@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация локального pin/cache-реестра для общего ChunkStore.
+
 #include <cybou/chunk_retention.h>
 
 #include <cybou/chunk_blob_store.h>
@@ -16,10 +19,15 @@ namespace {
 
 constexpr std::string_view PIN{"pin/"};   // pin/<chunk><holder><reference>
 constexpr std::string_view REF{"ref/"};   // ref/<holder><reference><chunk>
-constexpr std::string_view CACHE{"cch/"}; // cch/<chunk> -> last use (ms)
+constexpr std::string_view CACHE{"cch/"}; // cch/<chunk> -> last_use_ms
 constexpr std::size_t HEX{64};
 constexpr std::size_t PIN_KEY{4 + 3 * HEX};
 constexpr std::size_t CACHE_KEY{4 + HEX};
+
+std::span<const unsigned char> Bytes(const std::string_view text)
+{
+    return {reinterpret_cast<const unsigned char*>(text.data()), text.size()};
+}
 
 std::string Hex(std::span<const unsigned char> bytes)
 {
@@ -57,10 +65,9 @@ std::string KeyString(const RetentionKey& key) { return Hex(key.holder) + Hex(ke
 
 std::array<unsigned char, 32> RetentionTag(const std::string_view domain, const std::span<const unsigned char> bytes)
 {
-    std::vector<unsigned char> input(domain.begin(), domain.end());
-    input.push_back(0);
-    input.insert(input.end(), bytes.begin(), bytes.end());
-    return ComputeBlake3Digest(input);
+    static constexpr unsigned char separator{0};
+    const std::array parts{Bytes(domain), std::span<const unsigned char>{&separator, 1}, bytes};
+    return ComputeBlake3Digest(parts);
 }
 
 ChunkRetentionRegistry::ChunkRetentionRegistry(const std::filesystem::path& path, const bool memory_only,
@@ -101,7 +108,7 @@ bool ChunkRetentionRegistry::Release(const RetentionKey& key, const std::uint64_
         for (const auto& id : chunks) {
             batch.Erase(std::string{PIN} + id + owner);
             batch.Erase(std::string{REF} + owner + id);
-            // Released content stays useful locally until the cache needs room.
+            // После release локальный blob ещё полезен и остаётся в cache до реальной нехватки места.
             batch.Write(std::string{CACHE} + id, now_ms);
         }
         m_db->WriteBatch(batch, true);
@@ -166,7 +173,7 @@ ChunkRetentionRegistry::CollectResult ChunkRetentionRegistry::Collect(const Chun
             }
             if (id) entries.emplace_back(*id, used);
         });
-        // Evictable = cache entry, blob present, not pinned. Oldest use first.
+        // Вытесняем только cache-записи с реально существующим blob без pin.
         std::vector<std::tuple<std::uint64_t, ChunkId, std::uint64_t>> evictable;
         KVStore::Batch forget;
         for (const auto& [id, used] : entries) {
@@ -182,8 +189,8 @@ ChunkRetentionRegistry::CollectResult ChunkRetentionRegistry::Collect(const Chun
         std::sort(evictable.begin(), evictable.end());
         for (const auto& [used, id, size] : evictable) {
             if (result.cache_bytes <= cache_budget_bytes || result.removed >= max_removals) break;
-            if (used + grace_ms > now_ms) break; // everything after is newer still
-            if (!remove(id)) continue;           // a provider obligation keeps it
+            if (used + grace_ms > now_ms) break; // Дальше идут только более свежие записи.
+            if (!remove(id)) continue;           // Blob удержан provider-обязательством.
             forget.Erase(std::string{CACHE} + Hex(id));
             result.cache_bytes -= size;
             result.removed_bytes += size;

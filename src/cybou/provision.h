@@ -5,6 +5,9 @@
 #ifndef CYBOU_PROVISION_H
 #define CYBOU_PROVISION_H
 
+/// \file
+/// \brief Одноразовое офлайн provisioning DEVNET и генерация compiled public constants.
+
 #include <cybou/identity_crypto.h>
 #include <cybou/identity_kem.h>
 #include <cybou/network_genesis.h>
@@ -18,6 +21,7 @@
 
 namespace cybou {
 
+/// \brief Полный набор результатов DEVNET provisioning: приватный материал, genesis и public constants.
 struct DevnetProvisionResult {
     // Network Root (strictly offline)
     RecoveryEntropy network_entropy{};
@@ -44,15 +48,10 @@ struct DevnetProvisionResult {
     std::vector<unsigned char> serialized_genesis_state;
 };
 
-/** Generates complete DEVNET provisioning material in memory. */
+/// \brief Генерирует весь DEVNET provisioning полностью в памяти.
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning();
 
-/**
- * Executes full one-time provisioning:
- * 1. Generates secret keys and genesis material in memory.
- * 2. Writes private secret files to private_dir (e.g. private/devnet).
- * 3. Writes public C++ constants header to constants_header_path.
- */
+/// \brief Выполняет одноразовое provisioning: private secrets и public constants header.
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
     const std::filesystem::path& constants_header_path);

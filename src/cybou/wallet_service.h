@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// Высокоуровневый сервис балансов, переводов и локального журнала кошелька.
+
 #ifndef CYBOU_WALLET_SERVICE_H
 #define CYBOU_WALLET_SERVICE_H
 
@@ -23,6 +26,7 @@
 
 namespace cybou {
 
+/// Вид записи локального журнала кошелька.
 enum class WalletEntryKind : uint8_t {
     ONBOARDING_BONUS = 0,
     PAYMENT = 1,
@@ -30,11 +34,13 @@ enum class WalletEntryKind : uint8_t {
     ROOT_PUBLICATION_FEE = 3,
 };
 
+/// Финальность записи локального журнала кошелька.
 enum class WalletEntryFinality : uint8_t {
     PENDING = 0,
     FINAL = 1,
 };
 
+/// Одна строка локально синхронизированного журнала кошелька.
 struct WalletLedgerEntry {
     cybou::Hash256 entry_id;
     WalletEntryKind kind{WalletEntryKind::ONBOARDING_BONUS};
@@ -48,6 +54,7 @@ struct WalletLedgerEntry {
     friend bool operator==(const WalletLedgerEntry&, const WalletLedgerEntry&) = default;
 };
 
+/// Причина отказа пользовательской операции кошелька.
 enum class WalletOperationError : uint8_t {
     NONE = 0,
     NO_IDENTITY,
@@ -61,6 +68,7 @@ enum class WalletOperationError : uint8_t {
     SUBMIT_FAILED,
 };
 
+/// Результат отправки пользовательской операции кошелька.
 struct WalletOperationResult {
     WalletOperationError error{WalletOperationError::NONE};
     cybou::Hash256 op_id{};
@@ -70,37 +78,36 @@ struct WalletOperationResult {
     explicit operator bool() const { return error == WalletOperationError::NONE; }
 };
 
-/**
- * CybouWalletService manages balance queries, payment transactions (PaymentPayload),
- * irreversible system locks (SystemLockPayload), and on-chain activity ledger sync.
- */
+/// Управляет балансами, пользовательскими операциями и локальным журналом кошелька.
 class CybouWalletService {
 public:
+    /// Создаёт сервис кошелька для текущей Identity и runtime.
     explicit CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore);
     ~CybouWalletService();
 
     CybouWalletService(const CybouWalletService&) = delete;
     CybouWalletService& operator=(const CybouWalletService&) = delete;
 
-    /** Send a payment from Balance to recipient AccountId */
+    /// Отправляет платёж из Balance получателю.
     WalletOperationResult SendPayment(const AccountId& recipient, uint64_t amount);
 
-    /** Lock an amount from Balance to System Balance (one-way, irreversible) */
+    /// Необратимо переводит сумму из Balance в System Balance.
     WalletOperationResult LockToSystemBalance(uint64_t amount);
 
-    /** Submit wallet operations off the caller's thread. Completion runs on the worker thread. */
+    /// Выполняет отправку платежа на рабочем потоке сервиса.
     void SendPaymentAsync(const AccountId& recipient, uint64_t amount,
         std::function<void(WalletOperationResult)> completion);
+    /// Выполняет системный лок на рабочем потоке сервиса.
     void LockToSystemBalanceAsync(uint64_t amount,
         std::function<void(WalletOperationResult)> completion);
 
-    /** Sync ledger entries against newly finalized blocks. */
+    /// Синхронизирует локальный журнал по новым финализированным блокам.
     size_t SyncLedger();
 
-    /** Get all ledger entries (most recent first) */
+    /// Возвращает все записи локального журнала, отсортированные от новых к старым.
     std::vector<WalletLedgerEntry> GetLedgerEntries() const;
 
-    /** Query current balances (balance, system_balance) directly from node runtime state */
+    /// Возвращает текущие канонические балансы (Balance, System Balance).
     std::pair<uint64_t, uint64_t> GetBalances() const;
 
 private:

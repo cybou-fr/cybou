@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// \brief Реализация потокобезопасного Full Node runtime: state, relay, sync и storage.
+
 #include <cybou/operation_submit.h>
 #include <cybou/node_runtime.h>
 #include <cybou/secret_file.h>
@@ -25,6 +28,7 @@ namespace cybou {
 NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir)
 {
     NodeRuntimeConfig config{.network_genesis = network.genesis, .data_dir = data_dir};
+    config.configured_peers.reserve(network.rendezvous_locators.size());
     for (const auto& locator : network.rendezvous_locators)
         config.configured_peers.push_back({{std::string{locator.host}, locator.port}, locator.tls_spki_sha256});
     return config;
@@ -217,7 +221,9 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::SignStorageProof(
     const auto key = DeriveIdentityPublicKey(*m_storage_secret, IdentityKeyPurpose::STORAGE);
     const auto signature = SignIdentityMessage(*m_storage_secret, IdentityKeyPurpose::STORAGE, message);
     if (!key || !signature) return std::nullopt;
-    std::vector<unsigned char> proof(key->ed25519.begin(), key->ed25519.end());
+    std::vector<unsigned char> proof;
+    proof.reserve(key->ed25519.size() + key->ml_dsa.size() + signature->ed25519.size() + signature->ml_dsa.size());
+    proof.insert(proof.end(), key->ed25519.begin(), key->ed25519.end());
     proof.insert(proof.end(), key->ml_dsa.begin(), key->ml_dsa.end());
     proof.insert(proof.end(), signature->ed25519.begin(), signature->ed25519.end());
     proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
@@ -261,7 +267,9 @@ std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoint
     std::lock_guard p2p_lock(m_p2p_mutex);
     std::vector<StorageEndpoint> endpoints;
     if (!m_peer_manager) return endpoints;
-    for (const auto& peer : m_peer_manager->StorageEndpoints()) {
+    const auto peers = m_peer_manager->StorageEndpoints();
+    endpoints.reserve(peers.size());
+    for (const auto& peer : peers) {
         if (peer.storage_id) endpoints.push_back({peer.address, peer.port, *peer.storage_id});
     }
     return endpoints;
@@ -642,7 +650,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {
     const cybou::Hash256 op_id = ComputeOperationId(op).value_or(cybou::Hash256{});
-    cybou::Hash256 net_id{};
+    std::vector<std::pair<std::string, uint16_t>> configured_endpoints;
     {
         std::lock_guard lock(m_mutex);
         const auto loaded = m_store.LoadState();
@@ -672,16 +680,21 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?
                 OperationSubmitStatus::ACCEPTED : OperationSubmitStatus::ALREADY_PENDING, .op_id = op_id};
         }
-        net_id = m_network_binding;
+        configured_endpoints.reserve(m_config.configured_peers.size());
+        for (const auto& peer : m_config.configured_peers) {
+            if (m_config.advertised_endpoint != peer.endpoint) configured_endpoints.push_back(peer.endpoint);
+        }
     }
     if (m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
         // Ordinary mesh relay: any connected relay peer executes the operation
         // itself and forwards it. There is no preferred finalizer route.
-        for (const auto& endpoint : GetConfiguredPeerEndpoints())
+        for (const auto& endpoint : configured_endpoints)
             m_peer_manager->Connect(endpoint.first, endpoint.second);
         std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
-        for (const auto& peer : m_peer_manager->Peers()) {
+        const auto peers = m_peer_manager->Peers();
+        accepting_candidates.reserve(peers.size());
+        for (const auto& peer : peers) {
             {
                 const auto endpoint = std::make_pair(peer.address, peer.port);
                 if (std::find(accepting_candidates.begin(), accepting_candidates.end(), endpoint) ==
@@ -954,6 +967,7 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
     }
 
     bool found{false};
+    const auto account_bytes = account_id.Value();
     cybou::Hash256 previous_id = m_config.network_genesis.GetGenesisAnchor();
     for (uint64_t height = 1; height <= *finalized_height; ++height) {
         const auto finalized = m_store.GetBlockAtHeight(height);
@@ -979,7 +993,6 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
             }
             if (!package || published_account != account_id || published_epoch != key_epoch) continue;
             if (found) return result;
-            const auto account_bytes = account_id.Value();
             const auto commitment = ComputeIdentityKemPackageCommitment(
                 std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
                 std::span<const unsigned char, 32>{account_bytes.begin(), 32}, key_epoch, *package);
@@ -1165,6 +1178,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     // Never hold state and peer locks together (peer I/O can call state methods).
     {
         std::lock_guard lock{m_mutex};
+        snapshot.operations.reserve(m_recent_operation_status_order.size());
         for (const auto& id : m_recent_operation_status_order) {
             const auto& op = m_recent_operation_status.at(id);
             snapshot.operations.push_back({id.GetHex(), static_cast<std::uint32_t>(op.kind), op.finalized_height});
@@ -1172,12 +1186,22 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     }
     {
         std::lock_guard lock{m_p2p_mutex};
-        if (m_peer_manager) for (const auto& peer : m_peer_manager->Peers()) {
-            std::string provider;
-            if (peer.storage_id) { static constexpr char HEX[] = "0123456789abcdef";
-                for (auto b : *peer.storage_id) { provider += HEX[b >> 4]; provider += HEX[b & 15]; } }
-            snapshot.peers.push_back({peer.address + ":" + std::to_string(peer.port),
-                peer.hello.finalized_height, provider});
+        if (m_peer_manager) {
+            const auto peers = m_peer_manager->Peers();
+            snapshot.peers.reserve(peers.size());
+            for (const auto& peer : peers) {
+                std::string provider;
+                if (peer.storage_id) {
+                    static constexpr char HEX[] = "0123456789abcdef";
+                    provider.reserve(peer.storage_id->size() * 2);
+                    for (auto b : *peer.storage_id) {
+                        provider += HEX[b >> 4];
+                        provider += HEX[b & 15];
+                    }
+                }
+                snapshot.peers.push_back({peer.address + ":" + std::to_string(peer.port),
+                    peer.hello.finalized_height, provider});
+            }
         }
     }
     if (m_finalized_chunk_store) {
@@ -1208,6 +1232,7 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpoints
     std::lock_guard lock(m_mutex);
     constexpr size_t MAX_GOSSIP_TARGETS{32};
     std::vector<std::pair<std::string, uint16_t>> result;
+    result.reserve(MAX_GOSSIP_TARGETS);
     for (const auto& peer : m_config.configured_peers) {
         if (result.size() >= MAX_GOSSIP_TARGETS) break;
         if (m_config.advertised_endpoint == peer.endpoint) continue;
@@ -1242,6 +1267,7 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetConfiguredPee
 {
     std::lock_guard lock(m_mutex);
     std::vector<Endpoint> result;
+    result.reserve(m_config.configured_peers.size());
     for (const auto& peer : m_config.configured_peers)
         if (m_config.advertised_endpoint != peer.endpoint) result.push_back(peer.endpoint);
     return result;

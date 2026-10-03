@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// \brief Реализация volatile-пула проверенных Validation-attestations.
+
 #include <cybou/validation_pool.h>
 
 namespace cybou {
@@ -39,9 +42,10 @@ size_t ValidationPool::Count(const cybou::Hash256& operation_id) const
 
 std::vector<ValidationAttestation> ValidationPool::ForOperation(const cybou::Hash256& operation_id) const
 {
-    std::vector<ValidationAttestation> attestations;
     const auto entry = m_entries.find(operation_id);
-    if (entry == m_entries.end()) return attestations;
+    if (entry == m_entries.end()) return {};
+    std::vector<ValidationAttestation> attestations;
+    attestations.reserve(entry->second.size());
     for (const auto& [account, attestation] : entry->second) {
         (void)account;
         attestations.push_back(attestation);

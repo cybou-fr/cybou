@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license.
+/// \file
+/// \brief Публично-безопасная запись node events в локальный журнал.
 #ifndef CYBOU_EVENT_RECORD_H
 #define CYBOU_EVENT_RECORD_H
 #include <cybou/diagnostics.h>
@@ -11,6 +13,7 @@
 #include <string>
 #include <variant>
 namespace cybou {
+/// \brief Набор allowlisted событий локального node event log.
 enum class NodeEvent {
     node_started, node_stopping, node_status, peer_connected, peer_disconnected,
     peer_rejected, sync_started, sync_progress, sync_complete, sync_failed,
@@ -23,8 +26,9 @@ enum class NodeEvent {
 };
 using EventValue = std::variant<std::string, std::uint64_t, bool>;
 using EventFields = std::map<std::string, EventValue>;
+/// \brief Режим детализации event log без изменения allowlist-политики.
 enum class EventLogMode { MINIMAL, DETAILED };
-/** Output only; bounded records and allowlisted public fields, no free-form errors. */
+/// \brief Потокобезопасный writer локального event log с жёсткой allowlist полей.
 class EventWriter final {
     mutable std::mutex m_mutex;
     std::FILE* m_file{nullptr};
@@ -34,10 +38,14 @@ class EventWriter final {
     std::mutex m_snapshot_mutex;
     std::map<std::string, PeerDiagnostics> m_peers;
 public:
+    /// \brief Открывает event log и генерирует новый run id.
     explicit EventWriter(const std::filesystem::path& path, EventLogMode mode=EventLogMode::MINIMAL);
     ~EventWriter();
+    /// \brief Записывает одно событие с allowlisted публичными полями.
     void Write(NodeEvent event, const EventFields& fields = {});
+    /// \brief Возвращает пригодность файлового дескриптора для дальнейшей записи.
     bool Good() const;
+    /// \brief Проецирует диагностический snapshot в последовательность публичных событий.
     void Observe(const NodeDiagnosticsSnapshot& snapshot);
 };
 } // namespace cybou

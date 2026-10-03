@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация канонического реестра Identity и его digest-проверок.
+
 #include <cybou/identity_registry.h>
 #include <cybou/crypto/sha256.h>
 
@@ -43,6 +46,7 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const cybou::Hash256& n
 
     std::vector<unsigned char> preimage;
     constexpr std::string_view domain{"CYBOU/IDENTITY-ROTATE"};
+    preimage.reserve(domain.size() + 32 + 32 + 8 + 8 + 32 + 32 + 32);
     preimage.insert(preimage.end(), domain.begin(), domain.end());
     preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     preimage.insert(preimage.end(), account.begin(), account.end());
@@ -62,6 +66,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
         network_binding.IsNull() || request.account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> preimage;
     constexpr std::string_view domain{"CYBOU/IDENTITY-OP"};
+    preimage.reserve(domain.size() + 32 + 32 + 8 + 8 + 1 + 32);
     preimage.insert(preimage.end(), domain.begin(), domain.end());
     preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     const auto account = request.account_id.Value();

@@ -1,5 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see COPYING.
+/// \file
+/// Канонические кодеки приватных документов Mail, Files и RecoveryBridge.
+
 #include <cybou/private_application_schema.h>
 #include <cybou/binary_codec.h>
 #include <algorithm>
@@ -136,6 +139,7 @@ MailMessage DecodeMail(BinaryReader& reader) {
     const auto account = AccountId::FromBytes(reader.Fixed(32)); Require(account.has_value()); mail.recipient_account_id = *account;
     mail.client_timestamp_ms = reader.U64(); mail.subject = reader.Text(MAX_SUBJECT_BYTES); mail.body = reader.Text(MAX_BODY_BYTES);
     const auto count = reader.U16(); Require(count <= MAX_ATTACHMENTS);
+    mail.attachments.reserve(count);
     for (std::uint16_t i = 0; i < count; ++i) {
         MailAttachment attachment;
         attachment.attachment_id = reader.Fixed<PrivateItemId>(); attachment.filename = reader.Text(MAX_FILENAME_BYTES);
@@ -148,6 +152,7 @@ MailMessage DecodeMail(BinaryReader& reader) {
 FilesMutationBatch DecodeFiles(BinaryReader& reader) {
     FilesMutationBatch batch;
     const auto count = reader.U16(); Require(count > 0 && count <= MAX_MUTATIONS);
+    batch.mutations.reserve(count);
     for (std::uint16_t i = 0; i < count; ++i) {
         FileMutation mutation;
         mutation.kind = static_cast<FileMutationKind>(reader.U8()); mutation.item_id = reader.Fixed<PrivateItemId>();
@@ -165,6 +170,7 @@ IdentityRecoveryBridge DecodeBridge(BinaryReader& reader) {
     IdentityRecoveryBridge bridge;
     const auto account = AccountId::FromBytes(reader.Fixed(32)); Require(account.has_value()); bridge.account_id = *account;
     bridge.next_key_epoch = reader.U64(); const auto count = reader.U16(); Require(count > 0 && count <= MAX_HISTORICAL_SEEDS);
+    bridge.historical_seeds.reserve(count);
     for (std::uint16_t i = 0; i < count; ++i) { const auto epoch = reader.U64(); bridge.historical_seeds.push_back({epoch, reader.Fixed<XWingSeed>()}); }
     Require(ValidBridge(bridge)); return bridge;
 }

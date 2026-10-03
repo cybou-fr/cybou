@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация Merkle-авторизации чанков публикации.
+
 #include <cybou/chunk_authorization.h>
 
 #include <algorithm>
@@ -15,6 +18,12 @@ namespace {
 
 constexpr std::string_view LEAF_DOMAIN{"CYBOU/CHUNK-AUTH/LEAF"};
 constexpr std::string_view NODE_DOMAIN{"CYBOU/CHUNK-AUTH/NODE"};
+
+std::span<const unsigned char> Bytes(const std::string_view text)
+{
+    return {reinterpret_cast<const unsigned char*>(text.data()), text.size()};
+}
+
 bool IsZero(const ChunkId& id)
 {
     return std::all_of(id.begin(), id.end(), [](const auto byte) { return byte == 0; });
@@ -22,17 +31,18 @@ bool IsZero(const ChunkId& id)
 
 ChunkId HashLeaf(const AuthorizedChunk& chunk)
 {
-    std::vector<unsigned char> preimage(LEAF_DOMAIN.begin(), LEAF_DOMAIN.end());
-    preimage.insert(preimage.end(), chunk.id.begin(), chunk.id.end());
-    return ComputeBlake3Digest(preimage);
+    const std::array parts{Bytes(LEAF_DOMAIN), std::span<const unsigned char>{chunk.id}};
+    return ComputeBlake3Digest(parts);
 }
 
 ChunkId HashNode(const ChunkId& left, const ChunkId& right)
 {
-    std::vector<unsigned char> preimage(NODE_DOMAIN.begin(), NODE_DOMAIN.end());
-    preimage.insert(preimage.end(), left.begin(), left.end());
-    preimage.insert(preimage.end(), right.begin(), right.end());
-    return ComputeBlake3Digest(preimage);
+    const std::array parts{
+        Bytes(NODE_DOMAIN),
+        std::span<const unsigned char>{left},
+        std::span<const unsigned char>{right},
+    };
+    return ComputeBlake3Digest(parts);
 }
 
 bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks)
@@ -150,14 +160,15 @@ std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(
 {
     if (!ValidChunkSet(chunks)) return std::nullopt;
     try {
-        std::vector<AuthorizedChunk> ordered{chunks.begin(), chunks.end()};
         std::set<ChunkId> unique_ids;
-        for (const auto& chunk : ordered) if (!unique_ids.insert(chunk.id).second) return std::nullopt;
+        for (const auto& chunk : chunks) {
+            if (!unique_ids.insert(chunk.id).second) return std::nullopt;
+        }
 
         std::vector<std::vector<ChunkId>> levels;
         levels.emplace_back();
-        levels.back().reserve(ordered.size());
-        for (const auto& chunk : ordered) levels.back().push_back(HashLeaf(chunk));
+        levels.back().reserve(chunks.size());
+        for (const auto& chunk : chunks) levels.back().push_back(HashLeaf(chunk));
         while (levels.back().size() > 1) {
             const auto& current = levels.back();
             std::vector<ChunkId> next;
@@ -171,7 +182,7 @@ std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(
 
         ChunkAuthorizationTree result;
         result.root = levels.back().front();
-        result.chunk_count = static_cast<std::uint32_t>(ordered.size());
+        result.chunk_count = static_cast<std::uint32_t>(chunks.size());
         result.m_levels = std::move(levels);
         return result;
     } catch (...) {
@@ -183,6 +194,7 @@ ChunkAuthorizationProof ChunkAuthorizationTree::Proof(const std::uint32_t leaf_i
 {
     if (leaf_index >= chunk_count) throw std::out_of_range{"chunk authorization leaf index"};
     ChunkAuthorizationProof proof{.leaf_index = leaf_index};
+    proof.siblings.reserve(m_levels.size());
     auto index = static_cast<std::size_t>(leaf_index);
     auto width = static_cast<std::size_t>(chunk_count);
     for (std::size_t level = 0; width > 1; ++level) {

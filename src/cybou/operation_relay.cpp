@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// \brief Реализация volatile-очереди точных байтов для P2P-ретрансляции операций.
+
 #include <cybou/operation_relay.h>
 
 #include <cybou/protocol_limits.h>
@@ -11,6 +14,23 @@
 #include <utility>
 
 namespace cybou {
+
+bool OperationRelay::FitsQueueLimits(const size_t bytes) const
+{
+    return m_queue.size() < m_max_operations &&
+        bytes <= m_max_queued_bytes - std::min(m_queued_bytes, m_max_queued_bytes);
+}
+
+void OperationRelay::RememberSeen(const cybou::Hash256& operation_id)
+{
+    if (!m_seen_ids.insert(operation_id).second) return;
+    m_seen_order.push_back(operation_id);
+    while (m_seen_order.size() > m_seen_limit) {
+        const auto expired = m_seen_order.front();
+        m_seen_order.pop_front();
+        if (!m_queued_ids.contains(expired)) m_seen_ids.erase(expired);
+    }
+}
 
 OperationRelay::OperationRelay(const size_t max_operations,
     const size_t max_queued_bytes)
@@ -37,20 +57,12 @@ OperationRelayEnqueueStatus OperationRelay::Enqueue(
     if (m_queued_ids.contains(*operation_id) || (m_seen_ids.contains(*operation_id) && !allow_seen_retry)) {
         return OperationRelayEnqueueStatus::DUPLICATE;
     }
-    if (m_queue.size() >= m_max_operations || exact_operation_bytes.size() >
-        m_max_queued_bytes - std::min(m_queued_bytes, m_max_queued_bytes)) {
+    if (!FitsQueueLimits(exact_operation_bytes.size())) {
         return OperationRelayEnqueueStatus::QUEUE_FULL;
     }
-    m_queue.push_back({*operation_id, {exact_operation_bytes.begin(), exact_operation_bytes.end()}});
+    m_queue.push_back({*operation_id, std::vector<unsigned char>{exact_operation_bytes.begin(), exact_operation_bytes.end()}});
     m_queued_ids.insert(*operation_id);
-    if (m_seen_ids.insert(*operation_id).second) {
-        m_seen_order.push_back(*operation_id);
-        while (m_seen_order.size() > m_seen_limit) {
-            const auto expired = m_seen_order.front();
-            m_seen_order.pop_front();
-            if (!m_queued_ids.contains(expired)) m_seen_ids.erase(expired);
-        }
-    }
+    RememberSeen(*operation_id);
     m_queued_bytes += exact_operation_bytes.size();
     return OperationRelayEnqueueStatus::QUEUED;
 }

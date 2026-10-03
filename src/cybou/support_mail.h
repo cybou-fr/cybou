@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Правила поддержки support mail поверх обычной RootPublication.
+
 #ifndef CYBOU_SUPPORT_MAIL_H
 #define CYBOU_SUPPORT_MAIL_H
 
@@ -17,37 +20,25 @@
 
 namespace cybou {
 
-/**
- * Support mail (application rule, not consensus).
- *
- * The recipient is not explicitly encoded in the publication. A message to
- * the network authority's support name pays a higher RootPublication fee on
- * purpose: the sender adds undecryptable padding capsules until the fee
- * reaches SupportMailMinimumFee. This public fee and capsule pattern can act
- * as a statistical support-mail traffic fingerprint. The fee goes to the
- * Central Authority Balance like any fee; the authority's client verifies it from the
- * finalized publication and marks messages that paid less.
- */
+/// Метка имени поддержки сети.
 inline constexpr std::string_view SUPPORT_NAME_LABEL{CENTRAL_AUTHORITY_NAME};
+/// Во сколько раз минимальная комиссия support mail выше базовой публикации.
 inline constexpr std::uint64_t SUPPORT_MAIL_FEE_MULTIPLIER{5};
 
-/** About 5x a short message (5 KiB, one chunk). */
+/// Вычисляет минимальную комиссию support mail.
 inline std::uint64_t SupportMailMinimumFee(const CybouProtocolParameters& params)
 {
     return SUPPORT_MAIL_FEE_MULTIPLIER * (5 * params.root_publication_fee_per_started_kib + params.root_publication_fee_per_chunk);
 }
 
-/** The Identity that holds the genesis-granted support name, once claimed. */
+/// Возвращает AccountID, владеющий support-именем после его claim.
 inline std::optional<AccountId> SupportAccount(const CybouState& state)
 {
     const auto* allocation = FindCentralAuthorityAllocation(state);
     return allocation ? allocation->claimed_by : std::nullopt;
 }
 
-/**
- * Exact network fee of a publication: its canonical operation is the
- * two-byte operation header, the fixed-size authorization and the payload.
- */
+/// Вычисляет точную сетевую комиссию RootPublication.
 inline std::optional<std::uint64_t> RootPublicationOperationFee(
     const CybouProtocolParameters& params, const RootPublication& publication)
 {
@@ -56,10 +47,7 @@ inline std::optional<std::uint64_t> RootPublicationOperationFee(
     return ComputeRootPublicationFee(params, 2 + IDENTITY_OPERATION_AUTH_SIZE + payload->size(), publication.chunk_count);
 }
 
-/**
- * Adds padding capsules (random bytes no key opens) until the publication
- * pays at least `minimum_fee`. False if the capsule limit is reached first.
- */
+/// Добавляет padding-capsules, пока публикация не достигнет `minimum_fee`.
 inline bool PadPublicationToFee(const CybouProtocolParameters& params, RootPublication& publication,
     std::uint64_t minimum_fee)
 {

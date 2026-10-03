@@ -4,11 +4,16 @@
 #ifndef CYBOU_ECONOMICS_H
 #define CYBOU_ECONOMICS_H
 
+/// \file
+/// \brief Канонические константы экономики, используемые текущей реализацией DEVNET.
+
 #include <cstdint>
 #include <string_view>
 
 namespace cybou {
+/// \brief Метка единственной genesis allocation Центральной Authority до её claim.
 inline constexpr std::string_view CENTRAL_AUTHORITY_NAME{"cybou"};
+/// \brief Начальный размер DEV onboarding pool в spendable CYBOU.
 inline constexpr uint64_t DEV_ONBOARDING_POOL{100'000'000};
 } // namespace cybou
 

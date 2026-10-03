@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация durable-журнала и сериализации операций Identity.
+
 #include <cybou/operation_submit.h>
 #include <cybou/identity_operation_coordinator.h>
 
@@ -222,6 +225,7 @@ bool IdentityOperationCoordinator::SaveJournal(const JournalEntry& entry)
     if (m_journal_path.empty() || entry.operation_bytes.empty() || entry.operation_bytes.size() > MAX_JOURNALED_OPERATION_BYTES ||
         entry.operation_bytes.size() > std::numeric_limits<uint32_t>::max()) return false;
     std::vector<unsigned char> bytes(JOURNAL_MAGIC.begin(), JOURNAL_MAGIC.end());
+    bytes.reserve(JOURNAL_FIXED_SIZE + entry.operation_bytes.size());
     bytes.insert(bytes.end(), entry.network_binding.begin(), entry.network_binding.end());
     bytes.insert(bytes.end(), entry.account_id.Value().begin(), entry.account_id.Value().end());
     Append64(bytes, entry.nonce);

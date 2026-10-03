@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Каноническая сериализация и применение Payment/SystemLock.
 
 #include <cybou/payment.h>
 #include <cybou/crypto/sha256.h>

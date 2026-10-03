@@ -1,11 +1,14 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Русский публичный API move-only контейнера для 32-байтового секрета.
 #ifndef CYBOU_SECRET32_H
 #define CYBOU_SECRET32_H
 #include <cybou/crypto/cleanse.h>
 #include <array>
 namespace cybou {
-/** Move-only secret: moved-from buffers and exception paths are always cleansed. */
+/// \brief Move-only контейнер для 32-байтового секрета.
+/// \details Буфер очищается при уничтожении, а также у объекта-источника после перемещения.
 class Secret32 {
 public:
     Secret32(const std::array<unsigned char,32>& bytes):m_bytes(bytes) {}

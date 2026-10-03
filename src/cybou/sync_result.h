@@ -5,10 +5,14 @@
 #ifndef CYBOU_SYNC_RESULT_H
 #define CYBOU_SYNC_RESULT_H
 
+/// \file
+/// \brief Результат одного прохода проверенной P2P-синхронизации Full Node.
+
 #include <cstdint>
 
 namespace cybou {
 
+/// \brief Исход одной попытки verified sync с отдельным пиром.
 enum class SyncPeerStatus : uint8_t {
     UP_TO_DATE,
     BLOCKS_APPLIED,
@@ -17,11 +21,11 @@ enum class SyncPeerStatus : uint8_t {
     PROTOCOL_ERROR,
 };
 
-/** Outcome of one verified CYBOU P2P sync pass. */
+/// \brief Итог одного verified sync-pass по известным пирам.
 struct SyncPeerResult {
     SyncPeerStatus status{SyncPeerStatus::CONNECTION_FAILED};
     uint64_t blocks_applied{0};
-    /** Known-peer round completed; liveness/UX only, never global freshness. */
+    /// \brief Проход по known peers завершён; это только liveness/UX hint, не доказательство свежести сети.
     bool caught_up_with_known_peers{false};
 
     operator uint64_t() const { return blocks_applied; }

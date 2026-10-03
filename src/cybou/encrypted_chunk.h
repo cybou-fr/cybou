@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Формат одного зашифрованного чанка и операции encrypt/decrypt.
+
 #ifndef CYBOU_ENCRYPTED_CHUNK_H
 #define CYBOU_ENCRYPTED_CHUNK_H
 
@@ -15,6 +18,7 @@
 
 namespace cybou {
 
+/// \brief 32-байтовый ключ контента для одного неизменяемого encrypted tree.
 using ContentKey = std::array<unsigned char, 32>;
 
 inline constexpr std::size_t ENCRYPTED_CHUNK_HEADER_SIZE{48};
@@ -24,21 +28,22 @@ inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_STORED_BYTES{
     ENCRYPTED_CHUNK_HEADER_SIZE + 512 * 1024 + 16};
 inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_RANDOM_PADDING_BYTES{256 * 1024};
 
+/// \brief Один адресуемый зашифрованный чанк в stored-формате.
 struct EncryptedChunk {
     ChunkId id{};
     std::vector<unsigned char> stored_bytes;
 };
 
-/** Create one random content key for a single immutable encrypted tree. */
+/// \brief Генерирует случайный content key для одного immutable encrypted tree.
 std::optional<ContentKey> GenerateContentKey();
 
-/** Pad and encrypt one bounded byte chunk. */
+/// \brief Паддит и шифрует один ограниченный фрагмент plaintext.
 std::optional<EncryptedChunk> EncryptChunk(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key,
     std::span<const unsigned char> plaintext);
 
-/** Verify the address before authenticating and returning one bounded byte chunk. */
+/// \brief Проверяет ChunkId, аутентифицирует и возвращает plaintext одного чанка.
 std::optional<std::vector<unsigned char>> DecryptChunk(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key,

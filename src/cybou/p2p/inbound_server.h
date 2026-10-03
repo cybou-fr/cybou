@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Русский публичный API ограниченного inbound-сервера CYBOU P2P.
 
 #ifndef CYBOU_P2P_INBOUND_SERVER_H
 #define CYBOU_P2P_INBOUND_SERVER_H
@@ -19,12 +21,16 @@ namespace cybou::p2p {
 
 inline constexpr size_t MAX_INBOUND_PEERS{8};
 
-// Bounded DEV listener. Each peer has one worker; no peer can block accept.
+/// \brief Ограниченный inbound-listener DEV-узла.
+/// \details У каждого пира свой worker; один зависший пир не блокирует accept следующего.
 class InboundPeerServer {
 public:
+    /// \brief Создает listener на указанной конечной точке.
     InboundPeerServer(CybouNodeRuntime& runtime, boost::asio::io_context& io,
         const boost::asio::ip::tcp::endpoint& endpoint);
+    /// \brief Запускает цикл приема новых TCP-подключений до установки флага остановки.
     void Run(std::atomic_bool& stopping);
+    /// \brief Возвращает фактический локальный порт acceptor'а.
     uint16_t Port() const { return m_acceptor.local_endpoint().port(); }
 
 private:

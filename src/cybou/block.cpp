@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Каноническая сериализация, deserialization и идентификация блоков.
 
 #include <cybou/block.h>
 
@@ -119,20 +121,27 @@ cybou::Hash256 ComputeBlockId(const CybouBlock& block)
 
 std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block)
 {
-    std::vector<unsigned char> out;
-    out.reserve(76); // base header size
+    std::vector<std::vector<unsigned char>> serialized_operations;
+    serialized_operations.reserve(block.operations.size());
+    size_t total_size{76 + block.operations.size() * 4};
+    for (const auto& op : block.operations) {
+        auto serialized_op = SerializeProtocolOperation(op);
+        if (!serialized_op) return std::nullopt;
+        total_size += serialized_op->size();
+        serialized_operations.push_back(std::move(*serialized_op));
+    }
 
+    std::vector<unsigned char> out;
+    out.reserve(total_size);
     out.insert(out.end(), block.parent_block_id.begin(), block.parent_block_id.end());
     AppendUint64LE(out, block.height);
     out.insert(out.end(), block.resulting_state_root.begin(), block.resulting_state_root.end());
 
     AppendUint32LE(out, static_cast<uint32_t>(block.operations.size()));
 
-    for (const auto& op : block.operations) {
-        const auto serialized_op = SerializeProtocolOperation(op);
-        if (!serialized_op) return std::nullopt;
-        AppendUint32LE(out, static_cast<uint32_t>(serialized_op->size()));
-        out.insert(out.end(), serialized_op->begin(), serialized_op->end());
+    for (const auto& serialized_op : serialized_operations) {
+        AppendUint32LE(out, static_cast<uint32_t>(serialized_op.size()));
+        out.insert(out.end(), serialized_op.begin(), serialized_op.end());
     }
 
     return out;

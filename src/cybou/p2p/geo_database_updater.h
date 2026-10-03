@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Русский публичный API фонового обновления Geo-датасета DB-IP Lite.
 
 #ifndef CYBOU_P2P_GEO_DATABASE_UPDATER_H
 #define CYBOU_P2P_GEO_DATABASE_UPDATER_H
@@ -23,23 +25,26 @@
 
 namespace cybou::p2p {
 
+/// \brief Описание опубликованного релиза DB-IP Lite, найденного на официальной странице.
 struct GeoDatabaseRelease {
     std::chrono::year_month month;
     std::string download_path;
     std::string sha1;
 };
 
-/** Keeps the local DB-IP Lite country dataset current for this CYBOU process. */
+/// \brief Поддерживает локальный DB-IP Lite country dataset актуальным в рамках текущего процесса.
 class GeoDatabaseUpdater final {
 public:
+    /// \brief Создает объект, загружает кэш и запускает фоновый worker обновления.
     static std::shared_ptr<GeoDatabaseUpdater> Start(const std::filesystem::path& data_directory);
+    /// \brief Разбирает HTML официальной страницы релизов и возвращает последний CSV-релиз.
     static std::optional<GeoDatabaseRelease> ParseOfficialReleasePage(std::string_view page);
     ~GeoDatabaseUpdater();
 #if defined(CYBOU_ENABLE_TEST_HOOKS)
     using FetchForTest = std::function<std::string(std::string_view, std::string_view, size_t,
         const std::map<std::string, std::string>&)>;
     using WaitForTest = std::function<bool(std::stop_token, std::chrono::milliseconds)>;
-    /** Synchronous test instance: never starts a worker or accesses the network. */
+    /// \brief Создает синхронный тестовый экземпляр без worker'а и без сетевого доступа.
     static std::shared_ptr<GeoDatabaseUpdater> CreateForTest(const std::filesystem::path& directory,
         FetchForTest fetch, WaitForTest wait = {});
     bool RefreshForTest(std::stop_token stop = {}) { return RefreshWithRetries(stop); }
@@ -49,7 +54,9 @@ public:
     GeoDatabaseUpdater(const GeoDatabaseUpdater&) = delete;
     GeoDatabaseUpdater& operator=(const GeoDatabaseUpdater&) = delete;
 
+    /// \brief Возвращает текущий валидный датасет или nullptr, если кэш устарел.
     std::shared_ptr<const FrenchIpDataset> CurrentDataset() const;
+    /// \brief Возвращает true, когда сейчас доступен пригодный датасет.
     bool Ready() const { return static_cast<bool>(CurrentDataset()); }
 
 private:

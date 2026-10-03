@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация одной TLS-защищенной P2P-сессии CYBOU.
 
 #include <cybou/operation_submit.h>
 #include <cybou/p2p/session.h>
@@ -304,9 +306,16 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
         !IsSupportedMessageType(static_cast<uint8_t>(frame.type))) return std::nullopt;
-    std::vector<unsigned char> bytes{'C', 'Y', 'B', 'P', static_cast<unsigned char>(frame.type)};
+    std::vector<unsigned char> bytes;
+    bytes.resize(HEADER_SIZE);
+    bytes[0] = 'C';
+    bytes[1] = 'Y';
+    bytes[2] = 'B';
+    bytes[3] = 'P';
+    bytes[4] = static_cast<unsigned char>(frame.type);
     const auto size = static_cast<uint32_t>(frame.payload.size());
-    for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
+    for (int i = 0; i < 4; ++i) bytes[5 + i] = static_cast<unsigned char>(size >> (8 * i));
+    bytes.reserve(HEADER_SIZE + frame.payload.size());
     bytes.insert(bytes.end(), frame.payload.begin(), frame.payload.end());
     return bytes;
 }
@@ -350,6 +359,7 @@ std::vector<unsigned char> EncodePeersPayload(const std::vector<std::pair<std::s
 {
     std::vector<unsigned char> out;
     const uint8_t count = static_cast<uint8_t>(std::min<size_t>(peers.size(), MAX_PEER_DISCOVERY_ENTRIES));
+    out.reserve(1 + static_cast<size_t>(count) * 19);
     out.push_back(count);
     size_t added = 0;
     for (const auto& [host, port] : peers) {

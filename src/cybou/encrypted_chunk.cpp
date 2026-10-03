@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация encrypt/decrypt одного зашифрованного чанка.
+
 #include <cybou/encrypted_chunk.h>
 
 #include <cybou/crypto/chacha20_poly1305.h>
@@ -74,7 +77,9 @@ bool IsPadBucket(const std::size_t size)
 std::vector<unsigned char> MakeKeyInfo(
     const std::span<const unsigned char, 32> network_binding)
 {
-    std::vector<unsigned char> info(KEY_INFO_DOMAIN.begin(), KEY_INFO_DOMAIN.end());
+    std::vector<unsigned char> info;
+    info.reserve(KEY_INFO_DOMAIN.size() + network_binding.size());
+    info.insert(info.end(), KEY_INFO_DOMAIN.begin(), KEY_INFO_DOMAIN.end());
     info.insert(info.end(), network_binding.begin(), network_binding.end());
     return info;
 }
@@ -83,7 +88,9 @@ std::vector<unsigned char> MakeAad(
     const std::span<const unsigned char> header,
     const std::span<const unsigned char, 32> network_binding)
 {
-    std::vector<unsigned char> aad(AAD_DOMAIN.begin(), AAD_DOMAIN.end());
+    std::vector<unsigned char> aad;
+    aad.reserve(AAD_DOMAIN.size() + header.size() + network_binding.size());
+    aad.insert(aad.end(), AAD_DOMAIN.begin(), AAD_DOMAIN.end());
     aad.insert(aad.end(), header.begin(), header.end());
     aad.insert(aad.end(), network_binding.begin(), network_binding.end());
     return aad;

@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация canonical Validation-attestation и её криптографической проверки.
+
 #include <cybou/validation_attestation.h>
 #include <cybou/crypto/sha256.h>
 

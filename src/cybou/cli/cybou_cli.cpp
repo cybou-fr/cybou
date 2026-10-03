@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация headless CLI единственного исполняемого файла `cybou`.
 
 #include <cybou/cli/cybou_cli.h>
 
@@ -146,6 +148,13 @@ std::array<unsigned char, 32> Sha256Pin(std::string_view text)
 
 const std::initializer_list<std::string> ADMISSION_OPTIONS{"peer-admission", "geo-country-csv", "geo-sha256", "geo-issued-month"};
 
+std::set<std::string> AllowedOptions(std::initializer_list<std::string> keys, const bool admission)
+{
+    std::set<std::string> allowed(keys);
+    if (admission) allowed.insert(ADMISSION_OPTIONS.begin(), ADMISSION_OPTIONS.end());
+    return allowed;
+}
+
 void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& data_directory)
 {
     const auto mode = opts.Require("peer-admission");
@@ -173,10 +182,7 @@ void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& da
 
 void Allow(const Options& opts, std::initializer_list<std::string> keys, bool admission = false)
 {
-    std::vector<std::string> allowed(keys);
-    if (admission) allowed.insert(allowed.end(), ADMISSION_OPTIONS);
-    std::set<std::string> set(allowed.begin(), allowed.end());
-    opts.AllowSet(set);
+    opts.AllowSet(AllowedOptions(keys, admission));
 }
 
 /** Apply CLI-local policy to the shared official runtime configuration. */

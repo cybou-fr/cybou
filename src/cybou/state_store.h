@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Хранилище канонического состояния и финализированных блоков CYBOU.
 
 #ifndef CYBOU_STATE_STORE_H
 #define CYBOU_STATE_STORE_H
@@ -21,6 +23,7 @@
 
 namespace cybou {
 
+/// \brief Текущий канонический финализированный head: block id плюс высота.
 struct FinalizedHead {
     cybou::Hash256 block_id;
     uint64_t height{0};
@@ -50,6 +53,7 @@ struct LocalRecordCodec<FinalizedHead> {
 };
 } // namespace detail
 
+/// \brief Ошибки загрузки канонического состояния из локального KV store.
 enum class StateLoadError : uint8_t {
     NONE,
     NOT_FOUND,
@@ -57,6 +61,7 @@ enum class StateLoadError : uint8_t {
     NETWORK_MISMATCH,
 };
 
+/// \brief Результат загрузки канонического состояния с проверкой hash integrity.
 struct StateLoadResult {
     StateLoadError error{StateLoadError::NONE};
     std::optional<CybouState> state;
@@ -64,18 +69,21 @@ struct StateLoadResult {
     explicit operator bool() const { return error == StateLoadError::NONE && state.has_value(); }
 };
 
+/// \brief Ошибки первичной инициализации genesis.
 enum class GenesisInitError : uint8_t {
     NONE,
     ALREADY_INITIALIZED,
     GENESIS_STATE_MISMATCH,
 };
 
+/// \brief Результат записи genesis state в пустое хранилище.
 struct GenesisInitResult {
     GenesisInitError error{GenesisInitError::NONE};
 
     explicit operator bool() const { return error == GenesisInitError::NONE; }
 };
 
+/// \brief Ошибки атомарного коммита PoA-finalized блока.
 enum class BlockTransitionError : uint8_t {
     NONE,
     INVALID_BLOCK_ID,
@@ -94,21 +102,14 @@ enum class BlockTransitionError : uint8_t {
     POA_SAFETY_HALTED,
 };
 
+/// \brief Результат проверки и коммита финализированного блока.
 struct BlockTransitionResult {
     BlockTransitionError error{BlockTransitionError::NONE};
     BlockExecutionResult op_result{};
     explicit operator bool() const { return error == BlockTransitionError::NONE; }
 };
 
-/**
- * Sole owner of the canonical CYBOU state.
- *
- * CYBOU accepts one genesis-bound PoA finalizer: a finalized block is never reorged, so
- * there is intentionally no production rollback/undo path. State transition
- * is strictly candidate-validate-commit on top of the store's own canonical
- * state; callers never hold or supply a copy of consensus state and there is
- * no arbitrary Write() entry point.
- */
+/// \brief Единственный владелец канонического состояния, финализированных блоков и локальных индексов.
 class CybouStateStore
 {
 public:
@@ -116,61 +117,57 @@ public:
         KVStore& db,
         VerifiedNetworkGenesis network_genesis);
 
-    /** Persist genesis state at height 0. Fails if already initialized. */
+    /// \brief Сохраняет genesis state на высоте 0; повторная инициализация запрещена.
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
 
-    /** Load the canonical state with hash integrity verification. */
+    /// \brief Загружает каноническое состояние и проверяет его hash integrity.
     StateLoadResult LoadState() const;
 
-    /** Hash of the canonical state, if initialized. */
+    /// \brief Возвращает текущий канонический state root.
     std::optional<cybou::Hash256> GetStateRoot() const;
 
-    /** Canonical finalized head (block id and height). */
+    /// \brief Возвращает текущий финализированный head.
     std::optional<FinalizedHead> GetFinalizedHead() const;
 
-    /** Last finalized block id (genesis block id before any committed child). */
+    /// \brief Возвращает block id последнего финализированного блока.
     std::optional<cybou::Hash256> GetFinalizedTip() const;
 
-    /** Canonical finalized height (0 for genesis, monotonically increasing with each finalized block). */
+    /// \brief Возвращает финализированную высоту, начиная с 0 для genesis.
     std::optional<uint64_t> GetFinalizedHeight() const;
 
-    /** Compute a proposal root from the canonical parent state without committing it. */
+    /// \brief Вычисляет candidate state root поверх канонического родительского состояния без коммита.
     std::optional<cybou::Hash256> ComputeCandidateStateRoot(
         const std::vector<ProtocolOperation>& operations,
         uint64_t height) const;
 
-    /** 32-byte NetworkBinding of the definition's Network Public Key (NetworkID). */
+    /// \brief Возвращает NetworkBinding активной сети.
     const cybou::Hash256& GetNetworkBinding() const { return m_network_binding; }
+    /// \brief Возвращает верифицированный genesis активной сети.
     const VerifiedNetworkGenesis& GetNetworkGenesis() const { return m_network_genesis; }
+    /// \brief Возвращает underlying KV store.
     KVStore& GetDatabase() const { return m_db; }
+    /// \brief Сообщает, переведён ли локальный PoA safety guard в fail-closed состояние.
     bool PoaSafetyHalted() const;
+    /// \brief Возвращает локально сохранённые доказательства PoA safety halt.
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
-    /** NetworkBinding persisted with genesis, if initialized. */
+    /// \brief Возвращает NetworkBinding, сохранённый при инициализации genesis.
     std::optional<cybou::Hash256> GetStoredNetworkBinding() const;
 
-    /**
-     * Atomically commit a PoA-finalized block:
-     * - verifies parent equals current head
-     * - verifies height equals head.height + 1
-     * - verifies block ID and genesis-bound PoA finality certificate
-     * - verifies operations and fee routing against a throwaway candidate
-     * - verifies candidate state root matches block.resulting_state_root
-     * - atomically writes new state, hash, head, and finalized block in one batch.
-     */
+    /// \brief Проверяет и атомарно коммитит PoA-finalized блок вместе с новым состоянием и индексами.
     BlockTransitionResult CommitFinalizedBlock(
         const FinalizedBlock& finalized_block,
         bool sync = true);
 
-    /** Retrieve a persisted finalized block by its block ID. */
+    /// \brief Загружает финализированный блок по его block id.
     std::optional<FinalizedBlock> GetBlock(const cybou::Hash256& block_id) const;
 
-    /** Retrieve a finalized non-genesis block by canonical height. */
+    /// \brief Загружает финализированный блок по канонической высоте.
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
 
-    /** Check the local index of operations committed with finalized blocks. */
+    /// \brief Проверяет наличие операции в локальном индексе финализированных операций.
     bool HasIndexedFinalizedOperation(const cybou::Hash256& op_id) const;
-    /** Return the indexed finalized height for an operation, if present and valid. */
+    /// \brief Возвращает финализированную высоту операции, если локальный индекс и блок валидны.
     std::optional<uint64_t> GetFinalizedOperationHeight(const cybou::Hash256& op_id) const;
 
 

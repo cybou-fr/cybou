@@ -4,6 +4,9 @@
 #ifndef CYBOU_OPERATION_RELAY_H
 #define CYBOU_OPERATION_RELAY_H
 
+/// \file
+/// \brief FIFO-очередь точных байтов операций для hop-by-hop ретрансляции.
+
 #include <cybou/hash256.h>
 
 #include <cstddef>
@@ -17,6 +20,7 @@
 
 namespace cybou {
 
+/// \brief Итог постановки операции в локальную очередь ретрансляции.
 enum class OperationRelayEnqueueStatus : uint8_t {
     QUEUED,
     DUPLICATE,
@@ -24,33 +28,40 @@ enum class OperationRelayEnqueueStatus : uint8_t {
     INVALID_OPERATION,
 };
 
+/// \brief Точные байты операции вместе с уже вычисленным OperationID.
 struct RelayedOperation {
     cybou::Hash256 operation_id;
     std::vector<unsigned char> exact_bytes;
 };
 
-/** Bounded, volatile queue of locally executed operations for hop-by-hop P2P relay. */
+/// \brief Ограниченная RAM-очередь локально исполненных операций до подтверждения relay-пиром.
 class OperationRelay final {
 public:
     explicit OperationRelay(size_t max_operations = 256,
         size_t max_queued_bytes = 8U * 1024U * 1024U);
 
-    /** allow_seen_retry lets a submitting origin retry bytes already forwarded from this queue. */
+    /// \brief Добавляет точные canonical bytes операции; allow_seen_retry разрешает повтор от исходного отправителя.
     OperationRelayEnqueueStatus Enqueue(std::span<const unsigned char> exact_operation_bytes,
         bool allow_seen_retry = false);
-    /** View the FIFO head until a connected full node accepts the operation. */
+    /// \brief Возвращает текущую голову FIFO без резервирования для передачи.
     std::optional<RelayedOperation> Peek() const;
-    /** Reserve the FIFO head for one in-flight peer transfer. */
+    /// \brief Резервирует голову FIFO под одну активную передачу peer-to-peer.
     std::optional<RelayedOperation> Claim();
-    /** Release a failed/incomplete transfer so another peer can retry it. */
+    /// \brief Снимает резерв после неуспешной/неполной отправки.
     void Release(const cybou::Hash256& operation_id);
+    /// \brief Подтверждает успешную доставку головы FIFO и удаляет её из очереди.
     bool Acknowledge(const cybou::Hash256& operation_id);
+    /// \brief Проверяет, удерживается ли операция в очереди ожидания.
     bool HasQueued(const cybou::Hash256& operation_id) const;
+    /// \brief Забывает уже finalized операцию, если она ещё оставалась в relay-очереди.
     void ForgetFinalized(const cybou::Hash256& operation_id);
     size_t QueuedOperations() const;
     size_t QueuedBytes() const;
 
 private:
+    bool FitsQueueLimits(size_t bytes) const;
+    void RememberSeen(const cybou::Hash256& operation_id);
+
     const size_t m_max_operations;
     const size_t m_max_queued_bytes;
     const size_t m_seen_limit;

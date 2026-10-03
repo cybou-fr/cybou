@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация локального географического допуска пиров по датасету DB-IP Lite.
 
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/geo_database_updater.h>
@@ -23,6 +25,17 @@ namespace {
 constexpr uintmax_t MAX_DATASET_BYTES{64 * 1024 * 1024};
 constexpr size_t MAX_RECORDS{1'000'000};
 constexpr std::chrono::days MAX_DATASET_AGE{45};
+
+std::optional<std::string_view> NextLine(const std::string_view text, size_t& offset)
+{
+    if (offset >= text.size()) return std::nullopt;
+    const size_t start = offset;
+    size_t end = text.find('\n', start);
+    offset = end == std::string_view::npos ? text.size() : end + 1;
+    if (end == std::string_view::npos) end = text.size();
+    if (end > start && text[end - 1] == '\r') --end;
+    return text.substr(start, end - start);
+}
 
 std::optional<std::pair<std::array<unsigned char, 16>, bool>> AddressBytes(std::string_view text)
 {
@@ -82,29 +95,30 @@ std::shared_ptr<const FrenchIpDataset> FrenchIpDataset::LoadDbIpCountryCsv(const
                 reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size()}},
                 actual_sha256.data()) || actual_sha256 != expected_sha256) return nullptr;
 
-        std::istringstream lines{bytes};
-        std::string line;
+        const std::string_view csv{bytes};
         std::vector<Range> ranges;
+        ranges.reserve(std::min<size_t>(MAX_RECORDS, bytes.size() / 24));
         size_t records{0};
-        while (std::getline(lines, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            if (line.empty() || ++records > MAX_RECORDS) return nullptr;
-            const auto first_comma = line.find(',');
-            const auto second_comma = first_comma == std::string::npos ? first_comma : line.find(',', first_comma + 1);
-            if (first_comma == std::string::npos || second_comma == std::string::npos ||
-                line.find(',', second_comma + 1) != std::string::npos || first_comma == 0 ||
-                second_comma == first_comma + 1 || second_comma + 3 != line.size()) return nullptr;
-            const auto first = AddressBytes(std::string_view{line}.substr(0, first_comma));
-            const auto last = AddressBytes(std::string_view{line}.substr(first_comma + 1,
-                second_comma - first_comma - 1));
+        size_t offset{0};
+        while (true) {
+            const auto line = NextLine(csv, offset);
+            if (!line) break;
+            if (line->empty() || ++records > MAX_RECORDS) return nullptr;
+            const auto first_comma = line->find(',');
+            const auto second_comma = first_comma == std::string_view::npos ? first_comma : line->find(',', first_comma + 1);
+            if (first_comma == std::string_view::npos || second_comma == std::string_view::npos ||
+                line->find(',', second_comma + 1) != std::string_view::npos || first_comma == 0 ||
+                second_comma == first_comma + 1 || second_comma + 3 != line->size()) return nullptr;
+            const auto first = AddressBytes(line->substr(0, first_comma));
+            const auto last = AddressBytes(line->substr(first_comma + 1, second_comma - first_comma - 1));
             if (!first || !last || first->second != last->second || first->first > last->first) return nullptr;
-            const std::string_view country{line.data() + second_comma + 1, 2};
+            const std::string_view country{line->data() + second_comma + 1, 2};
             if (!std::all_of(country.begin(), country.end(), [](const char c) { return c >= 'A' && c <= 'Z'; })) {
                 return nullptr;
             }
             if (country == "FR") ranges.push_back(Range{first->first, last->first, first->second});
         }
-        if (!lines.eof() || ranges.empty()) return nullptr;
+        if (ranges.empty()) return nullptr;
         std::sort(ranges.begin(), ranges.end(), [](const Range& left, const Range& right) {
             if (left.ipv6 != right.ipv6) return left.ipv6 < right.ipv6;
             return left.first < right.first;
@@ -144,9 +158,6 @@ PeerAdmissionPolicy PeerAdmissionPolicy::PublicWithUpdater(std::shared_ptr<GeoDa
 
 bool PeerAdmissionPolicy::Allows(const std::string_view numeric_address) const
 {
-    boost::system::error_code ec;
-    const auto address = boost::asio::ip::make_address(std::string{numeric_address}, ec);
-    if (ec) return false;
     const auto dataset = m_dataset ? m_dataset : (m_updater ? m_updater->CurrentDataset() : nullptr);
     return dataset && dataset->IsFrench(numeric_address);
 }

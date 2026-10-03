@@ -1,14 +1,38 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Исполнение блоков без побочных эффектов на хранилище.
 
 #include <cybou/block_executor.h>
 
 #include <algorithm>
-#include <set>
 #include <limits>
+#include <unordered_set>
 
 namespace cybou {
+namespace {
+
+struct ByteArray32Hasher {
+    size_t operator()(const std::array<unsigned char, 32>& value) const noexcept
+    {
+        size_t hash{1469598103934665603ull};
+        for (const unsigned char byte : value) {
+            hash ^= byte;
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+};
+
+struct AccountIdHasher {
+    size_t operator()(const AccountId& account) const noexcept
+    {
+        return ByteArray32Hasher{}(account.Value());
+    }
+};
+
+} // namespace
 
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
@@ -28,8 +52,10 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     });
     if (creates > params.max_account_creates_per_block) return fail(BlockExecutionError::TOO_MANY_ACCOUNT_CREATES);
     auto candidate = parent;
-    std::set<std::array<unsigned char, 32>> adjustment_digests;
-    std::set<AccountId> auth_credited_accounts;
+    std::unordered_set<std::array<unsigned char, 32>, ByteArray32Hasher> adjustment_digests;
+    std::unordered_set<AccountId, AccountIdHasher> auth_credited_accounts;
+    adjustment_digests.reserve(operations.size());
+    auth_credited_accounts.reserve(operations.size());
     if (params.name_commit_max_lifetime > 0) {
         std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
             return block_height > item.second.commit_height &&

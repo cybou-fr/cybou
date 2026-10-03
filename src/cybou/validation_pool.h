@@ -4,6 +4,9 @@
 #ifndef CYBOU_VALIDATION_POOL_H
 #define CYBOU_VALIDATION_POOL_H
 
+/// \file
+/// \brief RAM-sidecar для проверенных Validation-attestations на текущем finalized base.
+
 #include <cybou/validation_attestation.h>
 
 #include <cstddef>
@@ -18,6 +21,7 @@ namespace cybou {
 inline constexpr size_t MAX_VALIDATED_OPERATIONS{256};
 inline constexpr size_t MAX_ATTESTATIONS_PER_OPERATION{16};
 
+/// \brief Результат добавления attestation в volatile ValidationPool.
 enum class ValidationPoolAdd : uint8_t { ADDED, DUPLICATE, STALE_BASE, FULL };
 
 /**
@@ -30,14 +34,15 @@ class ValidationPool
 public:
     using Key = std::pair<cybou::Hash256, AccountId>;
 
-    /** Caller has verified the attestation and executed its operation. */
+    /// \brief Добавляет уже проверенную attestation для локально исполненного кандидата.
     ValidationPoolAdd Add(const ValidationAttestation& attestation);
-    /** A new finalized tip makes every held attestation stale. */
+    /// \brief Смена finalized tip делает все удерживаемые attestations устаревшими.
     void ResetBase(const cybou::Hash256& finalized_tip);
     void Drop(const cybou::Hash256& operation_id);
     size_t Count(const cybou::Hash256& operation_id) const;
+    /// \brief Возвращает attestations для одной операции в детерминированном порядке по validator AccountID.
     std::vector<ValidationAttestation> ForOperation(const cybou::Hash256& operation_id) const;
-    /** First held attestation whose key `skip` rejects is not yet known to the caller. */
+    /// \brief Возвращает первую attestation, которую предикат skip ещё не считает известной.
     std::optional<ValidationAttestation> First(const std::function<bool(const Key&)>& skip) const;
     size_t Operations() const { return m_entries.size(); }
 

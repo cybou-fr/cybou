@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// Высокоуровневый сервис подготовки, создания, восстановления и ротации Identity.
+
 #ifndef CYBOU_IDENTITY_SERVICE_H
 #define CYBOU_IDENTITY_SERVICE_H
 
@@ -25,6 +28,7 @@
 
 namespace cybou {
 
+/// Фаза локального жизненного цикла создания или восстановления Identity.
 enum class IdentityCreationPhase : uint8_t {
     IDLE = 0,
     CREATING_KEYS,
@@ -35,6 +39,7 @@ enum class IdentityCreationPhase : uint8_t {
     FAILED,
 };
 
+/// Итог создания или восстановления Identity.
 struct IdentityCreationResult {
     bool success{false};
     IdentityCreationPhase final_phase{IdentityCreationPhase::IDLE};
@@ -44,11 +49,15 @@ struct IdentityCreationResult {
     std::string error_message;
 };
 
+/// Колбэк уведомления о смене фазы.
 using PhaseCallback = std::function<void(IdentityCreationPhase phase, const std::string& detail)>;
+/// Колбэк завершения операции сервиса Identity.
 using CompletionCallback = std::function<void(const IdentityCreationResult& result)>;
 
+/// Координирует локальные операции жизненного цикла одной Identity.
 class CybouIdentityService {
 public:
+    /// Создаёт сервис Identity для заданного runtime и опционального пути vault.
     explicit CybouIdentityService(
         CybouNodeRuntime& runtime,
         std::optional<std::filesystem::path> storage_path = std::nullopt);
@@ -57,61 +66,67 @@ public:
     CybouIdentityService(const CybouIdentityService&) = delete;
     CybouIdentityService& operator=(const CybouIdentityService&) = delete;
 
-    /** Configure persistent storage path for atomic pre-save */
+    /// Настраивает путь постоянного хранения переносимого vault.
     void SetStoragePath(std::filesystem::path path);
+    /// Возвращает текущий путь хранения vault, если он настроен.
     std::optional<std::filesystem::path> GetStoragePath() const;
 
-    /** Current identity creation phase */
+    /// Возвращает текущую фазу жизненного цикла Identity.
     IdentityCreationPhase GetPhase() const { return m_phase.load(); }
 
-    /** Account ID if an identity has been initialized or created */
+    /// Возвращает AccountID разблокированной или уже созданной Identity.
     std::optional<AccountId> GetAccountId() const;
+    /// Возвращает каноническое финализированное состояние текущего аккаунта.
     std::optional<AccountState> GetFinalizedAccountState() const;
+    /// Возвращает финализированное primary name текущей Identity.
     std::optional<std::string> GetFinalizedPrimaryName() const;
 
-    /** Prepare random local material and return its 24 words for user confirmation. */
+    /// Готовит новую локальную Identity и возвращает её 24 слова для подтверждения.
     std::optional<RecoveryWords> PrepareNewIdentity();
+    /// Отбрасывает ещё не сохранённую подготовленную Identity.
     void DiscardPreparedIdentity();
-    /** Unlock an existing portable vault; no raw-seed or automatic import path. */
+    /// Разблокирует существующий переносимый vault.
     bool LoadVault(std::string_view password);
-    /** Stop identity work and erase all unlocked key material from memory. */
+    /// Останавливает текущую работу и стирает весь разблокированный секретный материал.
     void Lock();
+    /// Возвращает true, если vault сейчас разблокирован.
     bool IsUnlocked() const;
-    /**
-     * The unlocked Identity's recovery phrase derives this network's genesis
-     * PoA finalizer key: it is the network's central authority. Proven from
-     * genesis alone; grants no signing or finality power to this process.
-     */
+    /// Проверяет, выводит ли текущая recovery phrase genesis-authorized PoA ключ сети.
     bool IsNetworkAuthority() const;
 
-    /** Access underlying keystore */
+    /// Возвращает доступ к подлежащему keystore.
     CybouKeyStore& GetKeyStore() { return m_keystore; }
+    /// Возвращает константный доступ к подлежащему keystore.
     const CybouKeyStore& GetKeyStore() const { return m_keystore; }
+    /// Возвращает связанный NodeRuntime.
     CybouNodeRuntime& GetNodeRuntime() { return m_runtime; }
 
-    /** Synchronous identity creation (blocks until complete or error) */
+    /// Синхронно создаёт новую Identity и ждёт результат.
     IdentityCreationResult CreateIdentitySync(
         std::string password,
         const PhaseCallback& on_phase = nullptr,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
-    /** Asynchronous identity creation */
+    /// Асинхронно создаёт новую Identity.
     void CreateIdentityAsync(
         std::string password,
         PhaseCallback on_phase,
         CompletionCallback on_complete,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
+    /// Синхронно восстанавливает Identity по 24 словам.
     IdentityCreationResult RestoreIdentitySync(
         const RecoveryWords& words,
         std::string password,
         const PhaseCallback& on_phase = nullptr,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
-    /** Persist a candidate vault before submitting a root rotation; promote it only after finality. */
+    /// Синхронно подготавливает и отправляет ротацию Identity.
     IdentityOperationResult RotateIdentitySync(const RecoveryWords& new_words, std::string password);
+    /// Возвращает true, если ротация Identity уже подготовлена и ещё не завершена.
     bool HasPendingIdentityRotation();
-    /** Resume from the encrypted candidate vault without asking the user to re-enter the phrase. */
+    /// Возобновляет локальное завершение ротации из зашифрованного candidate vault.
     IdentityOperationResult ResumeIdentityRotationSync(std::string password);
+    /// Асинхронно восстанавливает Identity по 24 словам.
     void RestoreIdentityAsync(
         RecoveryWords words,
         std::string password,
@@ -119,7 +134,7 @@ public:
         CompletionCallback on_complete,
         std::chrono::milliseconds timeout = std::chrono::seconds(30));
 
-    /** Cancel ongoing identity creation */
+    /// Отменяет текущую асинхронную работу сервиса Identity.
     void Cancel();
 
 private:

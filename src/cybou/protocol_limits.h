@@ -5,23 +5,20 @@
 #ifndef CYBOU_PROTOCOL_LIMITS_H
 #define CYBOU_PROTOCOL_LIMITS_H
 
+/// \file
+/// \brief Consensus-safe upper bounds shared между wire, execution и storage слоями.
+
 #include <cstddef>
 #include <cstdint>
 
 namespace cybou {
 
-/**
- * One invariant for every layer: consensus validation of RootPublication,
- * fees, publication staging, transient chunk-authorization proofs, encrypted trees
- * and StorageService placement. A publication the network can finalize is
- * always one the application and storage layers can serve.
- * 2^20 chunks is hundreds of GiB of encrypted content per publication.
- */
+/// \brief Верхняя граница числа чанков в одной RootPublication на всех слоях.
 inline constexpr std::uint32_t MAX_PUBLICATION_CHUNKS{1U << 20};
 
-/** Largest serialized ProtocolOperation accepted anywhere (pool, CYBOU P2P, CLI). */
+/// \brief Максимальный serialized ProtocolOperation, принимаемый в pool, P2P и CLI.
 inline constexpr std::uint32_t MAX_OPERATION_PAYLOAD_BYTES{128U * 1024U};
-/** Largest serialized finalized block transferred over CYBOU P2P. */
+/// \brief Максимальный serialized finalized block, передаваемый по CYBOU P2P.
 inline constexpr std::uint32_t MAX_FINALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 } // namespace cybou

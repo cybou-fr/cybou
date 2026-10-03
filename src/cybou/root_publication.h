@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Канонический wire-формат RootPublication и capsule helpers.
 
 #ifndef CYBOU_ROOT_PUBLICATION_H
 #define CYBOU_ROOT_PUBLICATION_H
@@ -21,12 +23,14 @@
 
 namespace cybou {
 
+/// \brief Верхние границы канонического формата RootPublication.
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_BYTES{128 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_OPERATION_BYTES{144 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};
 
+/// \brief Opaque recipient capsule, оборачивающая ContentKey под KEM-ключ получателя.
 struct RootRecipientCapsule {
     std::uint16_t kem_profile{IDENTITY_KEM_PROFILE_XWING};
     std::uint64_t key_epoch{0};
@@ -36,6 +40,7 @@ struct RootRecipientCapsule {
     friend bool operator==(const RootRecipientCapsule&, const RootRecipientCapsule&) = default;
 };
 
+/// \brief Единственная каноническая операция публикации контента в консенсусе.
 struct RootPublication {
     ChunkId root_chunk_id{};
     ChunkId chunk_authorization_root{};
@@ -45,6 +50,7 @@ struct RootPublication {
     friend bool operator==(const RootPublication&, const RootPublication&) = default;
 };
 
+/// \brief Identity-authorized RootPublication, пригодная для включения в блок.
 struct AuthorizedRootPublication {
     IdentityOperationAuthorization authorization;
     RootPublication publication;
@@ -52,14 +58,18 @@ struct AuthorizedRootPublication {
     friend bool operator==(const AuthorizedRootPublication&, const AuthorizedRootPublication&) = default;
 };
 
-/** Canonical CBOR body; Identity authorization is carried by the outer operation. */
+/// \brief Сериализует RootPublication в текущий канонический бинарный формат.
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
+/// \brief Десериализует и валидирует RootPublication.
 std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes);
+/// \brief Вычисляет протокольную комиссию RootPublication из размера операции и числа chunk'ов.
 std::optional<std::uint64_t> ComputeRootPublicationFee(
     const CybouProtocolParameters& params,
     std::size_t canonical_operation_bytes, std::uint32_t chunk_count);
+/// \brief Вычисляет payload commitment RootPublication.
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 
+/// \brief Создаёт recipient capsule для публикации корневого контента.
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,
@@ -70,6 +80,7 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::uint64_t recipient_key_epoch,
     std::span<const unsigned char, 32> content_key);
 
+/// \brief Открывает recipient capsule локальным seed'ом получателя и извлекает ContentKey.
 std::optional<ContentKey> OpenRootRecipientCapsule(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,

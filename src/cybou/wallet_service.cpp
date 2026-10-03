@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// Реализация сервиса кошелька и локальной синхронизации журнала операций.
+
 #include <cybou/wallet_service.h>
 #include <cybou/identity_operation_coordinator.h>
 
@@ -8,6 +11,13 @@
 #include <chrono>
 
 namespace cybou {
+namespace {
+std::uint64_t NowUnixSeconds()
+{
+    return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count());
+}
+} // namespace
 
 CybouWalletService::CybouWalletService(CybouNodeRuntime& runtime, CybouKeyStore& keystore)
     : m_runtime(runtime),
@@ -120,8 +130,7 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         .amount = -static_cast<int64_t>(amount),
         .system_side = false,
         .counterparty = recipient,
-        .timestamp = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count()),
+        .timestamp = NowUnixSeconds(),
         .height = m_runtime.GetFinalizedHeight().value_or(0),
         .finality = WalletEntryFinality::PENDING,
     };
@@ -177,8 +186,7 @@ WalletOperationResult CybouWalletService::LockToSystemBalance(const uint64_t amo
         .amount = static_cast<int64_t>(amount),
         .system_side = true,
         .counterparty = AccountId{},
-        .timestamp = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count()),
+        .timestamp = NowUnixSeconds(),
         .height = m_runtime.GetFinalizedHeight().value_or(0),
         .finality = WalletEntryFinality::PENDING,
     };
@@ -252,6 +260,9 @@ size_t CybouWalletService::SyncLedger()
     }
 
     auto working_entries = original_entries;
+    if (*tip_height > original_height) {
+        working_entries.reserve(original_entries.size() + static_cast<std::size_t>(*tip_height - original_height));
+    }
     const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
 
     uint64_t scanned_height = original_height;

@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// Реализация создания, восстановления и ротации локальной Identity.
+
 #include <cybou/operation_submit.h>
 #include <cybou/identity_service.h>
 #include <cybou/block_executor.h>

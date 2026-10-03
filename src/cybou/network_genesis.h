@@ -5,6 +5,9 @@
 #ifndef CYBOU_NETWORK_GENESIS_H
 #define CYBOU_NETWORK_GENESIS_H
 
+/// \file
+/// \brief Canonical signed NetworkGenesis и операции вокруг immutable official network definition.
+
 #include <cybou/identity_crypto.h>
 #include <cybou/protocol_params.h>
 #include <cybou/state.h>
@@ -18,32 +21,32 @@
 
 namespace cybou {
 
+/// \brief Проверяет допустимость immutable protocol parameters внутри NetworkGenesis.
 bool ValidateProtocolParameters(const CybouProtocolParameters& params);
-/** SHA-256("CYBOU/NETWORK-ID" || canonical Network Public Key), unchanged. */
+/// \brief Вычисляет immutable NetworkBinding = SHA-256("CYBOU/NETWORK-ID" || canonical Network Public Key).
 cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
+/// \brief Создаёт canonical DEV genesis state без локальных модификаций.
 CybouState CreateDevGenesisState();
 
 inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS"};
 
-/**
- * Canonical signed network genesis specification.
- * NetworkID is the exact canonical bytes of network_public_key.
- */
+/// \brief Canonical signed network genesis specification; NetworkID — точные canonical bytes network_public_key.
 struct NetworkGenesis {
 
-    /** Network Public Key (Root authority of this official network). */
+    /// \brief Network Public Key — офлайн root authority конкретной official network.
     IdentityHybridPublicKey network_public_key{IdentityKeyPurpose::NETWORK_ROOT, {}, {}};
 
     cybou::Hash256 genesis_state_root;
     IdentityHybridPublicKey poa_finalizer_public_key{IdentityKeyPurpose::POA_FINALIZER, {}, {}};
     CybouProtocolParameters protocol_parameters;
 
-    /** Signature signed by the strictly offline Network Private Key over the canonical specification digest. */
+    /// \brief Подпись офлайн Network Private Key по canonical digest спецификации.
     IdentityHybridSignature signature;
 
     friend bool operator==(const NetworkGenesis&, const NetworkGenesis&) = default;
 };
 
+/// \brief Причина отказа верификации signed NetworkGenesis.
 enum class NetworkGenesisError : uint8_t {
     NONE,
     INVALID_NETWORK_KEY,
@@ -53,26 +56,25 @@ enum class NetworkGenesisError : uint8_t {
     INVALID_SIGNATURE,
 };
 
-/** Serializes the unsigned specification payload for signing and hashing. */
+/// \brief Сериализует неподписанный canonical payload NetworkGenesis.
 std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& genesis);
 
-/** Computes the canonical specification digest to be signed by the Network Key. */
+/// \brief Вычисляет canonical digest спецификации, подписываемый Network Key.
 cybou::Hash256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis);
 
-/** Fully serializes the signed NetworkGenesis. */
+/// \brief Полностью сериализует signed NetworkGenesis.
 std::vector<unsigned char> SerializeSignedNetworkGenesis(const NetworkGenesis& genesis);
 
-/** Deserializes a signed NetworkGenesis from canonical bytes. */
+/// \brief Разбирает signed NetworkGenesis из canonical bytes.
 std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const unsigned char> bytes);
 
-/** Validates and cryptographically verifies the Signed NetworkGenesis. */
+/// \brief Валидирует и криптографически проверяет signed NetworkGenesis.
 NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis);
 
-/**
- * High-integrity verified network genesis type that guarantees valid signature and semantics.
- */
+/// \brief High-integrity wrapper: внутри только криптографически и семантически verified genesis.
 class VerifiedNetworkGenesis {
 public:
+    /// \brief Создаёт verified-объект только после полной проверки подписи и семантики.
     static std::optional<VerifiedNetworkGenesis> Create(NetworkGenesis genesis);
 
     const NetworkGenesis& GetGenesis() const noexcept { return m_genesis; }
@@ -83,7 +85,7 @@ public:
     const IdentityHybridPublicKey& GetPoaPublicKey() const noexcept { return m_genesis.poa_finalizer_public_key; }
     const CybouProtocolParameters& GetProtocolParameters() const noexcept { return m_genesis.protocol_parameters; }
 
-    /** Returns the exact canonical NetworkID bytes representing this network. */
+    /// \brief Возвращает точные canonical NetworkID bytes этой сети.
     std::span<const unsigned char> GetNetworkId() const noexcept { return m_network_id_bytes; }
 
 private:
@@ -94,14 +96,16 @@ private:
     cybou::Hash256 m_genesis_digest{cybou::Hash256::ZERO};
 };
 
-/** Canonical byte serialization of any IdentityHybridPublicKey. */
+/// \brief Canonical byte serialization любого IdentityHybridPublicKey.
 std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key);
+/// \brief Canonical разбор произвольного IdentityHybridPublicKey с optional проверкой purpose.
 std::optional<IdentityHybridPublicKey> CanonicalDeserializeHybridPublicKey(
     std::span<const unsigned char> bytes,
     std::optional<IdentityKeyPurpose> expected_purpose = std::nullopt);
 
-/** Canonical byte serialization of Network Public Key (exact NetworkID). */
+/// \brief Canonical byte serialization Network Public Key, то есть exact NetworkID bytes.
 std::vector<unsigned char> CanonicalSerializeNetworkPublicKey(const IdentityHybridPublicKey& key);
+/// \brief Canonical разбор exact NetworkID bytes обратно в Network Public Key.
 std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std::span<const unsigned char> bytes);
 
 } // namespace cybou

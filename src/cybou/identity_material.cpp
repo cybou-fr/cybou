@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация переносимого локального материала Identity.
+
 #include <cybou/identity_material.h>
 #include <cybou/identity_vault.h>
 #include <cybou/identity_crypto.h>

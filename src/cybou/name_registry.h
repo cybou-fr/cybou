@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Канонические правила имён .cybou, commit/reveal payload и NameRegistry.
 
 #ifndef CYBOU_NAME_REGISTRY_H
 #define CYBOU_NAME_REGISTRY_H
@@ -25,6 +27,7 @@
 
 namespace cybou {
 
+/// \brief Границы размеров канонической label и related payloads name subsystem'а.
 inline constexpr size_t NAME_MIN_LABEL_LENGTH{5};
 inline constexpr size_t NAME_MAX_LABEL_LENGTH{32};
 inline constexpr size_t NAME_COMMIT_PAYLOAD_SIZE{32};
@@ -33,6 +36,7 @@ inline constexpr size_t NAME_REVEAL_PAYLOAD_SIZE{1 + 32 + 32 + NAME_CLAIM_WORK_S
 inline constexpr size_t AUTHORIZED_NAME_COMMIT_SIZE{2565 + NAME_COMMIT_PAYLOAD_SIZE};    // 2597 bytes
 inline constexpr size_t AUTHORIZED_NAME_REVEAL_SIZE{2565 + NAME_REVEAL_PAYLOAD_SIZE};    // 2742 bytes
 
+/// \brief Ошибки синтаксической проверки публичной label .cybou.
 enum class NameValidationError : uint8_t {
     NONE,
     EMPTY,
@@ -46,6 +50,7 @@ enum class NameValidationError : uint8_t {
     PROTECTED_NAME,
 };
 
+/// \brief Проверяет публичную label .cybou по каноническим правилам.
 inline NameValidationError ValidateNameLabel(std::string_view label)
 {
     if (label.empty()) return NameValidationError::EMPTY;
@@ -93,6 +98,7 @@ inline NameValidationError ValidateNameLabel(std::string_view label)
     return NameValidationError::NONE;
 }
 
+/// \brief Вычисляет commitment NameCommit из сети, аккаунта, label и salt.
 inline cybou::Hash256 ComputeNameCommitment(
     const cybou::Hash256& network_binding,
     const AccountId& account_id,
@@ -113,12 +119,14 @@ inline cybou::Hash256 ComputeNameCommitment(
     return commitment;
 }
 
+/// \brief Payload операции NameCommit.
 struct NameCommitPayload {
     cybou::Hash256 commitment;
 
     friend bool operator==(const NameCommitPayload&, const NameCommitPayload&) = default;
 };
 
+/// \brief Сериализует payload NameCommit в канонический бинарный формат.
 inline std::optional<std::array<unsigned char, NAME_COMMIT_PAYLOAD_SIZE>> SerializeNameCommitPayload(
     const NameCommitPayload& payload)
 {
@@ -128,6 +136,7 @@ inline std::optional<std::array<unsigned char, NAME_COMMIT_PAYLOAD_SIZE>> Serial
     return out;
 }
 
+/// \brief Десериализует payload NameCommit.
 inline std::optional<NameCommitPayload> DeserializeNameCommitPayload(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != NAME_COMMIT_PAYLOAD_SIZE) return std::nullopt;
@@ -137,6 +146,7 @@ inline std::optional<NameCommitPayload> DeserializeNameCommitPayload(std::span<c
     return payload;
 }
 
+/// \brief Вычисляет payload commitment NameCommit.
 inline std::optional<IdentityKeyId> ComputeNameCommitPayloadCommitment(const NameCommitPayload& payload)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-COMMIT-PAYLOAD"};
@@ -150,6 +160,7 @@ inline std::optional<IdentityKeyId> ComputeNameCommitPayloadCommitment(const Nam
     return res;
 }
 
+/// \brief Identity-authorized NameCommit для включения в блок.
 struct AuthorizedNameCommit {
     IdentityOperationAuthorization authorization;
     NameCommitPayload commit;
@@ -157,6 +168,7 @@ struct AuthorizedNameCommit {
     friend bool operator==(const AuthorizedNameCommit&, const AuthorizedNameCommit&) = default;
 };
 
+/// \brief Proof-of-work структура для NameReveal.
 struct NameClaimWork {
     cybou::Hash256 network_binding;
     AccountId account_id;
@@ -167,6 +179,7 @@ struct NameClaimWork {
     friend bool operator==(const NameClaimWork&, const NameClaimWork&) = default;
 };
 
+/// \brief Сериализует NameClaimWork в канонический бинарный формат.
 inline std::optional<std::array<unsigned char, NAME_CLAIM_WORK_SIZE>> SerializeNameClaimWork(
     const NameClaimWork& work)
 {
@@ -182,6 +195,7 @@ inline std::optional<std::array<unsigned char, NAME_CLAIM_WORK_SIZE>> SerializeN
     return out;
 }
 
+/// \brief Десериализует NameClaimWork.
 inline std::optional<NameClaimWork> DeserializeNameClaimWork(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != NAME_CLAIM_WORK_SIZE) return std::nullopt;
@@ -201,6 +215,7 @@ inline std::optional<NameClaimWork> DeserializeNameClaimWork(std::span<const uns
     return work;
 }
 
+/// \brief Вычисляет domain-separated hash структуры NameClaimWork.
 inline cybou::Hash256 ComputeNameClaimWorkHash(const NameClaimWork& work)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-WORK"};
@@ -214,6 +229,7 @@ inline cybou::Hash256 ComputeNameClaimWorkHash(const NameClaimWork& work)
     return hash;
 }
 
+/// \brief Проверяет PoW для NameClaimWork против заданной сложности.
 inline bool CheckNameClaimWork(const NameClaimWork& work, uint32_t required_bits)
 {
     if (required_bits == 0) return true;
@@ -232,6 +248,7 @@ inline bool CheckNameClaimWork(const NameClaimWork& work, uint32_t required_bits
     return count >= required_bits;
 }
 
+/// \brief Payload операции NameReveal.
 struct NameRevealPayload {
     std::string label;
     std::array<unsigned char, 32> salt{};
@@ -240,6 +257,7 @@ struct NameRevealPayload {
     friend bool operator==(const NameRevealPayload&, const NameRevealPayload&) = default;
 };
 
+/// \brief Сериализует payload NameReveal в канонический бинарный формат.
 inline std::optional<std::array<unsigned char, NAME_REVEAL_PAYLOAD_SIZE>> SerializeNameRevealPayload(
     const NameRevealPayload& payload)
 {
@@ -258,6 +276,7 @@ inline std::optional<std::array<unsigned char, NAME_REVEAL_PAYLOAD_SIZE>> Serial
     return out;
 }
 
+/// \brief Десериализует payload NameReveal.
 inline std::optional<NameRevealPayload> DeserializeNameRevealPayload(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != NAME_REVEAL_PAYLOAD_SIZE) return std::nullopt;
@@ -278,6 +297,7 @@ inline std::optional<NameRevealPayload> DeserializeNameRevealPayload(std::span<c
     return payload;
 }
 
+/// \brief Вычисляет payload commitment NameReveal.
 inline std::optional<IdentityKeyId> ComputeNameRevealPayloadCommitment(const NameRevealPayload& payload)
 {
     static constexpr std::string_view DOMAIN{"CYBOU/NAME-REVEAL-PAYLOAD"};
@@ -291,6 +311,7 @@ inline std::optional<IdentityKeyId> ComputeNameRevealPayloadCommitment(const Nam
     return res;
 }
 
+/// \brief Identity-authorized NameReveal для включения в блок.
 struct AuthorizedNameReveal {
     IdentityOperationAuthorization authorization;
     NameRevealPayload reveal;
@@ -298,6 +319,7 @@ struct AuthorizedNameReveal {
     friend bool operator==(const AuthorizedNameReveal&, const AuthorizedNameReveal&) = default;
 };
 
+/// \brief Запись о pending NameCommit, ожидающем достаточной глубины.
 struct NameCommitRecord {
     AccountId account_id;
     uint64_t commit_height{0};
@@ -305,6 +327,7 @@ struct NameCommitRecord {
     friend bool operator==(const NameCommitRecord&, const NameCommitRecord&) = default;
 };
 
+/// \brief Каноническое отображение имён, обратных ссылок и pending commit'ов.
 struct NameRegistry {
     std::map<std::string, AccountId> names;
     std::map<AccountId, std::string> account_names;
@@ -312,12 +335,14 @@ struct NameRegistry {
 
     friend bool operator==(const NameRegistry&, const NameRegistry&) = default;
 
+    /// \brief Разрешает публичную label в AccountId.
     const AccountId* Resolve(std::string_view label) const
     {
         auto it = names.find(std::string(label));
         return it != names.end() ? &it->second : nullptr;
     }
 
+    /// \brief Возвращает primary name аккаунта, если оно уже финализировано.
     const std::string* PrimaryName(const AccountId& account_id) const
     {
         auto it = account_names.find(account_id);
@@ -325,6 +350,7 @@ struct NameRegistry {
     }
 };
 
+/// \brief Сериализует канонический реестр имён.
 inline std::vector<unsigned char> SerializeNameRegistry(const NameRegistry& reg)
 {
     std::vector<unsigned char> out;
@@ -345,6 +371,7 @@ inline std::vector<unsigned char> SerializeNameRegistry(const NameRegistry& reg)
     return out;
 }
 
+/// \brief Десериализует и валидирует канонический реестр имён.
 inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsigned char> bytes)
 {
     if (bytes.size() < 4 + 4) return std::nullopt;
@@ -402,6 +429,7 @@ inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsig
     return reg;
 }
 
+/// \brief Ошибки применения NameCommit к кандидатному состоянию.
 enum class NameCommitError : uint8_t {
     NONE,
     INVALID_PAYLOAD,
@@ -413,6 +441,7 @@ enum class NameCommitError : uint8_t {
     COMMITMENT_LIMIT_EXCEEDED,
 };
 
+/// \brief Ошибки применения NameReveal к кандидатному состоянию.
 enum class NameRevealError : uint8_t {
     NONE,
     INVALID_PAYLOAD,
@@ -429,8 +458,9 @@ enum class NameRevealError : uint8_t {
     INVALID_WORK_PROOF,
 };
 
-// Aliases
+/// \brief Псевдоним публичного типа для NameCommit operation payload.
 using NameCommitOp = AuthorizedNameCommit;
+/// \brief Псевдоним публичного типа для NameReveal operation payload.
 using NameRevealOp = AuthorizedNameReveal;
 
 } // namespace cybou

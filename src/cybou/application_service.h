@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Восстановимый локальный индекс Mail/Files поверх финализированных RootPublication.
+
 #ifndef CYBOU_APPLICATION_SERVICE_H
 #define CYBOU_APPLICATION_SERVICE_H
 
@@ -23,19 +26,15 @@ class CybouKeyStore;
 class CybouNodeRuntime;
 class StorageService;
 
-/** Local mailbox placement. Archive and Trash are local, not published. */
-/**
- * DELETED is a local tombstone ("Delete forever" from Trash): delivered mail
- * is part of finalized history, so it is hidden from this mailbox rather
- * than erased. Only a Trash message can become DELETED; ListMail omits it.
- */
+/// Локальная папка почтового сообщения в Application DB.
 enum class MailFolder : std::uint8_t { INBOX = 1, SENT = 2, ARCHIVE = 3, TRASH = 4, DELETED = 5 };
 
+/// Локально проиндексированная запись письма.
 struct MailRecord {
     cybou::Hash256 operation_id;
     std::uint64_t finalized_height{0};
     std::uint32_t operation_index{0};
-    /** From the outer authorized publication, never from decrypted content. */
+    /// Отправитель из внешней авторизованной публикации, а не из расшифрованного тела.
     AccountId sender;
     bool outgoing{false};
     MailMessage message;
@@ -44,7 +43,7 @@ struct MailRecord {
     bool starred{false};
 };
 
-/** Canonical publication order of the mutation that produced an item's state. */
+/// Канонический порядок публикации мутации, породившей текущее состояние объекта.
 struct PrivateOrder {
     std::uint64_t height{0};
     std::uint32_t operation_index{0};
@@ -52,39 +51,38 @@ struct PrivateOrder {
     auto operator<=>(const PrivateOrder&) const = default;
 };
 
+/// Локально проиндексированная запись Files.
 struct FileRecord {
     FileItem item;
     cybou::Hash256 operation_id;
     PrivateOrder order;
     bool deleted{false};
-    /** Local, encrypted Identity state; never published. */
+    /// Локальное зашифрованное состояние Identity, не публикуемое в сеть.
     bool starred{false};
 };
 
+/// Состояние локальной доступности и индексации корня публикации.
 enum class AccessibleRootState : std::uint8_t {
     DISCOVERED = 1,
     INDEXED = 2,
-    /** Root content could not be fetched yet; retried without blocking the scan. */
+    /// Контент временно недоступен и будет повторно запрошен позже.
     TEMPORARILY_UNAVAILABLE = 3,
-    /** Opened but not a valid private document for this Identity; never retried. */
+    /// Капсула открылась, но документ недопустим для этой Identity.
     INVALID = 4,
 };
 
-/** Device-local attachment of an unsent draft: a local file or a Files reference. */
+/// Локальное вложение черновика: путь на устройстве или ссылка на Files.
 struct DraftAttachment {
     std::string name;
     std::uint64_t logical_size{0};
-    std::string source_path;   ///< local file chosen on this device
-    std::string reference_id;  ///< Files reference, e.g. "ref-<item>"
+    std::string source_path;   ///< Локальный файл, выбранный на этом устройстве.
+    std::string reference_id;  ///< Ссылка Files, например `ref-<item>`.
     bool operator==(const DraftAttachment&) const = default;
 };
 
-/**
- * Unsent Mail compose state. Drafts live only in the encrypted Application DB
- * of this device; they are never published and are not rebuilt from history.
- */
+/// Непубликованный compose state письма в локальной Application DB.
 struct MailDraft {
-    std::string draft_id; ///< [a-z0-9-], at most 64 characters
+    std::string draft_id; ///< `[a-z0-9-]`, не более 64 символов.
     std::string to;
     std::string subject;
     std::string body;
@@ -93,6 +91,7 @@ struct MailDraft {
     bool operator==(const MailDraft&) const = default;
 };
 
+/// Текущий прогресс сканирования финализированной истории приложения.
 struct ApplicationScanProgress {
     std::uint64_t scanned_height{0};
     std::uint64_t finalized_height{0};
@@ -101,46 +100,47 @@ struct ApplicationScanProgress {
 };
 
 
-/**
- * Inbound discovery and private indexing for one unlocked Identity.
- *
- * Scans canonical finalized blocks for AuthorizedRootPublications, tries
- * this Identity's recoverable KEM epochs on each capsule, and records only
- * publications that open. Roots are fetched through StorageService and
- * decoded as private schemas into the encrypted Application DB. Processing is
- * idempotent per OperationID and resumes from a persisted checkpoint. The
- * whole projection is rebuildable from finalized history and storage.
- */
+/// Входное обнаружение и приватная индексация для одной разблокированной Identity.
 class ApplicationService final {
 public:
+    /// Создаёт сервис индексации поверх runtime, keystore, Application DB и StorageService.
     ApplicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
         PrivateApplicationStore& application_db, StorageService& storage);
 
-    /** Scans up to max_blocks new finalized blocks and retries unavailable roots. */
+    /// Сканирует до `max_blocks` новых финализированных блоков и повторяет недоступные корни.
     ApplicationScanProgress Scan(std::uint64_t max_blocks = 256);
+    /// Возвращает текущий прогресс сканирования.
     ApplicationScanProgress Progress();
 
+    /// Возвращает локально доступные письма.
     std::vector<MailRecord> ListMail();
+    /// Возвращает письмо по его PrivateItemId.
     std::optional<MailRecord> GetMail(const PrivateItemId& message_id);
-    /** Local mailbox state; never published. */
+    /// Обновляет локальный флаг прочтения письма.
     bool SetMailRead(const PrivateItemId& message_id, bool read);
+    /// Обновляет локальный флаг звезды письма.
     bool SetMailStarred(const PrivateItemId& message_id, bool starred);
-    /** Persists the local star of an existing Files item. */
+    /// Сохраняет локальный флаг звезды существующего объекта Files.
     bool SetFileStarred(const PrivateItemId& item_id, bool starred);
+    /// Перемещает письмо между локальными папками.
     bool MoveMail(const PrivateItemId& message_id, MailFolder folder);
 
-    /** Current Files catalog (deleted items excluded). */
+    /// Возвращает текущий каталог Files без удалённых элементов.
     std::vector<FileRecord> ListFiles();
+    /// Возвращает один объект Files по его PrivateItemId.
     std::optional<FileRecord> GetFile(const PrivateItemId& item_id);
 
-    /** Device-local drafts, newest first. */
+    /// Сохраняет локальный черновик письма.
     bool SaveDraft(const MailDraft& draft);
+    /// Возвращает локальные черновики, начиная с самых новых.
     std::vector<MailDraft> ListDrafts();
+    /// Удаляет локальный черновик по `draft_id`.
     bool DeleteDraft(std::string_view draft_id);
 
-    /** Own RecoveryBridges in canonical order (for historical KEM recovery). */
+    /// Возвращает собственные RecoveryBridge в каноническом порядке.
     std::vector<IdentityRecoveryBridge> RecoveryBridges();
 
+    /// Возвращает локальное состояние индексации публикации по её OperationID.
     std::optional<AccessibleRootState> PublicationState(const cybou::Hash256& operation_id);
 
 private:
@@ -161,7 +161,7 @@ private:
     std::optional<FileRecord> LoadFile(const PrivateItemId& id) const;
     bool SaveFile(const FileRecord& record);
     std::uint64_t Checkpoint() const;
-    /** Imports verified historical KEM seeds; true when an epoch is recovered for the first time. */
+    /// Импортирует проверенные исторические KEM seed из RecoveryBridge.
     bool ImportBridgeSeeds(const AccountId& me, std::uint64_t my_key_epoch);
 
     CybouNodeRuntime& m_runtime;
@@ -169,7 +169,7 @@ private:
     PrivateApplicationStore& m_application_db;
     StorageService& m_storage;
     std::mutex m_mutex;
-    /** Set during the one-time repair pass when the recovery index is absent. */
+    /// Установлен на однократном проходе ремонта старых индексов.
     bool m_repairing{false};
 };
 

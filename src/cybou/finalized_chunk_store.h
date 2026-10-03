@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Provider-facing admission store для finalized RootPublication чанков.
+
 #ifndef CYBOU_FINALIZED_CHUNK_STORE_H
 #define CYBOU_FINALIZED_CHUNK_STORE_H
 
@@ -23,6 +26,7 @@
 
 namespace cybou {
 
+/// \brief Итог попытки принять authorized chunk в provider store.
 enum class ChunkAdmissionStatus {
     STORED,
     ALREADY_STORED,
@@ -34,6 +38,7 @@ enum class ChunkAdmissionStatus {
     STORAGE_ERROR,
 };
 
+/// \brief Результат admission-попытки для одного чанка.
 struct ChunkAdmissionResult {
     ChunkAdmissionStatus status{ChunkAdmissionStatus::INVALID};
     explicit operator bool() const
@@ -42,12 +47,13 @@ struct ChunkAdmissionResult {
     }
 };
 
-/** Must resolve only RootPublications found in this full node's canonical finalized history. */
+/// \brief Разрешает только те RootPublication, которые уже есть в finalized history узла.
 using FinalizedPublicationLookup = std::function<std::optional<RootPublication>(const cybou::Hash256& operation_id)>;
 
-/** Content-addressed immutable provider store for finalized RootPublication chunks. */
+/// \brief Неизменяемый provider store для finalized RootPublication чанков.
 class FinalizedChunkStore final {
 public:
+    /// \brief Создаёт admission-store, привязанный к network binding и общему blob-store.
     FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
         std::span<const unsigned char, 32> network_binding, std::uint64_t capacity_bytes,
         bool wipe_data = false);
@@ -55,20 +61,25 @@ public:
     FinalizedChunkStore(const FinalizedChunkStore&) = delete;
     FinalizedChunkStore& operator=(const FinalizedChunkStore&) = delete;
 
+    /// \brief Принимает authorized chunk только для finalized публикации и корректного proof.
     ChunkAdmissionResult PutChunk(const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof, const FinalizedPublicationLookup& lookup);
-    /** Returns a verified stored proof only while the admitted blob is present. */
+    /// \brief Возвращает сохранённый proof только пока сам admitted blob реально присутствует.
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
         const FinalizedPublicationLookup& lookup) const;
+    /// \brief Возвращает локально сохранённый provider blob после проверки метаданных размера.
     std::optional<std::vector<unsigned char>> GetChunk(const ChunkId& chunk_id) const;
+    /// \brief Возвращает true, если admitted chunk присутствует и размер совпадает с метаданными.
     bool HasChunk(const ChunkId& chunk_id) const;
-    /** Metadata-only bound, before network byte admission or reading a blob. */
+    /// \brief Возвращает размер admitted blob только по provider-метаданным.
     std::optional<uint64_t> StoredSize(const ChunkId& chunk_id) const;
-    /** Deletes a local cache blob unless this provider has admitted it (atomic with admission). */
+    /// \brief Удаляет локальный cache-blob только если provider его не admit-ил.
     bool RemoveUnlessAdmitted(const ChunkId& chunk_id);
+    /// \brief Возвращает число байтов, занятых admitted provider-репликами.
     std::uint64_t UsedBytes() const;
+    /// \brief Возвращает локальную квоту provider-store.
     std::uint64_t CapacityBytes() const { return m_capacity_bytes; }
 
 private:

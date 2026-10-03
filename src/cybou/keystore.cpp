@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// Реализация локального keystore Identity и производных криптографических ролей.
+
 #include <cybou/keystore.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -211,6 +214,7 @@ std::vector<std::pair<std::uint64_t, XWingSeed>> CybouKeyStore::KemSeedsForRecov
 {
     std::vector<std::pair<std::uint64_t, XWingSeed>> seeds;
     if (!m_impl->identity_xwing_seed) return seeds;
+    seeds.reserve(m_impl->historical_xwing_seeds.size() + 1);
     for (const auto& [epoch, seed] : m_impl->historical_xwing_seeds) {
         if (epoch < current_key_epoch) seeds.emplace_back(epoch, seed);
     }

@@ -4,6 +4,9 @@
 #ifndef CYBOU_NODE_RUNTIME_H
 #define CYBOU_NODE_RUNTIME_H
 
+/// \file
+/// \brief Потокобезопасный Full Node runtime: finalized state, candidate execution, relay и storage.
+
 #include <cybou/operation_submit.h>
 #include <cybou/operation_pool.h>
 #include <cybou/poa_finalizer.h>
@@ -44,43 +47,44 @@ class CybouKeyStore;
 class IdentityOperationCoordinator;
 class PoaSigner;
 
-/** Stable TLS identity for a node whose address is a compiled bootstrap locator. */
+/// \brief Стабильная TLS identity для узла, обслуживающего compiled bootstrap locator.
 struct TlsServerIdentity {
     std::filesystem::path certificate_chain_file;
     std::filesystem::path private_key_file;
 };
 
+/// \brief Явно сконфигурированный peer с optional transport pin.
 struct ConfiguredPeer {
     std::pair<std::string, uint16_t> endpoint;
     std::optional<std::array<unsigned char, 32>> tls_spki_sha256;
 };
 
+/// \brief Полная конфигурация одного Full Node runtime.
 struct NodeRuntimeConfig {
     VerifiedNetworkGenesis network_genesis;
-    /**
-     * Compiled rendezvous peers of the official network: dialed first like any
-     * ordinary peer, with the session TLS SPKI checked against the compiled pin.
-     */
+    /// \brief Каталог локального runtime state и provider storage.
     std::filesystem::path data_dir;
     std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
+    /// \brief Compiled/operator peers; pinned locators набираются первыми как обычные Full Nodes.
     std::vector<ConfiguredPeer> configured_peers;
-    /** This node's own CYBOU P2P listener; used to filter self-addresses out of discovery. */
+    /// \brief Собственный CYBOU P2P listener узла; нужен для фильтрации self-addresses.
     std::optional<std::pair<std::string, uint16_t>> advertised_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
-    /** Only on the node serving a bootstrap locator; ordinary nodes use ephemeral TLS. */
+    /// \brief Только для узла bootstrap locator; обычные узлы используют ephemeral TLS.
     std::optional<TlsServerIdentity> tls_server_identity;
-    /** nullopt selects automatic allocation; explicit zero is restricted to memory-only tests. */
+    /// \brief nullopt = автоматическая local storage allocation; zero допустим только в memory-only tests.
     std::optional<uint64_t> storage_capacity_bytes;
     std::shared_ptr<EventWriter> event_writer;
-    /** Required local address policy for all public P2P sockets. */
+    /// \brief Локальная policy-проверка адресов для всех публичных P2P sockets.
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 };
 
-/** Construct consistent runtime inputs from a verified compiled network. */
+/// \brief Строит согласованную runtime-конфигурацию из verified compiled official network.
 NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir);
 
+/// \brief Высокоуровневое состояние локального runtime и persistent state.
 enum class NodeRuntimeState : uint8_t {
     UNINITIALIZED = 0,
     READY = 1,
@@ -89,8 +93,10 @@ enum class NodeRuntimeState : uint8_t {
     SAFETY_HALTED = 4,
 };
 
+/// \brief Последний статус попытки локального PoA block production.
 enum class BlockProductionStatus : uint8_t { PRODUCED, SIGNER_UNAVAILABLE, RETRY, SAFETY_HALT };
 
+/// \brief Снимок ключевого состояния runtime для UI, CLI и service-логики.
 struct NodeRuntimeStatus {
     cybou::Hash256 network_binding;
     uint64_t finalized_height{0};
@@ -102,10 +108,12 @@ struct NodeRuntimeStatus {
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
 };
 
+/// \brief Итог поиска finalized операции в локальной проверенной истории.
 enum class FinalizedOperationLookupStatus : uint8_t {
     FOUND, NOT_FOUND, HISTORY_UNAVAILABLE,
 };
 
+/// \brief Координаты finalized операции в canonical history.
 struct FinalizedOperationLookupResult {
     FinalizedOperationLookupStatus status{FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE};
     uint64_t scanned_height{0};
@@ -114,6 +122,7 @@ struct FinalizedOperationLookupResult {
     cybou::Hash256 block_id;
 };
 
+/// \brief Итог поиска finalized KEM package для Identity и её key epoch.
 enum class IdentityKemPackageLookupStatus : uint8_t {
     FOUND,
     NOT_FOUND,
@@ -122,6 +131,7 @@ enum class IdentityKemPackageLookupStatus : uint8_t {
     HISTORY_UNAVAILABLE,
 };
 
+/// \brief Результат разрешения finalized KEM package из проверенной истории.
 struct IdentityKemPackageLookupResult {
     IdentityKemPackageLookupStatus status{IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE};
     IdentityKemPackage package{};
@@ -134,6 +144,7 @@ struct IdentityKemPackageLookupResult {
     cybou::Hash256 state_root;
 };
 
+/// \brief Локально наблюдаемый статус операции до или после finalization.
 enum class OperationStatusKind : uint8_t {
     UNKNOWN,
     LOCAL_PENDING,
@@ -143,30 +154,29 @@ enum class OperationStatusKind : uint8_t {
     HISTORY_UNAVAILABLE,
 };
 
+/// \brief Локально наблюдаемый статус операции и число удерживаемых Validation-attestations.
 struct OperationStatus {
     OperationStatusKind kind{OperationStatusKind::UNKNOWN};
     uint64_t finalized_height{0};
-    /** Verified eligible attestations held for this locally valid, unfinalized candidate. */
+    /// \brief Число verified eligible attestations для локально валидного, но ещё не finalized кандидата.
     uint32_t validation_signatures{0};
 
-    /** VALIDATED: locally valid and attested by at least one eligible Identity. Changes no state. */
+    /// \brief true, если кандидат локально валиден и имеет хотя бы одну eligible attestation; state не меняется.
     bool IsValidated() const { return kind != OperationStatusKind::FINALIZED && validation_signatures > 0; }
 };
 
+/// \brief Итог приёма peer Validation-attestation для уже исполненного локального кандидата.
 enum class ValidationAcceptStatus : uint8_t {
     ADDED,
     DUPLICATE,
-    /** This node holds no locally valid candidate with that OperationID. */
+    /// \brief Узел не держит локально валидный candidate с данным OperationID.
     NOT_CANDIDATE,
     STALE_BASE,
     INVALID,
     FULL,
 };
 
-/**
- * CybouNodeRuntime provides a unified, thread-safe runtime service
- * for both headless (cybou-node) and GUI (cybou desktop).
- */
+/// \brief Унифицированный потокобезопасный runtime для headless и desktop Full Node.
 class CybouNodeRuntime {
 public:
     explicit CybouNodeRuntime(NodeRuntimeConfig config);
@@ -175,146 +185,161 @@ public:
     CybouNodeRuntime(const CybouNodeRuntime&) = delete;
     CybouNodeRuntime& operator=(const CybouNodeRuntime&) = delete;
 
-    /** Initialize store with genesis state if not already initialized. */
+    /// \brief Инициализирует store canonical genesis state, если state ещё не существует.
     bool InitializeGenesis(const CybouState& genesis, bool sync = true);
 
-    /** Current runtime status */
+    /// \brief Возвращает текущий агрегированный статус runtime.
     NodeRuntimeStatus GetStatus() const;
+    /// \brief Возвращает диагностический snapshot runtime, peer set и storage usage.
     NodeDiagnosticsSnapshot GetDiagnostics() const;
+    /// \brief Доступ к optional writer'у событий runtime.
     std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
+    /// \brief Возвращает сохранённые PoA safety evidence из local state store.
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
-    /** Network definition and identifier */
+    /// \brief Verified immutable network definition runtime.
     const VerifiedNetworkGenesis& GetNetworkGenesis() const { return m_config.network_genesis; }
+    /// \brief NetworkBinding текущей official network.
     const cybou::Hash256& GetNetworkBinding() const { return m_network_binding; }
 
-    /** Finalized height and head */
+    /// \brief Высота и tip canonical finalized chain, если они уже инициализированы.
     std::optional<uint64_t> GetFinalizedHeight() const;
     std::optional<cybou::Hash256> GetFinalizedTip() const;
     std::optional<cybou::Hash256> GetStateRoot() const;
 
-    /** Account state lookup */
+    /// \brief Читает finalized AccountState из локального canonical state.
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
 
-    /** Submit an operation to pending pool (producer) or direct execution */
+    /// \brief Локально исполняет и подаёт операцию в candidate pool и/или relay.
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
-    /** PoA only: sign and queue an AUTH GRANT/BURN valid solely in the next block. */
+    /// \brief Только для PoA signer: подписывает AUTH GRANT/BURN, валидный лишь для следующего блока.
     OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
+    /// \brief Возвращает локально известный статус операции.
     OperationStatus GetOperationStatus(const cybou::Hash256& op_id) const;
+    /// \brief Возвращает coordinator, привязанный к конкретному keystore и его nonce journal.
     IdentityOperationCoordinator& GetIdentityOperationCoordinator(CybouKeyStore& keystore);
+    /// \brief Просит все зарегистрированные coordinators повторить просроченные relay-попытки.
     void RetryPendingIdentityOperations();
+    /// \brief Возвращает недавние finalized heads для gossip.
     std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
 
-    /** Produce a block if running as the PoA finalizer */
+    /// \brief Производит следующий finalized block, если локальный узел сейчас выполняет роль PoA finalizer.
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
+    /// \brief Возвращает статус последней попытки block production.
     BlockProductionStatus LastBlockProductionStatus() const;
-    /** Arm the local PoA signer with a signer matching this network's genesis key. */
+    /// \brief Включает локальный PoA signer, если он соответствует genesis-authorized key.
     bool EnablePoaSigner(std::shared_ptr<PoaSigner> signer);
-    /** Stop signing while preserving the node's pending operation pool and journal. */
+    /// \brief Отключает локальное PoA signing без очистки candidate pool и journal.
     void DisablePoaSigner();
+    /// \brief true, если локальный PoA signer включён и готов к подписи.
     bool IsPoaSignerActive() const;
 
-    /** Relay only after this node independently executed the operation on its finalized state. */
+    /// \brief Ставит в relay только операцию, уже независимо исполненную этим узлом на finalized state.
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
         bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
-    /**
-     * Local Identity used to attest candidates this node executed. It signs only
-     * while unlocked and while its finalized AUTH exceeds 1,000,000; nullptr clears it.
-     */
+    /// \brief Настраивает локальную Identity для attestation кандидатов; nullptr очищает signer.
     void SetValidationSigner(ValidationSignerRef signer);
+    /// \brief Проверяет право локального signer'а подписывать Validation в текущем finalized state.
     bool IsLocalValidationEligible() const;
-    /** Verify a peer attestation against this node's own candidate and finalized state. */
+    /// \brief Проверяет peer-attestation только против локального кандидата и собственного finalized state.
     ValidationAcceptStatus AcceptValidationAttestation(const ValidationAttestation& attestation);
+    /// \brief Возвращает удерживаемые attestations для одной локальной candidate operation.
     std::vector<ValidationAttestation> GetValidationAttestations(const cybou::Hash256& operation_id) const;
+    /// \brief Возвращает следующую attestation, ещё неизвестную вызывающей стороне.
     std::optional<ValidationAttestation> NextValidationAttestation(
         const std::function<bool(const ValidationPool::Key&)>& skip) const;
-    /** Locally executed, not yet finalized candidates held by this node. */
+    /// \brief Число локально исполненных, но ещё не finalized кандидатов.
     size_t CandidateOperationCount() const;
+    /// \brief Проверяет наличие локально удерживаемого candidate operation.
     bool HasCandidateOperation(const cybou::Hash256& operation_id) const;
+    /// \brief Резервирует голову relay-очереди для одной активной передачи.
     std::optional<RelayedOperation> ClaimRelayedOperation();
+    /// \brief Освобождает ранее зарезервированную relay-операцию после неуспешной отправки.
     void ReleaseRelayedOperation(const cybou::Hash256& operation_id);
+    /// \brief Подтверждает успешную отправку зарезервированной relay-операции.
     bool AcknowledgeRelayedOperation(const cybou::Hash256& operation_id);
+    /// \brief Проверяет, удерживается ли операция в relay-очереди.
     bool HasRelayedOperation(const cybou::Hash256& operation_id) const;
 
-    /** Commit a finalized block */
+    /// \brief Коммитит внешний verified finalized block в локальную canonical chain.
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 
-    /** Block lookup by height */
+    /// \brief Читает finalized block по высоте из локальной canonical history.
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
     FinalizedOperationLookupResult FindFinalizedOperation(const cybou::Hash256& op_id) const;
-    /** Resolve a RootPublication only from verified canonical finalized history. */
+    /// \brief Разрешает RootPublication только из проверенной canonical finalized history.
     std::optional<RootPublication> FindFinalizedRootPublication(const cybou::Hash256& op_id) const;
-    /** Resolve the finalized KEM capability for an Identity key epoch. */
+    /// \brief Находит finalized KEM package для указанной Identity и key epoch.
     IdentityKemPackageLookupResult FindIdentityKemPackage(
         const AccountId& account_id, uint64_t key_epoch) const;
 
-    /** Maintain discovered CYBOU P2P sessions, fail over across peers, and sync verified blocks. */
+    /// \brief Поддерживает P2P sessions, failover между peer routes и verified block sync.
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
+    /// \brief Число currently connected peers.
     size_t ConnectedPeerCount() const;
-    /** Local encrypted staging/cache, available on every Full Node. */
+    /// \brief Локальный encrypted staging/cache, присутствующий на каждом Full Node.
     ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
-    /** Why local blobs stay: pins and evictable cache entries (never content semantics). */
+    /// \brief Реестр pin/cache причин удержания локальных blob'ов без прикладной семантики.
     ChunkRetentionRegistry& GetChunkRetention() { return *m_chunk_retention; }
-    /**
-     * Evicts least-recently-used unpinned cache blobs over cache_budget_bytes.
-     * Pinned and provider-admitted blobs are never removed.
-     */
+    /// \brief Эвиктит LRU unpinned cache blobs сверх cache_budget_bytes; pinned и admitted blobs не трогает.
     ChunkRetentionRegistry::CollectResult CollectChunkGarbage(std::uint64_t cache_budget_bytes,
         std::uint64_t now_ms, std::size_t max_removals = 256);
     const ChunkBlobStore& GetChunkBlobStore() const { return *m_chunk_blob_store; }
     ChunkAdmissionResult PutFinalizedChunk(const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
+    /// \brief Возвращает finalized encrypted chunk из локального storage.
     std::optional<std::vector<unsigned char>> GetFinalizedChunk(const ChunkId& chunk_id) const;
+    /// \brief Возвращает finalized authorization proof для сохранённого chunk.
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) const;
+    /// \brief Проверяет наличие finalized chunk в локальном storage.
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** A connected CYBOU P2P storage peer and the StorageId it proved on demand. */
+    /// \brief Connected storage peer и доказанный им по запросу StorageId.
     struct StorageEndpoint {
         std::string address;
         uint16_t port{0};
         std::array<unsigned char, 32> storage_id{};
     };
     std::vector<StorageEndpoint> StorageEndpoints() const;
-    /** Storage calls go only to a session that proved the expected StorageId. */
+    /// \brief Отправляет chunk только peer-session, доказавшей ожидаемый StorageId.
     std::optional<ChunkAdmissionResult> PutChunkToStorageEndpoint(const std::string& address, uint16_t port,
         const std::array<unsigned char, 32>& storage_id, const cybou::Hash256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStorageEndpoint(const std::string& address,
         uint16_t port, const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id);
-    /** This node's storage provider identity; available on every Full Node. */
+    /// \brief StorageId этого узла; доступен на каждом Full Node.
     std::optional<std::array<unsigned char, 32>> LocalStorageId() const;
-    /** Encoded STORAGE_PROOF for a storage challenge; available on every Full Node. */
+    /// \brief Кодирует STORAGE_PROOF для challenge-response внутри storage relationship.
     std::optional<std::vector<unsigned char>> SignStorageProof(std::span<const unsigned char> message) const;
+    /// \brief Запрашивает у peer authorization proof для already finalized chunk.
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStorageEndpoint(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& storage_id,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
 
-
-    /** Peer discovery endpoints */
-    /** Local pre-parse abuse limiter; it has no protocol or Authority effect. */
+    /// \brief Локальный pre-parse abuse limiter; не имеет protocol или Authority effect.
     std::optional<uint64_t> FinalizedChunkSize(const ChunkId& id) const
     { return m_finalized_chunk_store->StoredSize(id); }
     std::shared_ptr<void> AcquireStorageTransfer(const std::string& address)
     { return m_ingress.AcquireStorageTransfer(address); }
     bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
     { return m_ingress.Admit(address, work, bytes); }
+    /// \brief Проверяет peer address через локальную admission policy.
     bool AdmitPeerAddress(const std::string& numeric_address) const;
+    /// \brief Возвращает набор peer endpoints, пригодных для gossip/discovery.
     std::vector<std::pair<std::string, uint16_t>> GetPeerEndpointsForGossip() const;
-    /**
-     * Replace the explicit peer endpoints supplied by the operator.
-     * Explicit peers always come first in gossip targets and cannot be crowded
-     * out by discovered routing hints.
-     */
+    /// \brief Заменяет explicit operator endpoints, сохраняя release-pinned bootstrap entries.
     void SetConfiguredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
-    /** The explicit peer endpoints as last configured. */
+    /// \brief Возвращает explicit peer endpoints без собственного listener endpoint.
     std::vector<std::pair<std::string, uint16_t>> GetConfiguredPeerEndpoints() const;
+    /// \brief Добавляет проверенные discovered endpoints в локальный bounded cache.
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
-    /** Compiled SPKI pin for a bootstrap locator endpoint; nullopt for every other peer. */
+    /// \brief Возвращает compiled SPKI pin bootstrap locator'а либо nullopt для любого иного peer.
     std::optional<std::array<unsigned char, 32>> PinnedSpki(const std::string& address, uint16_t port) const;
+    /// \brief Возвращает optional стабильную TLS identity listener'а.
     const std::optional<TlsServerIdentity>& GetTlsServerIdentity() const { return m_config.tls_server_identity; }
 
-    /** Access underlying store */
+    /// \brief Доступ к underlying local state store.
     CybouStateStore& GetStore() { return m_store; }
     const CybouStateStore& GetStore() const { return m_store; }
 
@@ -330,9 +355,9 @@ private:
     void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
     void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
-    /** Re-execute candidates on the new head and stop relaying the ones that became invalid. */
+    /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
     void RevalidateCandidates();
-    /** Attest one locally accepted candidate on the current finalized base, if eligible. */
+    /// \brief Подписывает одну локально принятую candidate operation на текущем finalized base, если signer eligible.
     void AttestCandidate(const cybou::Hash256& operation_id);
     NodeRuntimeConfig m_config;
     cybou::Hash256 m_network_binding;
@@ -340,11 +365,11 @@ private:
     std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
     std::unique_ptr<ChunkRetentionRegistry> m_chunk_retention;
-    /** Storage provider key secret (persisted beside provider data). */
+    /// \brief Секрет storage provider key, сохраняемый рядом с provider data.
     std::optional<std::array<unsigned char, 32>> m_storage_secret;
     std::optional<std::array<unsigned char, 32>> m_storage_id;
     CybouStateStore m_store;
-    /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
+    /// \brief Собственный volatile candidate pool Full Node; PoA-узел собирает блоки только из него.
     OperationPool m_operation_pool{m_store};
     std::unique_ptr<PoaFinalizer> m_poa_finalizer;
     // Preserve the exact journaled candidate across signing/commit retries.

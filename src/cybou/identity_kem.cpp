@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация X-Wing KEM профиля Identity и его канонического package commit.
+
 #include <cybou/identity_kem.h>
 
 #include <cybou/crypto/cleanse.h>

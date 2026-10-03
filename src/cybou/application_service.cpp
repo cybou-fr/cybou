@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация rebuildable-индекса Mail/Files и восстановления приватных публикаций.
+
 #include <cybou/application_service.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -144,6 +147,7 @@ std::vector<Id> ReadIds(const PrivateApplicationStore& db, std::string_view key)
     std::vector<Id> ids;
     const auto encoded = db.Get(key);
     if (!encoded || encoded->size() % 32 != 0) return ids;
+    ids.reserve(encoded->size() / 32);
     for (std::size_t offset{0}; offset < encoded->size(); offset += 32) {
         Id id{};
         std::copy_n(encoded->begin() + offset, 32, id.begin());

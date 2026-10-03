@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+/// \file
+/// \brief Реализация пула локально проверенных операций.
+
 #include <cybou/operation_pool.h>
 
 #include <cybou/block_executor.h>
@@ -10,6 +13,30 @@
 #include <map>
 
 namespace cybou {
+
+bool OperationPool::FitsGlobalLimits(const size_t bytes) const
+{
+    return m_entries.size() < m_limits.max_count &&
+        m_bytes <= m_limits.max_bytes &&
+        bytes <= m_limits.max_bytes - m_bytes;
+}
+
+bool OperationPool::FitsPeerLimits(const std::string& peer, const size_t bytes) const
+{
+    const auto found = m_peer_usage.find(peer);
+    const PeerUsage usage = found == m_peer_usage.end() ? PeerUsage{} : found->second;
+    return usage.count < m_limits.max_peer_count &&
+        usage.bytes <= m_limits.max_peer_bytes &&
+        bytes <= m_limits.max_peer_bytes - usage.bytes;
+}
+
+void OperationPool::RecordPeerUsage(const std::optional<std::string>& peer, const size_t bytes)
+{
+    if (!peer) return;
+    auto& usage = m_peer_usage[*peer];
+    ++usage.count;
+    usage.bytes += bytes;
+}
 
 PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
                                    std::optional<std::string> source_peer)
@@ -29,20 +56,10 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
         }
     }
 
-    if (m_entries.size() >= m_limits.max_count || m_bytes > m_limits.max_bytes ||
-        encoded->size() > m_limits.max_bytes - m_bytes) return PoolAdmission::REJECTED;
+    if (!FitsGlobalLimits(encoded->size())) return PoolAdmission::REJECTED;
     if (source_peer) {
         if (source_peer->empty()) return PoolAdmission::REJECTED;
-        size_t peer_count{0};
-        size_t peer_bytes{0};
-        for (const auto& entry : m_entries) {
-            if (entry.source_peer == source_peer) {
-                ++peer_count;
-                peer_bytes += entry.bytes;
-            }
-        }
-        if (peer_count >= m_limits.max_peer_count || peer_bytes > m_limits.max_peer_bytes ||
-            encoded->size() > m_limits.max_peer_bytes - peer_bytes) return PoolAdmission::REJECTED;
+        if (!FitsPeerLimits(*source_peer, encoded->size())) return PoolAdmission::REJECTED;
     }
     const auto head = m_store.GetFinalizedHead();
     if (!head || head->height == std::numeric_limits<uint64_t>::max()) return PoolAdmission::REJECTED;
@@ -52,6 +69,7 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     m_entries.push_back(Entry{operation, *id, encoded->size(), std::move(source_peer)});
     m_ids.insert(*id);
     m_bytes += encoded->size();
+    RecordPeerUsage(m_entries.back().source_peer, m_entries.back().bytes);
     return PoolAdmission::ACCEPTED;
 }
 
@@ -98,8 +116,6 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
         });
     }
 
-    std::map<std::string, size_t> peer_counts;
-    std::map<std::string, size_t> peer_bytes;
     size_t account_creates{0};
 
     for (auto& entry : previous) {
@@ -118,8 +134,7 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
                 continue;
             }
         }
-        if (m_entries.size() >= m_limits.max_count || m_bytes > m_limits.max_bytes ||
-            entry.bytes > m_limits.max_bytes - m_bytes) {
+        if (!FitsGlobalLimits(entry.bytes)) {
             dropped.push_back(entry.id);
             continue;
         }
@@ -128,10 +143,7 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
                 dropped.push_back(entry.id);
                 continue;
             }
-            const auto p_count = peer_counts[*entry.source_peer];
-            const auto p_bytes = peer_bytes[*entry.source_peer];
-            if (p_count >= m_limits.max_peer_count || p_bytes > m_limits.max_peer_bytes ||
-                entry.bytes > m_limits.max_peer_bytes - p_bytes) {
+            if (!FitsPeerLimits(*entry.source_peer, entry.bytes)) {
                 dropped.push_back(entry.id);
                 continue;
             }
@@ -151,10 +163,7 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
         current_state = std::move(*exec.state);
         m_ids.insert(entry.id);
         m_bytes += entry.bytes;
-        if (entry.source_peer) {
-            peer_counts[*entry.source_peer]++;
-            peer_bytes[*entry.source_peer] += entry.bytes;
-        }
+        RecordPeerUsage(entry.source_peer, entry.bytes);
         m_entries.push_back(std::move(entry));
     }
 
@@ -165,6 +174,7 @@ void OperationPool::Clear()
 {
     m_entries.clear();
     m_ids.clear();
+    m_peer_usage.clear();
     m_bytes = 0;
 }
 

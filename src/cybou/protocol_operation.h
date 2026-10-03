@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Канонический tagged-union формат протокольных операций CYBOU.
 
 #ifndef CYBOU_PROTOCOL_OPERATION_H
 #define CYBOU_PROTOCOL_OPERATION_H
@@ -19,11 +21,13 @@
 
 namespace cybou {
 
+/// \brief Размеры канонических сериализаций наиболее частых протокольных операций.
 inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{IDENTITY_OPERATION_AUTH_SIZE + PAYMENT_PAYLOAD_SIZE};
 inline constexpr size_t IDENTITY_ROTATE_SIZE{32 + 32 + 1952 + 32 + 1312 + IDENTITY_KEM_PACKAGE_SIZE +
     8 + 8 + 2 * (64 + 3309) + 64 + 2420};
 inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + SYSTEM_LOCK_PAYLOAD_SIZE};
 
+/// \brief Дискриминатор канонического бинарного формата ProtocolOperation.
 enum class ProtocolOperationKind : uint8_t {
     ACCOUNT_CREATE = 1,
     PAYMENT = 2,
@@ -35,6 +39,7 @@ enum class ProtocolOperationKind : uint8_t {
     POA_AUTH_ADJUSTMENT = 8,
 };
 
+/// \brief Канонический tagged union всех операций, попадающих в блок.
 using ProtocolOperation = std::variant<
     AccountCreateOp,
     AuthorizedPayment,
@@ -45,14 +50,17 @@ using ProtocolOperation = std::variant<
     AuthorizedRootPublication,
     PoaAuthAdjustment>;
 
+/// \brief Сериализует tagged union операции в канонический бинарный формат.
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation);
+/// \brief Десериализует tagged union операции из канонического бинарного формата.
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
+/// \brief Вычисляет domain-separated OperationID из канонической сериализации.
 std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operation);
-/** The existing Identity that authorizes the operation; nullopt for AccountCreate and PoaAuthAdjustment. */
+/// \brief Возвращает существующий AccountId-авторизатор операции; nullopt для AccountCreate и PoaAuthAdjustment.
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
-/** The account that earns AUTH upon finalized execution. Only utility operations (RootPublication, SystemLock) earn AUTH. */
+/// \brief Возвращает аккаунт, который получает AUTH после финализации utility-операции.
 std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operation);
-/** Verify operation signatures and payload bindings before volatile mesh relay. */
+/// \brief Проверяет подписи и binding payload перед ретрансляцией в volatile mesh.
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
     const cybou::Hash256& network_binding, const IdentityRegistry& identities);
 

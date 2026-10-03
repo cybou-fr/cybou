@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Каноническая сериализация и десериализация реестра Identity.
+
 #include <cybou/identity_registry.h>
 
 #include <algorithm>
@@ -81,6 +84,7 @@ std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const Identi
         registry.m_accounts.size() != registry.m_recovery_index.size()) return std::nullopt;
     std::vector<unsigned char> out;
     const auto count = static_cast<uint32_t>(registry.m_accounts.size());
+    out.reserve(4 + registry.m_accounts.size() * ACCOUNT_SIZE);
     for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(count >> (8 * i)));
     for (const auto& [account_id, record] : registry.m_accounts) {
         const auto recovery_id = ComputeRecoveryKeyId(record.recovery_key);

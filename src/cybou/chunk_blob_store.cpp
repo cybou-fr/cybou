@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация физического content-addressed ChunkStore.
+
 #include <cybou/chunk_blob_store.h>
 #include <cybou/encrypted_chunk.h>
 
@@ -39,7 +42,12 @@ std::string Hex(const std::span<const unsigned char> bytes)
     return result;
 }
 
-std::optional<ChunkId> ParseChunkId(const std::string& hex)
+bool SameBytes(const std::vector<unsigned char>& left, const std::span<const unsigned char> right)
+{
+    return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin());
+}
+
+std::optional<ChunkId> ParseChunkId(const std::string_view hex)
 {
     if (hex.size() != 64) return std::nullopt;
     ChunkId id{};
@@ -220,7 +228,7 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
     if (m_memory_only) {
         const auto existing = m_memory_blobs.find(id);
         if (existing != m_memory_blobs.end()) {
-            return existing->second == std::vector<unsigned char>{stored_bytes.begin(), stored_bytes.end()} ?
+            return SameBytes(existing->second, stored_bytes) ?
                 ChunkBlobPutStatus::ALREADY_STORED : ChunkBlobPutStatus::CONFLICT;
         }
         if (stored_bytes.size() > std::numeric_limits<std::uint64_t>::max() - m_used_bytes) {
@@ -234,14 +242,13 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
         const auto path = BlobPath(m_root, id);
         if (std::filesystem::exists(path)) {
             if (const auto existing = ReadBlob(path, id)) {
-                if (!std::equal(existing->begin(), existing->end(), stored_bytes.begin(), stored_bytes.end())) {
+                if (!SameBytes(*existing, stored_bytes)) {
                     return ChunkBlobPutStatus::CONFLICT;
                 }
                 return SyncDirectory(path.parent_path()) ? ChunkBlobPutStatus::ALREADY_STORED :
                     ChunkBlobPutStatus::STORAGE_ERROR;
             }
-            // Damaged on disk (bit rot, truncation): the bytes offered hash to
-            // the ChunkID, so replace the file with them.
+            // Если файл повреждён, но предложенные байты дают тот же ChunkId, безопасно восстанавливаем файл.
             if (std::filesystem::is_symlink(path) || !std::filesystem::is_regular_file(path)) {
                 return ChunkBlobPutStatus::STORAGE_ERROR;
             }
@@ -254,8 +261,7 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
             return ChunkBlobPutStatus::STORAGE_ERROR;
         }
         if (!WriteBlobAtomically(path, id, stored_bytes)) {
-            // A failed directory sync can leave a valid file behind. Count it
-            // for physical capacity, but keep reporting uncertain durability.
+            // Ошибка sync каталога может оставить корректный blob на диске; ёмкость считаем по факту.
             m_used_bytes = ScanBlobs(m_root);
             return ChunkBlobPutStatus::STORAGE_ERROR;
         }

@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация фонового обновления локального Geo-датасета DB-IP Lite.
 
 #include <cybou/p2p/geo_database_updater.h>
 
@@ -54,6 +56,21 @@ constexpr std::array RETRY_DELAYS{
     std::chrono::seconds{0}, std::chrono::seconds{2}, std::chrono::seconds{5},
     std::chrono::seconds{15}, std::chrono::seconds{60},
 };
+
+std::string MonthText(const std::chrono::year_month month)
+{
+    return std::to_string(static_cast<int>(month.year())) + "-" +
+        (static_cast<unsigned>(month.month()) < 10 ? "0" : "") +
+        std::to_string(static_cast<unsigned>(month.month()));
+}
+
+std::string ToLowerAscii(std::string text)
+{
+    std::transform(text.begin(), text.end(), text.begin(), [](const char c) {
+        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    });
+    return text;
+}
 
 http::request<http::empty_body> GeoRequest(std::string_view host, std::string_view target)
 {
@@ -142,10 +159,7 @@ std::optional<Release> ParseReleasePage(const std::string_view page)
     static const std::array<std::string_view, 12> months{
         "january", "february", "march", "april", "may", "june",
         "july", "august", "september", "october", "november", "december"};
-    std::string month_name = match[1].str();
-    std::transform(month_name.begin(), month_name.end(), month_name.begin(), [](const char c) {
-        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    });
+    std::string month_name = ToLowerAscii(match[1].str());
     const auto month_pos = std::find(months.begin(), months.end(), month_name);
     if (month_pos == months.end()) return std::nullopt;
     const int year_value = std::stoi(match[2].str());
@@ -156,10 +170,7 @@ std::optional<Release> ParseReleasePage(const std::string_view page)
     const std::regex sha1_regex{R"(<dt>\s*SHA1SUM\s*</dt>\s*<dd[^>]*>\s*([a-f0-9]{40})\s*</dd>)",
         std::regex::icase};
     if (!std::regex_search(card_html, match, sha1_regex)) return std::nullopt;
-    std::string sha1 = match[1].str();
-    std::transform(sha1.begin(), sha1.end(), sha1.begin(), [](const char c) {
-        return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    });
+    std::string sha1 = ToLowerAscii(match[1].str());
 
     const std::regex link_regex{
         R"(href=['"]https://download\.db-ip\.com/free/(dbip-country-lite-([0-9]{4})-([0-9]{2})\.csv\.gz)['"])",
@@ -225,11 +236,7 @@ std::string Gunzip(const std::string_view compressed)
 std::shared_ptr<const FrenchIpDataset> LoadCachedDataset(const std::filesystem::path& path,
     const std::chrono::year_month month, const std::string_view sha256)
 {
-    const auto parsed_month = FrenchIpDataset::ParseIssuedMonth(
-        std::to_string(static_cast<int>(month.year())) + "-" +
-        (static_cast<unsigned>(month.month()) < 10 ? "0" : "") +
-        std::to_string(static_cast<unsigned>(month.month())));
-    if (!parsed_month) return nullptr;
+    if (!month.ok()) return nullptr;
     std::array<unsigned char, 32> digest{};
     if (sha256.size() != digest.size() * 2) return nullptr;
     for (size_t i = 0; i < digest.size(); ++i) {
@@ -238,7 +245,7 @@ std::shared_ptr<const FrenchIpDataset> LoadCachedDataset(const std::filesystem::
         if (parsed.ec != std::errc{} || parsed.ptr != sha256.data() + i * 2 + 2 || value > 255) return nullptr;
         digest[i] = static_cast<unsigned char>(value);
     }
-    return FrenchIpDataset::LoadDbIpCountryCsv(path, digest, *parsed_month);
+    return FrenchIpDataset::LoadDbIpCountryCsv(path, digest, month);
 }
 
 } // namespace
@@ -301,8 +308,7 @@ void GeoDatabaseUpdater::LoadCached()
         std::smatch match;
         const auto filename = path.filename().string();
         if (!std::regex_match(filename, match, cache_name)) continue;
-        const auto month_text = match[1].str() + "-" + match[2].str();
-        const auto month = FrenchIpDataset::ParseIssuedMonth(month_text);
+        const auto month = FrenchIpDataset::ParseIssuedMonth(match[1].str() + "-" + match[2].str());
         if (!month) continue;
         const auto dataset = LoadCachedDataset(path, *month, match[3].str());
         if (dataset) {
@@ -331,9 +337,7 @@ GeoDatabaseUpdater::RefreshResult GeoDatabaseUpdater::RefreshOnce()
         throw std::runtime_error("cannot compute Geo CSV SHA-256");
     }
     const auto digest = Hex(sha256);
-    const auto year = static_cast<int>(release->month.year());
-    const auto month_number = static_cast<unsigned>(release->month.month());
-    const auto month_text = std::to_string(year) + "-" + (month_number < 10 ? "0" : "") + std::to_string(month_number);
+    const auto month_text = MonthText(release->month);
     const auto temporary_directory = m_data_directory;
     std::filesystem::create_directories(temporary_directory);
     const auto target = temporary_directory / ("dbip-country-lite-" + month_text + "-" + digest + ".csv");

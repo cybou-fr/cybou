@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация синхронного workflow claim'а имени .cybou.
 
 #include <cybou/name_service.h>
 

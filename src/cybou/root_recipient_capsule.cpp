@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief KEM/AEAD-обёртка ContentKey для RootPublication recipient capsules.
 
 #include <cybou/root_publication.h>
 
@@ -51,6 +53,7 @@ std::vector<unsigned char> CapsuleKeyInfo(
     const std::uint64_t recipient_key_epoch)
 {
     std::vector<unsigned char> info(CAPSULE_KEY_DOMAIN.begin(), CAPSULE_KEY_DOMAIN.end());
+    info.reserve(CAPSULE_KEY_DOMAIN.size() + root_chunk_id.size() + sender_account_id.size() + 3 * sizeof(std::uint64_t));
     info.insert(info.end(), root_chunk_id.begin(), root_chunk_id.end());
     info.insert(info.end(), sender_account_id.begin(), sender_account_id.end());
     AppendU64Be(info, sender_nonce);
@@ -68,6 +71,8 @@ std::vector<unsigned char> CapsuleAad(
     const std::uint64_t recipient_key_epoch)
 {
     std::vector<unsigned char> aad(CAPSULE_AAD_DOMAIN.begin(), CAPSULE_AAD_DOMAIN.end());
+    aad.reserve(CAPSULE_AAD_DOMAIN.size() + network_binding.size() + root_chunk_id.size() +
+        sender_account_id.size() + 3 * sizeof(std::uint64_t));
     aad.insert(aad.end(), network_binding.begin(), network_binding.end());
     aad.insert(aad.end(), root_chunk_id.begin(), root_chunk_id.end());
     aad.insert(aad.end(), sender_account_id.begin(), sender_account_id.end());

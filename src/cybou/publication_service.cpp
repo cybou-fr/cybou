@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация локального staging, отправки и durability-статусов публикаций.
+
 #include <cybou/publication_service.h>
 #include <cybou/support_mail.h>
 
@@ -27,7 +30,7 @@
 namespace cybou {
 namespace {
 
-/** Local pin of a job's staged chunks: opaque Identity holder + job reference. */
+/// Локальный pin staged-чанков job: opaque holder Identity + opaque reference job.
 RetentionKey JobRetention(const AccountId& account, const std::string_view job_id)
 {
     const auto& value = account.Value();
@@ -51,7 +54,7 @@ std::string LeavesKey(const std::string_view id)
     return "publication/leaves/" + std::string{id};
 }
 
-/** Publication intent including the content key; erased once finalized. */
+/// Сохранённый intent с content key; удаляется после перехода публикации в finalized state.
 std::string IntentKey(const std::string_view id)
 {
     return "publication/intent/" + std::string{id};
@@ -172,7 +175,9 @@ bool PublicationService::Save(const std::string_view local_job_id, const Job& jo
     if (!publication || publication->empty() || publication->size() > std::numeric_limits<std::uint32_t>::max()) {
         return false;
     }
-    std::vector<unsigned char> encoded(MAGIC.begin(), MAGIC.end());
+    std::vector<unsigned char> encoded;
+    encoded.reserve(FIXED_SIZE + publication->size());
+    encoded.insert(encoded.end(), MAGIC.begin(), MAGIC.end());
     encoded.insert(encoded.end(), job.network_binding.begin(), job.network_binding.end());
     encoded.insert(encoded.end(), job.account_id.Value().begin(), job.account_id.Value().end());
     encoded.push_back(static_cast<unsigned char>(job.phase));
@@ -182,11 +187,11 @@ bool PublicationService::Save(const std::string_view local_job_id, const Job& jo
     Append32(encoded, static_cast<std::uint32_t>(publication->size()));
     encoded.insert(encoded.end(), publication->begin(), publication->end());
     if (!m_application_db.Put(JobKey(local_job_id), encoded)) return false;
-    // Once finalized the exact publication is fixed; the intent (with its key) is no longer needed.
+    // После finality публикация уже зафиксирована, поэтому приватный intent с ключом больше не нужен.
     if (job.phase == PublicationJobPhase::SECURING || job.phase == PublicationJobPhase::PROTECTED) {
         m_application_db.Erase(IntentKey(local_job_id));
     }
-    // Job index for resumption and status listing; IDs are short ASCII.
+    // Индекс нужен для возобновления и перечисления статусов; job id остаются короткими ASCII-строками.
     auto index = m_application_db.Get(JOB_INDEX_KEY).value_or(std::vector<unsigned char>{});
     std::string_view listed{reinterpret_cast<const char*>(index.data()), index.size()};
     for (std::size_t start{0}; start < listed.size();) {
@@ -272,7 +277,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     if (!self_capsule) return Failure("Cannot create owner recovery capsule");
     publication.recipient_capsules.push_back(*self_capsule);
     if (future_self) {
-        // RecoveryBridge: also readable by the next, not yet published, KEM key.
+        // RecoveryBridge должен читаться и следующим KEM-ключом, который ещё не опубликован on-chain.
         if (future_self->second != sender->key_epoch + 1) return Failure("Invalid future key epoch");
         const auto future_capsule = CreateRootRecipientCapsule(network_bytes, account_bytes,
             sender->nonce, sender->key_epoch, bundle.root_chunk_id, future_self->first,
@@ -282,7 +287,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     }
     if (const auto support = SupportAccount(*loaded.state); recipient && support && *recipient == *support &&
         *recipient != *account) {
-        // Support mail pays the support rate; the network still sees no recipient.
+        // Support-mail доплачивает тариф поддержки, но сеть по-прежнему не получает отдельного recipient.
         const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
         if (!PadPublicationToFee(params, publication, SupportMailMinimumFee(params))) {
             return Failure("Cannot pay the support rate for this message");
@@ -303,7 +308,7 @@ PublicationJobResult PublicationService::ResumeLocked(const std::string_view loc
 {
     if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (job.phase == PublicationJobPhase::QUEUED) {
-        // Never signed: rebuild capsules against the current nonce.
+        // Ещё не подписывали: безопасно пересобираем capsule на текущем finalized nonce.
         const auto intent = LoadIntent(local_job_id);
         if (!intent) return Failure("Queued publication intent is missing");
         return BuildAndSubmit(local_job_id, *intent);
@@ -361,8 +366,7 @@ PublicationJobResult PublicationService::ResumeLocked(const std::string_view loc
     }
     if (job.operation_id.IsNull() && (result.phase == IdentityOperationPhase::CONFLICT ||
             result.phase == IdentityOperationPhase::REJECTED) && LoadIntent(local_job_id)) {
-        // Never signed (another operation holds the nonce, or the nonce moved):
-        // wait and rebuild later instead of failing the user's action.
+        // Если подписи ещё не было, а nonce уже занят/сдвинулся, job безопасно уходит в очередь на пересборку.
         job.phase = PublicationJobPhase::QUEUED;
         if (!Save(local_job_id, job)) return Failure("Cannot save queued publication");
         return {.phase = job.phase, .error = result.error};
@@ -535,7 +539,7 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     const auto retention = JobRetention(m_application_db.Account(), local_job_id);
     auto& pins = m_runtime.GetChunkRetention();
-    // Retrying an interrupted local attempt replaces its pins; no operation was submitted.
+    // Повторная попытка локального staging переустанавливает pin'ы: операция ещё не была отправлена.
     if (!pins.Release(retention, NowMs())) { error = "Cannot reset local staging pins"; return std::nullopt; }
     if (!m_application_db.Put("publication/staging-attempt", std::span{
             reinterpret_cast<const unsigned char*>(local_job_id.data()), local_job_id.size()})) {
@@ -626,7 +630,7 @@ PublicationJobResult PublicationService::PublishMail(const std::string_view loca
         children.push_back(std::move(content));
     }
     for (std::size_t i{0}; i < message.attachments.size(); ++i) {
-        // Reused attachments must already reference protected content.
+        // Переиспользуемое вложение обязано уже ссылаться на PROTECTED-контент.
         if (!targets.contains(i) && (message.attachments[i].root_chunk_id == ChunkId{} ||
                 message.attachments[i].content_key == ContentKey{})) return Failure("Attachment has no content");
     }
@@ -658,7 +662,7 @@ PublicationJobResult PublicationService::PublishFiles(const std::string_view loc
     if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     if (batch.mutations.empty()) return Failure("Empty Files change");
-    // Items without an explicit modification time get the publishing time.
+    // Если время изменения не задано явно, фиксируем время публикации.
     const auto now_ms = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
     for (auto& mutation : batch.mutations) {
@@ -691,7 +695,7 @@ PublicationJobResult PublicationService::PublishFiles(const std::string_view loc
         }
     }
     if (!staged) return Failure(error);
-    // Files are private: only the owner's self capsule.
+    // Files остаются приватными: публикуем только owner self-capsule.
     return SubmitPreparedLocked(local_job_id, staged->bundle, std::nullopt, std::nullopt);
 }
 
@@ -707,7 +711,7 @@ PublicationJobResult PublicationService::PublishRecoveryBridge(const std::string
     const auto* record = me && loaded && loaded.state ? loaded.state->identities.Find(*me) : nullptr;
     if (!record) return Failure("Identity is not finalized");
     const std::uint64_t current_epoch = record->key_epoch;
-    // A bridge that silently omits an epoch would make that content unrecoverable.
+    // Молчаливый пропуск эпохи сделал бы часть зашифрованного контента невосстановимой.
     for (std::uint64_t epoch{0}; epoch < current_epoch; ++epoch) {
         if (m_runtime.FindIdentityKemPackage(*me, epoch).status == IdentityKemPackageLookupStatus::FOUND &&
             !m_identity.HasKemSeedForEpoch(epoch, current_epoch)) {
@@ -810,7 +814,7 @@ std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::Pr
                 status->durability_percent = durability.ProgressPercent(storage.RemoteReplicaTarget());
                 if (durability.state == DurabilityState::PROTECTED && MarkProtected(id)) {
                     status->phase = PublicationJobPhase::PROTECTED;
-                    // Remotely durable: the local copy becomes evictable cache.
+                    // После достижения удалённой durability локальная копия становится обычным вытесняемым cache.
                     (void)m_runtime.GetChunkRetention().Release(JobRetention(m_application_db.Account(), id), NowMs());
                 } else if (!durability.error.empty()) {
                     status->error = durability.error;
@@ -822,8 +826,7 @@ std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::Pr
             status = Resume(id);
         }
         if (status->phase == PublicationJobPhase::PROTECTED) {
-            // StorageService owns durability; a job never stays PROTECTED
-            // once its placement is not (audit loss, NEEDS_ATTENTION, ...).
+            // Истина о durability принадлежит StorageService: PROTECTED снимается при любой деградации placement.
             storage.Track(status->operation_id);
             const auto durability = storage.GetDurability(status->operation_id);
             if (durability && durability->state != DurabilityState::PROTECTED) {

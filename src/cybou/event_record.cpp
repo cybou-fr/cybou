@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license.
+/// \file
+/// \brief Реализация локального журнала публично-безопасных node events.
 #include <cybou/event_record.h>
 #include <cybou/secret_file.h>
 #include <chrono>

@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация потоковой сборки и чтения encrypted chunk trees.
+
 #include <cybou/encrypted_chunk_tree.h>
 
 #include <cybou/binary_codec.h>
@@ -235,10 +238,11 @@ bool ReadTreeNode(
     for (const auto& child : *children) {
         ChildRef typed_child = child;
         typed_child.kind = child_kind;
-        if (typed_child.kind == INDEX_KIND && !ReadTreeNode(network, key, typed_child, lookup, visit, sink,
-                max_output, depth + 1, path, output_bytes)) { path.erase(node.id); return false; }
-        if (typed_child.kind == DATA_KIND && !ReadTreeNode(network, key, typed_child, lookup, visit, sink,
-                max_output, depth + 1, path, output_bytes)) { path.erase(node.id); return false; }
+        if (!ReadTreeNode(network, key, typed_child, lookup, visit, sink,
+                max_output, depth + 1, path, output_bytes)) {
+            path.erase(node.id);
+            return false;
+        }
     }
     path.erase(node.id);
     return true;

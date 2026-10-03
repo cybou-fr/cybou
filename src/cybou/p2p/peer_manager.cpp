@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация single-threaded менеджера outbound-пиров CYBOU.
 
 #include <cybou/operation_submit.h>
 #include <cybou/p2p/peer_manager.h>
@@ -28,6 +30,17 @@ std::optional<uint64_t> RandomNonce()
     return nonce == 0 ? std::nullopt : std::optional<uint64_t>{nonce};
 }
 
+using Endpoint = std::pair<std::string, uint16_t>;
+
+std::optional<Endpoint> CanonicalEndpoint(const std::string_view numeric_address, const uint16_t port)
+{
+    if (port == 0) return std::nullopt;
+    boost::system::error_code ec;
+    const auto address = boost::asio::ip::make_address(std::string{numeric_address}, ec);
+    if (ec) return std::nullopt;
+    return Endpoint{address.to_string(), port};
+}
+
 } // namespace
 
 PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime}
@@ -38,18 +51,15 @@ PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime}
 bool PeerManager::Connect(const std::string& numeric_address, const uint16_t port)
 {
     m_last_connect_status = PeerConnectStatus::INVALID_REQUEST;
-    if (port == 0) return false;
-    boost::system::error_code ec;
-    const auto address = boost::asio::ip::make_address(numeric_address, ec);
-    if (ec) return false;
-    const Endpoint endpoint{address.to_string(), port};
-    if (!m_runtime.AdmitPeerAddress(endpoint.first)) {
+    const auto endpoint = CanonicalEndpoint(numeric_address, port);
+    if (!endpoint) return false;
+    if (!m_runtime.AdmitPeerAddress(endpoint->first)) {
         m_last_connect_status = PeerConnectStatus::ADMISSION_REJECTED;
         return false;
     }
-    if (m_peers.contains(endpoint)) return false;
+    if (m_peers.contains(*endpoint)) return false;
     if (m_peers.size() >= MAX_OUTBOUND_PEERS) {
-        if (!(m_explicit_endpoints.contains(endpoint) || m_runtime.PinnedSpki(endpoint.first, endpoint.second).has_value())) {
+        if (!(m_explicit_endpoints.contains(*endpoint) || m_runtime.PinnedSpki(endpoint->first, endpoint->second).has_value())) {
             // Discovered endpoints never displace existing connections.
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
             return false;
@@ -76,7 +86,8 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     boost::asio::steady_timer timer{m_io};
     timer.expires_after(std::chrono::seconds(5));
     std::optional<boost::system::error_code> connect_result;
-    socket.async_connect({address, port}, [&](const boost::system::error_code& result) {
+    const auto address = boost::asio::ip::make_address(endpoint->first);
+    socket.async_connect({address, endpoint->second}, [&](const boost::system::error_code& result) {
         connect_result = result;
         timer.cancel();
     });
@@ -95,7 +106,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .nonce = *nonce};
     TlsSessionConfig tls;
-    tls.expected_server_spki_sha256 = m_runtime.PinnedSpki(endpoint.first, port);
+    tls.expected_server_spki_sha256 = m_runtime.PinnedSpki(endpoint->first, endpoint->second);
     auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
     if (!peer->Handshake(local)) {
         switch (peer->LastHandshakeStatus()) {
@@ -109,12 +120,12 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
-    m_announced_blocks.erase(endpoint);
+    m_announced_blocks.erase(*endpoint);
     // Seed the fanout frontier from the peer's handshake height. This
     // knowledge survives reconnects (a peer's chain only grows), so it is
     // deliberately NOT erased on disconnect or failed consensus sends.
-    m_peer_finalized_heights[endpoint] = peer->Peer()->finalized_height;
-    m_peers.emplace(endpoint, std::move(peer));
+    m_peer_finalized_heights[*endpoint] = peer->Peer()->finalized_height;
+    m_peers.emplace(*endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
     return true;
 }
@@ -179,11 +190,9 @@ size_t PeerManager::PingSome(const size_t max_peers)
 SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks)
 {
     SyncPeerResult result;
-    boost::system::error_code ec;
-    const auto address = boost::asio::ip::make_address(numeric_address, ec);
-    if (ec) return result;
-    const Endpoint endpoint{address.to_string(), port};
-    auto it = m_peers.find(endpoint);
+    const auto endpoint = CanonicalEndpoint(numeric_address, port);
+    if (!endpoint) return result;
+    auto it = m_peers.find(*endpoint);
     if (it == m_peers.end()) return result;
     if (!it->second->Peer()) {
         result.status = SyncPeerStatus::PROTOCOL_ERROR;
@@ -235,11 +244,9 @@ OperationSubmitResult PeerManager::SubmitOperation(const std::string& numeric_ad
 {
     const auto op_id = ComputeOperationId(operation).value_or(cybou::Hash256{});
     const OperationSubmitResult failure{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
-    boost::system::error_code ec;
-    const auto address = boost::asio::ip::make_address(numeric_address, ec);
-    if (ec) return failure;
-    const Endpoint endpoint{address.to_string(), port};
-    auto it = m_peers.find(endpoint);
+    const auto endpoint = CanonicalEndpoint(numeric_address, port);
+    if (!endpoint) return failure;
+    auto it = m_peers.find(*endpoint);
     if (it == m_peers.end()) return failure;
     const auto result = it->second->SubmitOperation(operation);
     if (!result) {
@@ -260,14 +267,12 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES || op_id.IsNull()) return result;
     for (const auto& [host, port] : endpoints) {
-        boost::system::error_code ec;
-        const auto address = boost::asio::ip::make_address(host, ec);
-        if (ec) continue;
-        const Endpoint endpoint{address.to_string(), port};
-        auto it = m_peers.find(endpoint);
+        const auto endpoint = CanonicalEndpoint(host, port);
+        if (!endpoint) continue;
+        auto it = m_peers.find(*endpoint);
         if (it == m_peers.end()) {
             if (!Connect(host, port)) continue;
-            it = m_peers.find(endpoint);
+            it = m_peers.find(*endpoint);
         }
         if (it == m_peers.end() || !it->second->Peer()) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
@@ -277,7 +282,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
             continue;
         }
         result.acknowledgment = *acknowledgment;
-        result.endpoint = endpoint;
+        result.endpoint = *endpoint;
         if (*acknowledgment) {
             result.delivery_uncertain = false;
             return result;
@@ -456,15 +461,12 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
 PeerSession* PeerManager::FindStorageSession(
     const std::string& address, const uint16_t port, const std::optional<StorageId>& storage_id, Endpoint* endpoint)
 {
-    if (port == 0) return nullptr;
-    boost::system::error_code ec;
-    const auto parsed = boost::asio::ip::make_address(address, ec);
-    if (ec) return nullptr;
-    const Endpoint key{parsed.to_string(), port};
-    const auto it = m_peers.find(key);
+    const auto key = CanonicalEndpoint(address, port);
+    if (!key) return nullptr;
+    const auto it = m_peers.find(*key);
     if (it == m_peers.end()) return nullptr;
     if (!it->second->Peer()) {
-        m_announced_blocks.erase(key);
+        m_announced_blocks.erase(*key);
         m_peers.erase(it);
         return nullptr;
     }
@@ -473,7 +475,7 @@ PeerSession* PeerManager::FindStorageSession(
     }
     // A different provider now answering at this endpoint is not the recorded replica.
     if (storage_id && *it->second->PeerStorageId() != *storage_id) return nullptr;
-    if (endpoint) *endpoint = key;
+    if (endpoint) *endpoint = *key;
     return it->second.get();
 }
 

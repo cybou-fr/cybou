@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Координация durable journaling и локальной PoA-подписи блоков/adjustments.
 
 #ifndef CYBOU_POA_FINALIZER_H
 #define CYBOU_POA_FINALIZER_H
@@ -14,6 +16,7 @@
 
 namespace cybou {
 
+/// \brief Итог попытки выпустить PoA finality certificate.
 enum class PoaSigningStatus : uint8_t {
     SIGNED,
     ALREADY_PREPARED,
@@ -21,13 +24,14 @@ enum class PoaSigningStatus : uint8_t {
     SIGNING_FAILED,
 };
 
+/// \brief Результат journaling+signing финализирующего сертификата.
 struct PoaSigningResult {
     PoaSigningStatus status{PoaSigningStatus::SIGNING_FAILED};
     PoaJournalStatus journal_status{PoaJournalStatus::NONE};
     std::optional<PoaFinalityCertificate> certificate;
 };
 
-/** Journals every intent before calling its local signer. */
+/// \brief Обёртка над журналом и signer'ом, требующая durable intent до подписи.
 class PoaFinalizer final {
 public:
     PoaFinalizer(KVStore& db, const cybou::Hash256& network_binding,
@@ -41,14 +45,20 @@ public:
     PoaFinalizer(PoaFinalizer&&) = delete;
     PoaFinalizer& operator=(PoaFinalizer&&) = delete;
 
+    /// \brief Проверяет совместимость текущего канонического tip с локальным журналом.
     PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const cybou::Hash256& finalized_tip);
+    /// \brief Сообщает, остановлен ли финализатор локальным safety halt.
     bool SafetyHalted() const { return m_journal.SafetyHalted(); }
+    /// \brief Подключает signer, если его публичный ключ совпадает с genesis-authorized PoA key.
     bool EnableSigner(PoaSignerRef signer);
+    /// \brief Отключает текущий локальный signer.
     void DisableSigner();
+    /// \brief Возвращает признак наличия активного signer'а.
     bool SignerEnabled() const { return static_cast<bool>(m_signer); }
+    /// \brief Журналирует intent и, если это безопасно, подписывает блок PoA finality certificate.
     PoaSigningResult SignFinality(uint64_t finalized_height, const cybou::Hash256& finalized_tip,
         const CybouBlock& block);
-    /** Fill the PoA signature of a domain-separated AUTH adjustment. */
+    /// \brief Заполняет PoA-подпись domain-separated AUTH adjustment.
     bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
 
 private:

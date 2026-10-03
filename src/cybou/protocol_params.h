@@ -5,6 +5,9 @@
 #ifndef CYBOU_PROTOCOL_PARAMS_H
 #define CYBOU_PROTOCOL_PARAMS_H
 
+/// \file
+/// \brief Immutable protocol parameters, зафиксированные в signed NetworkGenesis.
+
 #include <cstddef>
 #include <cstdint>
 
@@ -23,13 +26,7 @@ inline constexpr uint64_t DEFAULT_NAME_COMMIT_MIN_DEPTH{1};
 inline constexpr uint64_t DEFAULT_NAME_COMMIT_MAX_LIFETIME{1000};
 inline constexpr uint32_t DEFAULT_MAX_PENDING_NAME_COMMITS{10000};
 
-/**
- * Immutable protocol parameters. For DEV/Beta these are fixed network
- * parameters: every full node derives the identical set from the genesis /
- * network definition. There is intentionally no runtime governance path that
- * mutates consensus parameters — a parameter change is a software
- * upgrade or a new genesis.
- */
+/// \brief Immutable consensus parameters, одинаковые для каждого Full Node этой сети.
 struct CybouProtocolParameters {
     uint32_t account_creation_work_bits{DEFAULT_ACCOUNT_CREATION_WORK_BITS};
     uint64_t account_creation_epoch_lag{DEFAULT_ACCOUNT_CREATION_EPOCH_LAG};
@@ -48,6 +45,7 @@ struct CybouProtocolParameters {
     friend bool operator==(const CybouProtocolParameters&, const CybouProtocolParameters&) = default;
 };
 
+/// \brief Возвращает фиксированный набор DEV protocol parameters.
 constexpr CybouProtocolParameters DevProtocolParameters()
 {
     CybouProtocolParameters params{};
@@ -55,11 +53,7 @@ constexpr CybouProtocolParameters DevProtocolParameters()
     return params;
 }
 
-/**
- * Canonical PoT epoch derivation. Consensus code must never accept an epoch
- * from a caller: the epoch is always a pure function of the finalized block
- * height and the immutable network parameters.
- */
+/// \brief Canonical derivation эпохи из finalized block height и immutable parameters.
 constexpr uint64_t EpochForHeight(const uint64_t block_height, const CybouProtocolParameters& params)
 {
     return params.epoch_blocks == 0 ? 0 : block_height / params.epoch_blocks;

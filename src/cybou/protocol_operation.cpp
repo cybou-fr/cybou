@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Сериализация, десериализация и proof-checking протокольных операций.
 
 #include <cybou/protocol_operation.h>
 #include <cybou/crypto/sha256.h>
@@ -67,6 +69,16 @@ std::optional<IdentityOperationAuthorization> DeserializeIdentityOperationAuthor
     auth.signature.ml_dsa.assign(bytes.begin() + offset, bytes.end());
     if (IsAllZero(auth.payload_commitment) || IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return std::nullopt;
     return auth;
+}
+
+std::vector<unsigned char> TaggedOperationBytes(const ProtocolOperationKind kind,
+    std::span<const unsigned char> body)
+{
+    std::vector<unsigned char> out;
+    out.reserve(1 + body.size());
+    out.push_back(static_cast<unsigned char>(kind));
+    out.insert(out.end(), body.begin(), body.end());
+    return out;
 }
 
 template <typename Payload, typename Commitment>
@@ -236,51 +248,41 @@ std::optional<IdentityRotate> DeserializeIdentityRotate(std::span<const unsigned
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation)
 {
-    std::vector<unsigned char> out;
     if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
         const auto body = SerializeAccountCreateOp(*create);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::ACCOUNT_CREATE));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::ACCOUNT_CREATE, *body);
     } else if (const auto* payment = std::get_if<AuthorizedPayment>(&operation)) {
         const auto body = SerializePayment(*payment);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::PAYMENT));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::PAYMENT, *body);
     } else if (const auto* rotate = std::get_if<IdentityRotate>(&operation)) {
         const auto body = SerializeIdentityRotate(*rotate);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::IDENTITY_ROTATE));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::IDENTITY_ROTATE, *body);
     } else if (const auto* lock = std::get_if<AuthorizedSystemLock>(&operation)) {
         const auto body = SerializeSystemLock(*lock);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::SYSTEM_LOCK));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::SYSTEM_LOCK, *body);
     } else if (const auto* commit = std::get_if<AuthorizedNameCommit>(&operation)) {
         const auto body = SerializeNameCommit(*commit);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::NAME_COMMIT));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::NAME_COMMIT, *body);
     } else if (const auto* reveal = std::get_if<AuthorizedNameReveal>(&operation)) {
         const auto body = SerializeNameReveal(*reveal);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::NAME_REVEAL));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::NAME_REVEAL, *body);
     } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operation)) {
         const auto body = SerializeRootPublicationOperation(*publication);
         if (!body || body->size() + 1 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::ROOT_PUBLICATION));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::ROOT_PUBLICATION, *body);
     } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operation)) {
         const auto body = SerializePoaAuthAdjustment(*adjustment);
         if (!body) return std::nullopt;
-        out.push_back(static_cast<unsigned char>(ProtocolOperationKind::POA_AUTH_ADJUSTMENT));
-        out.insert(out.end(), body->begin(), body->end());
+        return TaggedOperationBytes(ProtocolOperationKind::POA_AUTH_ADJUSTMENT, *body);
     } else {
         return std::nullopt;
     }
-    return out;
 }
 
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes)

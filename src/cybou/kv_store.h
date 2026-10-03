@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Минимальный LevelDB-адаптер для локального хранения канонического состояния.
 
 #ifndef CYBOU_KV_STORE_H
 #define CYBOU_KV_STORE_H
@@ -26,6 +28,14 @@ namespace leveldb { class WriteBatch; }
 namespace cybou {
 
 namespace detail {
+
+inline constexpr size_t CompactSizeWidth(const uint64_t value)
+{
+    if (value < 253) return 1;
+    if (value <= std::numeric_limits<uint16_t>::max()) return 3;
+    if (value <= std::numeric_limits<uint32_t>::max()) return 5;
+    return 9;
+}
 
 inline void AppendCompactSize(std::vector<unsigned char>& out, const uint64_t value)
 {
@@ -67,6 +77,7 @@ struct LocalRecordCodec<std::string> {
     static std::vector<unsigned char> Encode(const std::string& value)
     {
         std::vector<unsigned char> out;
+        out.reserve(CompactSizeWidth(value.size()) + value.size());
         AppendCompactSize(out, value.size());
         out.insert(out.end(), value.begin(), value.end());
         return out;
@@ -86,6 +97,7 @@ struct LocalRecordCodec<std::vector<unsigned char>> {
     static std::vector<unsigned char> Encode(const std::vector<unsigned char>& value)
     {
         std::vector<unsigned char> out;
+        out.reserve(CompactSizeWidth(value.size()) + value.size());
         AppendCompactSize(out, value.size());
         out.insert(out.end(), value.begin(), value.end());
         return out;
@@ -145,6 +157,7 @@ bool DeserializeLocalRecord(const std::span<const unsigned char> bytes, T& value
 
 } // namespace detail
 
+/// \brief Параметры открытия локального key-value store CYBOU.
 struct KVStoreOptions {
     std::filesystem::path path;
     size_t cache_bytes{8 << 20};
@@ -152,7 +165,7 @@ struct KVStoreOptions {
     bool wipe_data{false};
 };
 
-/** Minimal serializing LevelDB adapter for canonical CYBOU state. */
+/// \brief Минимальная типобезопасная оболочка над LevelDB для локальных записей CYBOU.
 class KVStore final
 {
 public:
@@ -227,12 +240,11 @@ public:
 
     void WriteBatch(Batch& batch, bool sync = false);
 
-    /** Visit entries whose serialized std::string key starts with prefix.
-     *  key_size is the complete, un-serialized string key length. */
+    /// \brief Обходит строки-ключи с заданным префиксом после локальной сериализации ключа.
     void ForEachStringPrefix(const std::string& prefix, size_t key_size,
         const std::function<void(const std::string&, const std::string&)>& visitor) const;
 
-    /** Visit entries whose serialized std::string key starts with prefix, preserving raw value bytes. */
+    /// \brief Обходит строки-ключи с заданным префиксом, сохраняя сырые value bytes.
     void ForEachStringPrefixRaw(const std::string& prefix, size_t key_size,
         const std::function<void(const std::string&, const std::string&)>& visitor) const;
 

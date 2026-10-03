@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Детерминированное выполнение операций блока поверх родительского состояния.
 
 #ifndef CYBOU_BLOCK_EXECUTOR_H
 #define CYBOU_BLOCK_EXECUTOR_H
@@ -12,6 +14,7 @@
 
 namespace cybou {
 
+/// \brief Ошибки детерминированного применения набора операций блока.
 enum class BlockExecutionError : uint8_t {
     NONE,
     TOO_MANY_ACCOUNT_CREATES,
@@ -27,6 +30,7 @@ enum class BlockExecutionError : uint8_t {
     INVALID_STATE,
 };
 
+/// \brief Результат выполнения операций блока и вычисления итогового state root.
 struct BlockExecutionResult {
     BlockExecutionError error{BlockExecutionError::NONE};
     size_t failed_operation_index{0};
@@ -44,10 +48,10 @@ struct BlockExecutionResult {
     explicit operator bool() const { return error == BlockExecutionError::NONE && state.has_value() && state_root.has_value(); }
 };
 
-/** Flat AUTH earned by the authorizing account of each finalized Identity operation. */
+/// \brief Плоская награда AUTH за один финализированный utility-оператор в пределах блока.
 inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
 
-/** Without the genesis PoA key every PoaAuthAdjustment is invalid. */
+/// \brief Выполняет операции блока, сохраняя консенсусные инварианты supply, AUTH и state root.
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const cybou::Hash256& network_binding, uint64_t block_height,

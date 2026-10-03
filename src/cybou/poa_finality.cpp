@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Проверка и каноническая сериализация PoA finality certificates.
 
 #include <cybou/poa_finality.h>
 

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Детерминированная сериализация и применение переходов канонического состояния.
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
@@ -14,6 +16,7 @@
 namespace cybou {
 namespace {
 constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
+constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
 {
@@ -99,6 +102,20 @@ const uint64_t* CentralAuthorityFeeBalance(const CybouState& state)
         reverse == state.names.account_names.end() || reverse->second != allocation->label) return nullptr;
     return &account->second.balance;
 }
+
+size_t SerializedStateSize(const CybouState& state,
+    const std::vector<unsigned char>& identities,
+    const std::vector<unsigned char>& names)
+{
+    size_t total_size = 8 + 4 + state.accounts.size() * ACCOUNT_SIZE + 4 + identities.size() + 4 + names.size() + 4;
+    for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
+        static_cast<void>(recovery_id);
+        total_size += GENESIS_ALLOCATION_BASE_SIZE + allocation.label.size();
+        if (allocation.claimed_by) total_size += AccountId::SIZE;
+    }
+    return total_size;
+}
+
 } // namespace
 
 bool CanCreditCentralAuthorityFee(const CybouState& state, uint64_t fee)
@@ -304,7 +321,9 @@ StateValidationError ValidateCybouState(const CybouState& state)
     if (state.names.names.size() != state.names.account_names.size()) return StateValidationError::INVALID_NAME_REGISTRY;
     if (state.genesis_allocations.size() > MAX_GENESIS_ALLOCATIONS) return StateValidationError::INVALID_NAME_REGISTRY;
     std::set<std::string> allocation_labels;
+    std::map<std::string, AccountId> claimed_genesis_labels;
     for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
+        static_cast<void>(recovery_id);
         const auto validity = ValidateNameLabel(allocation.label);
         if (!allocation.label.empty() && validity != NameValidationError::NONE &&
             validity != NameValidationError::PROTECTED_NAME) return StateValidationError::INVALID_NAME_REGISTRY;
@@ -314,16 +333,16 @@ StateValidationError ValidateCybouState(const CybouState& state)
         if (allocation.claimed_by && !state.accounts.contains(*allocation.claimed_by)) {
             return StateValidationError::INVALID_NAME_REGISTRY;
         }
+        if (allocation.claimed_by && !allocation.label.empty()) {
+            claimed_genesis_labels.emplace(allocation.label, *allocation.claimed_by);
+        }
     }
-    const auto genesis_granted = [&](const std::string& label, const AccountId& acc) {
-        return std::ranges::any_of(state.genesis_allocations, [&](const auto& entry) {
-            return entry.second.label == label && entry.second.claimed_by == acc;
-        });
-    };
     for (const auto& [label, acc] : state.names.names) {
         const auto validity = ValidateNameLabel(label);
+        const auto granted = claimed_genesis_labels.find(label);
         if (validity != NameValidationError::NONE &&
-            !(validity == NameValidationError::PROTECTED_NAME && genesis_granted(label, acc))) {
+            !(validity == NameValidationError::PROTECTED_NAME &&
+                granted != claimed_genesis_labels.end() && granted->second == acc)) {
             return StateValidationError::INVALID_NAME_REGISTRY;
         }
         auto it = state.names.account_names.find(acc);
@@ -370,6 +389,7 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     const auto names = SerializeNameRegistry(state.names);
     if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
+    out.reserve(SerializedStateSize(state, *identities, names));
     Write64(out, state.onboarding_pool);
     Write32(out, static_cast<uint32_t>(state.accounts.size()));
     for (const auto& [id, account] : state.accounts) {

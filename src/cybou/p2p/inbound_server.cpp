@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация ограниченного inbound-listener'а CYBOU P2P.
 
 #include <cybou/p2p/inbound_server.h>
 
@@ -17,18 +19,24 @@
 namespace cybou::p2p {
 namespace {
 
-std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
+std::optional<uint64_t> RandomNonce()
 {
-    const auto status = runtime.GetStatus();
-    if (!status.is_initialized) return std::nullopt;
     std::array<unsigned char, 8> bytes{};
     if (RAND_bytes(bytes.data(), bytes.size()) != 1) return std::nullopt;
     uint64_t nonce{0};
     for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[i]} << (8 * i);
-    if (nonce == 0) return std::nullopt;
+    return nonce == 0 ? std::nullopt : std::optional<uint64_t>{nonce};
+}
+
+std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
+{
+    const auto status = runtime.GetStatus();
+    if (!status.is_initialized) return std::nullopt;
+    const auto nonce = RandomNonce();
+    if (!nonce) return std::nullopt;
     return Hello{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
-        .nonce = nonce};
+        .nonce = *nonce};
 }
 
 } // namespace
@@ -38,6 +46,7 @@ InboundPeerServer::InboundPeerServer(CybouNodeRuntime& runtime, boost::asio::io_
     : m_runtime{runtime}, m_acceptor{io, endpoint}
 {
     m_acceptor.non_blocking(true);
+    m_workers.reserve(MAX_INBOUND_PEERS);
 }
 
 void InboundPeerServer::Run(std::atomic_bool& stopping)
@@ -54,7 +63,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             continue;
         }
         if (ec) { stopping = true; break; }
-        const auto remote=socket.remote_endpoint(ec);
+        const auto remote = socket.remote_endpoint(ec);
         if (ec || !m_runtime.AdmitPeerAddress(remote.address().to_string()) ||
             !m_runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::CONNECTION)) {
             socket.close(); continue;

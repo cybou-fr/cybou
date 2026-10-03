@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация гибридной криптографии Identity и вычисления идентификаторов ключей.
+
 #include <cybou/identity_crypto.h>
 #include <cybou/crypto/hkdf_sha256.h>
 #include <cybou/crypto/cleanse.h>
@@ -26,6 +29,11 @@ using Key = std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)>;
 using KeyCtx = std::unique_ptr<EVP_PKEY_CTX, decltype(&EVP_PKEY_CTX_free)>;
 using MdCtx = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>;
 
+std::span<const unsigned char> Bytes(const std::string_view value)
+{
+    return {reinterpret_cast<const unsigned char*>(value.data()), value.size()};
+}
+
 const char* Algorithm(IdentityKeyPurpose purpose)
 {
     switch (purpose) {
@@ -48,26 +56,45 @@ size_t SignatureSize(IdentityKeyPurpose purpose)
     return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE ? 2420 : 3309;
 }
 
+bool HasNonzero(std::span<const unsigned char> bytes)
+{
+    return std::any_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte != 0; });
+}
+
+std::optional<std::string_view> DerivationInfo(
+    const IdentityKeyPurpose purpose, const std::string_view component)
+{
+    const bool ed25519 = component == "ED25519";
+    switch (purpose) {
+    case IdentityKeyPurpose::RECOVERY_ROOT:
+        return ed25519 ? std::optional<std::string_view>{"CYBOU/IDENTITY/ROOT/ED25519"}
+                       : std::optional<std::string_view>{"CYBOU/IDENTITY/ROOT/ML-DSA-65"};
+    case IdentityKeyPurpose::AUTHORIZATION:
+        return ed25519 ? std::optional<std::string_view>{"CYBOU/IDENTITY/AUTH/ED25519"}
+                       : std::optional<std::string_view>{"CYBOU/IDENTITY/AUTH/ML-DSA-44"};
+    case IdentityKeyPurpose::POA_FINALIZER:
+        return ed25519 ? std::optional<std::string_view>{"CYBOU/IDENTITY/POA_FINALIZER/ED25519"}
+                       : std::optional<std::string_view>{"CYBOU/IDENTITY/POA_FINALIZER/ML-DSA-65"};
+    case IdentityKeyPurpose::STORAGE:
+        return ed25519 ? std::optional<std::string_view>{"CYBOU/IDENTITY/STORAGE/ED25519"}
+                       : std::optional<std::string_view>{"CYBOU/IDENTITY/STORAGE/ML-DSA-44"};
+    case IdentityKeyPurpose::NETWORK_ROOT:
+        return ed25519 ? std::optional<std::string_view>{"CYBOU/IDENTITY/NETWORK_ROOT/ED25519"}
+                       : std::optional<std::string_view>{"CYBOU/IDENTITY/NETWORK_ROOT/ML-DSA-65"};
+    }
+    return std::nullopt;
+}
+
 std::optional<std::array<unsigned char, 32>> DeriveSeed(
     std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpose,
     std::string_view component)
 {
     if (!Algorithm(purpose)) return std::nullopt;
     constexpr std::string_view salt{"CYBOU/IDENTITY/HKDF-SHA256"};
-    std::string_view purpose_label;
-    switch (purpose) {
-    case IdentityKeyPurpose::RECOVERY_ROOT: purpose_label = "ROOT"; break;
-    case IdentityKeyPurpose::AUTHORIZATION: purpose_label = "AUTH"; break;
-    case IdentityKeyPurpose::POA_FINALIZER: purpose_label = "POA_FINALIZER"; break;
-    case IdentityKeyPurpose::STORAGE: purpose_label = "STORAGE"; break;
-    case IdentityKeyPurpose::NETWORK_ROOT: purpose_label = "NETWORK_ROOT"; break;
-    }
-    const std::string info = std::string{"CYBOU/IDENTITY/"} + std::string{purpose_label} + "/" +
-        (component == "ED25519" ? "ED25519" : Algorithm(purpose));
+    const auto info = DerivationInfo(purpose, component);
+    if (!info) return std::nullopt;
     std::array<unsigned char, 32> seed{};
-    const auto salt_bytes = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
-    const auto info_bytes = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(info.data()), info.size()};
-    if (!crypto::HkdfSha256(secret, salt_bytes, info_bytes, seed)) return std::nullopt;
+    if (!crypto::HkdfSha256(secret, Bytes(salt), Bytes(*info), seed)) return std::nullopt;
     return seed;
 }
 
@@ -292,8 +319,7 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
 {
     if (recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT ||
         recovery_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::RECOVERY_ROOT) ||
-        std::all_of(recovery_key.ed25519.begin(), recovery_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
-        std::all_of(recovery_key.ml_dsa.begin(), recovery_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+        !HasNonzero(recovery_key.ed25519) || !HasNonzero(recovery_key.ml_dsa)) return std::nullopt;
 
     constexpr std::string_view domain{"CYBOU/RECOVERY-KEY-ID"};
     constexpr std::array<unsigned char, 1> suite{1}; // hybrid root suite
@@ -309,8 +335,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
 {
     if (authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION ||
         authorization_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::AUTHORIZATION) ||
-        std::all_of(authorization_key.ed25519.begin(), authorization_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
-        std::all_of(authorization_key.ml_dsa.begin(), authorization_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
+        !HasNonzero(authorization_key.ed25519) || !HasNonzero(authorization_key.ml_dsa)) return std::nullopt;
     constexpr std::string_view domain{"CYBOU/IDENTITY-AUTH-KEY-ID"};
     constexpr std::array<unsigned char, 2> suite{2, 1};
     std::array<unsigned char, 32> id{};
@@ -325,8 +350,7 @@ std::optional<std::array<unsigned char, 32>> ComputePoaFinalizerKeyId(
 {
     if (poa_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
         poa_finalizer_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::POA_FINALIZER) ||
-        std::all_of(poa_finalizer_key.ed25519.begin(), poa_finalizer_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
-        std::all_of(poa_finalizer_key.ml_dsa.begin(), poa_finalizer_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
+        !HasNonzero(poa_finalizer_key.ed25519) || !HasNonzero(poa_finalizer_key.ml_dsa)) {
         return std::nullopt;
     }
     constexpr std::string_view domain{"CYBOU/POA-FINALIZER-KEY-ID"};

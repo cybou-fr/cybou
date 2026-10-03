@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация офлайн DEVNET provisioning без изменения уже существующих constants.
+
 #include <cybou/provision.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/network_genesis.h>
@@ -23,6 +26,7 @@ namespace {
 std::string JoinWords(const RecoveryWords& words)
 {
     std::string res;
+    res.reserve(words.size() * 10);
     for (size_t i = 0; i < words.size(); ++i) {
         if (i > 0) res += " ";
         res += words[i];
@@ -57,6 +61,17 @@ std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t inde
     return ss.str();
 }
 
+std::optional<AccountId> GenerateRandomAccountId()
+{
+    std::array<unsigned char, 32> acc_bytes{};
+    do {
+        if (RAND_bytes(acc_bytes.data(), static_cast<int>(acc_bytes.size())) != 1) {
+            return std::nullopt;
+        }
+    } while (std::all_of(acc_bytes.begin(), acc_bytes.end(), [](unsigned char b){ return b == 0; }));
+    return AccountId::FromBytes(acc_bytes);
+}
+
 } // namespace
 
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
@@ -79,14 +94,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     res.cybou_entropy = *cybou_entropy;
     res.cybou_words = EncodeRecoveryWords(res.cybou_entropy);
 
-    // Stable non-zero random AccountID (DEC-165)
-    std::array<unsigned char, 32> acc_bytes{};
-    do {
-        if (RAND_bytes(acc_bytes.data(), static_cast<int>(acc_bytes.size())) != 1) {
-            return std::nullopt;
-        }
-    } while (std::all_of(acc_bytes.begin(), acc_bytes.end(), [](unsigned char b){ return b == 0; }));
-    auto parsed_acc = AccountId::FromBytes(acc_bytes);
+    // Stable non-zero random AccountID (DEC-165).
+    auto parsed_acc = GenerateRandomAccountId();
     if (!parsed_acc) return std::nullopt;
     res.cybou_account_id = *parsed_acc;
 

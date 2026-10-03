@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Верификация и выдача official networks, собранных из compiled constants.
+
 #include <cybou/official_networks.h>
 #include <cybou/official_devnet_constants.h>
 

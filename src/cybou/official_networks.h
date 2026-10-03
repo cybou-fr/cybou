@@ -5,6 +5,9 @@
 #ifndef CYBOU_OFFICIAL_NETWORKS_H
 #define CYBOU_OFFICIAL_NETWORKS_H
 
+/// \file
+/// \brief Verified official networks, жёстко собранные из public constants.
+
 #include <cybou/network_genesis.h>
 #include <cybou/state.h>
 
@@ -15,23 +18,20 @@
 
 namespace cybou {
 
+/// \brief Идентификатор официальной сети, поддерживаемой текущей сборкой.
 enum class NetworkKind : uint8_t {
     DEVNET = 0,
     MAINNET = 1,
 };
 
-/** Known rendezvous peer: an ordinary full node, pinned for transport discovery only. */
+/// \brief Известный rendezvous peer: обычный Full Node с transport-only TLS SPKI pin.
 struct RendezvousLocator {
     std::string_view host;
     uint16_t port{0};
     std::array<unsigned char, 32> tls_spki_sha256{};
 };
 
-/**
- * One official network, built only from compiled public constants and verified
- * once: Network Public Key (NetworkID) -> signed immutable NetworkGenesis ->
- * initial state root. The verified signed genesis is the runtime consensus input.
- */
+/// \brief Verified official network: compiled NetworkID, signed immutable genesis и initial state.
 struct OfficialNetwork {
     NetworkKind kind{NetworkKind::DEVNET};
     std::string_view name;
@@ -40,12 +40,9 @@ struct OfficialNetwork {
     std::span<const RendezvousLocator> rendezvous_locators;
 };
 
-/**
- * The only official startup source. "devnet" returns the compiled, verified
- * DEVNET. MAINNET is not provisioned (no key, genesis or bootstrap) and fails
- * closed; any other value, including a file path, is rejected.
- */
+/// \brief Возвращает verified official network по имени профиля; любые внешние файлы отвергаются.
 const OfficialNetwork& RequireOfficialNetwork(std::string_view name);
+/// \brief Возвращает verified official network по enumerator-сети.
 const OfficialNetwork& RequireOfficialNetwork(NetworkKind kind);
 
 

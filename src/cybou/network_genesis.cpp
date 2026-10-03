@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация canonical signed NetworkGenesis и immutable official-network binding.
+
 #include <cybou/network_genesis.h>
 #include <cybou/signing.h>
 #include <cybou/root_publication.h>
@@ -72,6 +75,11 @@ CybouState CreateDevGenesisState()
 }
 
 namespace {
+
+size_t SerializedProtocolParametersSize()
+{
+    return 4 + 8 + 4 + 8 + 8 + 8 + 8 + 8 + 4 + 8 + 8 + 4 + 1;
+}
 
 void WriteU8(std::vector<unsigned char>& out, uint8_t value) {
     out.push_back(value);
@@ -157,20 +165,19 @@ std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std:
 
 std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& genesis)
 {
-    std::vector<unsigned char> out;
-
     const auto net_key_bytes = CanonicalSerializeNetworkPublicKey(genesis.network_public_key);
+    const auto poa_key_bytes = CanonicalSerializeHybridPublicKey(genesis.poa_finalizer_public_key);
+    std::vector<unsigned char> out;
+    out.reserve(4 + net_key_bytes.size() + cybou::Hash256::size() + poa_key_bytes.size() +
+        SerializedProtocolParametersSize());
     WriteU32LE(out, static_cast<uint32_t>(net_key_bytes.size()));
     out.insert(out.end(), net_key_bytes.begin(), net_key_bytes.end());
 
     WriteHash(out, genesis.genesis_state_root);
 
-    WriteU8(out, static_cast<uint8_t>(genesis.poa_finalizer_public_key.purpose));
-    out.insert(out.end(), genesis.poa_finalizer_public_key.ed25519.begin(), genesis.poa_finalizer_public_key.ed25519.end());
-    WriteU32LE(out, static_cast<uint32_t>(genesis.poa_finalizer_public_key.ml_dsa.size()));
-    out.insert(out.end(), genesis.poa_finalizer_public_key.ml_dsa.begin(), genesis.poa_finalizer_public_key.ml_dsa.end());
+    out.insert(out.end(), poa_key_bytes.begin(), poa_key_bytes.end());
 
-    // Protocol parameters
+    // Порядок и размеры ниже образуют canonical consensus payload.
     const auto& p = genesis.protocol_parameters;
     WriteU32LE(out, p.account_creation_work_bits);
     WriteU64LE(out, p.account_creation_epoch_lag);
@@ -204,8 +211,7 @@ cybou::Hash256 ComputeNetworkGenesisDigest(const NetworkGenesis& genesis)
 std::vector<unsigned char> SerializeSignedNetworkGenesis(const NetworkGenesis& genesis)
 {
     auto out = SerializeNetworkGenesisPayload(genesis);
-
-    // Signature
+    out.reserve(out.size() + genesis.signature.ed25519.size() + 4 + genesis.signature.ml_dsa.size());
     out.insert(out.end(), genesis.signature.ed25519.begin(), genesis.signature.ed25519.end());
     WriteU32LE(out, static_cast<uint32_t>(genesis.signature.ml_dsa.size()));
     out.insert(out.end(), genesis.signature.ml_dsa.begin(), genesis.signature.ml_dsa.end());
@@ -267,7 +273,7 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     poa_key.ml_dsa.assign(bytes.begin() + pos, bytes.begin() + pos + *poa_ml_dsa_len);
     pos += *poa_ml_dsa_len;
 
-    // Protocol parameters
+    // Порядок чтения обязан совпадать с SerializeNetworkGenesisPayload().
     CybouProtocolParameters p;
     const auto work_bits = read_u32le();
     const auto epoch_lag = read_u64le();

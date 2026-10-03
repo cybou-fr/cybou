@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Durable journal намерений PoA finalizer'а перед подписью блоков.
 
 #ifndef CYBOU_POA_SIGNING_JOURNAL_H
 #define CYBOU_POA_SIGNING_JOURNAL_H
@@ -16,6 +18,7 @@
 
 namespace cybou {
 
+/// \brief Последнее зафиксированное намерение PoA finalizer'а.
 struct PoaJournalHead {
     uint64_t height{0};
     cybou::Hash256 parent_block_id;
@@ -23,6 +26,7 @@ struct PoaJournalHead {
     friend bool operator==(const PoaJournalHead&, const PoaJournalHead&) = default;
 };
 
+/// \brief Результаты проверки и продвижения durable PoA signing journal.
 enum class PoaJournalStatus : uint8_t {
     NONE,
     ALREADY_PREPARED,
@@ -36,20 +40,22 @@ enum class PoaJournalStatus : uint8_t {
     STORAGE_ERROR,
 };
 
-/** Durable pre-sign intent journal. It never stores private signing material. */
+/// \brief Fail-closed журнал, фиксирующий intent до выпуска PoA-подписи.
 class PoaSigningJournal final {
 public:
     PoaSigningJournal(KVStore& db, const cybou::Hash256& network_binding,
         const cybou::Hash256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key);
 
-    /** Check the canonical head before the finalizer session may sign. */
+    /// \brief Проверяет, что локально видимый канонический tip совместим с журналом.
     PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const cybou::Hash256& finalized_tip);
 
-    /** Persist the next block intent synchronously before producing its signature. */
+    /// \brief Синхронно фиксирует intent следующего блока до генерации подписи.
     PoaJournalStatus PrepareToSign(uint64_t height,
         const cybou::Hash256& parent_block_id, const cybou::Hash256& block_id);
 
+    /// \brief Возвращает последнюю зафиксированную journal head.
     PoaJournalHead Head() const;
+    /// \brief Сообщает, переведён ли журнал в fail-closed состояние.
     bool SafetyHalted() const;
 
 private:

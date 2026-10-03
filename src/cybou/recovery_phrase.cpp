@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация кодирования и декодирования recovery phrase BIP-39 (ENT=256).
+
 #include <cybou/recovery_phrase.h>
 #include <cybou/crypto/sha256.h>
 

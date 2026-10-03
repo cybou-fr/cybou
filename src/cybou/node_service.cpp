@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация service-обвязки вокруг runtime, listener и фоновой синхронизации.
+
 #include <cybou/node_service.h>
 
 #include <cybou/p2p/inbound_server.h>
@@ -20,6 +23,20 @@
 #include <utility>
 
 namespace cybou {
+namespace {
+
+void SleepUntilStopped(const std::atomic_bool& stop_flag, std::chrono::milliseconds duration)
+{
+    constexpr auto SLEEP_SLICE = std::chrono::milliseconds{200};
+    auto remaining = duration;
+    while (remaining > std::chrono::milliseconds::zero() && !stop_flag.load()) {
+        const auto sleep_for = std::min(remaining, SLEEP_SLICE);
+        std::this_thread::sleep_for(sleep_for);
+        remaining -= sleep_for;
+    }
+}
+
+} // namespace
 
 CybouNodeService::CybouNodeService(CybouNodeServiceConfig config)
     : m_runtime{std::make_unique<CybouNodeRuntime>(std::move(config.runtime))},
@@ -100,13 +117,7 @@ void CybouNodeService::StartNetwork(
             // pausing, so a fresh node catches up in minutes, not an hour.
             if (result.blocks_applied >= config.sync_batch_size) continue;
 
-            auto remaining = config.sync_interval;
-            constexpr auto SLEEP_SLICE = std::chrono::milliseconds{200};
-            while (remaining > std::chrono::milliseconds::zero() && !m_stop_network.load()) {
-                const auto sleep_for = std::min(remaining, SLEEP_SLICE);
-                std::this_thread::sleep_for(sleep_for);
-                remaining -= sleep_for;
-            }
+            SleepUntilStopped(m_stop_network, config.sync_interval);
         }
         }};
         StartBlockProduction(config.block_interval_ms);

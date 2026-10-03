@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация remote durability и placement exact encrypted chunks.
+
 #include <cybou/storage_service.h>
 
 #include <cybou/node_runtime.h>
@@ -25,7 +28,7 @@ bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoin
     return std::any_of(replicas.begin(), replicas.end(),
         [&](const StorageEndpoint& r) { return SameProvider(r, provider); });
 }
-/** Bound on a single placement record: the largest publication chunk count. */
+/// Верхняя граница числа реплик, сериализуемых на один чанк placement.
 constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 
 constexpr std::string_view PLACEMENT_INDEX_KEY{"storage/placements"};
@@ -82,7 +85,7 @@ private:
     std::size_t m_offset{0};
 };
 
-/** Uniform CSPRNG shuffle; false when the system RNG fails. */
+/// Равномерное CSPRNG-перемешивание; false означает отказ системного RNG.
 bool Shuffle(std::vector<StorageEndpoint>& items)
 {
     for (std::size_t i = items.size(); i > 1; --i) {
@@ -175,7 +178,7 @@ std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const S
 struct StorageService::Placement {
     cybou::Hash256 operation_id;
     std::vector<ChunkId> leaves;
-    /** Remote providers that acknowledged each leaf; the local copy never appears here. */
+    /** Удалённые providers, подтвердившие leaf; локальная копия здесь никогда не учитывается. */
     std::vector<std::vector<StorageEndpoint>> replicas;
 };
 
@@ -203,6 +206,7 @@ std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash2
         if (!in.Take(placement.leaves[i])) return std::nullopt;
         const auto replicas = in.U8();
         if (!replicas || *replicas > MAX_REPLICAS_PER_CHUNK) return std::nullopt;
+        placement.replicas[i].reserve(*replicas);
         for (std::uint32_t r{0}; r < *replicas; ++r) {
             StorageEndpoint endpoint;
             if (!in.Take(endpoint.storage_id)) return std::nullopt;
@@ -226,7 +230,16 @@ std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash2
 
 bool StorageService::Save(const Placement& placement)
 {
-    std::vector<unsigned char> out(MAGIC.begin(), MAGIC.end());
+    std::size_t reserve = MAGIC.size() + placement.operation_id.size() + 4;
+    for (const auto& replicas : placement.replicas) {
+        reserve += 32 + 1;
+        for (std::size_t r{0}; r < replicas.size() && r < MAX_REPLICAS_PER_CHUNK; ++r) {
+            reserve += 32 + 1 + replicas[r].address.size() + 2;
+        }
+    }
+    std::vector<unsigned char> out;
+    out.reserve(reserve);
+    out.insert(out.end(), MAGIC.begin(), MAGIC.end());
     out.insert(out.end(), placement.operation_id.begin(), placement.operation_id.end());
     Append32(out, static_cast<std::uint32_t>(placement.leaves.size()));
     for (std::size_t i{0}; i < placement.leaves.size(); ++i) {
@@ -242,7 +255,7 @@ bool StorageService::Save(const Placement& placement)
             Append16(out, replicas[r].port);
         }
     }
-    // The placement and its entry in the maintained set are written together.
+    // Placement и его присутствие в индексе должны фиксироваться как одна логическая запись.
     PrivateApplicationStore::Batch batch{m_application_db};
     if (!m_application_db.Put(PlacementKey(placement.operation_id), out)) return false;
     auto index = PlacementIndex();
@@ -301,7 +314,7 @@ PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id,
     if (!m_application_db.IsUnlocked()) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Application DB is locked"};
     }
-    // Only finalized publications may be placed, and only with their exact chunk set.
+    // Размещаем только finalized публикации и только с их точным набором leaves.
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
     if (leaves.empty() || leaves.size() > MAX_PUBLICATION_CHUNKS || leaves.size() != publication->chunk_count) {
@@ -449,7 +462,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
         auto& replicas = placement.replicas[i];
         if (replicas.size() >= m_target) continue;
 
-        // Local copy, or any healthy remote copy when repairing after eviction.
+        // Используем локальную копию или любую здоровую удалённую копию при ремонте после eviction.
         lock.unlock();
         const auto bytes = FetchInternal(placement.leaves[i], replicas);
         lock.lock();
@@ -458,20 +471,21 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
             continue;
         }
 
+        const auto proof = commitment->Proof(static_cast<std::uint32_t>(i));
+
         for (const auto& provider : providers) {
             if (replicas.size() >= m_target) break;
-            // One provider key is one replica, whatever endpoints it answers on.
+            // Один provider key считается одной репликой независимо от числа endpoint.
             if (HasProvider(replicas, provider)) continue;
 
             const auto op_id = placement.operation_id;
             const auto chunk_id = placement.leaves[i];
-            const auto proof = commitment->Proof(i);
 
             lock.unlock();
             const auto admitted = m_transport.Put(provider, op_id, chunk_id, *bytes, proof);
             lock.lock();
 
-            // STORED and ALREADY_STORED both mean the provider now retains the chunk.
+            // STORED и ALREADY_STORED одинаково означают, что provider удерживает этот чанк.
             if (!admitted || !*admitted) {
                 admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
                     (admitted ? " rejected chunk with status " + std::to_string(static_cast<unsigned>(admitted->status))
@@ -517,6 +531,7 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         auto& replicas = placement->replicas[i];
         const auto chunk_id = placement->leaves[i];
         std::vector<StorageEndpoint> healthy;
+        healthy.reserve(replicas.size());
         for (const auto& provider : replicas) {
             lock.unlock();
             const auto bytes = m_transport.Get(provider, chunk_id);
@@ -538,7 +553,7 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
     const bool degraded = result.state != DurabilityState::PROTECTED;
     if (degraded) if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::placement_degraded,
         {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
-    // Below target: repair now from any valid copy (local or remote).
+    // Если ушли ниже target, сразу ремонтируем из любой валидной копии: локальной или удалённой.
     if (result.state != DurabilityState::PROTECTED && m_runtime.FindFinalizedRootPublication(operation_id)) {
         result = Place(lock, *placement);
     }
@@ -557,6 +572,7 @@ PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
         auto& replicas = placement->replicas[i];
         const auto chunk_id = placement->leaves[i];
         std::vector<StorageEndpoint> healthy;
+        healthy.reserve(replicas.size());
         for (const auto& provider : replicas) {
             lock.unlock();
             const auto bytes = m_transport.Get(provider, chunk_id);
@@ -618,7 +634,7 @@ std::optional<std::vector<unsigned char>> StorageService::FetchInternal(const Ch
     for (const auto& provider : candidates) {
         auto bytes = m_transport.Get(provider, chunk_id);
         if (!bytes || ComputeChunkId(*bytes) != chunk_id) continue;
-        // Cache the verified ciphertext; a failed cache write does not fail retrieval.
+        // Кешируем уже проверенный ciphertext; провал записи в кеш не ломает выдачу данных.
         (void)m_runtime.GetChunkBlobStore().Put(chunk_id, *bytes);
         (void)m_runtime.GetChunkRetention().NoteCacheUse(chunk_id, now_ms);
         return bytes;

@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Реализация admission-store для finalized provider-чанков.
+
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/encrypted_chunk.h>
 
@@ -25,7 +28,7 @@ std::string Hex(const std::span<const unsigned char> bytes)
     return result;
 }
 
-std::optional<ChunkId> ParseChunkId(const std::string& hex)
+std::optional<ChunkId> ParseChunkId(const std::string_view hex)
 {
     if (hex.size() != 64) return std::nullopt;
     ChunkId id{};
@@ -100,8 +103,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
         .wipe_data = wipe_data,
     });
 
-    // Provider metadata is network-bound even though the common blob store is
-    // keyed only by the hash of exact encrypted bytes.
+    // Provider-метаданные жёстко привязаны к сети, хотя общий blob-store индексируется только exact-byte hash.
     const std::string network_key{"chunk-store/network-id"};
     std::vector<unsigned char> saved_network_binding;
     if (m_db->Read(network_key, saved_network_binding)) {
@@ -129,15 +131,13 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
                 size > std::numeric_limits<std::uint64_t>::max() - total) {
                 throw std::runtime_error{"invalid finalized chunk size metadata"};
             }
-            // Startup checks presence and size only; content is verified by
-            // BLAKE3 on every GET and by owner audits, never by rereading
-            // the whole store here.
+            // На старте проверяем только наличие и размер; полная BLAKE3-проверка происходит на GET и owner-аудитах.
             if (m_blobs.StoredSize(*id) != std::optional<std::uint64_t>{size}) {
                 throw std::runtime_error{"provider chunk blob is missing or has the wrong size"};
             }
             total += size;
         });
-        // A reduced quota retains existing replicas but rejects new admission.
+        // Сниженная квота сохраняет уже принятые реплики, но блокирует новый admission.
         m_db->Write(m_namespace + "/storage-bytes", total, true);
     }
 }
@@ -220,8 +220,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         m_db->WriteBatch(batch, true);
         return {ChunkAdmissionStatus::STORED};
     } catch (...) {
-        // A valid blob remains usable for local staging if provider metadata
-        // could not be committed. It must never be removed as rollback.
+        // Если метаданные не записались, сам корректный blob может ещё быть нужен локальному staging.
         return {ChunkAdmissionStatus::STORAGE_ERROR};
     }
 }

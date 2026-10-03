@@ -5,6 +5,9 @@
 #ifndef CYBOU_NODE_SERVICE_H
 #define CYBOU_NODE_SERVICE_H
 
+/// \file
+/// \brief Координатор жизненного цикла Full Node поверх CybouNodeRuntime.
+
 #include <cybou/node_runtime.h>
 
 #include <atomic>
@@ -20,11 +23,13 @@
 
 namespace cybou {
 
+/// \brief Конфигурация запуска node-service: runtime plus canonical genesis state.
 struct CybouNodeServiceConfig {
     NodeRuntimeConfig runtime;
     CybouState genesis;
 };
 
+/// \brief Параметры фоновой сети: verified sync, listener и локальная PoA-периодика.
 struct CybouNetworkServiceConfig {
     std::chrono::milliseconds sync_interval{3000};
     uint64_t sync_batch_size{64};
@@ -32,7 +37,7 @@ struct CybouNetworkServiceConfig {
     std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
 };
 
-/** Owns node runtime startup and the Full Node network lifecycle. */
+/// \brief Управляет запуском runtime и сетевым жизненным циклом Full Node.
 class CybouNodeService final {
 public:
     using NetworkUpdate = std::function<bool(const SyncPeerResult&, const NodeRuntimeStatus&, size_t)>;
@@ -43,18 +48,22 @@ public:
     CybouNodeService(const CybouNodeService&) = delete;
     CybouNodeService& operator=(const CybouNodeService&) = delete;
 
-    /** Open or initialize the local state, rejecting corrupt and foreign state. */
+    /// \brief Открывает или инициализирует локальное состояние, отвергая чужую или повреждённую сеть.
     void Start();
-    /** Start CYBOU P2P peer maintenance and verified sync, optionally before any peer is known. */
+    /// \brief Запускает CYBOU P2P maintenance, verified sync и optional listener.
     void StartNetwork(
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
+    /// \brief Останавливает сетевые фоновые потоки и listener.
     void StopNetwork();
-    /** Start or stop local PoA block production as the vault unlocks/locks. */
+    /// \brief Запускает локальное PoA block production при доступном signer.
     void StartBlockProduction(uint64_t block_interval_ms = 1000);
+    /// \brief Останавливает локальное PoA block production.
     void StopBlockProduction();
 
+    /// \brief Доступ к базовому runtime этого сервиса.
     CybouNodeRuntime& Runtime() { return *m_runtime; }
+    /// \brief Константный доступ к базовому runtime этого сервиса.
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }
 
 private:

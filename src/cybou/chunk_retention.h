@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Локальный реестр pin/cache для общего зашифрованного ChunkStore.
+
 #ifndef CYBOU_CHUNK_RETENTION_H
 #define CYBOU_CHUNK_RETENTION_H
 
@@ -23,62 +26,52 @@ namespace cybou {
 class ChunkBlobStore;
 class KVStore;
 
-/**
- * Opaque local retention reference: a holder (for example one local
- * Identity) and one of its references (for example a publication job).
- * Both are 32-byte hashes; the registry never learns what they mean.
- */
+/// \brief Непрозрачная локальная ссылка удержания: владелец и его ссылка.
+///
+/// Оба поля — 32-байтовые теги. Реестр не знает их прикладной семантики.
 struct RetentionKey {
     std::array<unsigned char, 32> holder{};
     std::array<unsigned char, 32> reference{};
 };
 
-/** holder = BLAKE3(domain || bytes); reference = BLAKE3(domain || bytes). */
+/// \brief Строит 32-байтовый retention tag из домена и байтов полезной нагрузки.
 std::array<unsigned char, 32> RetentionTag(std::string_view domain, std::span<const unsigned char> bytes);
 
-/**
- * Node-local pin/reference registry for the common encrypted ChunkStore.
- *
- * The ChunkStore stays a plain map of ChunkID -> encrypted bytes. This
- * registry records, separately, why a local blob must stay:
- *   - pins: (holder, reference) -> ChunkIDs that must not be evicted
- *     (staged content not yet remotely durable, content the user keeps
- *     offline);
- *   - cache entries: blobs that may be evicted, with their last use.
- * Provider obligations stay in FinalizedChunkStore admission records.
- *
- * Garbage collection only ever deletes a blob that is a cache entry, is not
- * pinned by anyone, is not provider-admitted and was not used within the
- * grace period. A blob the registry has never heard of is never deleted.
- */
+/// \brief Узел-локальный реестр pin/reference для общего encrypted ChunkStore.
+///
+/// Физический ChunkStore остаётся простой картой ChunkId -> encrypted bytes.
+/// Реестр отдельно хранит причины, почему локальный blob должен жить:
+/// - pins: (holder, reference) -> ChunkId, которые нельзя вытеснять;
+/// - cache entries: blob, которые можно вытеснять по LRU.
+/// Обязательства провайдера остаются в FinalizedChunkStore.
 class ChunkRetentionRegistry final {
 public:
-    /** memory_only keeps the registry in memory (tests, ephemeral nodes). */
+    /// \brief Создаёт реестр; memory_only оставляет всё только в памяти.
     ChunkRetentionRegistry(const std::filesystem::path& path, bool memory_only, bool wipe_data);
     ~ChunkRetentionRegistry();
     ChunkRetentionRegistry(const ChunkRetentionRegistry&) = delete;
     ChunkRetentionRegistry& operator=(const ChunkRetentionRegistry&) = delete;
 
-    /** Adds chunks to a reference (idempotent, atomic). */
+    /// \brief Атомарно добавляет чанки к pin-ссылке.
     bool Pin(const RetentionKey& key, std::span<const ChunkId> chunks);
-    /** Drops every pin of a reference; its chunks become evictable cache. */
+    /// \brief Удаляет все pin-ссылки и переводит чанки в вытесняемый cache.
     bool Release(const RetentionKey& key, std::uint64_t now_ms);
+    /// \brief Возвращает true, если хотя бы одна pin-ссылка удерживает чанк.
     bool IsPinned(const ChunkId& chunk) const;
+    /// \brief Возвращает все чанки, закрепленные конкретной ссылкой.
     std::vector<ChunkId> Pinned(const RetentionKey& key) const;
-    /** Records a (re)used local cache blob. */
+    /// \brief Обновляет отметку последнего использования cache-чанка.
     bool NoteCacheUse(const ChunkId& chunk, std::uint64_t now_ms);
 
+    /// \brief Сводка одной итерации вытеснения cache-чанков.
     struct CollectResult {
         std::uint64_t cache_bytes{0};
         std::size_t removed{0};
         std::uint64_t removed_bytes{0};
     };
-    /**
-     * Evicts least-recently-used unpinned cache blobs until the evictable
-     * cache fits cache_budget_bytes, at most max_removals per call.
-     * remove(chunk) deletes the blob only if no provider obligation exists
-     * and reports whether it did.
-     */
+    /// \brief Вытесняет unpinned cache-чанки по LRU, пока cache не уложится в бюджет.
+    ///
+    /// remove(chunk) удаляет blob только если на нём нет provider-обязательства.
     CollectResult Collect(const ChunkBlobStore& blobs, std::uint64_t cache_budget_bytes, std::uint64_t now_ms,
         std::uint64_t grace_ms, std::size_t max_removals, const std::function<bool(const ChunkId&)>& remove);
 

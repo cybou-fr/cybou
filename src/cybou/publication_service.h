@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// \brief Исходящие приватные публикации, локальный staging и отслеживание durability.
+
 #ifndef CYBOU_PUBLICATION_SERVICE_H
 #define CYBOU_PUBLICATION_SERVICE_H
 
@@ -23,6 +26,7 @@ namespace cybou {
 class CybouNodeRuntime;
 class StorageService;
 
+/// \brief Уже подготовленный локальный bundle для RootPublication.
 struct PreparedPublicationBundle {
     ChunkId root_chunk_id{};
     ContentKey content_key{};
@@ -30,96 +34,82 @@ struct PreparedPublicationBundle {
     std::uint32_t chunk_count{0};
 };
 
+/// \brief Текущая фаза локальной publication job.
 enum class PublicationJobPhase : std::uint8_t {
     WAITING_FINALITY = 1,
     SECURING = 2,
     NEEDS_ATTENTION = 3,
-    /** Finalized and every chunk has reached the remote replica target. */
+    /// Finalized и каждый chank достиг целевого числа удалённых реплик.
     PROTECTED = 4,
-    /** Waiting for an earlier Identity operation; capsules are built at submission. */
+    /// Ожидание более ранней Identity-операции; capsule строятся при отправке.
     QUEUED = 5,
 };
 
+/// \brief Наблюдаемое состояние publication job.
 struct PublicationJobResult {
     PublicationJobPhase phase{PublicationJobPhase::NEEDS_ATTENTION};
     cybou::Hash256 operation_id;
     std::uint64_t finalized_height{0};
     std::string error;
-    /** 0..100 toward the remote replica target while SECURING; -1 when unknown. */
+    /// 0..100 на пути к remote replica target при SECURING; -1 если неизвестно.
     int durability_percent{-1};
 };
 
-/** New local content to encrypt into its own tree within the publication. */
+/// \brief Новый локальный источник данных, который нужно зашифровать в отдельное дерево.
 struct NewContent {
     EncryptedTreeSource source;
 };
 
-/** Random 32-byte private identifier for messages, attachments and Files items. */
+/// \brief Генерирует случайный private item id для сообщений, вложений и Files-элементов.
 std::optional<PrivateItemId> NewPrivateItemId();
 
-/** Submits a prepared local bundle through the durable Identity operation journal.
- *
- * One recipient plus a mandatory owner capsule is supported. The persisted
- * private job is the exact RootPublication intent; after finality it awaits
- * StorageService to establish remote durability.
- */
+/// \brief Сервис исходящих приватных публикаций одного unlocked Identity.
+///
+/// Сервис хранит точный intent RootPublication, локальный порядок leaf-чанков
+/// и после finality передаёт управление durability в StorageService.
 class PublicationService final {
 public:
+    /// \brief Создаёт сервис публикаций для unlocked Identity и его Application DB.
     PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
         PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator);
+    /// \brief Отправляет уже подготовленный bundle через durable Identity journal.
     PublicationJobResult SubmitPrepared(std::string_view local_job_id,
         const PreparedPublicationBundle& bundle,
         std::optional<AccountId> recipient = std::nullopt);
+    /// \brief Возобновляет существующую publication job по локальному идентификатору.
     PublicationJobResult Resume(std::string_view local_job_id);
-    /** Cancels a never-submitted queued job, or a job whose operation is
-     * explicitly known rejected. Pending/uncertain/finalized work is retained. */
+    /// \brief Отменяет только безопасно забываемую job без принятой/finalized неопределённости.
     bool CancelPublication(std::string_view local_job_id);
+    /// \brief Возвращает текущее состояние локальной publication job.
     std::optional<PublicationJobResult> GetJob(std::string_view local_job_id);
-    /** Records StorageService's report that remote durability is met. Only a
-     * finalized (SECURING) job can become PROTECTED. */
+    /// \brief Помечает finalized job как PROTECTED после отчёта StorageService.
     bool MarkProtected(std::string_view local_job_id);
 
-    /**
-     * Mail: encrypts new attachments into child trees, fills their root/key
-     * references into the message, and publishes the MAIL_MESSAGE root with a
-     * recipient capsule and a self capsule. Attachments that already carry a
-     * protected root/key are referenced as-is (no re-upload).
-     * new_attachments[i].first is an index into message.attachments.
-     * Repeating a job ID resumes the recorded publication.
-     */
+    /// \brief Публикует MAIL_MESSAGE с recipient capsule и обязательной self capsule.
+    ///
+    /// Новые вложения шифруются в дочерние деревья; уже защищённые вложения
+    /// переиспользуются по root/key без повторной загрузки.
     PublicationJobResult PublishMail(std::string_view local_job_id, MailMessage message,
         std::vector<std::pair<std::size_t, NewContent>> new_attachments = {});
-    /**
-     * Files: publishes one FILES_MUTATION_BATCH with a self capsule. For each
-     * new_content entry the referenced UPSERT item receives the new tree's
-     * root/key and logical size.
-     */
+    /// \brief Публикует FILES_MUTATION_BATCH с self capsule.
     PublicationJobResult PublishFiles(std::string_view local_job_id, FilesMutationBatch batch,
         std::vector<std::pair<std::size_t, NewContent>> new_content = {});
 
-    /**
-     * Step one of a safe IdentityRotate: publishes an IDENTITY_RECOVERY_BRIDGE
-     * with every known KEM seed, readable by the current key and by the KEM
-     * key the new recovery entropy will publish at the next epoch.
-     */
+    /// \brief Публикует IDENTITY_RECOVERY_BRIDGE для безопасного первого шага IdentityRotate.
     PublicationJobResult PublishRecoveryBridge(std::string_view local_job_id,
         std::span<const unsigned char, 32> new_recovery_entropy);
-    /**
-     * True only when the bridge job is PROTECTED and its finalized root opens
-     * with the new entropy and decodes to this Identity's complete bridge.
-     * IdentityRotate must not be submitted before this returns true.
-     */
+    /// \brief Проверяет, что recovery bridge уже PROTECTED и читается новым recovery entropy.
     bool VerifyRecoveryBridge(std::string_view local_job_id, std::span<const unsigned char, 32> new_recovery_entropy,
         StorageService& storage);
 
-    /** Local job IDs known to this Identity, oldest first. */
+    /// \brief Возвращает все известные локальные job id в порядке создания.
     std::vector<std::string> Jobs();
-    /** Advances every unfinished job: finality, then StorageService placement. */
+    /// \brief Продвигает каждую незавершённую job: finality, затем placement/durability.
     std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(StorageService& storage);
 
 private:
     struct Job;
-    /** What to publish, independent of the nonce it is eventually signed with. */
+    /// \brief Неподписанный intent публикации, независимый от будущего nonce.
     struct Intent {
         PreparedPublicationBundle bundle;
         std::optional<AccountId> recipient;
@@ -128,10 +118,12 @@ private:
     std::optional<Intent> LoadIntent(std::string_view local_job_id) const;
     bool SaveIntent(std::string_view local_job_id, const Intent& intent);
     PublicationJobResult BuildAndSubmit(std::string_view local_job_id, const Intent& intent);
+    /// \brief Результат локального staging: bundle плюс точный порядок authorization leaves.
     struct Staged {
         PreparedPublicationBundle bundle;
         std::vector<ChunkId> leaves;
     };
+    /// \brief Строит private metadata корневого документа из дочерних summary.
     using BuildMetadata = std::function<std::optional<std::vector<unsigned char>>(
         std::span<const EncryptedTreeSummary> children)>;
     std::optional<Job> Load(std::string_view local_job_id) const;

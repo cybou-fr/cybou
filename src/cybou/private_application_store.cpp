@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Реализация зашифрованной локальной Application DB одной Identity.
+
 #include <cybou/private_application_store.h>
 
 #include <cybou/crypto/chacha20_poly1305.h>
@@ -21,6 +24,8 @@ namespace {
 
 constexpr std::string_view CHECK_NAME{"__application_store_check__"};
 constexpr std::string_view CHECK_VALUE{"CYBOU local application store"};
+constexpr std::string_view CHECK_DB_KEY{"app/check"};
+constexpr std::string_view ROW_DB_PREFIX{"app/row/"};
 constexpr std::string_view RECORD_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/record/"};
 constexpr std::string_view KEY_CHECK_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/key-check"};
 constexpr std::size_t MAX_NAME_BYTES{512};
@@ -87,23 +92,23 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
     m_db = std::make_unique<KVStore>(KVStoreOptions{.path = m_path, .cache_bytes = 4 << 20});
 
     std::vector<unsigned char> check;
-    if (m_db->Read(std::string{"app/check"}, check)) {
+    if (m_db->Read(std::string{CHECK_DB_KEY}, check)) {
         auto decoded = Decrypt(*key, CHECK_NAME, check);
         if (!decoded || !std::equal(decoded->begin(), decoded->end(), CHECK_VALUE.begin(), CHECK_VALUE.end())) {
             throw PrivateApplicationStoreKeyMismatch{"private application store belongs to other Identity keys"};
         }
         crypto::CleanseMemory(decoded->data(), decoded->size());
     } else {
-        if (m_db->Exists(std::string{"app/check"})) {
+        if (m_db->Exists(std::string{CHECK_DB_KEY})) {
             throw std::runtime_error{"corrupt private application store key check"};
         }
         bool has_rows{false};
-        m_db->ForEachStringPrefix("app/row/", std::string{"app/row/"}.size() + 64,
+        m_db->ForEachStringPrefix(std::string{ROW_DB_PREFIX}, std::string{ROW_DB_PREFIX}.size() + 64,
             [&](const std::string&, const std::string&) { has_rows = true; });
         if (has_rows) throw std::runtime_error{"private application store key check is missing"};
         auto encoded = Encrypt(*key, CHECK_NAME, Bytes(CHECK_VALUE));
         if (!encoded) throw std::runtime_error{"cannot encrypt private application store key check"};
-        m_db->Write(std::string{"app/check"}, *encoded, true);
+        m_db->Write(std::string{CHECK_DB_KEY}, *encoded, true);
     }
 }
 
@@ -132,7 +137,8 @@ std::optional<std::string> PrivateApplicationStore::RecordKey(
     const auto aad = AssociatedData(m_account, name);
     std::array<unsigned char, 32> digest{};
     if (!Mac(key, aad, digest)) return std::nullopt;
-    const auto result = std::string{"app/row/"} + Hex(digest);
+    auto result = std::string{ROW_DB_PREFIX};
+    result += Hex(digest);
     crypto::CleanseMemory(digest.data(), digest.size());
     return result;
 }

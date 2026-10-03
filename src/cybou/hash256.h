@@ -1,5 +1,7 @@
 // Copyright (c) 2026 CYBOU contributors
 // Distributed under the MIT software license, see COPYING.
+/// \file
+/// \brief Русский публичный API канонического 32-байтового идентификатора.
 #ifndef CYBOU_HASH256_H
 #define CYBOU_HASH256_H
 #include <algorithm>
@@ -12,7 +14,8 @@
 #include <string>
 #include <string_view>
 namespace cybou {
-/** Opaque canonical 32-byte identifier. Ordering and hex follow stored byte order. */
+/// \brief Непрозрачный канонический 32-байтовый идентификатор.
+/// \details Сравнение и hex-представление следуют фактическому порядку байт в памяти.
 class Hash256 {
     std::array<unsigned char,32> m_data{};
     static constexpr int Nibble(char c) {
@@ -24,10 +27,12 @@ class Hash256 {
 public:
     constexpr Hash256() = default;
     constexpr explicit Hash256(uint8_t first_byte) : m_data{first_byte} {}
+    /// \brief Создает Hash256 из точного 32-байтового span.
     constexpr explicit Hash256(std::span<const unsigned char> bytes) {
         if(bytes.size()!=size()) throw std::invalid_argument{"Hash256 requires 32 bytes"};
-        std::copy(bytes.begin(),bytes.end(),m_data.begin());
+        std::copy(bytes.begin(), bytes.end(), m_data.begin());
     }
+    /// \brief Создает Hash256 из compile-time hex-литерала длиной 64 символа.
     consteval explicit Hash256(std::string_view hex) {
         if(hex.size()!=64) throw "Hash256 requires 64 hex digits";
         for(size_t i=0;i<size();++i) {
@@ -47,8 +52,10 @@ public:
     constexpr const unsigned char* begin() const { return data(); }
     constexpr unsigned char* end() { return data()+size(); }
     constexpr const unsigned char* end() const { return data()+size(); }
+    /// \brief Возвращает строчный hex в прямом порядке байт.
     std::string GetHex() const;
     std::string ToString() const { return GetHex(); }
+    /// \brief Разбирает строчный hex длиной 64 символа.
     static std::optional<Hash256> FromHex(std::string_view hex);
     static const Hash256 ZERO;
     static const Hash256 ONE;

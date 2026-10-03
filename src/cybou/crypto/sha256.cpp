@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Реализация потокового SHA-256 на OpenSSL EVP.
 
 #include <cybou/crypto/sha256.h>
 
@@ -66,7 +68,7 @@ bool ComputeSha256(const std::initializer_list<std::span<const unsigned char>> p
         hasher.Finalize(output);
         return true;
     } catch (...) {
-        OPENSSL_cleanse(output, Sha256::OUTPUT_SIZE);
+        CleanseMemory(output, Sha256::OUTPUT_SIZE);
         return false;
     }
 }

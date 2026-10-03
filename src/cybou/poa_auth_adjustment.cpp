@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Каноническая сериализация и применение PoA AUTH adjustments.
 
 #include <cybou/poa_auth_adjustment.h>
 #include <cybou/crypto/sha256.h>
@@ -36,7 +38,7 @@ std::optional<std::vector<unsigned char>> SerializeBody(const PoaAuthAdjustment&
     if (!ValidAction(adjustment.action) || adjustment.target_account_id.IsNull() ||
         adjustment.amount == 0 || adjustment.block_height == 0) return std::nullopt;
     std::vector<unsigned char> out;
-    out.reserve(POA_AUTH_ADJUSTMENT_SIZE);
+    out.reserve(BODY_SIZE);
     out.push_back(static_cast<unsigned char>(adjustment.action));
     out.insert(out.end(), adjustment.target_account_id.Value().begin(), adjustment.target_account_id.Value().end());
     Write64(out, adjustment.amount);

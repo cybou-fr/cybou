@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Русский публичный API RFC 5869 HKDF-SHA256.
 
 #ifndef CYBOU_CRYPTO_HKDF_SHA256_H
 #define CYBOU_CRYPTO_HKDF_SHA256_H
@@ -8,7 +10,8 @@
 
 namespace cybou::crypto {
 
-/** Derive output with RFC 5869 HKDF-SHA256. Returns false if EVP cannot derive it. */
+/// \brief Выполняет RFC 5869 HKDF-SHA256 над входным ключевым материалом.
+/// \return false, если OpenSSL EVP не смог выполнить derivation.
 [[nodiscard]] bool HkdfSha256(
     std::span<const unsigned char> input_key_material,
     std::span<const unsigned char> salt,

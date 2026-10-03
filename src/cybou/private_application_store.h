@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Локальная зашифрованная rebuildable Application DB одной Identity.
+
 #ifndef CYBOU_PRIVATE_APPLICATION_STORE_H
 #define CYBOU_PRIVATE_APPLICATION_STORE_H
 
@@ -24,71 +27,50 @@
 
 namespace cybou {
 
-/** Rebuildable encrypted local projection for one unlocked Identity.
- *
- * Names and values are encrypted or keyed before reaching LevelDB. The store
- * retains no decryption key; access requires the original unlocked key store.
- * Canonical balances, names, and authorization state do not belong here.
- */
-/**
- * The Application DB was encrypted under different Identity key material,
- * typically before a completed IdentityRotate. The projection is rebuildable:
- * callers may discard it and open a fresh one; device-local-only records
- * (drafts) cannot be decrypted any more.
- */
+/// Исключение несовпадения ключа локальной Application DB и текущей Identity.
 class PrivateApplicationStoreKeyMismatch final : public std::runtime_error {
 public:
     using std::runtime_error::runtime_error;
 };
 
-/**
- * Local directory of one Identity under a CYBOU data directory:
- * <data_dir>/identities/<AccountID hex>. It holds app.db and staging.
- */
+/// Возвращает каталог Identity внутри общей директории данных CYBOU.
 std::filesystem::path IdentityDataDirectory(const std::filesystem::path& data_dir, const AccountId& account);
 
+/// Персональная зашифрованная Application DB одной разблокированной Identity.
 class PrivateApplicationStore final {
 public:
-    /** Opens <identity_dir>/app.db (see IdentityDataDirectory). */
+    /// Открывает `<identity_dir>/app.db` для текущей Identity.
     PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir);
     ~PrivateApplicationStore();
 
     PrivateApplicationStore(const PrivateApplicationStore&) = delete;
     PrivateApplicationStore& operator=(const PrivateApplicationStore&) = delete;
 
-    /** False when locked, switched to another key, or storage fails. */
+    /// Сохраняет запись; false при блокировке, смене ключа или ошибке хранилища.
     bool Put(std::string_view name, std::span<const unsigned char> plaintext);
+    /// Возвращает расшифрованную запись по имени.
     std::optional<std::vector<unsigned char>> Get(std::string_view name) const;
+    /// Проверяет наличие записи по имени.
     bool Has(std::string_view name) const;
+    /// Удаляет запись по имени.
     bool Erase(std::string_view name);
+    /// Возвращает true, если доступ к store сейчас разблокирован.
     bool IsUnlocked() const;
 
-    /** One change of an atomic batch: a value to store, or nullopt to erase. */
+    /// Одно изменение batch: сохранить значение или удалить запись.
     using Change = std::pair<std::string, std::optional<std::vector<unsigned char>>>;
-    /** Applies every change atomically (one synced LevelDB batch) or none. */
+    /// Атомарно применяет пакет изменений к LevelDB.
     bool WriteBatch(std::span<const Change> changes);
 
-    /**
-     * Groups dependent writes (a record and its index, a block and its scan
-     * checkpoint) so a crash can never persist only part of them. While a
-     * Batch is open, Put/Erase are staged and Get/Has read through them.
-     *
-     * Outermost Batch: Commit applies every staged change atomically (one
-     * synced write) or none; destroying it uncommitted discards everything.
-     *
-     * Nested Batch = savepoint of the enclosing one. Its Commit only keeps its
-     * changes in the enclosing batch (nothing is durable until the outermost
-     * Commit). Destroying it uncommitted, or committing after one of its own
-     * writes failed, rolls back exactly its changes and returns the enclosing
-     * batch to its state at the savepoint; the enclosing batch can still
-     * commit.
-     */
+    /// Группирует зависимые записи в атомарную логическую транзакцию.
     class Batch final {
     public:
+        /// Открывает batch или savepoint поверх текущего store.
         explicit Batch(PrivateApplicationStore& store);
         ~Batch();
         Batch(const Batch&) = delete;
         Batch& operator=(const Batch&) = delete;
+        /// Подтверждает batch или savepoint.
         bool Commit();
 
     private:
@@ -104,7 +86,9 @@ public:
         bool m_savepoint_failed{false};
     };
 
+    /// Возвращает AccountID владельца store.
     const AccountId& Account() const { return m_account; }
+    /// Возвращает путь к каталогу `app.db`.
     const std::filesystem::path& Path() const { return m_path; }
 
 private:
@@ -121,7 +105,7 @@ private:
     std::array<unsigned char, 32> m_key_check{};
     std::unique_ptr<KVStore> m_db;
     mutable std::recursive_mutex m_mutex;
-    /** Staged changes of the open Batch, keyed by record name. */
+    /// Изменения открытого batch, индексированные по имени записи.
     std::optional<std::map<std::string, std::optional<std::vector<unsigned char>>>> m_staged;
     bool m_staged_failed{false};
 };

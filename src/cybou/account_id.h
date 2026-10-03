@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Стабильный 32-байтовый идентификатор аккаунта, независимый от ротации ключей.
 
 #ifndef CYBOU_ACCOUNT_ID_H
 #define CYBOU_ACCOUNT_ID_H
@@ -14,14 +16,7 @@
 
 namespace cybou {
 
-/**
- * Opaque, stable 32-byte identifier for a CYBOU account.
- *
- * AccountID identifies an authorization record; it is not itself a public key
- * and therefore remains stable across Identity key rotation. All-zero is the
- * reserved invalid value. Canonical encoding is exactly the cybou::Hash256 internal
- * byte order defined by the protocol.
- */
+/// \brief Непрозрачный стабильный идентификатор аккаунта CYBOU.
 class AccountId
 {
 public:
@@ -30,6 +25,7 @@ public:
     AccountId() = default;
     explicit AccountId(const cybou::Hash256& value) : m_value{value} {}
 
+    /// \brief Создаёт AccountId из канонических 32 байт, отвергая нулевое значение.
     static std::optional<AccountId> FromBytes(std::span<const unsigned char> bytes)
     {
         if (bytes.size() != SIZE) return std::nullopt;
@@ -40,7 +36,9 @@ public:
         return id;
     }
 
+    /// \brief Возвращает true только для зарезервированного нулевого идентификатора.
     bool IsNull() const { return m_value.IsNull(); }
+    /// \brief Возвращает канонические 32 байта идентификатора.
     const cybou::Hash256& Value() const { return m_value; }
 
     friend bool operator==(const AccountId&, const AccountId&) = default;

@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Переносимое локальное представление AccountID и recovery entropy Identity.
+
 #ifndef CYBOU_IDENTITY_MATERIAL_H
 #define CYBOU_IDENTITY_MATERIAL_H
 
@@ -16,8 +19,7 @@
 
 namespace cybou {
 
-// Portable Identity material. Signing and KEM roles are domain-separated
-// derivations from recovery entropy; AccountID remains independently random.
+/// Переносимый секретный материал Identity для локального хранилища.
 struct IdentityMaterial {
     std::array<unsigned char, 32> account_id{};
     RecoveryEntropy recovery_entropy{};
@@ -31,10 +33,14 @@ struct IdentityMaterial {
     void Clear() noexcept;
 };
 
+/// Генерирует новый случайный AccountID и recovery entropy.
 std::optional<IdentityMaterial> GenerateIdentityMaterial();
+/// Сериализует переносимый секретный материал Identity.
 std::optional<std::vector<unsigned char>> SerializeIdentityMaterial(const IdentityMaterial& material);
+/// Создаёт новый зашифрованный файл материала Identity без перезаписи существующего.
 bool SaveNewIdentityMaterial(const std::filesystem::path& path,
     std::string_view password, const IdentityMaterial& material);
+/// Загружает и проверяет материал Identity из зашифрованного файла.
 std::optional<IdentityMaterial> LoadIdentityMaterial(
     const std::filesystem::path& path, std::string_view password);
 

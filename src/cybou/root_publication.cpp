@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Stanislav Saveliev
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
+/// \file
+/// \brief Каноническая сериализация и fee-расчёт RootPublication.
 
 #include <cybou/root_publication.h>
 

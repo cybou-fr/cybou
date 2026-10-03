@@ -2,6 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+/// \file
+/// Канонический реестр Identity и проверки операций создания/ротации/авторизации.
+
 #ifndef CYBOU_IDENTITY_REGISTRY_H
 #define CYBOU_IDENTITY_REGISTRY_H
 
@@ -20,7 +23,7 @@ using IdentityKeyId = std::array<unsigned char, 32>;
 inline constexpr size_t IDENTITY_OPERATION_AUTH_SIZE{2565};
 inline constexpr uint32_t MAX_IDENTITY_REGISTRY_ACCOUNTS{1'000'000};
 
-/** Protocol identity: mnemonic-derived key roles, never a machine or device. */
+/// Каноническая запись одной протокольной Identity.
 struct IdentityRecord {
     IdentityHybridPublicKey recovery_key;
     IdentityHybridPublicKey authorization_key;
@@ -31,7 +34,7 @@ struct IdentityRecord {
     friend bool operator==(const IdentityRecord&, const IdentityRecord&) = default;
 };
 
-/** Atomically rotate every public capability derived from a new recovery phrase. */
+/// Атомарный запрос ротации всех публичных возможностей Identity.
 struct IdentityRotate {
     AccountId account_id;
     IdentityHybridPublicKey new_recovery_key;
@@ -46,11 +49,13 @@ struct IdentityRotate {
     friend bool operator==(const IdentityRotate&, const IdentityRotate&) = default;
 };
 
+/// Разрешённые типы операций, подписываемых authorization-ключом Identity.
 enum class IdentityOperationKind : uint8_t {
     PAYMENT = 1, SYSTEM_LOCK = 2, NAME_COMMIT = 3, NAME_REVEAL = 4,
     ROOT_PUBLICATION = 5,
 };
 
+/// Каноническая authorizaton-обвязка для одной пользовательской операции.
 struct IdentityOperationAuthorization {
     AccountId account_id;
     uint64_t nonce{0};
@@ -62,6 +67,7 @@ struct IdentityOperationAuthorization {
     friend bool operator==(const IdentityOperationAuthorization&, const IdentityOperationAuthorization&) = default;
 };
 
+/// Причина отказа при проверке изменения реестра Identity.
 enum class IdentityRegistryError : uint8_t {
     NONE,
     INVALID_CREATE,
@@ -75,22 +81,31 @@ enum class IdentityRegistryError : uint8_t {
     INVALID_PAYLOAD,
 };
 
+/// Вычисляет digest запроса ротации Identity.
 std::optional<IdentityKeyId> ComputeIdentityRotateDigest(
     const cybou::Hash256& network_binding, const IdentityRotate& request);
+/// Вычисляет digest обычной операции Identity.
 std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     const cybou::Hash256& network_binding, const IdentityOperationAuthorization& request);
 
+/// Подсистема канонической проверки и хранения текущих ключей Identity.
 class IdentityRegistry
 {
 public:
+    /// Проверяет и регистрирует новую Identity из AccountCreate.
     IdentityRegistryError Register(const AccountCreateOp& create,
         const cybou::Hash256& network_binding, uint64_t block_height,
         const CybouProtocolParameters& params);
+    /// Проверяет и применяет атомарную ротацию Identity.
     IdentityRegistryError RotateIdentity(const IdentityRotate& request, const cybou::Hash256& network_binding);
+    /// Проверяет и учитывает обычную авторизованную операцию Identity.
     IdentityRegistryError AuthorizeOperation(const IdentityOperationAuthorization& request, const cybou::Hash256& network_binding);
 
+    /// Ищет AccountID по текущему RecoveryKeyId.
     std::optional<AccountId> FindByRecoveryKeyId(const IdentityKeyId& id) const;
+    /// Возвращает текущую запись Identity по AccountID.
     const IdentityRecord* Find(const AccountId& id) const;
+    /// Возвращает все канонические записи реестра.
     const std::map<AccountId, IdentityRecord>& Accounts() const { return m_accounts; }
 
     friend std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const IdentityRegistry& registry);
@@ -101,7 +116,9 @@ private:
     std::map<IdentityKeyId, AccountId> m_recovery_index;
 };
 
+/// Сериализует весь реестр Identity в канонический бинарный формат.
 std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const IdentityRegistry& registry);
+/// Десериализует и валидирует канонический бинарный реестр Identity.
 std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsigned char> bytes);
 
 } // namespace cybou

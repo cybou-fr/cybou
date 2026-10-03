@@ -1,5 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
+/// \file
+/// \brief Русский публичный API потокового SHA-256 на базе OpenSSL EVP.
 
 #ifndef CYBOU_CRYPTO_SHA256_H
 #define CYBOU_CRYPTO_SHA256_H
@@ -12,12 +14,13 @@
 
 namespace cybou::crypto {
 
-/** Incremental SHA-256 using OpenSSL EVP, with byte-identical output. */
+/// \brief Потоковый SHA-256 с тем же байтовым результатом, что и одноразовый подсчет.
 class Sha256 final
 {
 public:
     static constexpr std::size_t OUTPUT_SIZE{32};
 
+    /// \brief Создает новый хеш-контекст SHA-256.
     Sha256();
     ~Sha256();
 
@@ -26,7 +29,9 @@ public:
     Sha256(const Sha256&) = delete;
     Sha256& operator=(const Sha256&) = delete;
 
+    /// \brief Добавляет очередной непрерывный фрагмент данных.
     Sha256& Write(const unsigned char* data, std::size_t size);
+    /// \brief Завершает хеширование и пишет 32-байтовый digest в буфер caller'а.
     void Finalize(unsigned char* output);
 
 private:
@@ -34,10 +39,11 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-/** Compute a digest over ordered byte spans. Returns false on provider failure. */
+/// \brief Считает SHA-256 по упорядоченному набору фрагментов.
+/// \return false только при сбое OpenSSL-провайдера; выходной буфер тогда очищается.
 bool ComputeSha256(std::initializer_list<std::span<const unsigned char>> parts, unsigned char* output) noexcept;
 
-/** View string bytes without changing their encoding. */
+/// \brief Представляет байты строки как span без перекодирования.
 std::span<const unsigned char> Sha256Bytes(std::string_view text) noexcept;
 
 } // namespace cybou::crypto
