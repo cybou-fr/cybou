@@ -112,7 +112,7 @@ BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_syn
     BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
         .finalized_height = fixture.runtime->GetFinalizedHeight().value(),
         .finalized_tip = fixture.runtime->GetFinalizedTip().value(), .nonce = 55001}));
-    BOOST_CHECK(!client.PeerProviderId());
+    BOOST_CHECK(!client.PeerStorageId());
     BOOST_REQUIRE(client.ProveStorageIdentity());
     const auto bytes = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
     BOOST_REQUIRE(bytes);
@@ -323,12 +323,12 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         cybou::CybouNodeRuntime client{std::move(client_config)};
         BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
         client.SetExplicitPeerEndpoints(endpoints);
-        for (int i{0}; i < 6 && client.StoragePeerEndpoints().size() < 2; ++i) client.SyncFromConfiguredPeer(10);
-        BOOST_REQUIRE_EQUAL(client.StoragePeerEndpoints().size(), 2U);
+        for (int i{0}; i < 6 && client.StorageEndpointEndpoints().size() < 2; ++i) client.SyncFromConfiguredPeer(10);
+        BOOST_REQUIRE_EQUAL(client.StorageEndpointEndpoints().size(), 2U);
         // Each storage peer is known by the ProviderID it proved on demand.
         std::set<std::array<unsigned char, 32>> proven;
-        for (const auto& peer : client.StoragePeerEndpoints()) proven.insert(peer.provider_id);
-        BOOST_CHECK(proven == (std::set{*providers[0]->LocalProviderId(), *providers[1]->LocalProviderId()}));
+        for (const auto& peer : client.StorageEndpointEndpoints()) proven.insert(peer.provider_id);
+        BOOST_CHECK(proven == (std::set{*providers[0]->LocalStorageId(), *providers[1]->LocalStorageId()}));
 
         cybou::RuntimeStorageTransport transport{client};
         cybou::StorageService storage{*fixture.runtime, transport, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
             BOOST_CHECK(providers[0]->HasFinalizedChunk(leaf));
             BOOST_CHECK(providers[1]->HasFinalizedChunk(leaf));
             std::optional<cybou::ChunkAuthorizationProof> proof;
-            for (const auto& peer : client.StoragePeerEndpoints()) {
+            for (const auto& peer : client.StorageEndpointEndpoints()) {
                 proof = transport.GetProof({peer.provider_id, peer.address, peer.port}, content.operation_id, leaf);
                 if (proof) break;
             }
@@ -418,21 +418,21 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     cybou::p2p::Hello verifier{.network_binding = network_binding, .nonce = 22};
     std::array<unsigned char, 32> exporter{};
     exporter[0] = 1;
-    const auto message = cybou::p2p::ProviderProofMessage(signer, verifier, exporter);
+    const auto message = cybou::p2p::StorageProofMessage(signer, verifier, exporter);
     auto proof = provider.SignProviderProof(message);
     BOOST_REQUIRE(proof);
-    BOOST_CHECK(cybou::p2p::VerifyProviderProof(*proof, message) == provider.LocalProviderId());
+    BOOST_CHECK(cybou::p2p::VerifyStorageProof(*proof, message) == provider.LocalStorageId());
     // Replayed into another session or network, or tampered with, it proves nothing.
     auto other_session = verifier;
     other_session.nonce = 23;
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(signer, other_session, exporter)));
+    BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, cybou::p2p::StorageProofMessage(signer, other_session, exporter)));
     auto other_network = signer;
     other_network.network_binding = uint256{};
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(other_network, verifier, exporter)));
+    BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, cybou::p2p::StorageProofMessage(other_network, verifier, exporter)));
     (*proof)[5] ^= 0x01;
-    BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, message));
+    BOOST_CHECK(!cybou::p2p::VerifyStorageProof(*proof, message));
     // Even a zero-quota Full Node has its own storage identity.
-    BOOST_CHECK(fixture.runtime->LocalProviderId());
+    BOOST_CHECK(fixture.runtime->LocalStorageId());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

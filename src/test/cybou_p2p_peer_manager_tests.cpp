@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/operation_submit.h>
 #include <cybou/hex.h>
 #include <cybou/keystore.h>
 #include <cybou/p2p/peer_manager.h>
@@ -163,12 +164,12 @@ BOOST_AUTO_TEST_CASE(inbound_listener_closes_routes_when_policy_is_missing)
     BOOST_CHECK(read_error == boost::asio::error::eof || read_error == boost::asio::error::connection_reset);
 }
 
-BOOST_AUTO_TEST_CASE(removed_storage_wire_ids_are_rejected)
+BOOST_AUTO_TEST_CASE(unsupported_compact_wire_ids_are_rejected)
 {
-    for (uint8_t type = 21; type <= 28; ++type) {
+    for (unsigned int type = cybou::p2p::MAX_MESSAGE_TYPE + 1; type <= 255; ++type) {
         BOOST_CHECK(!cybou::p2p::EncodeFrame({static_cast<cybou::p2p::MessageType>(type), {}}));
         const std::array<unsigned char, 10> encoded{
-            'C', 'Y', 'P', '2', cybou::p2p::WIRE_VERSION, type, 0, 0, 0, 0};
+            'C', 'Y', 'P', '2', cybou::p2p::WIRE_VERSION, static_cast<unsigned char>(type), 0, 0, 0, 0};
         BOOST_CHECK(!cybou::p2p::DecodeFrame(encoded));
     }
 }
@@ -860,8 +861,8 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     };
     auto first = make_provider("proof-provider-1");
     auto second = make_provider("proof-provider-2");
-    const auto first_id = first->LocalProviderId();
-    const auto second_id = second->LocalProviderId();
+    const auto first_id = first->LocalStorageId();
+    const auto second_id = second->LocalStorageId();
     BOOST_REQUIRE(first_id && second_id);
     BOOST_REQUIRE(*first_id != *second_id);
     const auto network = fixture.runtime->GetNetworkBinding();
@@ -880,7 +881,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_REQUIRE(manager.Connect(address, port));
     BOOST_CHECK(!manager.Peers().front().provider_id);
-    const auto discovered = manager.StoragePeers();
+    const auto discovered = manager.StorageEndpoints();
     first_server.join();
     BOOST_REQUIRE(first_handshake.load());
     BOOST_REQUIRE_EQUAL(discovered.size(), 1U);
@@ -899,7 +900,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
         if (second_handshake) request_served = session.ServeNext(*second);
     }};
     BOOST_REQUIRE(manager.Connect(address, port));
-    const auto current = manager.StoragePeers();
+    const auto current = manager.StorageEndpoints();
     BOOST_REQUIRE_EQUAL(current.size(), 1U);
     BOOST_CHECK(current.front().provider_id == second_id);
     cybou::ChunkId chunk{};
@@ -1182,7 +1183,7 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_malformed_block_response_from_disconn
             const auto request = session.ReceiveFrame();
             served = served && request && request->type == cybou::p2p::MessageType::GET_BLOCKS;
             if (served && malformed) {
-                served = session.SendFrame({cybou::p2p::MessageType::BLOCK_INV,
+                served = session.SendFrame({cybou::p2p::MessageType::BLOCK_ANNOUNCE,
                     {0xff, 0xff, 0xff, 0x7f}});
             }
         }};
@@ -1253,7 +1254,6 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
         served = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 2,
             .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
             .nonce = 104}) &&
-            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime) &&
             session.ServeNext(*fixture.runtime);
     }};
     cybou::p2p::PeerManager manager{observer};
@@ -1302,7 +1302,7 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_finalized_block_without_duplicate_payload)
     BOOST_CHECK(observer.GetFinalizedTip().value_or(uint256{}) == block_id);
 }
 
-BOOST_AUTO_TEST_CASE(manager_rejects_block_that_disagrees_with_inventory)
+BOOST_AUTO_TEST_CASE(manager_rejects_block_metadata_with_wrong_height)
 {
     CybouServiceTestFixture fixture;
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
@@ -1325,20 +1325,11 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_that_disagrees_with_inventory)
             .nonce = 115})) return;
         const auto request = session.ReceiveFrame();
         if (!request || request->type != cybou::p2p::MessageType::GET_BLOCKS) return;
-        std::vector<unsigned char> inventory{1, 1, 0, 0, 0, 0, 0, 0, 0};
-        inventory.insert(inventory.end(), uint256::ONE.begin(), uint256::ONE.end());
-        if (!session.SendFrame({cybou::p2p::MessageType::BLOCK_INV, inventory})) return;
-        const auto get_block = session.ReceiveFrame();
-        if (!get_block || get_block->type != cybou::p2p::MessageType::GET_BLOCK ||
-            get_block->payload.size() != 8) return;
-        const auto block = fixture.runtime->GetBlockAtHeight(1);
-        const auto encoded = block ? cybou::SerializeFinalizedBlock(*block) : std::nullopt;
-        if (!encoded) return;
-        std::vector<unsigned char> block_size(4);
-        const auto size = static_cast<uint32_t>(encoded->size());
-        for (unsigned i = 0; i < 4; ++i) block_size[i] = static_cast<unsigned char>(size >> (8 * i));
-        served = session.SendFrame({cybou::p2p::MessageType::BLOCK_META, block_size}) &&
-            session.SendFrame({cybou::p2p::MessageType::BLOCK_CHUNK, *encoded});
+        // The response must begin at the requested height, before allocating block bytes.
+        std::vector<unsigned char> meta(12, 0);
+        meta[0] = 2;
+        meta[8] = 1;
+        served = session.SendFrame({cybou::p2p::MessageType::BLOCK_META, meta});
     }};
     cybou::p2p::PeerManager manager{observer};
     const auto address = loopback.to_string();
@@ -1373,7 +1364,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_conflicting_with_announced_finalized_
         served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = uint256::ONE,
             .nonce = 110}) &&
-            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+            session.ServeNext(*fixture.runtime);
     }};
     cybou::p2p::PeerManager manager{observer};
     const auto address = loopback.to_string();
@@ -1537,7 +1528,7 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
         payload.reserve(payload_size);
         while (payload.size() < payload_size) {
             const auto chunk = session.ReceiveFrame();
-            if (!chunk || chunk->type != cybou::p2p::MessageType::OP_CHUNK || chunk->payload.empty() ||
+            if (!chunk || chunk->type != cybou::p2p::MessageType::OP_DATA || chunk->payload.empty() ||
                 chunk->payload.size() > payload_size - payload.size()) return;
             payload.insert(payload.end(), chunk->payload.begin(), chunk->payload.end());
         }

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/operation_submit.h>
 #include <cybou/p2p/peer_manager.h>
 
 #include <cybou/node_runtime.h>
@@ -190,10 +191,6 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         return result;
     }
     result.status = SyncPeerStatus::UP_TO_DATE;
-    std::vector<BlockAnnouncement> inventory;
-    size_t inventory_cursor{0};
-    // Responses already requested (pipelined) for inventory entries from the cursor on.
-    size_t in_flight{0};
     while (result.blocks_applied < max_blocks) {
         const auto status = m_runtime.GetStatus();
         if (!status.is_initialized || status.finalized_height == std::numeric_limits<uint64_t>::max()) {
@@ -201,75 +198,33 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         const uint64_t height = status.finalized_height + 1;
-        {
-            if (inventory_cursor < inventory.size() && inventory[inventory_cursor].height != height) {
-                // Our height moved underneath the batch (e.g. a gossiped block): pipelined
-                // responses no longer line up, so drop the session and resync cleanly.
-                if (in_flight > 0) {
-                    result.status = SyncPeerStatus::CONNECTION_FAILED;
-                    m_peers.erase(it);
-                    break;
-                }
-                inventory.clear();
-                inventory_cursor = 0;
-            }
-            if (inventory_cursor == inventory.size()) {
-                const auto remaining = std::min<uint64_t>(max_blocks - result.blocks_applied, MAX_BLOCK_INVENTORY);
-                const auto announced = it->second->RequestBlockInventory(height, static_cast<uint8_t>(remaining));
-                if (announced.status == BlockRequestStatus::NOT_FOUND) {
-                    if (height <= it->second->Peer()->finalized_height) {
-                        result.status = SyncPeerStatus::CONNECTION_FAILED;
-                        m_peers.erase(it);
-                    } else result.caught_up_with_known_peers = true;
-                    break;
-                }
-                if (announced.status != BlockRequestStatus::OK) {
-                    result.status = announced.status == BlockRequestStatus::UNAVAILABLE ?
-                        SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR;
-                    m_peers.erase(it);
-                    break;
-                }
-                inventory = announced.blocks;
-                inventory_cursor = 0;
-                // Ask for the whole announced batch in one round trip.
-                for (const auto& entry : inventory) {
-                    if (!it->second->SendBlockRequest(entry.height)) {
-                        result.status = SyncPeerStatus::CONNECTION_FAILED;
-                        m_peers.erase(it);
-                        return result;
-                    }
-                }
-                in_flight = inventory.size();
-            }
+        const auto remaining = static_cast<uint8_t>(std::min<uint64_t>(max_blocks - result.blocks_applied, MAX_BLOCK_BATCH));
+        const auto batch = it->second->RequestBlocks(height, remaining,
+            [&](uint64_t expected_height, std::span<const unsigned char> bytes) {
+                const auto block = DeserializeFinalizedBlock(bytes);
+                const auto& announced = *it->second->Peer();
+                if (!block || block->block.height != expected_height ||
+                    block->certificate.network_binding != status.network_binding ||
+                    block->certificate.block_id != ComputeBlockId(block->block) ||
+                    (expected_height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
+                    !m_runtime.CommitBlock(*block)) return false;
+                ++result.blocks_applied;
+                result.status = SyncPeerStatus::BLOCKS_APPLIED;
+                return true;
+            });
+        if (batch.status == BlockRequestStatus::NOT_FOUND) {
+            if (height <= it->second->Peer()->finalized_height) {
+                result.status = SyncPeerStatus::CONNECTION_FAILED;
+                m_peers.erase(it);
+            } else result.caught_up_with_known_peers = true;
+            break;
         }
-        const auto response = it->second->ReadBlockResponse();
-        if (in_flight > 0) --in_flight;
-        if (response.status != BlockRequestStatus::OK && response.status != BlockRequestStatus::NOT_FOUND) {
-            result.status = response.status == BlockRequestStatus::UNAVAILABLE ?
+        if (batch.status != BlockRequestStatus::OK) {
+            result.status = batch.status == BlockRequestStatus::UNAVAILABLE ?
                 SyncPeerStatus::CONNECTION_FAILED : SyncPeerStatus::PROTOCOL_ERROR;
             m_peers.erase(it);
             break;
         }
-        if (response.status == BlockRequestStatus::NOT_FOUND) {
-            result.status = SyncPeerStatus::CONNECTION_FAILED;
-            m_peers.erase(it);
-            break;
-        }
-        const auto block = DeserializeFinalizedBlock(response.bytes);
-        const auto& announced = *it->second->Peer();
-        if (!block || block->block.height != height ||
-            block->certificate.network_binding != status.network_binding ||
-            block->certificate.block_id != ComputeBlockId(block->block) ||
-            (block->certificate.block_id != inventory[inventory_cursor].block_id) ||
-            (height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
-            !m_runtime.CommitBlock(*block)) {
-            result.status = SyncPeerStatus::PROTOCOL_ERROR;
-            m_peers.erase(it);
-            break;
-        }
-        ++inventory_cursor;
-        ++result.blocks_applied;
-        result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }
     return result;
 }
@@ -429,13 +384,13 @@ std::vector<PeerInfo> PeerManager::Peers() const
     peers.reserve(m_peers.size());
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer()) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerStorageId()});
         }
     }
     return peers;
 }
 
-std::vector<PeerInfo> PeerManager::StoragePeers()
+std::vector<PeerInfo> PeerManager::StorageEndpoints()
 {
     std::vector<PeerInfo> peers;
     for (auto it = m_peers.begin(); it != m_peers.end();) {
@@ -445,14 +400,14 @@ std::vector<PeerInfo> PeerManager::StoragePeers()
             it = m_peers.erase(it);
             continue;
         }
-        peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerProviderId()});
+        peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerStorageId()});
         ++it;
     }
     return peers;
 }
 
 std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
-    const std::string& address, const uint16_t port, const ProviderId& provider_id,
+    const std::string& address, const uint16_t port, const StorageId& provider_id,
     const uint256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
     const ChunkAuthorizationProof& proof)
 {
@@ -468,7 +423,7 @@ std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
 }
 
 std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
-    const std::string& address, const uint16_t port, const ProviderId& provider_id, const ChunkId& chunk_id)
+    const std::string& address, const uint16_t port, const StorageId& provider_id, const ChunkId& chunk_id)
 {
     Endpoint endpoint;
     auto* session = FindStorageSession(address, port, provider_id, &endpoint);
@@ -482,7 +437,7 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
 }
 
 std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
-    const std::string& address, const uint16_t port, const ProviderId& provider_id,
+    const std::string& address, const uint16_t port, const StorageId& provider_id,
     const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
     Endpoint endpoint;
@@ -497,7 +452,7 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
 }
 
 PeerSession* PeerManager::FindStorageSession(
-    const std::string& address, const uint16_t port, const std::optional<ProviderId>& provider_id, Endpoint* endpoint)
+    const std::string& address, const uint16_t port, const std::optional<StorageId>& provider_id, Endpoint* endpoint)
 {
     if (port == 0) return nullptr;
     boost::system::error_code ec;
@@ -512,7 +467,7 @@ PeerSession* PeerManager::FindStorageSession(
         return nullptr;
     }
     // A different provider now answering at this endpoint is not the recorded replica.
-    if (provider_id && *it->second->PeerProviderId() != *provider_id) return nullptr;
+    if (provider_id && *it->second->PeerStorageId() != *provider_id) return nullptr;
     if (endpoint) *endpoint = key;
     return it->second.get();
 }

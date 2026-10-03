@@ -112,7 +112,7 @@ int PublicationDurability::ProgressPercent(const std::uint8_t target) const
 std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
 {
     std::vector<StorageEndpoint> providers;
-    for (auto& peer : m_runtime.StoragePeerEndpoints()) {
+    for (auto& peer : m_runtime.StorageEndpointEndpoints()) {
         StorageEndpoint endpoint{peer.provider_id, peer.address, peer.port};
         if (!HasProvider(providers, endpoint)) providers.push_back(std::move(endpoint));
     }
@@ -123,20 +123,20 @@ std::optional<ChunkAdmissionResult> RuntimeStorageTransport::Put(const StorageEn
     const uint256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    return m_runtime.PutChunkToStoragePeer(provider.address, provider.port, provider.provider_id, publication_operation_id,
+    return m_runtime.PutChunkToStorageEndpoint(provider.address, provider.port, provider.provider_id, publication_operation_id,
         chunk_id, stored_bytes, proof);
 }
 
 std::optional<std::vector<unsigned char>> RuntimeStorageTransport::Get(const StorageEndpoint& provider,
     const ChunkId& chunk_id)
 {
-    return m_runtime.GetChunkFromStoragePeer(provider.address, provider.port, provider.provider_id, chunk_id);
+    return m_runtime.GetChunkFromStorageEndpoint(provider.address, provider.port, provider.provider_id, chunk_id);
 }
 
 std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const StorageEndpoint& provider,
     const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
-    return m_runtime.GetChunkAuthorizationProofFromStoragePeer(provider.address, provider.port,
+    return m_runtime.GetChunkAuthorizationProofFromStorageEndpoint(provider.address, provider.port,
         provider.provider_id, publication_operation_id, chunk_id);
 }
 

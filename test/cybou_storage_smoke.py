@@ -46,8 +46,8 @@ def main() -> int:
         logs[name] = log
         processes[name] = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
 
-    start("finalizer", [node, "finalizer", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
-                        "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
+    start("finalizer", [node, "node", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
+                        "--poa-key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
                         "--peer-admission", "lab"])
     time.sleep(2)
     for name, port in PROVIDERS.items():

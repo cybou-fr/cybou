@@ -95,7 +95,7 @@ BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_provider_admission)
     BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
     const std::vector<unsigned char> bytes(1100, 0x6b);
     const auto id = cybou::ComputeChunkId(bytes);
-    BOOST_REQUIRE(runtime.LocalProviderId());
+    BOOST_REQUIRE(runtime.LocalStorageId());
     BOOST_CHECK_EQUAL(runtime.GetDiagnostics().storage_capacity, 0U);
     BOOST_CHECK(runtime.GetChunkBlobStore().Put(id, bytes) == cybou::ChunkBlobPutStatus::STORED);
     BOOST_CHECK(runtime.GetChunkBlobStore().Get(id) == bytes);

@@ -99,8 +99,8 @@ int main(int argc, char* argv[])
         cybou::ApplicationService application{runtime, keystore, db, storage};
 
         WaitFor("two storage providers discovered through the finalizer",
-            [&] { return runtime.StoragePeerEndpoints().size() >= 2; }, 120s);
-        Step("PROVIDERS " + std::to_string(runtime.StoragePeerEndpoints().size()));
+            [&] { return runtime.StorageEndpointEndpoints().size() >= 2; }, 120s);
+        Step("PROVIDERS " + std::to_string(runtime.StorageEndpointEndpoints().size()));
 
         std::vector<unsigned char> original(700 * 1024);
         for (std::size_t i{0}; i < original.size(); ++i) original[i] = static_cast<unsigned char>((i * 131) ^ (i >> 7));

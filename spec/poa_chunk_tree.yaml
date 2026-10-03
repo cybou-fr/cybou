@@ -5,7 +5,7 @@ full_node:
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce]
   capability_bitmap: absent
   network_role_announcement: absent
-  baseline: [block_sync, inventory, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
+  baseline: [block_sync, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
   storage: intrinsic_local_quota_may_be_zero
   provider_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
   poa_authority: genesis_key_possession_proved_by_block_certificates

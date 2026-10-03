@@ -243,16 +243,16 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
     return node;
 }
 
-std::set<std::array<unsigned char, 32>> ProviderIds(cybou::CybouNodeRuntime& runtime)
+std::set<std::array<unsigned char, 32>> StorageIds(cybou::CybouNodeRuntime& runtime)
 {
     std::set<std::array<unsigned char, 32>> ids;
-    for (const auto& peer : runtime.StoragePeerEndpoints()) ids.insert(peer.provider_id);
+    for (const auto& peer : runtime.StorageEndpointEndpoints()) ids.insert(peer.provider_id);
     return ids;
 }
 
 std::optional<std::uint16_t> PortOf(cybou::CybouNodeRuntime& runtime, const std::array<unsigned char, 32>& id)
 {
-    for (const auto& peer : runtime.StoragePeerEndpoints()) {
+    for (const auto& peer : runtime.StorageEndpointEndpoints()) {
         if (peer.provider_id == id) return peer.port;
     }
     return std::nullopt;
@@ -283,8 +283,8 @@ int main(int argc, char* argv[])
         const auto created = identity.CreateIdentitySync(password, nullptr, 120s);
         if (!created.success) Fail("identity creation: " + created.error_message);
         Step("IDENTITY finalized");
-        WaitFor("three storage providers", [&] { return ProviderIds(runtime).size() >= 3; }, 120s);
-        Step("PROVIDERS " + std::to_string(ProviderIds(runtime).size()));
+        WaitFor("three storage providers", [&] { return StorageIds(runtime).size() >= 3; }, 120s);
+        Step("PROVIDERS " + std::to_string(StorageIds(runtime).size()));
 
         const auto account = *identity.GetAccountId();
         Services services{runtime, identity.GetKeyStore(), cybou::IdentityDataDirectory(work / "node-a", account)};
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
         // 2. Restart it: it comes back under the same ProviderID (persisted provider key).
         orchestrator.Request("START " + std::to_string(*victim_port));
         WaitFor("restarted provider reconnects with its ProviderID", [&] {
-            return ProviderIds(runtime).contains(victim) && PortOf(runtime, victim) == victim_port;
+            return StorageIds(runtime).contains(victim) && PortOf(runtime, victim) == victim_port;
         }, 180s);
         Step("RESTARTED same ProviderID");
 
@@ -393,7 +393,7 @@ int main(int argc, char* argv[])
         cybou::crypto::CleanseMemory(next_entropy->data(), next_entropy->size());
         if (!recovered.success) Fail("restore: " + recovered.error_message);
         if (*restored.GetAccountId() != account) Fail("restored a different AccountID");
-        WaitFor("providers on the fresh node", [&] { return ProviderIds(fresh_runtime).size() >= 3; }, 120s);
+        WaitFor("providers on the fresh node", [&] { return StorageIds(fresh_runtime).size() >= 3; }, 120s);
         Services clean{fresh_runtime, restored.GetKeyStore(), cybou::IdentityDataDirectory(work / "node-b", account)};
         clean.Verify(file_a, bytes_a, "pre-rotation file after clean restore");
         clean.Verify(file_b, bytes_b, "post-rotation file after clean restore");

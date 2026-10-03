@@ -16,11 +16,9 @@ namespace cybou {
 enum class IdentityKeyPurpose : uint8_t {
     RECOVERY_ROOT = 1,
     AUTHORIZATION = 2,
-    RELEASE_SIGNING = 5,
-    TREASURY = 6,
     POA_FINALIZER = 7,
     /** CYP2 storage provider identity (ProviderID = hash of this key). */
-    STORAGE_PROVIDER = 8,
+    STORAGE = 8,
     /** Strictly offline root authority that signs official network genesis. */
     NETWORK_ROOT = 9,
 };

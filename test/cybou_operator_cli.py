@@ -66,7 +66,7 @@ def main():
             try: process.wait(timeout=15)
             except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
         try:
-            finalizer=start("finalizer","finalizer",["--key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
+            finalizer=start("node","finalizer",["--poa-key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
             observer=start("node","observer",["--peer",endpoint])
             deadline=time.monotonic()+30
             while time.monotonic()<deadline:

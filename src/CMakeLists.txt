@@ -97,7 +97,6 @@ add_library(cybou_node STATIC
   cybou/secret_file.cpp
   cybou/provision.cpp
   cybou/poa_conflict_detector.cpp
-  cybou/poa_signing_service.cpp
   cybou/poa_signing_journal.cpp
   cybou/state_store.cpp
   cybou/block_executor.cpp

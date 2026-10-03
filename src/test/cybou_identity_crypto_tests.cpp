@@ -73,6 +73,17 @@ BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
     BOOST_CHECK(!cybou::ComputeRecoveryKeyId(missing_key));
 }
 
+BOOST_AUTO_TEST_CASE(removed_key_purposes_are_rejected)
+{
+    std::array<unsigned char, 32> seed{};
+    const std::array<unsigned char, 1> message{1};
+    for (const auto value : {5, 6}) {
+        const auto purpose = static_cast<cybou::IdentityKeyPurpose>(value);
+        BOOST_CHECK(!cybou::DeriveIdentityPublicKey(seed, purpose));
+        BOOST_CHECK(!cybou::SignIdentityMessage(seed, purpose, message));
+    }
+}
+
 BOOST_AUTO_TEST_CASE(protocol_roles_have_separate_hybrid_key_domains)
 {
     std::array<unsigned char, 32> seed{};
@@ -80,8 +91,8 @@ BOOST_AUTO_TEST_CASE(protocol_roles_have_separate_hybrid_key_domains)
     const std::array<unsigned char, 3> message{1, 2, 3};
     const auto root = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     BOOST_REQUIRE(root);
-    for (const auto purpose : {cybou::IdentityKeyPurpose::RELEASE_SIGNING,
-             cybou::IdentityKeyPurpose::TREASURY}) {
+    for (const auto purpose : {cybou::IdentityKeyPurpose::POA_FINALIZER,
+             cybou::IdentityKeyPurpose::NETWORK_ROOT}) {
         const auto key = cybou::DeriveIdentityPublicKey(seed, purpose);
         const auto signature = cybou::SignIdentityMessage(seed, purpose, message);
         BOOST_REQUIRE(key && signature);

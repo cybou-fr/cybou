@@ -60,12 +60,10 @@ std::optional<IdentityHybridPublicKey> CanonicalDeserializeHybridPublicKey(
     size_t expected_ml_dsa_size = 0;
     switch (key.purpose) {
     case IdentityKeyPurpose::AUTHORIZATION:
-    case IdentityKeyPurpose::STORAGE_PROVIDER:
+    case IdentityKeyPurpose::STORAGE:
         expected_ml_dsa_size = MLDSA44_PUBLIC_KEY_SIZE;
         break;
     case IdentityKeyPurpose::RECOVERY_ROOT:
-    case IdentityKeyPurpose::RELEASE_SIGNING:
-    case IdentityKeyPurpose::TREASURY:
     case IdentityKeyPurpose::POA_FINALIZER:
     case IdentityKeyPurpose::NETWORK_ROOT:
         expected_ml_dsa_size = MLDSA65_PUBLIC_KEY_SIZE;

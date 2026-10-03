@@ -35,7 +35,7 @@ public:
             };
             auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
             if (!provider->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
-            const auto id = provider->LocalProviderId();
+            const auto id = provider->LocalStorageId();
             if (!id) throw std::runtime_error{"provider has no ProviderID"};
             m_runtimes.push_back(std::move(provider));
             m_providers.emplace(cybou::StorageEndpoint{*id, "10.0.0." + std::to_string(i + 1), 7070},

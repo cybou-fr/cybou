@@ -4,6 +4,7 @@
 #ifndef CYBOU_P2P_PEER_MANAGER_H
 #define CYBOU_P2P_PEER_MANAGER_H
 
+#include <cybou/operation_submit.h>
 #include <cybou/p2p/session.h>
 #include <cybou/sync_result.h>
 
@@ -42,7 +43,7 @@ struct PeerInfo {
     uint16_t port{0};
     Hello hello;
     /** Proven ProviderID for storage peers. */
-    std::optional<ProviderId> provider_id;
+    std::optional<StorageId> provider_id;
 };
 
 struct PeerSubmitResult {
@@ -85,16 +86,16 @@ public:
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
     /** Connected Full Nodes whose storage identity is proven on demand. */
-    std::vector<PeerInfo> StoragePeers();
+    std::vector<PeerInfo> StorageEndpoints();
     std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
-        const std::string& address, uint16_t port, const ProviderId& provider_id,
+        const std::string& address, uint16_t port, const StorageId& provider_id,
         const uint256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
         const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkById(
-        const std::string& address, uint16_t port, const ProviderId& provider_id, const ChunkId& chunk_id);
+        const std::string& address, uint16_t port, const StorageId& provider_id, const ChunkId& chunk_id);
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
-        const std::string& address, uint16_t port, const ProviderId& provider_id,
+        const std::string& address, uint16_t port, const StorageId& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
     void DisconnectAll();
 
@@ -105,7 +106,7 @@ public:
 private:
     using Endpoint = std::pair<std::string, uint16_t>;
     PeerSession* FindStorageSession(const std::string& address, uint16_t port,
-        const std::optional<ProviderId>& provider_id, Endpoint* endpoint = nullptr);
+        const std::optional<StorageId>& provider_id, Endpoint* endpoint = nullptr);
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;

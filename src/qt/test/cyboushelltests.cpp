@@ -1367,8 +1367,9 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
     controller.start();
     QCOMPARE(failures.count(), 1);
     const auto reason = failures.takeFirst().at(0).toString();
-    QVERIFY(reason.contains(QStringLiteral("belongs to another network")) ||
-        reason.contains(QStringLiteral("compiled DEVNET genesis state is invalid")));
+    QVERIFY2(reason.contains(QStringLiteral("belongs to another network")) ||
+        reason.contains(QStringLiteral("compiled DEVNET genesis")) ||
+        reason == QStringLiteral("finalized chunk store network ID mismatch"), qPrintable(reason));
     QVERIFY(!model.status().node_running);
 }
 

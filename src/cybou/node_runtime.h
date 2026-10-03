@@ -4,6 +4,8 @@
 #ifndef CYBOU_NODE_RUNTIME_H
 #define CYBOU_NODE_RUNTIME_H
 
+#include <cybou/operation_submit.h>
+#include <cybou/operation_pool.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/account_id.h>
 #include <cybou/diagnostics.h>
@@ -261,23 +263,23 @@ public:
         const uint256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
     /** A connected CYP2 storage peer and the ProviderID it proved on demand. */
-    struct StoragePeer {
+    struct StorageEndpoint {
         std::string address;
         uint16_t port{0};
         std::array<unsigned char, 32> provider_id{};
     };
-    std::vector<StoragePeer> StoragePeerEndpoints() const;
+    std::vector<StorageEndpoint> StorageEndpointEndpoints() const;
     /** Storage calls go only to a session that proved the expected ProviderID. */
-    std::optional<ChunkAdmissionResult> PutChunkToStoragePeer(const std::string& address, uint16_t port,
+    std::optional<ChunkAdmissionResult> PutChunkToStorageEndpoint(const std::string& address, uint16_t port,
         const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
-    std::optional<std::vector<unsigned char>> GetChunkFromStoragePeer(const std::string& address,
+    std::optional<std::vector<unsigned char>> GetChunkFromStorageEndpoint(const std::string& address,
         uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id);
     /** This node's storage provider identity; available on every Full Node. */
-    std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
+    std::optional<std::array<unsigned char, 32>> LocalStorageId() const;
     /** Encoded PROVIDER_PROOF for a storage challenge; available on every Full Node. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
-    std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
+    std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStorageEndpoint(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
 

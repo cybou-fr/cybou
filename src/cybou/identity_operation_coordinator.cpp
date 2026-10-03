@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
+#include <cybou/operation_submit.h>
 #include <cybou/identity_operation_coordinator.h>
 
 #include <cybou/crypto/cleanse.h>

@@ -3,14 +3,14 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, inventory, announcements,
+implements the complete CYP2 v5 baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
 Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
-signing safety. IP, endpoints, TLS sessions, ProviderID and peer declarations
-never confer consensus authority. ProviderID is proven on demand only for a
+signing safety. IP, endpoints, TLS sessions, StorageID and peer declarations
+never confer consensus authority. StorageID is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 

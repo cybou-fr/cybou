@@ -57,7 +57,6 @@ std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 void Stop(int) { stopping.store(true); }
 
 const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
-  finalizer run --network devnet --data-dir DIR --key-file FILE --listen IP:PORT
                 [--block-interval 1000ms] [--peers FILE] [--capacity 20GiB] [--advertise IP:PORT]
                 [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|lab]
   node run --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
@@ -422,10 +421,10 @@ int OperationCommand(const std::string& action, const Options& opts)
 
 // ---- ordinary Full Node ----
 
-int RunNode(const Options& opts, bool require_poa_key)
+int RunNode(const Options& opts)
 {
     Allow(opts, {"network", "data-dir", "peer", "listen", "peers", "capacity", "advertise",
-        "tls-certificate", "tls-key", "event-log", "event-log-mode", "key-file", "poa-key-file", "block-interval"}, true);
+        "tls-certificate", "tls-key", "event-log", "event-log-mode", "poa-key-file", "block-interval"}, true);
     if (opts.Has("advertise") && !opts.Has("listen")) throw std::invalid_argument("--advertise requires --listen");
     ConfigurePeerAdmission(opts, opts.Require("data-dir"));
     StartEvents(opts, "Full Node");
@@ -440,11 +439,8 @@ int RunNode(const Options& opts, bool require_poa_key)
     if (listen) config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
     config.storage_capacity_bytes = opts.Has("capacity") ? Quantity(opts.Get("capacity")) : 0;
-    if ((!require_poa_key && opts.Has("key-file")) || (require_poa_key && opts.Has("poa-key-file"))) {
-        throw std::runtime_error("use --poa-key-file with node run, or --key-file with finalizer run");
-    }
-    if (require_poa_key || opts.Has("poa-key-file")) {
-        auto bytes = ReadSecretFile(require_poa_key ? opts.Require("key-file") : opts.Require("poa-key-file"), 32);
+    if (opts.Has("poa-key-file")) {
+        auto bytes = ReadSecretFile(opts.Require("poa-key-file"), 32);
         if (!bytes || bytes->size() != 32) throw std::runtime_error("PoA key file must be private and contain exactly 32 raw bytes");
         std::array<unsigned char, 32> seed{};
         std::copy(bytes->begin(), bytes->end(), seed.begin());
@@ -605,8 +601,8 @@ int StorageCommand(const std::string& action, const Options& opts)
         auto bytes = runtime.GetChunkBlobStore().Get(chunk);
         if (!bytes && opts.Has("peer")) {
             runtime.SyncFromConfiguredPeer(100);
-            for (const auto& peer : runtime.StoragePeerEndpoints()) {
-                bytes = runtime.GetChunkFromStoragePeer(peer.address, peer.port, peer.provider_id, chunk);
+            for (const auto& peer : runtime.StorageEndpointEndpoints()) {
+                bytes = runtime.GetChunkFromStorageEndpoint(peer.address, peer.port, peer.provider_id, chunk);
                 if (bytes) break;
             }
         }
@@ -649,7 +645,7 @@ int Dispatch(int argc, char* argv[])
     if (group == "storage") return StorageCommand(action, opts);
     if (action != "run") throw std::invalid_argument("unknown command; use --help");
     int result{0};
-    if (group == "finalizer" || group == "node") result = RunNode(opts, group == "finalizer");
+    if (group == "node") result = RunNode(opts);
     else throw std::invalid_argument("unknown command; use --help");
     if (events) events->Write(NodeEvent::node_stopping, {{"node_type", std::string{"Full Node"}}});
     return result;
@@ -659,7 +655,7 @@ int Dispatch(int argc, char* argv[])
 
 bool IsCommand(const std::string_view first)
 {
-    return first == "finalizer" || first == "node" || first == "network" ||
+    return first == "node" || first == "network" ||
         first == "operation" || first == "doctor" || first == "storage" || first == "--help" || first == "help";
 }
 

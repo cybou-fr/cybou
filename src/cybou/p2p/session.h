@@ -4,6 +4,7 @@
 #ifndef CYBOU_P2P_SESSION_H
 #define CYBOU_P2P_SESSION_H
 
+#include <cybou/operation_submit.h>
 #include <uint256.h>
 #include <cybou/account_id.h>
 #include <cybou/poa_finalizer.h>
@@ -31,64 +32,50 @@ namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint8_t WIRE_VERSION{5};
-inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
+inline constexpr uint8_t MAX_BLOCK_BATCH{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
 // entries than an honest node would ever send.
 inline constexpr uint8_t MAX_PEER_DISCOVERY_ENTRIES{32};
 
 enum class MessageType : uint8_t {
-    HELLO = 1, PING = 2, PONG = 3, GET_BLOCK = 4, BLOCK_META = 5,
-    BLOCK_CHUNK = 6, OP_META = 7, OP_CHUNK = 8, OP_RESULT = 9,
-    RESERVED_10 = 10, RESERVED_11 = 11, RESERVED_12 = 12,
-    GET_BLOCKS = 13, BLOCK_INV = 14,
-    BLOCK_RESULT = 15,
-    RESERVED_16 = 16,
-    RESERVED_17 = 17,
-    RESERVED_18 = 18,
-    GET_PEERS = 19,
-    PEERS = 20,
-    RESERVED_21 = 21,
-    RESERVED_22 = 22,
-    RESERVED_23 = 23,
-    RESERVED_24 = 24,
-    RESERVED_25 = 25,
-    RESERVED_26 = 26,
-    RESERVED_27 = 27,
-    RESERVED_28 = 28,
-    PUT_AUTHORIZED_CHUNK = 29,
-    AUTHORIZED_CHUNK_DATA = 30,
-    CHUNK_ADMISSION_RESULT = 31,
-    GET_CHUNK_BY_ID = 32,
-    CHUNK_DATA = 33,
-    GET_CHUNK_AUTHORIZATION_PROOF = 34,
-    CHUNK_AUTHORIZATION_PROOF = 35,
-    PROVIDER_PROOF = 36,
-    RESERVED_37 = 37, RESERVED_38 = 38, RESERVED_39 = 39,
-    RESERVED_41 = 41,
-    RESERVED_42 = 42,
-    RESERVED_43 = 43,
-    OPERATION_RELAY_POLL = 44,
-    OPERATION_RELAY_OPERATION_META = 45,
-    OPERATION_RELAY_OPERATION_CHUNK = 46,
-    OPERATION_RELAY_ACK = 47,
-    OPERATION_RELAY_ACK_RESULT = 48,
-    /** Pull one Validation attestation this session has not yet served. */
-    VALIDATION_ATTESTATION_POLL = 49,
-    /** One serialized ValidationAttestation, or an empty payload when none is new. */
-    VALIDATION_ATTESTATION = 50,
-    GET_PROVIDER_PROOF = 51,
+    HELLO = 1,
+    PING = 2,
+    PONG = 3,
+    GET_BLOCKS = 4,
+    BLOCK_META = 5,
+    BLOCK_DATA = 6,
+    BLOCKS_END = 7,
+    BLOCK_ANNOUNCE = 8,
+    BLOCK_RESULT = 9,
+    OP_POLL = 10,
+    OP_META = 11,
+    OP_DATA = 12,
+    OP_RESULT = 13,
+    GET_PEERS = 14,
+    PEERS = 15,
+    PUT_AUTHORIZED_CHUNK = 16,
+    AUTHORIZED_CHUNK_DATA = 17,
+    CHUNK_ADMISSION_RESULT = 18,
+    GET_CHUNK_BY_ID = 19,
+    CHUNK_DATA = 20,
+    GET_CHUNK_AUTHORIZATION_PROOF = 21,
+    CHUNK_AUTHORIZATION_PROOF = 22,
+    STORAGE_PROOF = 23,
+    VALIDATION_ATTESTATION_POLL = 24,
+    VALIDATION_ATTESTATION = 25,
+    STORAGE_PROOF_REQUEST = 26,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::GET_PROVIDER_PROOF)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_PROOF_REQUEST)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
-using ProviderId = std::array<unsigned char, 32>;
+using StorageId = std::array<unsigned char, 32>;
 /** Message a provider signs to prove its key in this TLS session. */
 struct Hello;
-std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello& verifier,
+std::vector<unsigned char> StorageProofMessage(const Hello& signer, const Hello& verifier,
     std::span<const unsigned char> tls_exporter);
 /** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
-std::optional<ProviderId> VerifyProviderProof(std::span<const unsigned char> payload,
+std::optional<StorageId> VerifyStorageProof(std::span<const unsigned char> payload,
     std::span<const unsigned char> message);
 struct Frame {
     MessageType type;
@@ -140,9 +127,9 @@ struct BlockAnnouncement {
     uint256 block_id;
 };
 
-struct BlockInventoryResult {
+struct BlockBatchResult {
     BlockRequestStatus status{BlockRequestStatus::INVALID_REQUEST};
-    std::vector<BlockAnnouncement> blocks;
+    uint8_t count{0};
 };
 
 enum class BlockAnnounceResult : uint8_t { APPLIED = 0, ALREADY_HAVE = 1, GAP = 2 };
@@ -165,21 +152,15 @@ public:
     PeerSession& operator=(const PeerSession&) = delete;
     bool Handshake(const Hello& local);
     /** On-demand, channel-bound storage relationship proof; never part of HELLO. */
-    std::optional<ProviderId> ProveStorageIdentity();
-    const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
+    std::optional<StorageId> ProveStorageIdentity();
+    const std::optional<StorageId>& PeerStorageId() const { return m_peer_provider_id; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
     // Callers must verify returned blocks before commit.
     BlockRequestResult RequestBlock(uint64_t height);
-    /**
-     * Pipelined block transfer: send several GET_BLOCK requests at once, then
-     * read their responses in the same order. The peer answers requests in
-     * order, so one round trip covers a whole batch instead of one per block.
-     */
-    bool SendBlockRequest(uint64_t height);
-    BlockRequestResult ReadBlockResponse();
-    BlockInventoryResult RequestBlockInventory(uint64_t first_height, uint8_t max_blocks);
+    BlockBatchResult RequestBlocks(uint64_t first_height, uint8_t max_blocks,
+        const std::function<bool(uint64_t, std::span<const unsigned char>)>& consume);
     // On success, peer_finalized_height receives the peer's finalized height
     // as reported in the BLOCK_RESULT acknowledgement (0 if not present).
     std::optional<BlockAnnounceResult> AdvertiseBlock(const BlockAnnouncement& announcement,
@@ -208,6 +189,14 @@ public:
     boost::asio::ip::tcp::socket& Socket() { return m_socket; }
 
 private:
+    bool SendBlock(uint64_t height, std::span<const unsigned char> bytes,
+        std::chrono::steady_clock::time_point deadline);
+    bool SendOperation(std::span<const unsigned char> bytes, std::chrono::steady_clock::time_point deadline);
+    std::optional<OperationSubmitResult> ReceiveOperation(const Frame& meta, CybouNodeRuntime& runtime,
+        bool allow_seen_retry, std::chrono::steady_clock::time_point deadline);
+    bool SendOperationResult(const OperationSubmitResult& result, std::chrono::steady_clock::time_point deadline);
+    std::optional<OperationSubmitResult> ReadOperationResult(const uint256& operation_id,
+        std::chrono::steady_clock::time_point deadline);
     bool EstablishSecureTransport(std::chrono::steady_clock::time_point deadline);
     bool AdvanceTlsOperation(int result, std::chrono::steady_clock::time_point deadline);
     bool ReadExact(unsigned char* out, size_t length, std::chrono::steady_clock::time_point deadline);
@@ -225,7 +214,7 @@ private:
     SSL* m_ssl{nullptr};
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
-    std::optional<ProviderId> m_peer_provider_id;
+    std::optional<StorageId> m_peer_provider_id;
     std::optional<Hello> m_local;
     // Attestations already served to this peer on the current finalized base.
     uint256 m_served_attestation_base;

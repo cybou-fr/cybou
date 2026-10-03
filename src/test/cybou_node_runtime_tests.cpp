@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/operation_submit.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/hex.h>
 #include <cybou/identity_material.h>
@@ -8,7 +9,7 @@
 #include <cybou/kv_store.h>
 #include <cybou/name_service.h>
 #include <cybou/block_executor.h>
-#include <cybou/poa_signing_service.h>
+#include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
 #include <cybou/validation_attestation.h>
 #include <test/cybou_service_test_fixture.h>
@@ -442,7 +443,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     cybou::KVStore alternate_signer_db{cybou::KVStoreOptions{.memory_only = true}};
     cybou::RecoveryEntropy operator_entropy{};
     operator_entropy[0] = fixture.validator_seed[0];
-    cybou::PoaSigningService alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
+    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
         fixture.definition.genesis_block_id, operator_entropy,
         fixture.definition.poa_finalizer_public_key};
     const auto alternate_signature = alternate_signer.SignFinality(0,

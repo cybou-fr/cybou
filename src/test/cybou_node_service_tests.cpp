@@ -180,7 +180,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error
                 .network_binding = local.runtime->GetNetworkBinding(),
                 .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(foreign_block->block),
-                .nonce = 29001}) && session.ServeNext(*foreign.runtime) && session.ServeNext(*foreign.runtime)) {
+                .nonce = 29001}) && session.ServeNext(*foreign.runtime)) {
             peer_served_bad_block.store(true);
         }
     }};

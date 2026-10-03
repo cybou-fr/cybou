@@ -59,8 +59,8 @@ def main() -> int:
             process.kill()
             process.wait()
 
-    finalizer_args = [node, "finalizer", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
-                      "--key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
+    finalizer_args = [node, "node", "run", "--network", str(network), "--data-dir", str(work / "finalizer-db"),
+                      "--poa-key-file", str(key), "--listen", f"127.0.0.1:{FINALIZER_P2P}", "--block-interval", "200ms", "--peers", str(peers),
                       "--peer-admission", "lab"]
 
     def provider_args(name):

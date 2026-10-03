@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/operation_submit.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/identity_service.h>
@@ -286,8 +287,6 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
     BOOST_CHECK(!std::filesystem::exists(claim_path));
     const auto claimed = names.ClaimSync("stanislav", "correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(claimed.success, claimed.message);
-    cybou::OperationPool pool{runtime.GetStore()};
-    cybou::PoaFinalizer producer{runtime.GetStore(), pool, fixture.validator_seed};
     bool checked_name_operation = false;
     for (uint64_t height = 2; height <= runtime.GetFinalizedHeight().value_or(0); ++height) {
         const auto finalized = runtime.GetBlockAtHeight(height);
@@ -295,7 +294,7 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
         for (const auto& operation : finalized->block.operations) {
             if (std::holds_alternative<cybou::AuthorizedNameCommit>(operation) ||
                 std::holds_alternative<cybou::AuthorizedNameReveal>(operation)) {
-                BOOST_CHECK(producer.SubmitOperationWithStatus(operation) ==
+                BOOST_CHECK(runtime.SubmitOperation(operation).status ==
                     cybou::OperationSubmitStatus::ALREADY_FINALIZED);
                 checked_name_operation = true;
             }
