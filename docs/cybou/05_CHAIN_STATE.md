@@ -10,8 +10,9 @@ objects.
 - Identity registry: stable AccountID, Recovery/Authorization capabilities,
   current KEM commitment, nonce and key epoch;
 - `.cybou` name registry;
-- economic pools and deterministic fee accounting;
-- genesis allocations containing initial CYBOU and AUTH;
+- OnboardingPool and direct protocol fee transfers to Central Authority;
+- genesis allocations containing initial CYBOU and AUTH; the unique `cybou`
+  allocation also accumulates protocol fees before its one-time claim;
 - immutable network parameters bound to the active network definition.
 
 Bootstrap is an ordinary CYBOU full peer and has no consensus grants, roles, or
@@ -51,3 +52,12 @@ Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENT
 - Authority never grants PoA finalization weight or consensus voting power;
 - Balance, System Balance and Authority are three distinct canonical account values;
 - all consensus state arithmetic is bounded integer arithmetic.
+
+## Canonical encoding
+
+State v12 is the sole encoding; v11 is rejected without migration. Allocations
+are immutable except for their one-time claimed_by and the pre-claim Balance
+of the unique Central Authority allocation. After claim its allocation Balance
+stays fixed; new fees credit the claimant account Balance. TotalSupply counts
+OnboardingPool, unclaimed allocation Balances, account Balances and System
+Balances, with checked integer arithmetic. Every finalized block preserves it.

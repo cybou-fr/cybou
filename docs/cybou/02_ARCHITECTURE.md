@@ -133,3 +133,11 @@ local until finality.
 Recoverable owner content requires an application-layer self capsule.
 Beta storage durability targets 2 independent remote full replicas plus 1 local
 physical copy (3 physical copies total); erasure coding is disabled.
+
+## Economics
+
+Protocol fees transfer in each paid operation from System Balance to the
+unique genesis-granted `cybou` allocation before claim, and to its ordinary
+claimant Balance afterwards. The DEV OnboardingPool begins at 100,000,000
+CYBOU and only decreases through AccountCreate. AUTH is excluded from supply.
+See `18_ECONOMICS_FEES.md`.

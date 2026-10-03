@@ -95,8 +95,6 @@ struct CybouNetworkAuthorityStatus {
     quint64 total_system_balance{0};
     quint64 total_authority{0};
     quint64 onboarding_pool{0};
-    quint64 security_reward_pool{0};
-    quint64 pending_fee_pool{0};
 };
 
 /**

@@ -325,7 +325,10 @@ architecture that is absent from higher levels:
 ```text
 MAX_SUPPLY = 100,000,000,000 CYBOU
 decimals = 0
-4 fee units -> 3 Security + 1 Onboarding
+DEV OnboardingPool = 100,000,000 CYBOU (genesis only; never replenished by fees)
+100% protocol fee: payer System Balance -> Central Authority spendable Balance
+Before claim: fees accumulate in the unique genesis allocation labelled cybou.
+After claim: fees credit that allocation claimant's ordinary AccountState Balance.
 ```
 
 Balance is spendable CYBOU. System Balance is an irreversible CYBOU service budget.

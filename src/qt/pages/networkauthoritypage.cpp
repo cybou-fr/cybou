@@ -166,8 +166,6 @@ void NetworkAuthorityPage::refresh()
     Row(m_economy, tr("Spendable Balance (all Identities)"), cybouAmountText(a.total_balance));
     Row(m_economy, tr("System Balance (all Identities)"), cybouAmountText(a.total_system_balance));
     Row(m_economy, tr("Onboarding pool"), cybouAmountText(a.onboarding_pool));
-    Row(m_economy, tr("Security reward pool"), cybouAmountText(a.security_reward_pool));
-    Row(m_economy, tr("Pending fee pool"), cybouAmountText(a.pending_fee_pool));
 
     ClearLayout(m_providers);
     if (d.peers.empty()) Row(m_providers, tr("Peers"), tr("None connected"));

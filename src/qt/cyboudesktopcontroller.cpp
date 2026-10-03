@@ -323,8 +323,6 @@ void CybouDesktopController::publishNetworkAuthority()
                 status.total_authority += account.authority;
             }
             status.onboarding_pool = state.onboarding_pool;
-            status.security_reward_pool = state.security_reward_pool;
-            status.pending_fee_pool = state.pending_fee_pool;
         }
     }
     QMetaObject::invokeMethod(m_model, [model = m_model, status] { model->setNetworkAuthority(status); },

@@ -8,27 +8,27 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 332 | f372b3184397b6b4 |
+| AGENTS.md | 335 | 57f4dc75f5c54f0b |
 | CONTRIBUTING.md | 49 | 1560938a1a187d62 |
 | INSTALL.md | 37 | 7b13446c3e77413f |
 | README.md | 128 | c0cb7a50348905b2 |
 | SECURITY.md | 59 | cc672cf53fa69a57 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
-| docs/cybou/02_ARCHITECTURE.md | 135 | a3ad168726e9298f |
+| docs/cybou/02_ARCHITECTURE.md | 143 | 0c47feab5a36b193 |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 156 | 49ad00d0ec04e2e0 |
-| docs/cybou/05_CHAIN_STATE.md | 53 | c7479a905378d646 |
+| docs/cybou/05_CHAIN_STATE.md | 63 | 22f55126d3a9c3df |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | b25b341e856d725c |
 | docs/cybou/08_P2P.md | 79 | 40c33aead8291ff6 |
 | docs/cybou/09_CRYPTO_PQ.md | 22 | e0dc00e45698f095 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 6b8887725be2a394 |
-| docs/cybou/18_ECONOMICS_FEES.md | 82 | a05720c67006e98a |
+| docs/cybou/18_ECONOMICS_FEES.md | 87 | d6b2178e63fc4b03 |
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 3afddbb8a61dfb82 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | 85631fe5a8ba5de1 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 33 | 6d793754b1abd5b7 |
-| docs/cybou/24_DECISIONS.md | 120 | 67dd385179d15269 |
+| docs/cybou/22_ROADMAP.md | 38 | 1024bc307a7dc8ca |
+| docs/cybou/24_DECISIONS.md | 127 | 52aca95c7ddf0b0a |
 | docs/cybou/25_OPEN_QUESTIONS.md | 49 | f8fd36051d472d5c |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 41 | fddae2c9f8d4cc3b |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 61 | 43069ce9409c76e1 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | d21ca11afbff59fe |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -41,7 +41,6 @@ editing an included file.
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 56 | d875206f8707d878 |
 | docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 37 | 12e7619392b0a286 |
 | docs/cybou/57_IDENTITY_AUTHORITY.md | 74 | a43bfdb05b261cc4 |
-| docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 27 | e7715c9b9f54348d |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 3cdcec3902215bd7 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | 19c87a68c4e4749d |
@@ -66,17 +65,16 @@ editing an included file.
 | docs/cybou/OPERATOR_LAB.md | 184 | 483bdfa9663d163a |
 | docs/cybou/POA_FINALITY.md | 58 | 33a6fc6852320178 |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
-| docs/cybou/README.md | 85 | 2d5478cc2214829e |
+| docs/cybou/README.md | 84 | 73cc6136e648bba7 |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
 | docs/cybou/STORAGE_ADMISSION.md | 92 | 5c4a54f3ab077c24 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
 | docs/cybou/VALIDATION.md | 96 | 36e878321ceb82ee |
-| spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
-| spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
-| spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |
+| spec/circulation_scenarios.csv | 2 | b63d09ab8a0355ce |
 | spec/mail_files_architecture.yaml | 109 | d506ac24b128ceca |
 | spec/market_strategy.yaml | 51 | a447525f8d273776 |
-| spec/monetary_model.yaml | 82 | 967f7bd333066e66 |
+| spec/monetary_model.yaml | 84 | 0d0400047eb7ba9e |
 | spec/onboarding.yaml | 29 | 0f26395eae2874e3 |
 | spec/poa_chunk_tree.yaml | 189 | 2ef764bca0e338dc |
+| spec/protocol_fee_test_vectors.csv | 9 | ef8eec36c01fc17b |
 | www/llms.txt | 79 | 4cf89d31345efb2c |

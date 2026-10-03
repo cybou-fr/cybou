@@ -192,7 +192,7 @@ const translations = {
     bento3Metric: "Clés locales et rôles distincts",
 
     bento4Title: "Finalité PoA et économie déterministe",
-    bento4Desc: "DEV utilise un opérateur de finalité unique et ne revendique pas le BFT. Le plafond de l'actif est de 100 milliards d'unités sans décimales ; les frais suivent les paramètres du réseau et la règle 3 Sécurité / 1 Accueil.",
+    bento4Desc: "DEV utilise un opérateur de finalité unique et ne revendique pas le BFT. Le plafond de l'actif est de 100 milliards d'unités sans décimales ; tous les frais du protocole vont à l’Identity de l’Autorité centrale.",
     bento4Value: "100 Mrd",
     bento4Metric: "Plafond de 100 milliards — 0 décimale",
 
@@ -222,7 +222,7 @@ const translations = {
     dtGrant: "Création de compte",
     ddGrant: "<code>AccountCreate</code> permissionless avec travail anti-Sybil ; le bonus est transféré de <code>OnboardingPool</code> vers <code>SystemBalance</code>.",
     dtFees: "Frais et répartition",
-    ddFees: "Frais déterministes de publication selon la taille et le nombre de chunks ; priorité désactivée ; 3 unités Sécurité et 1 Accueil par tranche de 4.",
+    ddFees: "Frais déterministes de publication selon la taille et le nombre de chunks ; priorité désactivée ; 100 % vers l’Identity de l’Autorité centrale.",
     dtPublication: "Publication de contenu",
     ddPublication: "<code>RootPublication</code> générique. Mail, Files et Backup sont des schémas privés chiffrés, pas des opérations de consensus distinctes.",
     dtKeys: "Rôles cryptographiques",
@@ -959,7 +959,7 @@ const translations = {
     bento3Metric: "Local keys and distinct roles",
 
     bento4Title: "PoA finality and deterministic economics",
-    bento4Desc: "DEV uses one finality operator and makes no BFT claim. The asset cap is 100 billion units with no decimals; fees follow network parameters and the 3 Security / 1 Onboarding split.",
+    bento4Desc: "DEV uses one finality operator and makes no BFT claim. The asset cap is 100 billion units with no decimals; all protocol fees go to the Central Authority Identity.",
     bento4Value: "100B",
     bento4Metric: "100 billion cap — 0 decimals",
 
@@ -989,7 +989,7 @@ const translations = {
     dtGrant: "Account creation",
     ddGrant: "Permissionless <code>AccountCreate</code> with anti-Sybil work; the bonus moves from <code>OnboardingPool</code> to <code>SystemBalance</code>.",
     dtFees: "Fees and allocation",
-    ddFees: "Deterministic publication fees based on size and chunk count; priority fees disabled; 3 Security and 1 Onboarding unit per 4-unit allocation.",
+    ddFees: "Deterministic publication fees based on size and chunk count; priority fees disabled; 100% paid to the Central Authority Identity.",
     dtPublication: "Content publication",
     ddPublication: "Generic <code>RootPublication</code>. Mail, Files, and Backup are private encrypted schemas, not separate consensus operations.",
     dtKeys: "Cryptographic key roles",

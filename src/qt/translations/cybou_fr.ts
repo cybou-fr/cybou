@@ -2907,16 +2907,6 @@ Objet : %3
         <translation>Réserve de bienvenue</translation>
     </message>
     <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="157" />
-        <source>Security reward pool</source>
-        <translation>Réserve des récompenses de sécurité</translation>
-    </message>
-    <message>
-        <location filename="../pages/networkauthoritypage.cpp" line="158" />
-        <source>Pending fee pool</source>
-        <translation>Réserve des frais en attente</translation>
-    </message>
-    <message>
         <location filename="../pages/networkauthoritypage.cpp" line="161" />
         <source>Peers</source>
         <translation>Pairs</translation>

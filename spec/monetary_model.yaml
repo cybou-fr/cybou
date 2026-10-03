@@ -7,22 +7,18 @@ asset:
   minimum_unit: 1
   perpetual_emission: false
 
-genesis_allocation:
-  owner_developer_operator:
-    amount: 25000000000
-    percent: 25
+dev_genesis:
   onboarding_pool:
-    amount: 25000000000
-    percent: 25
-  network_security_operations:
-    amount: 20000000000
-    percent: 20
-  product_ecosystem_reserve:
-    amount: 15000000000
-    percent: 15
-  strategic_reserve:
-    amount: 15000000000
-    percent: 15
+    amount: 100000000
+    replenished_by_fees: false
+  central_authority_genesis_allocation:
+    balance: 100000000
+    authority: 1000001
+    name: cybou
+  issued_supply: 200000000
+  unissued_supply: 99800000000
+  official_provisioning: deferred
+  state_version: 12
 
 onboarding_bonus:
   dev_onboarding_bonus: 6000
@@ -64,17 +60,23 @@ auth:
 
 cybou_supply:
   max: 100000000000
-  includes: [Balance, SystemBalance, protocol_CYBOU_pools]
+  includes: [Balance, SystemBalance, OnboardingPool, unclaimed_genesis_allocation_balances]
   excludes: [Authority]
 
 fees:
-  pending_pool: PendingFeePool
-  batch_size: 4
-  split_per_batch:
-    security: 3
-    onboarding: 1
+  source: SystemBalance
+  destination: CentralAuthorityBalance
+  recipient: unique_genesis_allocation_label_cybou
+  before_claim: genesis_allocation_balance
+  after_claim: claimant_account_balance
+  percent: 100
+  onboarding_percent: 0
   priority_fee: false
   burn_fraction: 0
+  batching: false
+  validator_rewards: false
+  provider_rewards: false
+  atomic: true
 
 application_content:
   mail_specific_consensus_fee_model: false

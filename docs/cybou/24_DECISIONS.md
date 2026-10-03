@@ -1,4 +1,4 @@
-# 24 — Current product and protocol decisions
+# 24 â€” Current product and protocol decisions
 
 This register records active frozen architecture decisions, followed by the
 superseded decision history. Lower documentation levels cannot introduce
@@ -72,10 +72,17 @@ architecture that contradicts these decisions.
 
 ### Fixed economics
 
+| ID | Decision | Status |
+|---|---|---|
+| DEC-257 | All protocol fees transfer atomically from payer System Balance to the unique genesis-granted `cybou` Central Authority allocation before claim, or its claimant's spendable Balance after claim. DEV OnboardingPool starts at 100M CYBOU and only funds onboarding. No batching, fee burn, validator/provider rewards or fee-funded onboarding. State v12 is the only canonical encoding; a new official genesis requires a new NetworkID. | Frozen |
+
 ```text
 MAX_SUPPLY = 100,000,000,000 CYBOU
 decimals = 0
-4 fee units -> 3 Security + 1 Onboarding
+DEV OnboardingPool = 100,000,000 CYBOU (genesis only; never replenished by fees)
+100% protocol fee: payer System Balance -> Central Authority spendable Balance
+Before claim: fees accumulate in the unique genesis allocation labelled cybou.
+After claim: fees credit that allocation claimant's ordinary AccountState Balance.
 ```
 
 Runtime policy governance is not part of the current target. Network parameters

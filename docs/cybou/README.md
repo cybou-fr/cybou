@@ -33,7 +33,7 @@ from or conflicting with higher levels:
 | [`08_P2P.md`](08_P2P.md) | CYP2 transport and peer management | Level 2 | Active |
 | [`09_CRYPTO_PQ.md`](09_CRYPTO_PQ.md) | Post-quantum cryptography profile and key roles | Level 2 | Active |
 | [`10_IDENTITY_NAMES.md`](10_IDENTITY_NAMES.md) | Protocol Identity, key derivation, and `.cybou` names | Level 2 | Active |
-| [`18_ECONOMICS_FEES.md`](18_ECONOMICS_FEES.md) | Native asset, Balance, System Balance, and fee routing | Level 2 | Active |
+| [`18_ECONOMICS_FEES.md`](18_ECONOMICS_FEES.md) | Native asset, Balance, System Balance, and direct Central Authority fees | Level 2 | Active |
 | [`19_SECURITY_THREAT_MODEL.md`](19_SECURITY_THREAT_MODEL.md) | System threat model, attacker assumptions, and boundaries | Level 2 | Active |
 | [`20_PROTOCOL_SERIALIZATION.md`](20_PROTOCOL_SERIALIZATION.md) | Deterministic wire formats and CBOR canonical rules | Level 2 | Active |
 | [`21_RELEASE_SECURITY.md`](21_RELEASE_SECURITY.md) | Release signing and distribution integrity | Level 2 | Active |
@@ -53,7 +53,6 @@ from or conflicting with higher levels:
 | [`52_BALANCE_AND_SYSTEM_BALANCE.md`](52_BALANCE_AND_SYSTEM_BALANCE.md) | Balance and System Balance semantics | Level 2 | Active |
 | [`56_OWNER_OPERATOR_AND_RESILIENCE.md`](56_OWNER_OPERATOR_AND_RESILIENCE.md) | Operational resilience and operator key handling | Level 6 | Active |
 | [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Canonical AUTH account value, issuance/burn and Validation eligibility | Level 2 | Active |
-| [`59_DETERMINISTIC_FEE_ROUTER.md`](59_DETERMINISTIC_FEE_ROUTER.md) | Deterministic integer 3 Security / 1 Onboarding fee router | Level 2 | Active |
 | [`68_OPERATOR_KEY_SEPARATION.md`](68_OPERATOR_KEY_SEPARATION.md) | PoA and operator key role custody | Level 2 | Active |
 | [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and OnboardingPool | Level 2 | Active |
 | [`71_WINDOWS_MINGW_BUILD.md`](71_WINDOWS_MINGW_BUILD.md) | Local Windows MinGW + vcpkg build procedure | — | Active |

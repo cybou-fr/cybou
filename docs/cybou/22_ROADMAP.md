@@ -31,3 +31,8 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 13. **Application data plane integration**: connect Mail and Files publication and finalized storage placement to the desktop model.
 14. **Storage durability hardening**: verify Beta target of 2 independent remote full replicas plus local copy (3 physical copies total) with audit and repair.
 15. **MAINNET provisioning and launch**: create its own keys, genesis and bootstrap only after full DEVNET soak and formal acceptance.
+
+## Prepared economics reset
+
+Direct Central Authority fees and state v12 are prepared. New DEVNET NetworkID
+provisioning and coordinated clean state cutover remain deferred by the operator.
