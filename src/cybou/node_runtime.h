@@ -302,6 +302,10 @@ public:
     /// \param account_id Искомый AccountID.
     /// \return AccountState или std::nullopt, если state не инициализирован либо аккаунт отсутствует.
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
+    /// \brief true, пока финализированная RootPublication числится в регистре (не отозвана).
+    bool IsPublicationActive(const cybou::Hash256& publication_id) const;
+    /// \brief Сколько метрируемых операций аккаунт ещё может сделать в окне следующего блока (DEC-272).
+    uint32_t RemainingEpochOperations(const AccountId& account_id) const;
 
     /// \brief Локально исполняет и подаёт операцию в candidate pool и/или relay.
     /// \param op Candidate operation; exact signed bytes будут восстановлены canonical serialization.

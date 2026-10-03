@@ -421,6 +421,27 @@ std::optional<uint64_t> CybouNodeRuntime::PrepareOperationWork(const ProtocolOpe
     return nonce;
 }
 
+bool CybouNodeRuntime::IsPublicationActive(const cybou::Hash256& publication_id) const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    return loaded && loaded.state && loaded.state->publications.contains(publication_id);
+}
+
+uint32_t CybouNodeRuntime::RemainingEpochOperations(const AccountId& account_id) const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    const auto head = m_store.GetFinalizedHead();
+    if (!loaded || !loaded.state || !head) return 0;
+    const auto account = loaded.state->accounts.find(account_id);
+    const auto limits = ComputeAuthorityTierLimits(account == loaded.state->accounts.end() ? 0 : account->second.authority);
+    const uint64_t epoch = EpochForHeight(head->height + 1, m_config.network_genesis.GetProtocolParameters());
+    const auto usage = loaded.state->usage.find(account_id);
+    const uint32_t used = usage != loaded.state->usage.end() && usage->second.epoch == epoch ? usage->second.epoch_operations : 0;
+    return used >= limits.operations_per_epoch ? 0 : limits.operations_per_epoch - used;
+}
+
 OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
     const auto nonce = PrepareOperationWork(op);

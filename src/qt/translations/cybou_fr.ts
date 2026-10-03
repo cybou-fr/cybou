@@ -65,176 +65,176 @@
 <context>
     <name>CybouCoreApplicationAdapter</name>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="474"/>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="500"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="505"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="531"/>
         <source>The destination cannot be written.</source>
         <translation>Impossible d’écrire dans la destination.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="494"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="525"/>
         <source>This content is temporarily unavailable. Try again later.</source>
         <translation>Ce contenu est temporairement indisponible. Réessayez plus tard.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="495"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="526"/>
         <source>This content could not be verified.</source>
         <translation>Impossible de vérifier ce contenu.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="631"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="662"/>
         <source>Your recovery data could not be verified.</source>
         <translation>Impossible de vérifier vos données de récupération.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="636"/>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="866"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="667"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="897"/>
         <source>Your recovery data could not be secured.</source>
         <translation>Impossible de protéger vos données de récupération.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="710"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="741"/>
         <source>CYBOU was locked before your data was secured. The current recovery phrase stays active.</source>
         <translation>CYBOU a été verrouillé avant la protection de vos données. La phrase de récupération actuelle reste active.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="830"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="861"/>
         <source>Your data cannot be secured for a new recovery phrase right now.</source>
         <translation>Vos données ne peuvent pas être protégées pour une nouvelle phrase de récupération pour le moment.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="835"/>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="848"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="866"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="879"/>
         <source>The new recovery phrase is invalid.</source>
         <translation>La nouvelle phrase de récupération est invalide.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="876"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="907"/>
         <source>This action is not available yet.</source>
         <translation>Cette action n’est pas encore disponible.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="897"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="928"/>
         <source>The draft could not be saved.</source>
         <translation>Impossible d’enregistrer le brouillon.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="917"/>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="935"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="948"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="966"/>
         <source>Could not prepare the message.</source>
         <translation>Impossible de préparer le message.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="918"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="949"/>
         <source>No CYBOU Identity has this name.</source>
         <translation>Aucune identité CYBOU ne porte ce nom.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="943"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="974"/>
         <source>%1 could not be read.</source>
         <translation>Impossible de lire %1.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="957"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="988"/>
         <source>%1 is not protected yet.</source>
         <translation>%1 n’est pas encore protégé.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="993"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1024"/>
         <source>The message could not be sent.</source>
         <translation>Impossible d’envoyer le message.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1031"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1062"/>
         <source>This message cannot be moved there.</source>
         <translation>Impossible de déplacer ce message à cet emplacement.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1050"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1081"/>
         <source>Some messages could not be deleted.</source>
         <translation>Impossible de supprimer certains messages.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1080"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1111"/>
         <source>This attachment is not available.</source>
         <translation>Cette pièce jointe est indisponible.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1122"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1153"/>
         <source>The attachment could not be saved to Files.</source>
         <translation>Impossible d’enregistrer la pièce jointe dans Fichiers.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1165"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1196"/>
         <source>The file could not be read.</source>
         <translation>Impossible de lire le fichier.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1188"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1219"/>
         <source>The file could not be uploaded.</source>
         <translation>Impossible de téléverser le fichier.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1203"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1234"/>
         <source>This file has no content yet.</source>
         <translation>Ce fichier ne contient encore aucune donnée.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1239"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1270"/>
         <source>The folder could not be created.</source>
         <translation>Impossible de créer le dossier.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1254"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1285"/>
         <source>The item could not be renamed.</source>
         <translation>Impossible de renommer cet élément.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1275"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1306"/>
         <source>The item could not be moved.</source>
         <translation>Impossible de déplacer cet élément.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1293"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1324"/>
         <source>Copy of %1</source>
         <translation>Copie de %1</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1297"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1328"/>
         <source>The copy could not be created.</source>
         <translation>Impossible de créer la copie.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1330"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1361"/>
         <source>The item could not be moved to Trash.</source>
         <translation>Impossible de déplacer l’élément dans la corbeille.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1346"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1377"/>
         <source>The item could not be restored.</source>
         <translation>Impossible de restaurer l’élément.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1376"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1407"/>
         <source>The items could not be deleted.</source>
         <translation>Impossible de supprimer les éléments.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1387"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1418"/>
         <source>This change cannot be retried; upload the file again.</source>
         <translation>Cette opération ne peut pas être relancée ; téléversez à nouveau le fichier.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1392"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1423"/>
         <source>The change still could not be sent. Try again later.</source>
         <translation>Impossible d’envoyer cette opération. Réessayez plus tard.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1412"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1443"/>
         <source>This change is already on its way and cannot be discarded.</source>
         <translation>Cette opération est déjà en cours d’envoi et ne peut pas être annulée.</translation>
     </message>
     <message>
-        <location filename="../cyboucoreapplicationadapter.cpp" line="1443"/>
+        <location filename="../cyboucoreapplicationadapter.cpp" line="1474"/>
         <source>The item could not be deleted.</source>
         <translation>Impossible de supprimer cet élément.</translation>
     </message>
@@ -1339,7 +1339,7 @@ Racine d’état %7</translation>
     </message>
     <message>
         <location filename="../pages/emailpage.cpp" line="62"/>
-        <location filename="../pages/emailpage.cpp" line="534"/>
+        <location filename="../pages/emailpage.cpp" line="543"/>
         <source>Archive</source>
         <translation>Archives</translation>
     </message>
@@ -1390,7 +1390,7 @@ Racine d’état %7</translation>
     </message>
     <message>
         <location filename="../pages/emailpage.cpp" line="196"/>
-        <location filename="../pages/emailpage.cpp" line="568"/>
+        <location filename="../pages/emailpage.cpp" line="577"/>
         <source>(no subject)</source>
         <translation>(sans objet)</translation>
     </message>
@@ -1507,119 +1507,124 @@ Racine d’état %7</translation>
         <translation>Supprimer définitivement %1 messages ? Ils seront retirés de cette boîte et ne pourront pas être restaurés ici.</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="486"/>
-        <location filename="../pages/emailpage.cpp" line="539"/>
+        <location filename="../pages/emailpage.cpp" line="492"/>
+        <source>Messages you sent are also removed from the network and free your storage. A recipient keeps only what their device already downloaded.</source>
+        <translation>Les messages que vous avez envoyés sont aussi retirés du réseau et libèrent votre stockage. Un destinataire ne garde que ce que son appareil a déjà téléchargé.</translation>
+    </message>
+    <message>
+        <location filename="../pages/emailpage.cpp" line="495"/>
+        <location filename="../pages/emailpage.cpp" line="548"/>
         <source>Delete forever</source>
         <translation>Supprimer définitivement</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="489"/>
+        <location filename="../pages/emailpage.cpp" line="498"/>
         <source>Message deleted</source>
         <translation>Message supprimé</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="489"/>
+        <location filename="../pages/emailpage.cpp" line="498"/>
         <source>%1 messages deleted</source>
         <translation>%1 messages supprimés</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="507"/>
+        <location filename="../pages/emailpage.cpp" line="516"/>
         <source>Edit draft</source>
         <translation>Modifier le brouillon</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="507"/>
+        <location filename="../pages/emailpage.cpp" line="516"/>
         <source>Open</source>
         <translation>Ouvrir</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="509"/>
+        <location filename="../pages/emailpage.cpp" line="518"/>
         <source>Reply</source>
         <translation>Répondre</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="510"/>
+        <location filename="../pages/emailpage.cpp" line="519"/>
         <source>Forward</source>
         <translation>Transférer</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="518"/>
+        <location filename="../pages/emailpage.cpp" line="527"/>
         <source>Mark as read</source>
         <translation>Marquer comme lu</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="518"/>
+        <location filename="../pages/emailpage.cpp" line="527"/>
         <source>Mark as unread</source>
         <translation>Marquer comme non lu</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="525"/>
+        <location filename="../pages/emailpage.cpp" line="534"/>
         <source>Remove star</source>
         <translation>Retirer des favoris</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="525"/>
+        <location filename="../pages/emailpage.cpp" line="534"/>
         <source>Star</source>
         <translation>Ajouter aux favoris</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="531"/>
+        <location filename="../pages/emailpage.cpp" line="540"/>
         <source>Move to Inbox</source>
         <translation>Déplacer dans la boîte de réception</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="537"/>
+        <location filename="../pages/emailpage.cpp" line="546"/>
         <source>Move to Trash</source>
         <translation>Déplacer dans la corbeille</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="543"/>
+        <location filename="../pages/emailpage.cpp" line="552"/>
         <source>Discard draft</source>
         <translation>Supprimer le brouillon</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="545"/>
+        <location filename="../pages/emailpage.cpp" line="554"/>
         <source>Draft discarded</source>
         <translation>Brouillon supprimé</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="569"/>
+        <location filename="../pages/emailpage.cpp" line="578"/>
         <source>%1 conversations</source>
         <translation>%1 conversations</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="673"/>
-        <location filename="../pages/emailpage.cpp" line="711"/>
+        <location filename="../pages/emailpage.cpp" line="682"/>
+        <location filename="../pages/emailpage.cpp" line="720"/>
         <source>%1, %2</source>
         <translation>%1, %2</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="719"/>
+        <location filename="../pages/emailpage.cpp" line="728"/>
         <source>No messages match “%1”.</source>
         <translation>Aucun message ne correspond à « %1 ».</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="720"/>
+        <location filename="../pages/emailpage.cpp" line="729"/>
         <source>%1 is empty.</source>
         <translation>%1 est vide.</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="730"/>
+        <location filename="../pages/emailpage.cpp" line="739"/>
         <source>Mail needs your CYBOU Identity. Create or restore it on Home.</source>
         <translation>Le courrier nécessite votre identité CYBOU. Créez-la ou restaurez-la depuis l’accueil.</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="731"/>
+        <location filename="../pages/emailpage.cpp" line="740"/>
         <source>Mail is not connected yet. Messages will appear here once it is.</source>
         <translation>Le courrier n’est pas encore connecté. Les messages apparaîtront ici une fois la connexion établie.</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="775"/>
+        <location filename="../pages/emailpage.cpp" line="784"/>
         <source>Re: %1</source>
         <translation>Re : %1</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="778"/>
+        <location filename="../pages/emailpage.cpp" line="787"/>
         <source>
 
 On %1, %2 wrote:
@@ -1630,12 +1635,12 @@ Le %1, %2 a écrit :
 %3</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="788"/>
+        <location filename="../pages/emailpage.cpp" line="797"/>
         <source>Fwd: %1</source>
         <translation>Tr : %1</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="789"/>
+        <location filename="../pages/emailpage.cpp" line="798"/>
         <source>
 
 ---------- Forwarded message ----------
@@ -1654,12 +1659,12 @@ Objet : %3
 %4</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="808"/>
+        <location filename="../pages/emailpage.cpp" line="817"/>
         <source>People you mail or pay appear here.</source>
         <translation>Les personnes à qui vous écrivez ou payez apparaîtront ici.</translation>
     </message>
     <message>
-        <location filename="../pages/emailpage.cpp" line="819"/>
+        <location filename="../pages/emailpage.cpp" line="828"/>
         <source>Write to %1</source>
         <translation>Écrire à %1</translation>
     </message>
@@ -4040,7 +4045,7 @@ Enregistrer quand même ?</translation>
     <name>StoragePage</name>
     <message>
         <location filename="../pages/storagepage.cpp" line="54"/>
-        <location filename="../pages/storagepage.cpp" line="931"/>
+        <location filename="../pages/storagepage.cpp" line="932"/>
         <source>My files</source>
         <translation>Mes fichiers</translation>
     </message>
@@ -4051,7 +4056,7 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location filename="../pages/storagepage.cpp" line="56"/>
-        <location filename="../pages/storagepage.cpp" line="577"/>
+        <location filename="../pages/storagepage.cpp" line="578"/>
         <source>Starred</source>
         <translation>Favoris</translation>
     </message>
@@ -4077,22 +4082,22 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location filename="../pages/storagepage.cpp" line="130"/>
-        <location filename="../pages/storagepage.cpp" line="343"/>
-        <location filename="../pages/storagepage.cpp" line="887"/>
+        <location filename="../pages/storagepage.cpp" line="344"/>
+        <location filename="../pages/storagepage.cpp" line="888"/>
         <source>New folder</source>
         <translation>Nouveau dossier</translation>
     </message>
     <message>
         <location filename="../pages/storagepage.cpp" line="133"/>
         <location filename="../pages/storagepage.cpp" line="133"/>
-        <location filename="../pages/storagepage.cpp" line="340"/>
-        <location filename="../pages/storagepage.cpp" line="342"/>
+        <location filename="../pages/storagepage.cpp" line="341"/>
+        <location filename="../pages/storagepage.cpp" line="343"/>
         <source>Upload files</source>
         <translation>Téléverser des fichiers</translation>
     </message>
     <message>
         <location filename="../pages/storagepage.cpp" line="135"/>
-        <location filename="../pages/storagepage.cpp" line="895"/>
+        <location filename="../pages/storagepage.cpp" line="896"/>
         <source>Upload folder</source>
         <translation>Téléverser un dossier</translation>
     </message>
@@ -4130,442 +4135,454 @@ Enregistrer quand même ?</translation>
         <translation>Vider la corbeille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="214"/>
         <source>Permanently delete everything in Trash? This cannot be undone.</source>
-        <translation>Supprimer définitivement tout le contenu de la corbeille ? Cette action est irréversible.</translation>
+        <translation type="vanished">Supprimer définitivement tout le contenu de la corbeille ? Cette action est irréversible.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="216"/>
+        <location filename="../pages/storagepage.cpp" line="214"/>
+        <source>Permanently delete everything in Trash? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
+        <translation>Supprimer définitivement tout le contenu de la corbeille ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
+    </message>
+    <message>
+        <location filename="../pages/storagepage.cpp" line="217"/>
         <source>Emptying Trash. It is done once the network confirms it.</source>
         <translation>Vidage de la corbeille. La suppression sera effective après confirmation du réseau.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="219"/>
+        <location filename="../pages/storagepage.cpp" line="220"/>
         <source>List view</source>
         <translation>Vue en liste</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="220"/>
+        <location filename="../pages/storagepage.cpp" line="221"/>
         <source>Grid view</source>
         <translation>Vue en grille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="252"/>
-        <location filename="../pages/storagepage.cpp" line="1003"/>
+        <location filename="../pages/storagepage.cpp" line="253"/>
+        <location filename="../pages/storagepage.cpp" line="1005"/>
         <source>Star</source>
         <translation>Ajouter aux favoris</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="255"/>
-        <location filename="../pages/storagepage.cpp" line="1010"/>
+        <location filename="../pages/storagepage.cpp" line="256"/>
+        <location filename="../pages/storagepage.cpp" line="1012"/>
         <source>Move to Trash</source>
         <translation>Déplacer dans la corbeille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="258"/>
-        <location filename="../pages/storagepage.cpp" line="382"/>
-        <location filename="../pages/storagepage.cpp" line="580"/>
-        <location filename="../pages/storagepage.cpp" line="1012"/>
+        <location filename="../pages/storagepage.cpp" line="259"/>
+        <location filename="../pages/storagepage.cpp" line="383"/>
+        <location filename="../pages/storagepage.cpp" line="581"/>
+        <location filename="../pages/storagepage.cpp" line="1014"/>
         <source>%1 items moved to Trash</source>
         <translation>%1 éléments déplacés dans la corbeille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="258"/>
-        <location filename="../pages/storagepage.cpp" line="383"/>
-        <location filename="../pages/storagepage.cpp" line="456"/>
-        <location filename="../pages/storagepage.cpp" line="581"/>
-        <location filename="../pages/storagepage.cpp" line="1013"/>
+        <location filename="../pages/storagepage.cpp" line="259"/>
+        <location filename="../pages/storagepage.cpp" line="384"/>
+        <location filename="../pages/storagepage.cpp" line="457"/>
+        <location filename="../pages/storagepage.cpp" line="582"/>
+        <location filename="../pages/storagepage.cpp" line="1015"/>
         <source>Undo</source>
         <translation>Annuler</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="264"/>
         <location filename="../pages/storagepage.cpp" line="265"/>
+        <location filename="../pages/storagepage.cpp" line="266"/>
         <source>Clear selection</source>
         <translation>Effacer la sélection</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="277"/>
-        <location filename="../pages/storagepage.cpp" line="310"/>
+        <location filename="../pages/storagepage.cpp" line="278"/>
+        <location filename="../pages/storagepage.cpp" line="311"/>
         <source>Files</source>
         <translation>Fichiers</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="279"/>
+        <location filename="../pages/storagepage.cpp" line="280"/>
         <source>Name</source>
         <translation>Nom</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="279"/>
+        <location filename="../pages/storagepage.cpp" line="280"/>
         <source>Size</source>
         <translation>Taille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="279"/>
+        <location filename="../pages/storagepage.cpp" line="280"/>
         <source>Modified</source>
         <translation>Modifié</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="279"/>
-        <location filename="../pages/storagepage.cpp" line="1096"/>
+        <location filename="../pages/storagepage.cpp" line="280"/>
+        <location filename="../pages/storagepage.cpp" line="1098"/>
         <source>Status</source>
         <translation>État</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="356"/>
-        <location filename="../pages/storagepage.cpp" line="1016"/>
+        <location filename="../pages/storagepage.cpp" line="357"/>
+        <location filename="../pages/storagepage.cpp" line="1018"/>
         <source>Details</source>
         <translation>Détails</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="382"/>
-        <location filename="../pages/storagepage.cpp" line="580"/>
-        <location filename="../pages/storagepage.cpp" line="1012"/>
+        <location filename="../pages/storagepage.cpp" line="383"/>
+        <location filename="../pages/storagepage.cpp" line="581"/>
+        <location filename="../pages/storagepage.cpp" line="1014"/>
         <source>Moved to Trash</source>
         <translation>Déplacé dans la corbeille</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="455"/>
+        <location filename="../pages/storagepage.cpp" line="456"/>
         <source>Moved to “%1”</source>
         <translation>Déplacé dans « %1 »</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="455"/>
+        <location filename="../pages/storagepage.cpp" line="456"/>
         <source>%1 items moved to “%2”</source>
         <translation>%1 éléments déplacés dans « %2 »</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="493"/>
-        <location filename="../pages/storagepage.cpp" line="698"/>
+        <location filename="../pages/storagepage.cpp" line="494"/>
+        <location filename="../pages/storagepage.cpp" line="699"/>
         <source>%1 items</source>
         <translation>%1 éléments</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="577"/>
+        <location filename="../pages/storagepage.cpp" line="578"/>
         <source>%1 items starred</source>
         <translation>%1 éléments ajoutés aux favoris</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="698"/>
+        <location filename="../pages/storagepage.cpp" line="699"/>
         <source>1 item</source>
         <translation>1 élément</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="722"/>
+        <location filename="../pages/storagepage.cpp" line="723"/>
         <source>No files match “%1”.</source>
         <translation>Aucun fichier ne correspond à « %1 ».</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="723"/>
+        <location filename="../pages/storagepage.cpp" line="724"/>
         <source>Trash is empty.</source>
         <translation>La corbeille est vide.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="724"/>
+        <location filename="../pages/storagepage.cpp" line="725"/>
         <source>Star files to find them here quickly.</source>
         <translation>Ajoutez des fichiers aux favoris pour les retrouver rapidement.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="725"/>
+        <location filename="../pages/storagepage.cpp" line="726"/>
         <source>Files you add or open appear here.</source>
         <translation>Les fichiers ajoutés ou ouverts apparaîtront ici.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="726"/>
+        <location filename="../pages/storagepage.cpp" line="727"/>
         <source>No files yet. Drag files here or use New to upload.</source>
         <translation>Aucun fichier pour le moment. Déposez des fichiers ici ou utilisez Nouveau pour les téléverser.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="733"/>
-        <location filename="../pages/storagepage.cpp" line="764"/>
+        <location filename="../pages/storagepage.cpp" line="734"/>
+        <location filename="../pages/storagepage.cpp" line="765"/>
         <source>Search results</source>
         <translation>Résultats de recherche</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="808"/>
+        <location filename="../pages/storagepage.cpp" line="809"/>
         <source>%1 selected</source>
         <translation>%1 sélectionné(s)</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="825"/>
+        <location filename="../pages/storagepage.cpp" line="826"/>
         <source>Files needs your CYBOU Identity. Create or restore it on Home.</source>
         <translation>Les fichiers nécessitent votre identité CYBOU. Créez-la ou restaurez-la depuis l’accueil.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="826"/>
+        <location filename="../pages/storagepage.cpp" line="827"/>
         <source>Files is not connected yet. Your files will appear here once it is.</source>
         <translation>Les fichiers ne sont pas encore connectés. Ils apparaîtront ici une fois la connexion établie.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="833"/>
+        <location filename="../pages/storagepage.cpp" line="834"/>
         <source>Storage almost full · %1 used of %2</source>
         <translation>Stockage presque plein · %1 utilisés sur %2</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="836"/>
+        <location filename="../pages/storagepage.cpp" line="837"/>
         <source>%1 used of %2</source>
         <translation>%1 utilisés sur %2</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="837"/>
+        <location filename="../pages/storagepage.cpp" line="838"/>
         <source>%1 used</source>
         <translation>%1 utilisés</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="887"/>
+        <location filename="../pages/storagepage.cpp" line="888"/>
         <source>Folder name</source>
         <translation>Nom du dossier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="888"/>
+        <location filename="../pages/storagepage.cpp" line="889"/>
         <source>Untitled folder</source>
         <translation>Dossier sans titre</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="890"/>
+        <location filename="../pages/storagepage.cpp" line="891"/>
         <source>Folder “%1” created</source>
         <translation>Dossier « %1 » créé</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="925"/>
-        <location filename="../pages/storagepage.cpp" line="996"/>
+        <location filename="../pages/storagepage.cpp" line="926"/>
+        <location filename="../pages/storagepage.cpp" line="998"/>
         <source>Rename</source>
         <translation>Renommer</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="925"/>
+        <location filename="../pages/storagepage.cpp" line="926"/>
         <source>New name</source>
         <translation>Nouveau nom</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="940"/>
-        <location filename="../pages/storagepage.cpp" line="997"/>
+        <location filename="../pages/storagepage.cpp" line="941"/>
+        <location filename="../pages/storagepage.cpp" line="999"/>
         <source>Move</source>
         <translation>Déplacer</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="940"/>
+        <location filename="../pages/storagepage.cpp" line="941"/>
         <source>Move to</source>
         <translation>Déplacer vers</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="948"/>
-        <location filename="../pages/storagepage.cpp" line="992"/>
-        <location filename="../pages/storagepage.cpp" line="1159"/>
+        <location filename="../pages/storagepage.cpp" line="949"/>
+        <location filename="../pages/storagepage.cpp" line="994"/>
+        <location filename="../pages/storagepage.cpp" line="1162"/>
         <source>Download</source>
         <translation>Télécharger</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="976"/>
-        <location filename="../pages/storagepage.cpp" line="1139"/>
+        <location filename="../pages/storagepage.cpp" line="977"/>
+        <location filename="../pages/storagepage.cpp" line="1141"/>
         <source>Restore</source>
         <translation>Restaurer</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="978"/>
+        <location filename="../pages/storagepage.cpp" line="979"/>
         <source>Restored</source>
         <translation>Restauré</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="978"/>
+        <location filename="../pages/storagepage.cpp" line="979"/>
         <source>%1 items restored</source>
         <translation>%1 éléments restaurés</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="980"/>
         <location filename="../pages/storagepage.cpp" line="981"/>
-        <location filename="../pages/storagepage.cpp" line="1147"/>
-        <location filename="../pages/storagepage.cpp" line="1151"/>
+        <location filename="../pages/storagepage.cpp" line="982"/>
+        <location filename="../pages/storagepage.cpp" line="1149"/>
+        <location filename="../pages/storagepage.cpp" line="1153"/>
         <source>Delete forever</source>
         <translation>Supprimer définitivement</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="982"/>
-        <source>Remove from your Files? CYBOU releases retained storage according to the Storage retention policy.</source>
-        <translation>Retirer de vos fichiers ? CYBOU libérera l’espace retenu conformément à la politique de conservation du stockage.</translation>
+        <location filename="../pages/storagepage.cpp" line="983"/>
+        <source>Permanently delete? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
+        <translation>Supprimer définitivement ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="990"/>
+        <location filename="../pages/storagepage.cpp" line="1154"/>
+        <source>Permanently delete this item? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
+        <translation>Supprimer définitivement cet élément ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
+    </message>
+    <message>
+        <source>Remove from your Files? CYBOU releases retained storage according to the Storage retention policy.</source>
+        <translation type="vanished">Retirer de vos fichiers ? CYBOU libérera l’espace retenu conformément à la politique de conservation du stockage.</translation>
+    </message>
+    <message>
+        <location filename="../pages/storagepage.cpp" line="992"/>
         <source>Open</source>
         <translation>Ouvrir</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="999"/>
+        <location filename="../pages/storagepage.cpp" line="1001"/>
         <source>Make a copy</source>
         <translation>Créer une copie</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1000"/>
+        <location filename="../pages/storagepage.cpp" line="1002"/>
         <source>Copy created</source>
         <translation>Copie créée</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1003"/>
+        <location filename="../pages/storagepage.cpp" line="1005"/>
         <source>Remove star</source>
         <translation>Retirer des favoris</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1006"/>
+        <location filename="../pages/storagepage.cpp" line="1008"/>
         <source>Send by CYBOU Mail</source>
         <translation>Envoyer par courrier CYBOU</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1031"/>
+        <location filename="../pages/storagepage.cpp" line="1033"/>
         <source>Folder</source>
         <translation>Dossier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1033"/>
+        <location filename="../pages/storagepage.cpp" line="1035"/>
         <source>PDF document</source>
         <translation>Document PDF</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1035"/>
+        <location filename="../pages/storagepage.cpp" line="1037"/>
         <source>Image</source>
         <translation>Image</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1036"/>
+        <location filename="../pages/storagepage.cpp" line="1038"/>
         <source>Archive</source>
         <translation>Archive</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1037"/>
+        <location filename="../pages/storagepage.cpp" line="1039"/>
         <source>File</source>
         <translation>Fichier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1037"/>
+        <location filename="../pages/storagepage.cpp" line="1039"/>
         <source>%1 file</source>
         <translation>%1 fichier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1079"/>
+        <location filename="../pages/storagepage.cpp" line="1081"/>
         <source>Close</source>
         <translation>Fermer</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1091"/>
+        <location filename="../pages/storagepage.cpp" line="1093"/>
         <source>Modified %1</source>
         <translation>Modifié le %1</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1102"/>
+        <location filename="../pages/storagepage.cpp" line="1104"/>
         <source>On this computer</source>
         <translation>Sur cet ordinateur</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1106"/>
+        <location filename="../pages/storagepage.cpp" line="1108"/>
         <source>Downloaded to</source>
         <translation>Téléchargé dans</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1106"/>
+        <location filename="../pages/storagepage.cpp" line="1108"/>
         <source>%1 in %2</source>
         <translation>%1 dans %2</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1107"/>
+        <location filename="../pages/storagepage.cpp" line="1109"/>
         <source>Downloaded copy: %1 — drag the file out of CYBOU to copy it</source>
         <translation>Copie téléchargée : %1 — faites glisser le fichier hors de CYBOU pour le copier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1112"/>
+        <location filename="../pages/storagepage.cpp" line="1114"/>
         <source>On the network</source>
         <translation>Sur le réseau</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1113"/>
+        <location filename="../pages/storagepage.cpp" line="1115"/>
         <source>Not stored on the network yet</source>
         <translation>Pas encore stocké sur le réseau</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1115"/>
+        <location filename="../pages/storagepage.cpp" line="1117"/>
         <source>%1 of %2 encrypted copies</source>
         <translation>%1 copies chiffrées sur %2</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1116"/>
+        <location filename="../pages/storagepage.cpp" line="1118"/>
         <source>%1 encrypted copies</source>
         <translation>%1 copies chiffrées</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1118"/>
+        <location filename="../pages/storagepage.cpp" line="1120"/>
         <source>Encryption</source>
         <translation>Chiffrement</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1118"/>
+        <location filename="../pages/storagepage.cpp" line="1120"/>
         <source>End-to-end, post-quantum; only you hold the keys</source>
         <translation>De bout en bout, post-quantique ; vous seul détenez les clés</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1120"/>
+        <location filename="../pages/storagepage.cpp" line="1122"/>
         <source>Owner</source>
         <translation>Propriétaire</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1120"/>
+        <location filename="../pages/storagepage.cpp" line="1122"/>
         <source>You</source>
         <translation>Vous</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1124"/>
+        <location filename="../pages/storagepage.cpp" line="1126"/>
         <source>Try again</source>
         <translation>Réessayer</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1129"/>
+        <location filename="../pages/storagepage.cpp" line="1131"/>
         <source>Discard</source>
         <translation>Abandonner</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1152"/>
         <source>Permanently delete this item? This cannot be undone.</source>
-        <translation>Supprimer définitivement cet élément ? Cette action est irréversible.</translation>
+        <translation type="vanished">Supprimer définitivement cet élément ? Cette action est irréversible.</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1166"/>
+        <location filename="../pages/storagepage.cpp" line="1169"/>
         <source>Send by Mail</source>
         <translation>Envoyer par courrier</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1177"/>
+        <location filename="../pages/storagepage.cpp" line="1180"/>
         <source>Advanced</source>
         <translation>Avancé</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1185"/>
+        <location filename="../pages/storagepage.cpp" line="1188"/>
         <source>Not reported yet</source>
         <translation>Pas encore indiqué</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1186"/>
+        <location filename="../pages/storagepage.cpp" line="1189"/>
         <source>Root content identifier</source>
         <translation>Identifiant de racine du contenu</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1187"/>
+        <location filename="../pages/storagepage.cpp" line="1190"/>
         <source>Finalized height</source>
         <translation>Hauteur finalisée</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1188"/>
+        <location filename="../pages/storagepage.cpp" line="1191"/>
         <source>Protection status</source>
         <translation>État de la protection</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1189"/>
+        <location filename="../pages/storagepage.cpp" line="1192"/>
         <source>Local availability</source>
         <translation>Disponibilité locale</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1190"/>
+        <location filename="../pages/storagepage.cpp" line="1193"/>
         <source>Retrieval status</source>
         <translation>État de récupération</translation>
     </message>
     <message>
-        <location filename="../pages/storagepage.cpp" line="1191"/>
+        <location filename="../pages/storagepage.cpp" line="1194"/>
         <source>Not retrieved on this computer</source>
         <translation>Non récupéré sur cet ordinateur</translation>
     </message>

@@ -463,6 +463,9 @@ bool ApplicationService::ProcessBlock(const std::uint64_t height, const std::uin
 bool ApplicationService::ProcessPublication(const std::uint64_t height, const std::uint32_t index,
     const cybou::Hash256& operation_id, const AuthorizedRootPublication& publication, const std::uint64_t my_key_epoch)
 {
+    // Revoked by its author (DEC-271): its chunks are purged, so there is
+    // nothing left to open; content already indexed here stays in this DB.
+    if (!m_runtime.IsPublicationActive(operation_id)) return true;
     // Idempotent: a recorded publication is not reopened. One that was
     // recorded but never indexed (older databases, or an unavailable root) is
     // indexed again, and the owner index is repaired.

@@ -199,6 +199,15 @@ public:
     /// Метод сам не удерживает общий mutex на всём проходе; корректность опирается на потокобезопасность этого сервиса и \p storage.
     std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(StorageService& storage);
 
+    /// \brief Решает, нужна ли ещё собственная публикация: OperationID и её authorization leaves.
+    using PublicationNeeded = std::function<bool(const cybou::Hash256& operation_id, std::span<const ChunkId> leaves)>;
+    /// \brief Отзывает одну собственную финализированную публикацию, которая больше ничему не нужна (DEC-271).
+    /// \details Не более одного отзыва в полёте; мосты восстановления не трогаются; отзыв не тратит
+    ///          последние операции окна (резерв для действий пользователя). После финализации job удаляется
+    ///          локально, а его pin освобождается.
+    /// \return OperationID публикации, чей отзыв сейчас в полёте или только что отправлен; иначе nullopt.
+    std::optional<cybou::Hash256> RevokeUnreferenced(const PublicationNeeded& needed);
+
 private:
     struct Job;
     /// \brief Неподписанный intent публикации, независимый от будущего nonce.
@@ -229,6 +238,8 @@ private:
     std::optional<Staged> Stage(std::string_view local_job_id, std::vector<NewContent>& children,
         const BuildMetadata& build_metadata, std::string& error);
     std::optional<std::vector<ChunkId>> LoadLeaves(std::string_view local_job_id) const;
+    /// \brief Удаляет локальную job после финализированного отзыва её публикации.
+    bool ForgetRevokedJob(std::string_view local_job_id);
 
     CybouNodeRuntime& m_runtime;
     CybouKeyStore& m_identity;

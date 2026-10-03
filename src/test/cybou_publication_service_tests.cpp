@@ -108,6 +108,50 @@ BOOST_AUTO_TEST_CASE(one_recipient_has_recipient_and_owner_capsules)
     BOOST_CHECK(publication.Resume("mail-job").phase == cybou::PublicationJobPhase::PROTECTED);
 }
 
+BOOST_AUTO_TEST_CASE(unreferenced_own_publication_is_revoked_once_and_forgotten)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("revoker.cybou");
+    cybou::KVStore proof_db{cybou::KVStoreOptions{.memory_only = true}};
+    const auto prepared = Prepare(*fixture.runtime, proof_db, "revoke-pub");
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), application_db, coordinator};
+    const auto submitted = publication.SubmitPrepared("files-revoke", prepared);
+    BOOST_REQUIRE(!submitted.operation_id.IsNull());
+    const std::vector<unsigned char> leaves(prepared.root_chunk_id.begin(), prepared.root_chunk_id.end());
+    BOOST_REQUIRE(application_db.Put("publication/leaves/files-revoke", leaves));
+
+    // Nothing is revoked before finality.
+    BOOST_CHECK(!publication.RevokeUnreferenced([](const auto&, auto) { return false; }));
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    BOOST_REQUIRE(publication.Resume("files-revoke").phase == cybou::PublicationJobPhase::SECURING);
+
+    // Still referenced: kept; the callback sees the publication and its leaves.
+    bool asked{false};
+    BOOST_CHECK(!publication.RevokeUnreferenced([&](const cybou::Hash256& id, std::span<const cybou::ChunkId> seen) {
+        asked = id == submitted.operation_id && seen.size() == 1 && seen.front() == prepared.root_chunk_id;
+        return true;
+    }));
+    BOOST_CHECK(asked);
+    BOOST_CHECK(fixture.runtime->IsPublicationActive(submitted.operation_id));
+
+    // Unreferenced: one revocation goes out and stays in flight until finality.
+    const auto revoking = publication.RevokeUnreferenced([](const auto&, auto) { return false; });
+    BOOST_REQUIRE(revoking);
+    BOOST_CHECK(*revoking == submitted.operation_id);
+    BOOST_CHECK(publication.RevokeUnreferenced([](const auto&, auto) { return false; }) == revoking);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    BOOST_CHECK(!fixture.runtime->IsPublicationActive(submitted.operation_id));
+    BOOST_CHECK(!fixture.runtime->FindFinalizedRootPublication(submitted.operation_id));
+
+    // The next pass forgets the job locally; nothing else is left to revoke.
+    BOOST_CHECK(!publication.RevokeUnreferenced([](const auto&, auto) { return false; }));
+    BOOST_CHECK(!publication.GetJob("files-revoke"));
+    const auto jobs = publication.Jobs();
+    BOOST_CHECK(std::find(jobs.begin(), jobs.end(), std::string{"files-revoke"}) == jobs.end());
+}
+
 BOOST_AUTO_TEST_CASE(corrupt_private_job_is_not_overwritten)
 {
     CybouServiceTestFixture fixture;

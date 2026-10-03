@@ -211,7 +211,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_empty_trash->hide();
     connect(m_empty_trash, &QPushButton::clicked, this, [this] {
         if (QMessageBox::question(this, tr("Empty Trash"),
-                tr("Permanently delete everything in Trash? This cannot be undone.")) != QMessageBox::Yes) return;
+                tr("Permanently delete everything in Trash? This cannot be undone. Once the network confirms it, "
+                   "the content is removed from the network and its storage is freed.")) != QMessageBox::Yes) return;
         m_model->requestEmptyTrash();
         m_model->notify(tr("Emptying Trash. It is done once the network confirms it."));
     });
@@ -979,7 +980,8 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
         });
         menu.addAction(tr("Delete forever"), this, [this, ids] {
             if (QMessageBox::question(this, tr("Delete forever"),
-                    tr("Remove from your Files? CYBOU releases retained storage according to the Storage retention policy."))
+                    tr("Permanently delete? This cannot be undone. Once the network confirms it, the content is removed "
+                       "from the network and its storage is freed."))
                 == QMessageBox::Yes) {
                 for (const auto& i : ids) m_model->requestDeleteFile(i);
             }
@@ -1149,7 +1151,8 @@ void StoragePage::rebuildDetails()
         forever->setProperty("cybouId", QStringLiteral("fileDeleteForever"));
         connect(forever, &QPushButton::clicked, this, [this, id = item->id] {
             if (QMessageBox::question(this, tr("Delete forever"),
-                    tr("Permanently delete this item? This cannot be undone.")) != QMessageBox::Yes) return;
+                    tr("Permanently delete this item? This cannot be undone. Once the network confirms it, the content "
+                       "is removed from the network and its storage is freed.")) != QMessageBox::Yes) return;
             m_model->requestDeleteFile(id);
             showDetails({});
         });

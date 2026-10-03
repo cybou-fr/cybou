@@ -162,6 +162,8 @@ struct CybouCoreApplicationAdapter::Session {
     /** Local encrypted cache beyond pins and provider obligations; LRU-evicted. */
     static constexpr std::uint64_t GC_EVERY_TICKS{60};
     static constexpr std::uint64_t LOCAL_CACHE_BUDGET_BYTES{2ULL << 30};
+    /** Deleted Mail/Files content is revoked from the network a few ticks apart. */
+    static constexpr std::uint64_t REVOKE_EVERY_TICKS{10};
     /** Files changes published from this device that the scanner has not reflected yet. */
     struct PendingFile {
         cybou::FileItem item;
@@ -330,8 +332,37 @@ struct CybouCoreApplicationAdapter::Session {
             locally_complete.clear(); // eviction or outside changes
         }
         for (const auto& [id, status] : publication->ProcessDurability(*storage)) jobs[id] = status;
+        // Only a complete index knows every reference to an own publication.
+        if (progress.Complete() && ticks % REVOKE_EVERY_TICKS == 0) RevokeUnreferenced();
         AdvanceRotation();
         Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);
+    }
+
+    /**
+     * Frees network storage held by deleted Mail and Files (DEC-271). An own
+     * publication stays while a catalog record (live or deleted: deletions must
+     * keep replaying over older upserts) came from it, while a message from it
+     * is not deleted forever, and while any live file or attachment tree lives
+     * in its chunks.
+     */
+    void RevokeUnreferenced()
+    {
+        std::set<cybou::Hash256> catalog_sources, live_messages;
+        std::set<cybou::ChunkId> live_roots;
+        for (const auto& record : application->ListFiles()) {
+            catalog_sources.insert(record.operation_id);
+            if (!record.deleted && record.item.root_chunk_id) live_roots.insert(*record.item.root_chunk_id);
+        }
+        for (const auto& record : application->ListMail()) {
+            if (record.folder == cybou::MailFolder::DELETED) continue;
+            live_messages.insert(record.operation_id);
+            for (const auto& attachment : record.message.attachments) live_roots.insert(attachment.root_chunk_id);
+        }
+        (void)publication->RevokeUnreferenced([&](const cybou::Hash256& operation_id,
+                                                  std::span<const cybou::ChunkId> leaves) {
+            return catalog_sources.contains(operation_id) || live_messages.contains(operation_id) ||
+                std::any_of(leaves.begin(), leaves.end(), [&](const cybou::ChunkId& leaf) { return live_roots.contains(leaf); });
+        });
     }
 
     void Snapshot(CybouRestoreStepState mail_restore)

@@ -365,6 +365,24 @@ actions: the file's content tree must enumerate from local ROOT/INDEX blobs
 and every DATA chunk must be present in the local ChunkStore. It turns false
 once cache eviction removes any of them.
 
+### Freeing network storage (DEC-271, DEC-272)
+
+`DELETE_ITEM` only changes the private catalog. Network storage is freed by
+`RevokePublication` of an own publication that nothing needs any more. The
+client decides this only from a complete Application DB index, with every own
+publication job finalized, and keeps a publication while:
+
+- any catalog record, live or deleted, came from it (a delete must keep
+  replaying over the older upsert during a restore);
+- a message it carries is not deleted forever;
+- the content tree of any live file or attachment is among its authorization
+  leaves (a file saved from Mail keeps the mail publication).
+
+Recovery bridges are never revoked. One revocation is in flight at a time, and
+the last operations of the window stay free for the user. Restores skip revoked
+publications. Deleting an own sent message forever therefore also removes it
+from the network for its recipient, who keeps only what was already downloaded.
+
 ## 10. Mail model
 
 A minimal private Mail message contains:

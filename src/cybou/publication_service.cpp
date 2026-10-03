@@ -52,6 +52,8 @@ constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'P', 'J'};
 /// 4 magic + 32 network_binding + 32 account + 1 phase + 8 nonce + 8 key_epoch + 32 op_id + 4 serialized publication size.
 constexpr std::size_t FIXED_SIZE{4 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
 constexpr std::string_view JOB_INDEX_KEY{"publication/jobs"};
+/// In-flight RevokePublication of an own publication (DEC-271).
+constexpr std::string_view REVOKING_KEY{"publication/revoking"};
 
 /// Leaves сохраняются отдельно, чтобы StorageService позже воспроизвёл ровно тот же authorization order.
 std::string LeavesKey(const std::string_view id)
@@ -617,6 +619,75 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
         return fail();
     }
 
+}
+
+bool PublicationService::ForgetRevokedJob(const std::string_view local_job_id)
+{
+    const std::array<unsigned char, 1> marker{1};
+    return m_application_db.Put(CancelKey(local_job_id), marker) && FinishCancellation(local_job_id);
+}
+
+std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const PublicationNeeded& needed)
+{
+    // Leave room for what the user does next: revocation is housekeeping.
+    constexpr std::uint32_t RESERVED_OPERATIONS{5};
+    std::lock_guard lock{m_mutex};
+    if (!m_application_db.IsUnlocked() || !needed) return std::nullopt;
+    const auto me = m_identity.GetAccountId();
+    if (!me) return std::nullopt;
+
+    // One revocation at a time: target (32) || revoke OperationID (32) || job id.
+    if (const auto marker = m_application_db.Get(REVOKING_KEY); marker && marker->size() > 64) {
+        cybou::Hash256 target, revoke;
+        std::copy_n(marker->begin(), 32, target.begin());
+        std::copy_n(marker->begin() + 32, 32, revoke.begin());
+        const std::string job{marker->begin() + 64, marker->end()};
+        if (!m_runtime.IsPublicationActive(target)) {
+            if (!ForgetRevokedJob(job) || !m_application_db.Erase(REVOKING_KEY)) return target;
+            return std::nullopt;
+        }
+        if (m_runtime.GetOperationStatus(revoke).kind != OperationStatusKind::REJECTED_KNOWN) return target;
+        m_application_db.Erase(REVOKING_KEY); // refused (e.g. window full): try again later
+        return std::nullopt;
+    }
+    if (m_runtime.RemainingEpochOperations(*me) <= RESERVED_OPERATIONS) return std::nullopt;
+    // Work still on its way may reuse content of a finalized publication (a mail
+    // attaching a file): decide only once every own job is finalized.
+    const auto all_jobs = Jobs();
+    for (const auto& job_id : all_jobs) {
+        const auto job = Load(job_id);
+        if (job && job->phase != PublicationJobPhase::SECURING && job->phase != PublicationJobPhase::PROTECTED) {
+            return std::nullopt;
+        }
+    }
+
+    for (const auto& job_id : all_jobs) {
+        if (job_id.starts_with("bridge-")) continue; // recovery bridges keep restores possible
+        const auto job = Load(job_id);
+        if (!job || job->account_id != *me || job->operation_id.IsNull() ||
+            (job->phase != PublicationJobPhase::SECURING && job->phase != PublicationJobPhase::PROTECTED)) continue;
+        if (!m_runtime.IsPublicationActive(job->operation_id)) {
+            ForgetRevokedJob(job_id); // revoked from another device
+            continue;
+        }
+        const auto leaves = LoadLeaves(job_id);
+        if (!leaves || needed(job->operation_id, *leaves)) continue;
+
+        const RevokePublicationPayload payload{job->operation_id};
+        const auto commitment = ComputeRevokePublicationPayloadCommitment(payload);
+        if (!commitment) continue;
+        const auto result = m_coordinator.Execute(IdentityOperationKind::REVOKE_PUBLICATION, *commitment,
+            [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
+                return ProtocolOperation{AuthorizedRevokePublication{authorization, payload}};
+            });
+        if (!result) return std::nullopt;
+        std::vector<unsigned char> marker(job->operation_id.begin(), job->operation_id.end());
+        marker.insert(marker.end(), result.op_id.begin(), result.op_id.end());
+        marker.insert(marker.end(), job_id.begin(), job_id.end());
+        m_application_db.Put(REVOKING_KEY, marker);
+        return job->operation_id;
+    }
+    return std::nullopt;
 }
 
 std::optional<std::vector<ChunkId>> PublicationService::LoadLeaves(const std::string_view local_job_id) const
