@@ -1,7 +1,7 @@
 # CYBOU
 
-CYBOU est un projet open source qui développe un logiciel de bureau et un
-réseau pair-à-pair pour l'identité, la messagerie privée et les fichiers.
+CYBOU développe une messagerie privée et un stockage de fichiers distribués,
+sans dépendre d'un service cloud centralisé.
 Ce dépôt contient le code du client, du nœud, du protocole et de leurs tests.
 CYBOU n'est pas un service public de messagerie ou de stockage cloud.
 

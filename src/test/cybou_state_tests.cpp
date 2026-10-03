@@ -999,10 +999,10 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);
     BOOST_CHECK(CybouStateHash(*restored) == CybouStateHash(state));
-    auto v11 = *bytes;
-    v11[0] = 11;
-    v11.insert(v11.begin() + 9, 16, 0); // actual obsolete pool layout
-    BOOST_CHECK(!DeserializeCybouState(v11));
+    auto malformed = *bytes;
+    malformed[0] = 0xff;
+    malformed.insert(malformed.begin() + 9, 16, 0); // invalid pool layout
+    BOOST_CHECK(!DeserializeCybouState(malformed));
 
     // Payment to Central Authority credits both the amount and its entire fee.
     state.accounts.at(sender).balance = 5;

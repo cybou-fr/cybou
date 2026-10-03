@@ -47,13 +47,14 @@ schemas, recipients, filenames and graph edges remain encrypted. Providers
 verify full ChunkIDs and finalized-publication authorization proofs. Finality
 authorizes admission, not availability or durability.
 
-CYP2 v4 requires TLS 1.3 and `X25519MLKEM768`. Finalizer and provider role
-proofs bind to the TLS exporter and both HELLOs. Ordinary peers are not
-globally authenticated by their ephemeral certificates. Secret files require
+CYBOU P2P requires TLS 1.3 and `X25519MLKEM768`. Full nodes use ephemeral
+certificates for transport encryption. StorageId is proven on demand for storage
+relationships; consensus and finality authority derive exclusively from the
+genesis-authorized keys and canonical finalized state. Secret files require
 owner-only permissions and must reject links or reparse points.
 
-## Current DEV limit
+## Current DEV deployment
 
-The DEV VPS runs an experimental standalone bootstrap prototype. Its existing
-state must remain operational until acceptance and coordinated cutover. See
-`AGENTS.md` and `docs/cybou/26_IMPLEMENTATION_STATUS.md`.
+The DEV VPS runs an ordinary headless full peer process (`cybou node run`) on
+the immutable current DEVNET with state under `/var/lib/cybou/node/state`.
+See `AGENTS.md` and `docs/cybou/26_IMPLEMENTATION_STATUS.md`.

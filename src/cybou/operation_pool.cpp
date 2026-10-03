@@ -120,7 +120,7 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation, const uin
     auto test_executor = *m_working->executor;
     auto exec = test_executor.ApplyOperation(operation);
     if (!exec.IsOk()) return PoolAdmission::REJECTED;
-    if (!test_executor.Finalize()) return PoolAdmission::REJECTED;
+    if (!test_executor.CanFinalize()) return PoolAdmission::REJECTED;
 
     *m_working->executor = std::move(test_executor);
     m_entries.push_back(Entry{operation, *id, work_nonce, encoded->size(), std::move(source_peer)});
@@ -207,7 +207,7 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
 
         auto test_executor = *m_working->executor;
         auto exec = test_executor.ApplyOperation(entry.operation);
-        if (!exec.IsOk() || !test_executor.Finalize()) {
+        if (!exec.IsOk() || !test_executor.CanFinalize()) {
             dropped.push_back(entry.id);
             continue;
         }

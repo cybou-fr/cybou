@@ -80,7 +80,7 @@ finalized rules in `57_IDENTITY_AUTHORITY.md`. Fee amounts do not scale AUTH.
 
 ## Network cutover
 
-State has no v11 decoder. A new genesis requires a new Network Public Key
+State has no legacy decoder. A new genesis requires a new Network Public Key
 and therefore a new NetworkID, followed by a clean network-bound state reset.
 Current compiled DEVNET has its new NetworkID and immutable genesis; the
 former DEVNET is retired. MAINNET remains unprovisioned. Development uses DEVNET. Existing genesis is never re-signed or replaced.

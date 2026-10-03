@@ -6,9 +6,9 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Current status
 
-- The DEV VPS runs a pinned standalone bootstrap prototype at
-  `51.255.46.58:29461`; legacy finalizer and provider services are inactive.
-  Coordinated new-genesis DEV cutover remains pending.
+- The DEV VPS runs an ordinary headless full peer (`cybou node run`) on DEVNET
+  at locator `51.255.46.58:29461` with state under `/var/lib/cybou/node/state`;
+  legacy prototype services are retired and inactive.
 - Finality is single-operator hybrid-PQ PoA; full nodes independently validate
   blocks, state roots, and certificates. This is a centralized trust model,
   **not BFT**, and the network makes no Byzantine fault tolerance claim.

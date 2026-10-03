@@ -106,8 +106,9 @@ reconstruction.
 ## Authority
 
 AUTH is a canonical network value attached to the Identity, read from the
-latest finalized state. Its sole protocol effect is qualifying an Identity to
-sign Validation when `Authority > 10,000,000 AUTH`. Validation is shown as
-additional pre-finalization confidence, never as a quorum or BFT guarantee.
-It does not allocate resources,
-confer stake weight, or grant PoA finalization power, and is not a gamified social score.
+latest finalized state. It governs anti-abuse resource limits (DEC-272: bounded
+operations per block/epoch, storage quota, largest file, and relay PoW difficulty)
+and qualifies an Identity to sign Validation when `Authority > 10,000,000 AUTH`.
+Validation is shown as additional pre-finalization confidence, never as a quorum
+or BFT guarantee. AUTH confers no stake weight and no PoA finalization power,
+and is not a gamified social score.

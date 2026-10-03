@@ -115,9 +115,12 @@ public:
     BlockExecutionError InitError() const noexcept { return m_init_error; }
 
     /// \brief Применяет одну кандидат-операцию к накапливающемуся состоянию.
-    /// \return Успех с новым промежуточным состоянием либо ошибка с детализацией.
-    /// \note При ошибке состояние `m_candidate` остаётся неизменным (транзакционный откат).
+    /// \return Успех либо ошибка с детализацией.
+    /// \note При ошибке состояние `m_valid` становится `false` (инвалидация контекста).
     BlockExecutionResult ApplyOperation(const ProtocolOperation& operation);
+
+    /// \brief Проверяет возможность финализации блока без копирования состояния.
+    bool CanFinalize() const;
 
     /// \brief Финализирует блок: проверяет supply, валидирует состояние и считает `state root`.
     BlockExecutionResult Finalize() const;

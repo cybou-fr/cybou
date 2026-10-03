@@ -54,7 +54,8 @@ BlockExecutor::BlockExecutor(const CybouState& parent,
 
 BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& operation)
 {
-    const auto fail = [](BlockExecutionError error) {
+    const auto fail = [this](BlockExecutionError error) {
+        m_valid = false;
         BlockExecutionResult result{};
         result.error = error;
         return result;
@@ -87,63 +88,62 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
         }
     }
 
-    auto candidate = m_candidate;
     std::optional<std::array<unsigned char, 32>> adjustment_digest;
 
     if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
         if (m_account_creates >= m_params.max_account_creates_per_block) {
             return fail(BlockExecutionError::TOO_MANY_ACCOUNT_CREATES);
         }
-        const auto result = ApplyAccountCreate(*create, m_network_binding, m_block_height, m_params, candidate);
+        const auto result = ApplyAccountCreate(*create, m_network_binding, m_block_height, m_params, m_candidate);
         if (result != AccountCreateStateError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_ACCOUNT_CREATE);
             failure.create_error = result;
             return failure;
         }
     } else if (const auto* payment = std::get_if<AuthorizedPayment>(&operation)) {
-        const auto result = ApplyPayment(*payment, m_network_binding, m_params, candidate);
+        const auto result = ApplyPayment(*payment, m_network_binding, m_params, m_candidate);
         if (result != PaymentError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_PAYMENT);
             failure.payment_error = result;
             return failure;
         }
     } else if (const auto* rotate = std::get_if<IdentityRotate>(&operation)) {
-        const auto result = candidate.identities.RotateIdentity(*rotate, m_network_binding);
+        const auto result = m_candidate.identities.RotateIdentity(*rotate, m_network_binding);
         if (result != IdentityRegistryError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_IDENTITY_ROTATE);
             failure.identity_error = result;
             return failure;
         }
     } else if (const auto* lock = std::get_if<AuthorizedSystemLock>(&operation)) {
-        const auto result = ApplySystemLock(*lock, m_network_binding, candidate);
+        const auto result = ApplySystemLock(*lock, m_network_binding, m_candidate);
         if (result != SystemLockError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_SYSTEM_LOCK);
             failure.lock_error = result;
             return failure;
         }
     } else if (const auto* commit = std::get_if<AuthorizedNameCommit>(&operation)) {
-        const auto result = ApplyNameCommit(*commit, m_network_binding, m_block_height, m_params, candidate);
+        const auto result = ApplyNameCommit(*commit, m_network_binding, m_block_height, m_params, m_candidate);
         if (result != NameCommitError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_NAME_COMMIT);
             failure.name_commit_error = result;
             return failure;
         }
     } else if (const auto* reveal = std::get_if<AuthorizedNameReveal>(&operation)) {
-        const auto result = ApplyNameReveal(*reveal, m_network_binding, m_block_height, m_params, candidate);
+        const auto result = ApplyNameReveal(*reveal, m_network_binding, m_block_height, m_params, m_candidate);
         if (result != NameRevealError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_NAME_REVEAL);
             failure.name_reveal_error = result;
             return failure;
         }
     } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operation)) {
-        const auto result = ApplyRootPublication(*publication, m_network_binding, m_params, candidate);
+        const auto result = ApplyRootPublication(*publication, m_network_binding, m_params, m_candidate);
         if (result != RootPublicationError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_ROOT_PUBLICATION);
             failure.root_publication_error = result;
             return failure;
         }
     } else if (const auto* revoke = std::get_if<AuthorizedRevokePublication>(&operation)) {
-        const auto result = ApplyRevokePublication(*revoke, m_network_binding, m_params, candidate);
+        const auto result = ApplyRevokePublication(*revoke, m_network_binding, m_params, m_candidate);
         if (result != RevokePublicationError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_REVOKE_PUBLICATION);
             failure.revoke_error = result;
@@ -153,7 +153,7 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
         const auto digest = ComputePoaAuthAdjustmentDigest(m_network_binding, *adjustment);
         auto result = !m_poa_key ? PoaAuthAdjustmentError::INVALID_SIGNATURE
             : !digest || m_adjustment_digests.contains(*digest) ? PoaAuthAdjustmentError::INVALID_PAYLOAD
-            : ApplyPoaAuthAdjustment(*adjustment, m_network_binding, m_block_height, *m_poa_key, candidate);
+            : ApplyPoaAuthAdjustment(*adjustment, m_network_binding, m_block_height, *m_poa_key, m_candidate);
         if (result != PoaAuthAdjustmentError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
             failure.poa_auth_error = result;
@@ -164,14 +164,14 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
 
     if (publication_op) {
         const auto id = ComputeOperationId(operation);
-        if (!id || !RecordPublication(candidate, *id, publication_op->authorization.account_id,
+        if (!id || !RecordPublication(m_candidate, *id, publication_op->authorization.account_id,
                 publication_op->publication.chunk_authorization_root, publication_op->publication.chunk_count,
                 m_block_height)) {
             return fail(BlockExecutionError::INVALID_STATE);
         }
     }
     if (metered) {
-        auto& usage = candidate.usage[*metered];
+        auto& usage = m_candidate.usage[*metered];
         usage.epoch = m_epoch;
         ++usage.epoch_operations;
         usage.block_height = m_block_height;
@@ -181,8 +181,8 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
     std::optional<AccountId> credited_actor;
     if (const auto actor = AuthorityEarningAccount(operation)) {
         if (!m_auth_credited_accounts.contains(*actor)) {
-            const auto account = candidate.accounts.find(*actor);
-            if (account == candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
+            const auto account = m_candidate.accounts.find(*actor);
+            if (account == m_candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
             auto& authority = account->second.authority;
             authority = authority > std::numeric_limits<uint64_t>::max() - AUTH_PER_FINALIZED_OPERATION
                 ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
@@ -191,16 +191,27 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
         }
     }
 
-    m_candidate = std::move(candidate);
     if (adjustment_digest) m_adjustment_digests.insert(*adjustment_digest);
     if (auth_credited && credited_actor) m_auth_credited_accounts.insert(*credited_actor);
     if (std::holds_alternative<AccountCreateOp>(operation)) {
         ++m_account_creates;
     }
 
-    BlockExecutionResult success{};
-    success.state = m_candidate;
-    return success;
+    return BlockExecutionResult{};
+}
+
+bool BlockExecutor::CanFinalize() const
+{
+    if (!m_valid) return false;
+    uint64_t final_supply{0};
+    if (ValidateCybouState(m_candidate, &final_supply) != StateValidationError::NONE) {
+        return false;
+    }
+    if (final_supply != m_initial_supply) {
+        return false;
+    }
+    const auto root = CybouStateHash(m_candidate, /*validate=*/false);
+    return root.has_value();
 }
 
 BlockExecutionResult BlockExecutor::Finalize() const

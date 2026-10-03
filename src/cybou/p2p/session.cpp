@@ -98,7 +98,7 @@ std::optional<TlsContexts> CreateTlsContexts()
         !X509_gmtime_adj(X509_getm_notAfter(certificate.get()), 24 * 60 * 60) ||
         X509_set_pubkey(certificate.get(), key.get()) != 1) return std::nullopt;
     X509_NAME* subject = X509_get_subject_name(certificate.get());
-    constexpr unsigned char common_name[]{'C','Y','B','O','U',' ','C','Y','P','2'};
+    constexpr unsigned char common_name[]{'C','Y','B','O','U',' ','P','2','P'};
     if (!subject || X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC, common_name,
             sizeof(common_name), -1, 0) != 1 || X509_set_issuer_name(certificate.get(), subject) != 1 ||
         X509_sign(certificate.get(), key.get(), EVP_sha256()) <= 0 ||

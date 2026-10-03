@@ -10,7 +10,7 @@ Account creation is permissionless. No operator approval, voucher, or central ac
 
 `AccountCreateOp` contains AccountID, a hybrid Recovery Root and initial Identity authorization, `AccountCreationWork`, and two proofs of possession. The root proof requires Ed25519 and ML-DSA-65; the authorization proof requires Ed25519 and ML-DSA-44. Both proofs cover a domain-separated digest bound to NetworkID, AccountID, and the exact authorization commitment.
 
-The work serialization is 113 bytes and binds NetworkID, AccountID, authorization commitment, height-derived work epoch, and nonce. The complete account creation encoding is 9,334 bytes. Version bytes are part of these wire formats. Consensus rejects missing or invalid signature components.
+The work serialization is 113 bytes and binds NetworkID, AccountID, authorization commitment, height-derived work epoch, and nonce. The complete account creation encoding is 9,334 bytes. Consensus rejects missing or invalid signature components.
 
 ## Verification and state transition
 

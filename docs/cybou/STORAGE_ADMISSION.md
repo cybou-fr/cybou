@@ -139,8 +139,8 @@ chunk no other admitted publication still authorizes.
 
 Peers storing chunks for each other perform periodic mutual cryptographic audits (DEC-270):
 1. **Challenge**: Storing peer A sends a randomized challenge (byte offset, length, salt/nonce) to peer B holding its chunk.
-2. **Response**: Peer B computes a deterministic cryptographic proof over the exact stored chunk bytes and returns it.
-3. **Notarization**: Verified challenge proofs and uptime attestations are included in PoA blocks, feeding peer reliability coefficients and maintaining active storage allowances.
+2. **Response**: Peer B computes a deterministic cryptographic proof over the exact stored chunk bytes and returns it (`StorageAuditChallenge`, `CreateStorageAuditProof`, `VerifyStorageAuditProof` in `src/cybou/storage_audit.h`).
+3. **Notarization & Reliability** (*Target architecture / Unimplemented*): Verified challenge proofs and uptime attestations are planned to be notarized in PoA blocks, feeding peer reliability coefficients and maintaining active storage allowances. (Currently, only the cryptographic audit primitive is implemented; P2P challenge relay, PoA notarization, and reliability state are not yet implemented).
 
 ## State synthesis and object pruning
 
