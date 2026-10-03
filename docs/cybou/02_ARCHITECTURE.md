@@ -141,6 +141,11 @@ PoA still re-execute the operation.
 Mail and Files share the same encrypted content substrate.
 ChunkID is the full BLAKE3-256 digest of stored encrypted bytes.
 
+The blockchain functions as a canonical Notarial Register: it records object
+publications, Merkle roots, recipient capsules, and mutual storage proofs.
+Resource quotas and storage admission rights are derived deterministically strictly
+from PoA-finalized state; local capacity declarations and off-chain vouchers convey zero authority.
+
 Storage admission is finality-first: authorized chunks are admitted remotely
 only after a finalized RootPublication authorizes them by Merkle proof.
 Validation never authorizes chunk admission. Application publication remains
@@ -149,12 +154,23 @@ Recoverable owner content requires an application-layer self capsule.
 Beta storage durability targets 2 independent remote full replicas plus 1 local
 physical copy (3 physical copies total); erasure coding is disabled.
 
+Users simply exchange storage space: each newly registered Identity receives an
+immediate Onboarding Trust Credit of 5 GB remote network storage, grounded in
+the reciprocal 1:3 physical storage obligation (allocating ~10–15 GB of local disk
+for peer chunks). Storing peers periodically audit each other through randomized
+byte-offset and nonce challenge-response proofs notarized in PoA blocks.
+When content is deleted by its author (`RevokePublication`), its active state
+record is tombstoned and pruned, authorizing storing nodes to immediately purge
+underlying chunks from local storage.
+
 ## Economics
 
-Protocol fees transfer in each paid operation from System Balance to the
-unique genesis-granted `cybou` allocation before claim, and to its ordinary
-claimant Balance afterwards. The DEV OnboardingPool begins at 100,000,000
-CYBOU and only decreases through AccountCreate. AUTH is excluded from supply.
+100% of every finalized protocol fee transfers atomically from the payer's System
+Balance to the Central Authority's spendable Balance (the unique genesis-granted `cybou`
+allocation before claim, and its ordinary claimant Balance afterwards). The DEV
+OnboardingPool begins at 100,000,000 CYBOU and only decreases through AccountCreate.
+There is no independent storage operator market or disk rental scheme; fees support
+network operation and software development. AUTH is excluded from supply.
 See `18_ECONOMICS_FEES.md`.
 
 ## Simplified implementation boundary

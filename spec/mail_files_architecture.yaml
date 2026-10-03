@@ -99,6 +99,8 @@ storage:
   deterministic_storage_ranking_frozen: false
   storage_discovery_initial: peer_fanout_by_chunk_id
   repair_required: true
+  mutual_proof_of_storage: true
+  object_pruning_on_revocation: true
 
 recovery:
   application_db_required: false

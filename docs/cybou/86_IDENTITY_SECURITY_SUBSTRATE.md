@@ -38,7 +38,7 @@ not used for ordinary user-service authorization.
 | Domain | Key material | Purpose | Current status |
 |---|---|---|---|
 | Recovery Root | Ed25519 + ML-DSA-65 | Recover account authority and authorize IdentityRotate | Implemented in the current identity path; encoding/vector work remains tracked by Identity docs |
-| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize account operations AND sign Validation signatures (if finalized AUTH > 1M) | Implemented for Identity authorization |
+| Identity authorization signing | Ed25519 + ML-DSA-44 | Authorize account operations AND sign Validation signatures (if finalized AUTH > 10M) | Implemented for Identity authorization |
 | Identity key agreement | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys for an current Identity key epoch | Draft-05 profile is published per current Identity key epoch in DEV |
 | Network Key | Hybrid PQ (Public Key = NetworkID) | Offline creation-time root of trust; signs immutable genesis specification once | Target; offline only |
 | PoA finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates | Implemented for single-operator PoA |

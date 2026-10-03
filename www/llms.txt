@@ -37,10 +37,18 @@ experimental software, not a public mail or cloud-storage service.
 - The Central Authority finalizer is operated from its desktop after unlock using
   the genesis-authorized PoA key. Its blocks are authenticated by genesis-authorized PoA certificates.
 - Authority is canonical non-transferable AUTH in AccountState, excluded from
-  CYBOU supply. AUTH changes only by finalized transitions (+1 per finalized identity
+  CYBOU supply. AUTH changes only by finalized transitions (+1 per finalized utility
   operation, PoA-signed GRANT/BURN adjustments) and is never transferred. Every full node executes
-  every candidate; identities with AUTH > 1,000,000 may add Validation signatures as
+  every candidate; identities with AUTH > 10,000,000 may add Validation signatures as
   evidence only. PoA re-executes everything and alone finalizes.
+- Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots,
+  recipient capsules, and mutual storage proofs. Storage quotas and admission eligibility
+  are derived deterministically from finalized state; local declarations convey zero authority.
+- Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB remote
+  network storage, backed by the reciprocal 1:3 physical storage baseline (~10–15 GB local storage).
+- Storing peers periodically verify stored chunks via mutual challenge-response proofs
+  (byte offset + nonce) notarized in blocks. Publication revocation purges chunks locally.
+  100% of protocol fees go to Central Authority for network maintenance and development.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local
   operator policy and never changes consensus.

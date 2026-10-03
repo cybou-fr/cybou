@@ -500,30 +500,32 @@ ChunkIDs / RootChunkID
 transfer peers
 ```
 
-## 20. Contribution/provider mode
+## 20. Reciprocal storage and node health
 
-Contributing disk capacity is an advanced/service setting, not part of normal
-file browsing.
+Storage is intrinsic to every Full Node: each node automatically allocates ~10–15 GB
+of local space to support the network's reciprocal 1:3 obligation, backing the user's
+5 GB Onboarding Trust Credit (DEC-258, DEC-269). Inspecting local storage allocation,
+uptime, and mutual audit health is an advanced setting, not part of normal file browsing.
 
 Suggested path:
 
 ```text
 Settings
--> Storage contribution
+-> Storage allocation & node health
 ```
 
 It may show:
 
 ```text
-Capacity contributed
-Capacity verified
-Current obligations
-Audit health
-Network service status
+Local storage allocated (e.g. 15 GB baseline)
+Storage used by peer chunks
+Reciprocal obligation ratio (1:3)
+Mutual audit health & uptime score
+Network notarial quota (e.g. 5 GB)
 ```
 
-Normal users who only consume their entitlement should not have to understand
-provider operation.
+Ordinary users who simply store files and send mail do not need to understand
+internal chunk placement or audit mechanics.
 
 ## 21. Performance contract
 

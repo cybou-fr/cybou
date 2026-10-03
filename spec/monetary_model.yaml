@@ -41,11 +41,11 @@ balances:
     canonical_state: AccountState.authority
     fixed_supply: false
     included_in_cybou_supply: false
-    validation_threshold_exclusive: 1000000
+    validation_threshold_exclusive: 10000000
     poa_power: false
 
 auth:
-  validation_threshold_exclusive: 1000000
+  validation_threshold_exclusive: 10000000
   genesis_allocation: true
   finalized_identity_operation_reward: 1
   account_create_rewarded: false

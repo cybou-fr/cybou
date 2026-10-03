@@ -14,12 +14,17 @@ economics:
   minted: false
 
 account_creation:
-  operation: AccountCreateOpV1
+  operation: AccountCreateOp
 
   work:
     required: true
-    profile: ACCOUNT_CREATION_WORK_V1
+    profile: ACCOUNT_CREATION_WORK
     target: protocol_parameter
+
+storage_onboarding:
+  trust_credit_bytes: 5368709120  # 5 GiB remote network storage
+  reciprocal_storage_ratio: 3
+  local_baseline_bytes: 16106127360  # 15 GiB local storage obligation
 
 anti_sybil:
   account_creation_work: true

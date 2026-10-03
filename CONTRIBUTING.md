@@ -11,8 +11,9 @@ code from integration and deployment gates.
 
 ## Architecture rules
 
-- All participants run the same full-node software core. Storage and
-  Central Authority PoA finalization are optional operational capabilities.
+- All participants run the same full-node software core. Storage is intrinsic
+  to every Full Node (positive production allocation); Central Authority PoA finalization
+  is an optional local signer for the genesis-authorized key holder.
 - Bootstrap is an ordinary CYBOU full peer for initial discovery; it has no
   special consensus powers and runs the same binary.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
@@ -20,7 +21,7 @@ code from integration and deployment gates.
 - The finalizer uses the genesis-authorized hybrid-PQ PoA key operated from the
   Central Authority desktop. This is single-operator finality, not BFT consensus.
   Every full node executes every candidate operation. Identities with finalized
-  AUTH > 1,000,000 may add Validation signatures after their own node validated
+  AUTH > 10,000,000 may add Validation signatures after their own node validated
   an operation; signatures are evidence only and PoA always re-executes.
 - Generic `RootPublication` is the only application-content publication
   operation. Mail, Files, Backup, filenames, recipients, graph edges, and

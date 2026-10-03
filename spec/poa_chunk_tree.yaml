@@ -36,7 +36,7 @@ consensus:
     receivers_reexecute: true
     poa_reexecutes: true
     creates_state: false
-    minimum_authority_for_eligibility: 1000001
+    minimum_authority_for_eligibility: 10000001
     authority_evaluation_state: latest_finalized_state
     signed_fields: [network_binding, operation_id, finalized_base_block_id, validator_account_id]
     signature: identity_authorization_ed25519_mldsa44
@@ -171,7 +171,8 @@ publication:
   capsule_aad: "CYBOU/ROOT-CAPSULE-AAD || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count"
   priority_fee: disabled
-  fee_split: {security: 3, onboarding: 1}
+  fee_split: absent
+  fee_recipient: 100_percent_central_authority_unique_allocation_cybou
   capsule_contains_public_recipient: false
   capsule_count_public: true
   capsule_count_privacy_treatment: ACCEPT_LEAKAGE
@@ -179,10 +180,16 @@ publication:
   finality_authorizes_storage: true
   finality_proves_durability: false
 storage:
+  model: notarial_register_deterministic_quotas
   address: ChunkID
   admission_policy_default: finality_first
   validation_authorizes_admission: false
   proof: domain_separated_Merkle_inclusion
+  onboarding_trust_credit_bytes: 5368709120  # 5 GiB
+  reciprocal_storage_ratio: 3
+  local_onboarding_storage_baseline_bytes: 16106127360  # 15 GiB
+  mutual_proof_of_storage: challenge_response_byte_offset_nonce_verified_in_blocks
+  object_pruning_on_revocation: true
   durability_targets:
     development: 1_remote_full_replica
     beta: 2_independent_remote_full_replicas_plus_local_copy_equals_3_physical_copies

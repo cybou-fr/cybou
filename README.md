@@ -39,10 +39,18 @@ service d'un réseau privé d'entreprise.
   client, découpé en blocs ROOT/INDEX/DATA. `RootPublication` est l'opération
   protocolaire qui autorise une publication ; les schémas Mail et Files sont
   des données applicatives privées.
-- **Stockage vérifiable.** Le nœud de stockage vérifie qu'un bloc appartient à
-  une publication finalisée. `StorageService` gère les répliques distantes,
-  l'audit d'intégrité et la réparation. La finalité seule ne signifie pas que
-  le contenu est disponible ou durable.
+- **Stockage vérifiable.** La blockchain agit comme un registre notarié
+  déterministe : elle consigne les métadonnées de `RootPublication`, les racines Merkle
+  et les capsules de destinataires. Les quotas et droits de stockage sont déduits
+  strictement de l'état finalisé par le PoA (aucune déclaration locale ni voucher
+  hors-chaîne ne confère d'autorité). Chaque identité reçoit un crédit de confiance
+  d'accueil immédiat de 5 Go de stockage réseau, adossé à une obligation physique
+  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs). Les nœuds
+  vérifient mutuellement leur stockage et leur disponibilité via des audits cryptographiques
+  périodiques (offset d'octets et sel) notariés dans les blocs. Lors de la révocation
+  d'un objet (`RevokePublication`), les blocs de données associés sont immédiatement
+  purgés par les nœuds hébergeurs. 100% des commissions de protocole reviennent à
+  l'opérateur pour la maintenance et le développement du réseau.
 - **Transport P2P.** CYBOU P2P utilise TLS 1.3 avec l'échange hybride
   `X25519MLKEM768`. Chaque nœud complet implémente le même protocole. L’identité de stockage
   est prouvée à la demande ; les certificats de blocs prouvent seuls l’autorité PoA.
@@ -56,9 +64,10 @@ service d'un réseau privé d'entreprise.
   fichier réseau officiel chargé à l'exécution. La clé PoA autorisée par la
   genèse est un rôle distinct de l'identité ordinaire `cybou.cybou` et signe les blocs.
   Chaque nœud complet exécute lui-même chaque opération candidate. Une identité
-  dont l'AUTH finalisée dépasse 1 000 000 peut y ajouter une signature de
+  dont l'AUTH finalisée dépasse 10 000 000 peut y ajouter une signature de
   Validation, simple preuve pré-finalisation. L'AUTH est stockée dans l'état du
-  compte, non transférable et exclue des 100 milliards de CYBOU. Le PoA
+  compte, non transférable et exclue des 100 milliards de CYBOU ; elle gouverne
+  également l'échelle anti-spam des quotas d'opérations et de stockage. Le PoA
   ré-exécute tout et reste seul à finaliser.
 - **Admission réseau.** Les commandes réseau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
