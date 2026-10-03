@@ -105,4 +105,26 @@ BOOST_AUTO_TEST_CASE(protocol_roles_have_separate_hybrid_key_domains)
     }
 }
 
+BOOST_AUTO_TEST_CASE(public_key_cache_repeated_verification_is_consistent)
+{
+    std::array<unsigned char, 32> seed{};
+    seed[0] = 99;
+    const std::array<unsigned char, 4> message{10, 20, 30, 40};
+    const auto key = cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::POA_FINALIZER);
+    const auto signature = cybou::SignIdentityMessage(seed, cybou::IdentityKeyPurpose::POA_FINALIZER, message);
+    BOOST_REQUIRE(key && signature);
+
+    // Initial verification (populates cache)
+    BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, message));
+
+    // Repeated verifications (hit the cache)
+    for (int i = 0; i < 20; ++i) {
+        BOOST_CHECK(cybou::VerifyIdentityMessage(*key, *signature, message));
+    }
+
+    // Tampered message rejected with cached key
+    const std::array<unsigned char, 4> bad_message{10, 20, 30, 41};
+    BOOST_CHECK(!cybou::VerifyIdentityMessage(*key, *signature, bad_message));
+}
+
 BOOST_AUTO_TEST_SUITE_END()

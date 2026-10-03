@@ -12,9 +12,13 @@
 #include <openssl/params.h>
 
 #include <algorithm>
+#include <cstring>
+#include <list>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace cybou {
 namespace {
@@ -106,12 +110,132 @@ std::optional<std::vector<unsigned char>> Sign(Key& key, std::span<const unsigne
     return signature;
 }
 
+struct KeyCacheLookup {
+    uint8_t algo_id{0};
+    std::span<const unsigned char> bytes;
+};
+
+struct KeyCacheKey {
+    uint8_t algo_id{0};
+    std::vector<unsigned char> bytes;
+};
+
+struct KeyCacheHasher {
+    using is_transparent = void;
+
+    size_t operator()(const KeyCacheKey& k) const noexcept {
+        return Hash(k.algo_id, k.bytes);
+    }
+    size_t operator()(const KeyCacheLookup& l) const noexcept {
+        return Hash(l.algo_id, l.bytes);
+    }
+
+private:
+    static size_t Hash(uint8_t algo_id, std::span<const unsigned char> bytes) noexcept {
+        uint64_t h = 14695981039346656037ULL ^ algo_id;
+        h *= 1099511628211ULL;
+        const size_t n = bytes.size();
+        size_t i = 0;
+        while (i + 8 <= n) {
+            uint64_t val = 0;
+            std::memcpy(&val, bytes.data() + i, 8);
+            h ^= val;
+            h *= 1099511628211ULL;
+            i += 8;
+        }
+        while (i < n) {
+            h ^= bytes[i];
+            h *= 1099511628211ULL;
+            ++i;
+        }
+        return static_cast<size_t>(h);
+    }
+};
+
+struct KeyCacheEqual {
+    using is_transparent = void;
+
+    bool operator()(const KeyCacheKey& a, const KeyCacheKey& b) const noexcept {
+        return a.algo_id == b.algo_id && a.bytes.size() == b.bytes.size() &&
+            (a.bytes.empty() || std::memcmp(a.bytes.data(), b.bytes.data(), a.bytes.size()) == 0);
+    }
+    bool operator()(const KeyCacheKey& a, const KeyCacheLookup& b) const noexcept {
+        return a.algo_id == b.algo_id && a.bytes.size() == b.bytes.size() &&
+            (b.bytes.empty() || std::memcmp(a.bytes.data(), b.bytes.data(), a.bytes.size()) == 0);
+    }
+    bool operator()(const KeyCacheLookup& a, const KeyCacheKey& b) const noexcept {
+        return a.algo_id == b.algo_id && a.bytes.size() == b.bytes.size() &&
+            (a.bytes.empty() || std::memcmp(a.bytes.data(), b.bytes.data(), a.bytes.size()) == 0);
+    }
+};
+
+class PublicKeyCache {
+public:
+    static constexpr size_t MAX_ENTRIES{1024};
+
+    std::shared_ptr<EVP_PKEY> GetOrCreate(const char* algorithm, std::span<const unsigned char> raw_key)
+    {
+        if (!algorithm || raw_key.empty()) return nullptr;
+        uint8_t algo_id = 0;
+        if (std::strcmp(algorithm, "ED25519") == 0) {
+            algo_id = 1;
+        } else if (std::strcmp(algorithm, "ML-DSA-44") == 0) {
+            algo_id = 2;
+        } else if (std::strcmp(algorithm, "ML-DSA-65") == 0) {
+            algo_id = 3;
+        } else {
+            return nullptr;
+        }
+
+        const KeyCacheLookup lookup{algo_id, raw_key};
+        std::unique_lock lock(m_mutex);
+        auto it = m_map.find(lookup);
+        if (it != m_map.end()) {
+            m_list.splice(m_list.begin(), m_list, it->second);
+            return it->second->second;
+        }
+
+        lock.unlock();
+
+        EVP_PKEY* raw = EVP_PKEY_new_raw_public_key_ex(nullptr, algorithm, nullptr, raw_key.data(), raw_key.size());
+        if (!raw) return nullptr;
+
+        std::shared_ptr<EVP_PKEY> pkey{raw, &EVP_PKEY_free};
+
+        lock.lock();
+        it = m_map.find(lookup);
+        if (it != m_map.end()) {
+            m_list.splice(m_list.begin(), m_list, it->second);
+            return it->second->second;
+        }
+
+        if (m_map.size() >= MAX_ENTRIES) {
+            auto lru = --m_list.end();
+            m_map.erase(lru->first);
+            m_list.pop_back();
+        }
+
+        KeyCacheKey key{algo_id, std::vector<unsigned char>(raw_key.begin(), raw_key.end())};
+        m_list.push_front({key, pkey});
+        m_map.emplace(std::move(key), m_list.begin());
+
+        return pkey;
+    }
+
+private:
+    std::mutex m_mutex;
+    std::list<std::pair<KeyCacheKey, std::shared_ptr<EVP_PKEY>>> m_list;
+    std::unordered_map<KeyCacheKey, decltype(m_list)::iterator, KeyCacheHasher, KeyCacheEqual> m_map;
+};
+
 bool Verify(const char* algorithm, std::span<const unsigned char> public_key,
     std::span<const unsigned char> signature, std::span<const unsigned char> message)
 {
-    Key key{EVP_PKEY_new_raw_public_key_ex(nullptr, algorithm, nullptr, public_key.data(), public_key.size()), EVP_PKEY_free};
+    static PublicKeyCache cache;
+    auto key = cache.GetOrCreate(algorithm, public_key);
+    if (!key) return false;
     MdCtx ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
-    return key && ctx && EVP_DigestVerifyInit_ex(ctx.get(), nullptr, nullptr, nullptr, nullptr, key.get(), nullptr) == 1 &&
+    return ctx && EVP_DigestVerifyInit_ex(ctx.get(), nullptr, nullptr, nullptr, nullptr, key.get(), nullptr) == 1 &&
         EVP_DigestVerify(ctx.get(), signature.data(), signature.size(), message.data(), message.size()) == 1;
 }
 } // namespace
