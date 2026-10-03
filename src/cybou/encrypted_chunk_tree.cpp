@@ -22,6 +22,7 @@
 namespace cybou {
 namespace {
 
+/// Внутренние теги payload внутри одного encrypted tree.
 constexpr std::uint64_t ROOT_KIND{0};
 constexpr std::uint64_t INDEX_KIND{1};
 constexpr std::uint64_t DATA_KIND{2};
@@ -39,7 +40,9 @@ private:
 };
 
 struct ChildRef {
+    /// \brief ChunkId дочернего чанка.
     ChunkId id{};
+    /// \brief Ожидаемый kind дочернего payload.
     std::uint64_t kind{DATA_KIND};
 };
 
@@ -52,6 +55,7 @@ struct ChunkIdHash {
     }
 };
 
+/// ROOT и INDEX хранят только child refs; private metadata разрешены только в ROOT.
 std::vector<unsigned char> MakeMetadata(const std::uint8_t kind, std::span<const ChildRef> children,
     std::span<const unsigned char> private_metadata = {})
 {
@@ -65,6 +69,7 @@ std::vector<unsigned char> MakeMetadata(const std::uint8_t kind, std::span<const
     if (kind == ROOT_KIND) writer.Bytes(private_metadata, ENCRYPTED_TREE_ROOT_PRIVATE_METADATA_MAX_BYTES);
     return writer.Take();
 }
+/// Разбор метаданных fail-closed: любая неоднозначность формата ломает всё дерево.
 std::optional<std::vector<ChildRef>> ParseMetadata(std::span<const unsigned char> bytes,
     const std::uint64_t expected_kind, std::uint64_t& child_kind,
     std::vector<unsigned char>* root_private_metadata = nullptr)
@@ -88,6 +93,7 @@ std::optional<std::vector<ChildRef>> ParseMetadata(std::span<const unsigned char
     } catch (...) { return std::nullopt; }
 }
 
+/// Случайный размер DATA-чанка сглаживает профиль файла без буферизации всего содержимого.
 std::optional<std::size_t> RandomDataTarget()
 {
     std::array<unsigned char, 4> random{};
@@ -98,6 +104,7 @@ std::optional<std::size_t> RandomDataTarget()
     return ENCRYPTED_TREE_DATA_MIN_BYTES + (value % width);
 }
 
+/// Явная защита от переполнения счётчиков размера.
 bool CheckedAdd(std::uint64_t& value, const std::uint64_t delta)
 {
     if (delta > std::numeric_limits<std::uint64_t>::max() - value) return false;
@@ -171,6 +178,7 @@ public:
 private:
     bool Store(const EncryptedChunk& chunk)
     {
+        // Leaf-order фиксируется в момент staging и затем повторно используется для chunk authorization proofs.
         if (m_summary.chunk_count >= MAX_PUBLICATION_CHUNKS ||
             !m_stage(static_cast<std::uint32_t>(m_summary.chunk_count), chunk) ||
             !m_authorization.Add(AuthorizedChunk{chunk.id}) ||
@@ -189,6 +197,7 @@ private:
 
     bool Flush(const std::size_t level)
     {
+        // INDEX появляется только когда текущий fan-out заполнен: дерево остаётся детерминированным и компактным.
         if (level + 1 >= m_levels.size() || m_levels[level].empty()) return false;
         const auto metadata = MakeMetadata(INDEX_KIND, m_levels[level]);
         if (metadata.size() > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES) return false;
@@ -207,6 +216,7 @@ private:
     ChunkAuthorizationAccumulator m_authorization;
 };
 
+/// Рекурсивное чтение проверяет ChunkId и AEAD на каждом шаге и отсекает циклы fail-closed.
 bool ReadTreeNode(
     const std::span<const unsigned char, 32> network,
     const std::span<const unsigned char, 32> key,
@@ -248,6 +258,7 @@ bool ReadTreeNode(
     return true;
 }
 
+/// Перечисление чанков использует те же структурные проверки, но не выпускает DATA plaintext наружу.
 bool EnumerateTreeNode(const std::span<const unsigned char, 32> network,
     const std::span<const unsigned char, 32> key, const ChildRef& node,
     const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit,
@@ -304,6 +315,7 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
                 summary.plaintext_bytes += *read;
             }
             if (filled != 0) {
+                // Последний неполный блок тоже шифруется как отдельный DATA chunk; padding скрывает точный хвостовой размер.
                 if (!builder.AddData(std::span<const unsigned char>{plaintext}.first(filled))) return std::nullopt;
             }
         }
@@ -342,6 +354,7 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
             throw;
         }
         if (!app_metadata.empty()) OPENSSL_cleanse(app_metadata.data(), app_metadata.size());
+        // ROOT metadata принимаются отдельно до DATA-потока, чтобы вызывающая сторона могла fail-closed прекратить чтение.
         if (!root_metadata_accepted) return std::nullopt;
         std::unordered_set<ChunkId, ChunkIdHash> path;
         path.insert(root_chunk_id);

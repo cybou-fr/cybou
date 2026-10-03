@@ -15,16 +15,19 @@ namespace {
 using CipherContext = std::unique_ptr<EVP_CIPHER_CTX, decltype(&EVP_CIPHER_CTX_free)>;
 unsigned char EMPTY_OCTET{0};
 
+/// \brief Возвращает устойчивый указатель даже для пустого span, чтобы не зависеть от поведения OpenSSL с `nullptr`.
 const unsigned char* DataOrSentinel(const std::span<const unsigned char> data)
 {
     return data.empty() ? &EMPTY_OCTET : data.data();
 }
 
+/// \brief Возвращает устойчивый выходной указатель даже для пустого span.
 unsigned char* OutputOrSentinel(const std::span<unsigned char> data)
 {
     return data.empty() ? const_cast<unsigned char*>(&EMPTY_OCTET) : data.data();
 }
 
+/// \brief Очищает буфер результата при любой ошибке AEAD.
 void Cleanse(const std::span<unsigned char> data)
 {
     if (!data.empty()) OPENSSL_cleanse(data.data(), data.size());
@@ -127,6 +130,8 @@ bool ChaCha20Poly1305Decrypt(
     unsigned char final_output[EVP_MAX_BLOCK_LENGTH]{};
     const int final_ok = EVP_DecryptFinal_ex(context.get(), final_output, &final_size);
     OPENSSL_cleanse(final_output, sizeof(final_output));
+    // Для ChaCha20-Poly1305 финальный шаг не должен выдавать дополнительных
+    // байтов; любое отклонение считаем повреждением и очищаем plaintext.
     if (final_ok != 1 || final_size != 0 || static_cast<std::size_t>(plaintext_size) != plaintext.size()) {
         Cleanse(plaintext);
         return false;

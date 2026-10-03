@@ -26,6 +26,7 @@ constexpr uintmax_t MAX_DATASET_BYTES{64 * 1024 * 1024};
 constexpr size_t MAX_RECORDS{1'000'000};
 constexpr std::chrono::days MAX_DATASET_AGE{45};
 
+/// \brief Возвращает следующую CSV-строку без копирования и нормализует `CRLF`.
 std::optional<std::string_view> NextLine(const std::string_view text, size_t& offset)
 {
     if (offset >= text.size()) return std::nullopt;
@@ -37,6 +38,9 @@ std::optional<std::string_view> NextLine(const std::string_view text, size_t& of
     return text.substr(start, end - start);
 }
 
+/// \brief Нормализует IPv4/IPv6 адрес в 16-байтовую форму для диапазонного сравнения.
+/// \details IPv4-mapped IPv6 схлопываются обратно в IPv4, чтобы один и тот же
+///          числовой адрес не мог обойти локальную политику разными текстовыми формами.
 std::optional<std::pair<std::array<unsigned char, 16>, bool>> AddressBytes(std::string_view text)
 {
     boost::system::error_code ec;
@@ -81,6 +85,8 @@ std::shared_ptr<const FrenchIpDataset> FrenchIpDataset::LoadDbIpCountryCsv(const
     try {
         if (!issued_month.ok()) return nullptr;
         const auto issued = std::chrono::sys_days{issued_month / 1};
+        // Возраст проверяется до чтения файла: будущий или просроченный датасет
+        // не должен даже частично использоваться для публичного допуска.
         if (today < issued || today - issued > MAX_DATASET_AGE) return nullptr;
         std::error_code ec;
         const auto size = std::filesystem::file_size(path, ec);
@@ -104,6 +110,8 @@ std::shared_ptr<const FrenchIpDataset> FrenchIpDataset::LoadDbIpCountryCsv(const
             const auto line = NextLine(csv, offset);
             if (!line) break;
             if (line->empty() || ++records > MAX_RECORDS) return nullptr;
+            // CSV строго фиксирован: лишние столбцы, пустые поля и перекрывающиеся
+            // диапазоны считаем повреждением, а не пытаемся «починить» локально.
             const auto first_comma = line->find(',');
             const auto second_comma = first_comma == std::string_view::npos ? first_comma : line->find(',', first_comma + 1);
             if (first_comma == std::string_view::npos || second_comma == std::string_view::npos ||
@@ -123,6 +131,8 @@ std::shared_ptr<const FrenchIpDataset> FrenchIpDataset::LoadDbIpCountryCsv(const
             if (left.ipv6 != right.ipv6) return left.ipv6 < right.ipv6;
             return left.first < right.first;
         });
+        // Любое перекрытие диапазонов трактуем как недоверенный вход: бинарный
+        // поиск дальше предполагает строгую упорядоченность без неоднозначностей.
         for (size_t i = 1; i < ranges.size(); ++i) {
             if (ranges[i - 1].ipv6 == ranges[i].ipv6 && ranges[i].first <= ranges[i - 1].last) return nullptr;
         }

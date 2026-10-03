@@ -14,11 +14,16 @@
 namespace cybou {
 
 /// \brief Верхняя граница числа чанков в одной RootPublication на всех слоях.
+/// \details 1U << 20 = 1 048 576 отдельных ChunkId. Лимит разделяется wire-форматом,
+///          локальным исполнением кандидат-операции и storage admission, чтобы одна и та же
+///          публикация не расходилась по допустимости между Full Node.
 inline constexpr std::uint32_t MAX_PUBLICATION_CHUNKS{1U << 20};
 
 /// \brief Максимальный serialized ProtocolOperation, принимаемый в pool, P2P и CLI.
+/// \details 128 * 1024 байт = 128 KiB полезной нагрузки exact signed operation.
 inline constexpr std::uint32_t MAX_OPERATION_PAYLOAD_BYTES{128U * 1024U};
 /// \brief Максимальный serialized finalized block, передаваемый по CYBOU P2P.
+/// \details 32 * 1024 * 1024 байт = 32 MiB на весь блок вместе с операциями и PoA certificate.
 inline constexpr std::uint32_t MAX_FINALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 } // namespace cybou

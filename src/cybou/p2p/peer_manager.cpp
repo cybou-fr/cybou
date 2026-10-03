@@ -21,6 +21,7 @@
 namespace cybou::p2p {
 namespace {
 
+/// \brief Генерирует ненулевой nonce для `HELLO` и ping.
 std::optional<uint64_t> RandomNonce()
 {
     std::array<unsigned char, 8> bytes{};
@@ -32,6 +33,8 @@ std::optional<uint64_t> RandomNonce()
 
 using Endpoint = std::pair<std::string, uint16_t>;
 
+/// \brief Канонизирует числовой endpoint в точную строковую форму Boost.Asio.
+/// \details Это убирает дубликаты вида разных текстовых представлений одного IP.
 std::optional<Endpoint> CanonicalEndpoint(const std::string_view numeric_address, const uint16_t port)
 {
     if (port == 0) return std::nullopt;
@@ -121,9 +124,9 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         return false;
     }
     m_announced_blocks.erase(*endpoint);
-    // Seed the fanout frontier from the peer's handshake height. This
-    // knowledge survives reconnects (a peer's chain only grows), so it is
-    // deliberately NOT erased on disconnect or failed consensus sends.
+    // Frontier сеем из высоты рукопожатия. Это знание сохраняется через
+    // переподключения, потому что финализованная цепочка может только расти;
+    // стирание приводило бы к повторному fanout древней истории.
     m_peer_finalized_heights[*endpoint] = peer->Peer()->finalized_height;
     m_peers.emplace(*endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
@@ -212,6 +215,8 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             [&](uint64_t expected_height, std::span<const unsigned char> bytes) {
                 const auto block = DeserializeFinalizedBlock(bytes);
                 const auto& announced = *it->second->Peer();
+                // Даже после валидного batch wire-ответа commit остается локальным и
+                // независимым: peer не может продвинуть канон одним только объявлением.
                 if (!block || block->block.height != expected_height ||
                     block->certificate.network_binding != status.network_binding ||
                     block->certificate.block_id != ComputeBlockId(block->block) ||
@@ -312,10 +317,9 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
             ++it;
             continue;
         }
-        // Heads at or below the peer's reported finalized height are marked
-        // announced without spending the per-cycle offer budget, so the walk
-        // reaches the peer's actual frontier instead of stalling on ancient
-        // blocks after every announced-set reset.
+        // Головы на высоте <= уже подтвержденной peer'ом помечаем сразу, не
+        // тратя маленький per-cycle budget: иначе после каждого сброса set'а
+        // fanout снова вязнет в древней истории и медленно доходит до frontier.
         const uint64_t peer_frontier = m_peer_finalized_heights[it->first];
         bool disconnected{false};
         size_t offered{0};
@@ -473,7 +477,8 @@ PeerSession* PeerManager::FindStorageSession(
     if (!it->second->ProveStorageIdentity()) {
         return nullptr;
     }
-    // A different provider now answering at this endpoint is not the recorded replica.
+    // Иной provider на том же endpoint недопустим: реплика идентифицируется
+    // доказанным `StorageId`, а не только адресом и портом.
     if (storage_id && *it->second->PeerStorageId() != *storage_id) return nullptr;
     if (endpoint) *endpoint = *key;
     return it->second.get();
@@ -482,10 +487,9 @@ PeerSession* PeerManager::FindStorageSession(
 void PeerManager::DisconnectAll()
 {
     m_peers.clear();
-    // Deliberately keep m_announced_blocks: a peer's
-    // finalized-chain knowledge persists across sessions. Clearing it restarts fanout
-    // from the oldest recent entries, and with the per-peer offer cap a peer
-    // that is behind never receives the newer blocks it actually needs.
+    // Преднамеренно сохраняем `m_announced_blocks`: знание о уже объявленной
+    // финализованной истории переживает конкретный сокет. Полная очистка
+    // заставила бы fanout снова начинать с самого старого recent набора.
 }
 
 size_t PeerManager::DiscoverPeers(const size_t max_sessions)

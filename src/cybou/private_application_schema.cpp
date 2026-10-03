@@ -9,6 +9,7 @@
 #include <type_traits>
 namespace cybou {
 namespace {
+// Первый байт документа однозначно выбирает schema без runtime version field и без внешнего контекста.
 constexpr std::uint8_t MAIL_TYPE{1}, FILES_TYPE{2}, BRIDGE_TYPE{3};
 constexpr std::size_t MAX_ATTACHMENTS{32};
 constexpr std::size_t MAX_MUTATIONS{512};
@@ -29,6 +30,7 @@ void Require(const bool condition)
     if (!condition) throw std::invalid_argument{"invalid private application schema"};
 }
 
+// Валидация имён и лимитов до кодирования не даёт локальному plaintext породить неоднозначный wire.
 bool ValidName(const std::string_view name)
 {
     return !name.empty() && name.size() <= MAX_FILENAME_BYTES && name != "." && name != ".." &&
@@ -64,7 +66,7 @@ bool ValidFileItem(const FileItem& item)
     if (item.kind == FileItemKind::FOLDER) {
         return item.logical_size == 0 && !item.root_chunk_id;
     }
-    // Every FILE, including an empty one, references an encrypted content tree.
+    // Даже пустой FILE обязан ссылаться на encrypted content tree, чтобы Files не имели второго inline-plaintext режима.
     return item.kind == FileItemKind::FILE && item.root_chunk_id.has_value();
 }
 
@@ -82,6 +84,8 @@ bool ValidFiles(const FilesMutationBatch& batch)
     return true;
 }
 
+// RecoveryBridge принимает только строго возрастающие historical epoch, чтобы restore
+// не путал актуальный seed с повтором, дубликатом или локальным откатом.
 bool ValidBridge(const IdentityRecoveryBridge& bridge)
 {
     if (bridge.account_id.IsNull() || bridge.next_key_epoch == 0 ||

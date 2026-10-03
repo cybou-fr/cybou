@@ -25,45 +25,71 @@ namespace cybou {
 
 /// \brief Конфигурация запуска node-service: runtime plus canonical genesis state.
 struct CybouNodeServiceConfig {
+    /// \brief Конфигурация базового runtime.
     NodeRuntimeConfig runtime;
+    /// \brief Canonical genesis state, совпадающий с runtime.network_genesis.
     CybouState genesis;
 };
 
 /// \brief Параметры фоновой сети: verified sync, listener и локальная PoA-периодика.
 struct CybouNetworkServiceConfig {
+    /// \brief Пауза между sync-pass, если не было полного заполнения batch.
     std::chrono::milliseconds sync_interval{3000};
+    /// \brief Верхняя граница числа finalized blocks, запрашиваемых за один sync-pass.
     uint64_t sync_batch_size{64};
+    /// \brief Целевой интервал локальной PoA-финализации, миллисекунды.
     uint64_t block_interval_ms{1000};
+    /// \brief Optional listener endpoint для входящих CYBOU P2P connections.
     std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
 };
 
 /// \brief Управляет запуском runtime и сетевым жизненным циклом Full Node.
 class CybouNodeService final {
 public:
+    /// \brief Колбэк прогресса verified sync.
+    /// \details Возвращаемое false просит сервис остановить сетевые потоки.
     using NetworkUpdate = std::function<bool(const SyncPeerResult&, const NodeRuntimeStatus&, size_t)>;
 
+    /// \brief Создаёт сервис и runtime, но не запускает state initialization.
+    /// \param config Конфигурация runtime и canonical genesis state.
     explicit CybouNodeService(CybouNodeServiceConfig config);
+    /// \brief Останавливает block production и сетевые потоки, если они были запущены.
     ~CybouNodeService();
 
     CybouNodeService(const CybouNodeService&) = delete;
     CybouNodeService& operator=(const CybouNodeService&) = delete;
 
     /// \brief Открывает или инициализирует локальное состояние, отвергая чужую или повреждённую сеть.
+    /// \pre Не вызывать одновременно из нескольких потоков.
+    /// \post После успешного возврата Runtime().GetStatus().is_initialized истинно либо state уже существовал.
+    /// \throws std::runtime_error При NETWORK_MISMATCH, CORRUPT или невозможности инициализировать genesis.
     void Start();
     /// \brief Запускает CYBOU P2P maintenance, verified sync и optional listener.
+    /// \param config Частота sync, listener endpoint и интервал локальной PoA-финализации.
+    /// \param update Колбэк, вызываемый после каждого sync-pass.
+    /// \pre Start() уже был успешно вызван; сеть ещё не запущена.
+    /// \post При успехе стартуют фоновые потоки sync/listener и block production.
+    /// \throws std::logic_error или std::invalid_argument при неверном состоянии/параметрах.
     void StartNetwork(
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
     /// \brief Останавливает сетевые фоновые потоки и listener.
+    /// \post После возврата фоновые сетевые потоки не выполняются.
     void StopNetwork();
     /// \brief Запускает локальное PoA block production при доступном signer.
+    /// \param block_interval_ms Целевой интервал между успешными блоками, мс.
+    /// \pre Start() уже был вызван; 1 <= block_interval_ms <= 60000.
+    /// \post При успехе запущен один фоновый поток block production.
     void StartBlockProduction(uint64_t block_interval_ms = 1000);
     /// \brief Останавливает локальное PoA block production.
+    /// \post После возврата поток block production остановлен или не существовал.
     void StopBlockProduction();
 
     /// \brief Доступ к базовому runtime этого сервиса.
+    /// \return Ссылка на underlying runtime; дальнейшая потокобезопасность определяется его собственным API.
     CybouNodeRuntime& Runtime() { return *m_runtime; }
     /// \brief Константный доступ к базовому runtime этого сервиса.
+    /// \return Ссылка на underlying runtime.
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }
 
 private:

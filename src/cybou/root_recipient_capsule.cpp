@@ -52,6 +52,8 @@ std::vector<unsigned char> CapsuleKeyInfo(
     const std::uint64_t sender_key_epoch,
     const std::uint64_t recipient_key_epoch)
 {
+    // HKDF info связывает wrapping key с конкретным root chunk и key epochs,
+    // чтобы одну и ту же X-Wing encapsulation нельзя было переиспользовать в другом контексте.
     std::vector<unsigned char> info(CAPSULE_KEY_DOMAIN.begin(), CAPSULE_KEY_DOMAIN.end());
     info.reserve(CAPSULE_KEY_DOMAIN.size() + root_chunk_id.size() + sender_account_id.size() + 3 * sizeof(std::uint64_t));
     info.insert(info.end(), root_chunk_id.begin(), root_chunk_id.end());
@@ -70,6 +72,8 @@ std::vector<unsigned char> CapsuleAad(
     const std::uint64_t sender_key_epoch,
     const std::uint64_t recipient_key_epoch)
 {
+    // AAD фиксирует сеть и автора публикации, поэтому успешная AEAD-проверка
+    // одновременно подтверждает контекст доставки ContentKey.
     std::vector<unsigned char> aad(CAPSULE_AAD_DOMAIN.begin(), CAPSULE_AAD_DOMAIN.end());
     aad.reserve(CAPSULE_AAD_DOMAIN.size() + network_binding.size() + root_chunk_id.size() +
         sender_account_id.size() + 3 * sizeof(std::uint64_t));
@@ -145,6 +149,8 @@ std::optional<ContentKey> OpenRootRecipientCapsule(
     const auto ciphertext_and_tag = std::span<const unsigned char>{capsule.wrapped_content_key}.subspan(ROOT_CAPSULE_NONCE_BYTES);
     ContentKey content_key{};
     CleanseOnExit cleanse_content_key{content_key};
+    // Нулевой ContentKey отвергается как fail-closed защита от некорректных
+    // расшифровок и случайного принятия "пустого" ключевого материала.
     if (!crypto::ChaCha20Poly1305Decrypt(wrapping_key, nonce, aad, ciphertext_and_tag, content_key) || IsZero(content_key)) {
         return std::nullopt;
     }

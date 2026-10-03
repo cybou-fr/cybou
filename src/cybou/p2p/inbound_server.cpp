@@ -19,6 +19,9 @@
 namespace cybou::p2p {
 namespace {
 
+/// \brief Генерирует nonce для `HELLO`/ping без допустимого нулевого значения.
+/// \details Ноль исключается, чтобы рукопожатие могло fail-closed отбрасывать
+///          зеркальный self-echo и частично инициализированные структуры тем же правилом.
 std::optional<uint64_t> RandomNonce()
 {
     std::array<unsigned char, 8> bytes{};
@@ -28,6 +31,8 @@ std::optional<uint64_t> RandomNonce()
     return nonce == 0 ? std::nullopt : std::optional<uint64_t>{nonce};
 }
 
+/// \brief Собирает локальный `HELLO` только из уже инициализированного финализованного состояния.
+/// \return `std::nullopt`, если runtime еще не готов или RNG недоступен.
 std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
 {
     const auto status = runtime.GetStatus();
@@ -64,11 +69,16 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
         }
         if (ec) { stopping = true; break; }
         const auto remote = socket.remote_endpoint(ec);
+        // Geo/admission и ingress budget проверяются до запуска worker'а: это
+        // удерживает дорогой TLS/HELLO путь за пределами локально запрещенных
+        // или слишком частых входов.
         if (ec || !m_runtime.AdmitPeerAddress(remote.address().to_string()) ||
             !m_runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::CONNECTION)) {
             socket.close(); continue;
         }
         if (m_workers.size() >= MAX_INBOUND_PEERS) {
+            // Новый пир отклоняется сразу, а не ставится в локальную очередь:
+            // так зависшие сессии не создают скрытый backlog и лимит остается жестким.
             socket.close();
             continue;
         }
@@ -81,6 +91,9 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             }
             PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
             const auto hello = LocalHello(m_runtime);
+            // После `HELLO` дополнительно сверяем уже известную локальную
+            // историю, чтобы не обслуживать дальнейший gossip с пиром, который
+            // сам себе противоречит на финализованной базе.
             if (hello && session.Handshake(*hello) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}

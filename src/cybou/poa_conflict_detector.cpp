@@ -49,6 +49,8 @@ std::string ObservationKey(const std::string& prefix, const PoaFinalityCertifica
 bool ValidConflictRecord(const std::span<const unsigned char> record,
     const cybou::Hash256& network_binding, const IdentityHybridPublicKey& finalizer_key)
 {
+    // Halt record принимается только если обе подписи заново верифицируются и
+    // относятся к одной сети/высоте/родителю, но к разным BlockID.
     if (record.size() != EQUIVOCATION_RECORD_SIZE ||
         record[0] != HALT_EQUIVOCATION) return false;
     const auto cert_size = POA_FINALITY_CERTIFICATE_SIZE;
@@ -160,6 +162,8 @@ PoaConflictStatus PoaConflictDetector::Observe(
     }
 
     if (certificate.block_id < previous->block_id) {
+        // min(BlockID) — детерминированное tie-break правило при подтверждённом
+        // equivocation; локальный канон обязан переключиться на меньший идентификатор.
         try {
             m_db.Write(observation_key, *encoded, true);
         } catch (...) {
@@ -214,6 +218,8 @@ PoaEvidenceReadResult PoaConflictDetector::ReadSafetyEvidence() const
 
 bool PoaConflictDetector::PersistHalt(const std::vector<unsigned char>& record) noexcept
 {
+    // Даже если durable запись halt не удалась, текущий процесс уже не может
+    // продолжать как безопасный наблюдатель.
     m_halted = true;
     try {
         m_db.Write(m_prefix + "halt", record, true);

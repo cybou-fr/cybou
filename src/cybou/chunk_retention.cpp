@@ -21,14 +21,18 @@ constexpr std::string_view PIN{"pin/"};   // pin/<chunk><holder><reference>
 constexpr std::string_view REF{"ref/"};   // ref/<holder><reference><chunk>
 constexpr std::string_view CACHE{"cch/"}; // cch/<chunk> -> last_use_ms
 constexpr std::size_t HEX{64};
+/// 4-байтовый префикс плюс три 32-байтовых значения в lower-case hex.
 constexpr std::size_t PIN_KEY{4 + 3 * HEX};
+/// 4-байтовый префикс плюс один ChunkId в lower-case hex.
 constexpr std::size_t CACHE_KEY{4 + HEX};
 
+/// Представляет ASCII domain как span байтов без копирования.
 std::span<const unsigned char> Bytes(const std::string_view text)
 {
     return {reinterpret_cast<const unsigned char*>(text.data()), text.size()};
 }
 
+/// Единый hex-формат для ключей KVStore.
 std::string Hex(std::span<const unsigned char> bytes)
 {
     static constexpr char DIGITS[]{"0123456789abcdef"};
@@ -41,6 +45,7 @@ std::string Hex(std::span<const unsigned char> bytes)
     return out;
 }
 
+/// Любой сбой разбора ключа трактуется как отсутствие валидного ChunkId.
 std::optional<ChunkId> ParseHex(std::string_view hex)
 {
     if (hex.size() != HEX) return std::nullopt;
@@ -59,6 +64,7 @@ std::optional<ChunkId> ParseHex(std::string_view hex)
     return id;
 }
 
+/// Склеивает opaque holder/reference в детерминированный owner key.
 std::string KeyString(const RetentionKey& key) { return Hex(key.holder) + Hex(key.reference); }
 
 } // namespace
@@ -108,7 +114,7 @@ bool ChunkRetentionRegistry::Release(const RetentionKey& key, const std::uint64_
         for (const auto& id : chunks) {
             batch.Erase(std::string{PIN} + id + owner);
             batch.Erase(std::string{REF} + owner + id);
-            // После release локальный blob ещё полезен и остаётся в cache до реальной нехватки места.
+            // После release локальный blob ещё нужен для retry/repair и уходит в cache, а не в немедленное удаление.
             batch.Write(std::string{CACHE} + id, now_ms);
         }
         m_db->WriteBatch(batch, true);
@@ -132,7 +138,8 @@ bool ChunkRetentionRegistry::IsPinned(const ChunkId& chunk) const
     try {
         return IsPinnedLocked(chunk);
     } catch (const std::exception&) {
-        return true; // unknown means keep
+        // Fail-closed: неизвестность не должна удалять локальную единственную копию.
+        return true;
     }
 }
 
@@ -173,7 +180,7 @@ ChunkRetentionRegistry::CollectResult ChunkRetentionRegistry::Collect(const Chun
             }
             if (id) entries.emplace_back(*id, used);
         });
-        // Вытесняем только cache-записи с реально существующим blob без pin.
+        // Вытесняем только cache-записи с реально существующим blob без pin и без provider-обязательства.
         std::vector<std::tuple<std::uint64_t, ChunkId, std::uint64_t>> evictable;
         KVStore::Batch forget;
         for (const auto& [id, used] : entries) {

@@ -42,6 +42,8 @@ struct CybouKeyStore::Impl {
     {
         Clear();
         if (!AccountId::FromBytes(value.account_id)) return false;
+        // Из одного recovery entropy локально восстанавливаются все публичные роли:
+        // Recovery, Authorization и KEM не хранятся разрозненно и не могут разъехаться.
         auto authorization = DeriveIdentityPublicKey(value.recovery_entropy, IdentityKeyPurpose::AUTHORIZATION);
         auto recovery = DeriveIdentityPublicKey(value.recovery_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
         auto kem_seed = DeriveIdentityXWingSeed(value.recovery_entropy);
@@ -171,8 +173,8 @@ std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveApplicationSto
     if (!m_impl->material) return std::nullopt;
     constexpr std::string_view salt{"CYBOU/LOCAL-APPLICATION-STORE"};
     const auto salt_bytes = std::span{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
-    // Bind the derived key to the stable AccountID, while keeping the recovery
-    // entropy within the key store.
+    // Ключ Application DB привязывается к stable AccountID, но не покидает keystore
+    // в виде recovery entropy: одна и та же фраза на другом AccountID не откроет store.
     std::array<unsigned char, 32> key{};
     if (!crypto::HkdfSha256(m_impl->material->recovery_entropy, salt_bytes,
             m_impl->material->account_id, key)) return std::nullopt;
@@ -190,6 +192,8 @@ std::optional<ContentKey> CybouKeyStore::OpenRootCapsule(const std::span<const u
                it != m_impl->historical_xwing_seeds.end()) {
         seed = &it->second;
     }
+    // Капсула открывается только текущим или проверенно-историческим seed соответствующего epoch:
+    // это исключает "угадывание" чужого контента соседним key epoch.
     if (!seed) return std::nullopt;
     return OpenRootRecipientCapsule(network_binding,
         std::span<const unsigned char, 32>{sender.Value().begin(), 32}, sender_nonce, sender_key_epoch,

@@ -22,40 +22,66 @@ namespace cybou {
 
 /// \brief Итог постановки операции в локальную очередь ретрансляции.
 enum class OperationRelayEnqueueStatus : uint8_t {
+    /// \brief Exact bytes операции поставлены в FIFO для последующей hop-by-hop отправки.
     QUEUED,
+    /// \brief Такой OperationID уже удерживается в очереди или недавно был замечен и подавлен seen-cache.
     DUPLICATE,
+    /// \brief Операция валидна, но очередь исчерпала лимиты RAM.
     QUEUE_FULL,
+    /// \brief Переданные bytes не образуют canonical signed operation.
     INVALID_OPERATION,
 };
 
 /// \brief Точные байты операции вместе с уже вычисленным OperationID.
 struct RelayedOperation {
+    /// \brief Canonical OperationID exact bytes.
     cybou::Hash256 operation_id;
+    /// \brief Exact signed bytes, которые нужно повторно передавать без пересериализации.
     std::vector<unsigned char> exact_bytes;
 };
 
 /// \brief Ограниченная RAM-очередь локально исполненных операций до подтверждения relay-пиром.
+/// \details Методы потокобезопасны: очередь сама сериализует доступ внутренним mutex.
 class OperationRelay final {
 public:
+    /// \brief Создаёт ограниченную FIFO-очередь ретрансляции.
+    /// \param max_operations Максимум операций в очереди.
+    /// \param max_queued_bytes Максимум exact bytes, удерживаемых в очереди.
+    /// \throws std::invalid_argument Если лимиты нулевые или меньше одной максимальной операции.
     explicit OperationRelay(size_t max_operations = 256,
         size_t max_queued_bytes = 8U * 1024U * 1024U);
 
     /// \brief Добавляет точные canonical bytes операции; allow_seen_retry разрешает повтор от исходного отправителя.
+    /// \param exact_operation_bytes Exact canonical bytes signed operation.
+    /// \param allow_seen_retry true разрешает обойти seen-cache для повторной попытки исходного отправителя.
+    /// \return QUEUED, DUPLICATE, QUEUE_FULL или INVALID_OPERATION.
+    /// \post При QUEUED exact bytes сохраняются без модификации до Acknowledge() или ForgetFinalized().
     OperationRelayEnqueueStatus Enqueue(std::span<const unsigned char> exact_operation_bytes,
         bool allow_seen_retry = false);
     /// \brief Возвращает текущую голову FIFO без резервирования для передачи.
+    /// \return Копия головы очереди или std::nullopt, если очередь пуста.
     std::optional<RelayedOperation> Peek() const;
     /// \brief Резервирует голову FIFO под одну активную передачу peer-to-peer.
+    /// \return Копия головы очереди или std::nullopt, если очередь пуста либо уже есть активный claim.
+    /// \post До Release()/Acknowledge() новый Claim() не выдаст другую операцию.
     std::optional<RelayedOperation> Claim();
     /// \brief Снимает резерв после неуспешной/неполной отправки.
+    /// \param operation_id OperationID, ранее полученный через Claim().
+    /// \post При совпадении с активным claim очередь снова доступна для Claim().
     void Release(const cybou::Hash256& operation_id);
     /// \brief Подтверждает успешную доставку головы FIFO и удаляет её из очереди.
+    /// \param operation_id OperationID, ранее полученный через Claim().
+    /// \return true только если подтверждена именно текущая зарезервированная голова FIFO.
     bool Acknowledge(const cybou::Hash256& operation_id);
     /// \brief Проверяет, удерживается ли операция в очереди ожидания.
+    /// \param operation_id Искомый OperationID.
     bool HasQueued(const cybou::Hash256& operation_id) const;
     /// \brief Забывает уже finalized операцию, если она ещё оставалась в relay-очереди.
+    /// \param operation_id OperationID, который больше не нужно ретранслировать.
     void ForgetFinalized(const cybou::Hash256& operation_id);
+    /// \brief Число операций, всё ещё удерживаемых в FIFO.
     size_t QueuedOperations() const;
+    /// \brief Сумма exact bytes, удерживаемых в FIFO, байты.
     size_t QueuedBytes() const;
 
 private:

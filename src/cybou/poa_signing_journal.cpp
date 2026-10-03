@@ -59,6 +59,8 @@ std::optional<PoaJournalHead> DecodeHead(const std::span<const unsigned char> by
     head.height = ReadUint64LE(bytes, 0);
     std::copy_n(bytes.begin() + 8, 32, head.parent_block_id.begin());
     std::copy_n(bytes.begin() + 40, 32, head.block_id.begin());
+    // Высота 0 допускается только для genesis anchor без parent; любой другой
+    // вариант означал бы двусмысленный старт journaling history.
     if (head.block_id.IsNull() || (head.height == 0 && !head.parent_block_id.IsNull()) ||
         (head.height != 0 && head.parent_block_id.IsNull())) return std::nullopt;
     return head;
@@ -144,6 +146,8 @@ PoaJournalStatus PoaSigningJournal::CheckCanonicalTip(
     }
     if (!matches) {
         m_history_verified = false;
+        // Несовпадение с уже journaled историей не лечится ретраем: после durable
+        // расхождения единственный безопасный режим — halt до ручного расследования.
         return PersistHalt(PoaJournalStatus::HISTORY_MISMATCH) ?
             PoaJournalStatus::HISTORY_MISMATCH : PoaJournalStatus::STORAGE_ERROR;
     }
@@ -165,6 +169,8 @@ PoaJournalStatus PoaSigningJournal::PrepareToSign(const uint64_t height,
         if (parent_block_id == m_head.parent_block_id && block_id == m_head.block_id) {
             return PoaJournalStatus::ALREADY_PREPARED;
         }
+        // Иная кандидатура для уже подготовленной высоты — прямое локальное
+        // equivocation evidence, даже без внешнего наблюдателя.
         return PersistHalt(PoaJournalStatus::EQUIVOCATION) ?
             PoaJournalStatus::EQUIVOCATION : PoaJournalStatus::STORAGE_ERROR;
     }

@@ -91,6 +91,10 @@ GenesisAllocation* FindCentralAuthorityAllocation(CybouState& state)
 namespace {
 const uint64_t* CentralAuthorityFeeBalance(const CybouState& state)
 {
+    // Комиссия всегда имеет единственное canonical destination: либо ещё не
+    // заявленная genesis allocation `cybou`, либо уже созданный аккаунт её claimant'а.
+    // Любая неоднозначность трактуется как повреждение состояния и останавливает
+    // fee routing fail-closed вместо "лучшей попытки".
     const auto* allocation = FindCentralAuthorityAllocation(state);
     if (!allocation) return nullptr;
     if (!allocation->claimed_by) return &allocation->balance;
@@ -136,6 +140,9 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
+    // Сначала проверяем уже существующие инварианты registry/state, потому что
+    // AccountCreate не должен "починять" испорченный снимок — консенсус может
+    // продолжаться только из канонически валидной родительской вершины.
     if (state.accounts.size() != state.identities.Accounts().size()) return AccountCreateStateError::INCONSISTENT_STATE;
     for (const auto& [id, account] : state.accounts) {
         if (!state.identities.Find(id)) return AccountCreateStateError::INCONSISTENT_STATE;
@@ -156,7 +163,8 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     if (const auto recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root)) {
         if (auto it = state.genesis_allocations.find(*recovery_id);
             it != state.genesis_allocations.end() && !it->second.claimed_by) {
-            // Registration above rejects a reused recovery key, so a claim happens once.
+            // Identity registry уже отверг повторное использование recovery key,
+            // поэтому соответствующая genesis allocation может быть заявлена только один раз.
             genesis_balance = it->second.balance;
             genesis_authority = it->second.authority;
             it->second.claimed_by = op.account_id;
@@ -235,6 +243,8 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     if (state.names.names.contains(op.reveal.label) ||
         std::ranges::any_of(state.genesis_allocations,
             [&](const auto& entry) { return entry.second.label == op.reveal.label; })) {
+        // Имя, уже занятое финализированным аккаунтом или зарезервированное genesis,
+        // не может быть переиграно reveal-операцией позже.
         return NameRevealError::NAME_ALREADY_TAKEN;
     }
     const auto expected_commitment = ComputeNameCommitment(network_binding, op.authorization.account_id, op.reveal.label, op.reveal.salt);
@@ -255,6 +265,9 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
         return NameRevealError::COMMIT_EXPIRED;
     }
 
+    // Reveal повторно проверяет и binding commit-а, и актуальность PoW окна:
+    // commit depth защищает front-running, а ограниченный epoch не даёт бесконечно
+    // переиспользовать старую работу для имён.
     if (op.reveal.work.network_binding != network_binding || op.reveal.work.account_id != op.authorization.account_id) {
         return NameRevealError::INVALID_WORK_PROOF;
     }
@@ -307,6 +320,9 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
 
 StateValidationError ValidateCybouState(const CybouState& state)
 {
+    // Проверка состояния намеренно избыточна: state root может считаться только
+    // после подтверждения всех взаимных индексов (`accounts`, `identities`, names,
+    // genesis labels). Это следует требованиям канонического state из 05_CHAIN_STATE.md.
     if (state.accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS) return StateValidationError::ACCOUNT_LIMIT_EXCEEDED;
     if (state.accounts.size() != state.identities.Accounts().size()) return StateValidationError::ACCOUNT_IDENTITY_COUNT_MISMATCH;
     for (const auto& [id, account] : state.accounts) {
@@ -365,6 +381,8 @@ uint64_t TotalSupply(const CybouState& state)
 {
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     uint64_t total{0};
+    // AUTH сознательно не участвует в supply: он учитывается отдельной метрикой
+    // authority и регулируется правилами docs/cybou/57_IDENTITY_AUTHORITY.md.
     if (state.onboarding_pool > MAX_SUPPLY) return std::numeric_limits<uint64_t>::max();
     total += state.onboarding_pool;
     for (const auto& [id, allocation] : state.genesis_allocations) {
@@ -439,6 +457,9 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         const auto authority = reader.U64();
         const auto height = reader.U64();
         const auto epoch = reader.U64();
+        // Map-ключи должны приходить уже в строгом порядке: это закрепляет одну
+        // каноническую сериализацию и исключает множественные байтовые представления
+        // одного и того же логического состояния.
         if (!id || (prior && !(*prior < *id)) || !balance || !system || !authority || !height || !epoch) return std::nullopt;
         prior = *id;
         state.accounts.emplace(*id, AccountState{*balance, *system, *authority, *height, *epoch});
@@ -487,6 +508,8 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
     }
     if (reader.Remaining()) return std::nullopt;
+    // Окончательная валидация после чтения всех доменов не допускает частично
+    // валидных снимков в state store.
     if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
     return state;
 }

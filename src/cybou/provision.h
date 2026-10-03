@@ -24,34 +24,59 @@ namespace cybou {
 /// \brief Полный набор результатов DEVNET provisioning: приватный материал, genesis и public constants.
 struct DevnetProvisionResult {
     // Network Root (strictly offline)
+    /// \brief Entropy офлайн Network Root mnemonic.
     RecoveryEntropy network_entropy{};
+    /// \brief Мнемонические слова офлайн Network Root.
     RecoveryWords network_words{};
+    /// \brief Public Network Root key, определяющий NetworkID.
     IdentityHybridPublicKey network_public_key;
+    /// \brief Exact canonical NetworkID bytes.
     std::vector<unsigned char> network_id_bytes;
 
     // cybou.cybou Identity
+    /// \brief Entropy Identity `cybou.cybou`, включая PoA role derivation.
     RecoveryEntropy cybou_entropy{};
+    /// \brief Мнемонические слова Identity `cybou.cybou`.
     RecoveryWords cybou_words{};
+    /// \brief Stable random AccountID Identity `cybou.cybou`.
     AccountId cybou_account_id{};
+    /// \brief Recovery public key `cybou.cybou`.
     IdentityHybridPublicKey cybou_recovery_key;
+    /// \brief Recovery Key ID для genesis allocation и recovery flows.
     IdentityKeyId cybou_recovery_key_id{};
+    /// \brief Authorization public key `cybou.cybou`.
     IdentityHybridPublicKey cybou_auth_key;
+    /// \brief Public XWing KEM key `cybou.cybou`.
     XWingPublicKey cybou_kem_pub{};
+    /// \brief PoA finalizer public key, derivable из той же mnemonic роли.
     IdentityHybridPublicKey cybou_poa_pub;
+    /// \brief PoA Finalizer Key ID для отчётов и public constants.
     IdentityKeyId cybou_poa_key_id{};
 
     // Consensus Genesis & Initial State
+    /// \brief Genesis state до высоты 1.
     CybouState genesis_state;
+    /// \brief Полностью подписанный immutable NetworkGenesis.
     NetworkGenesis signed_genesis;
+    /// \brief BLAKE3 state root genesis_state.
     cybou::Hash256 genesis_state_root;
+    /// \brief Canonical bytes signed_genesis.
     std::vector<unsigned char> serialized_signed_genesis;
+    /// \brief Canonical bytes genesis_state.
     std::vector<unsigned char> serialized_genesis_state;
 };
 
 /// \brief Генерирует весь DEVNET provisioning полностью в памяти.
+/// \return Полный набор секретов и public artifacts либо std::nullopt при криптографической/серилизационной ошибке.
+/// \post При успехе результат уже проходит round-trip и self-verification.
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning();
 
 /// \brief Выполняет одноразовое provisioning: private secrets и public constants header.
+/// \param private_dir Каталог под gitignored private material внутри repository private/.
+/// \param constants_header_path Путь к создаваемому public constants header.
+/// \return true при полном успешном provisioning без перезаписи существующих материалов.
+/// \pre private_dir указывает внутрь repository private/ и либо отсутствует, либо пуст.
+/// \post При true secrets и constants созданы эксклюзивно; существующие сети не перезаписываются.
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
     const std::filesystem::path& constants_header_path);

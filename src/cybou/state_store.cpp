@@ -16,6 +16,9 @@
 
 namespace cybou {
 namespace {
+// Локальные ключи KVStore не входят в сетевой протокол, но должны оставаться
+// стабильными внутри одного текущего формата state store, чтобы журнал финализации,
+// индексы блоков и state snapshots читались однозначно.
 
 const std::string STATE_KEY{"cybou/state"};
 const std::string HASH_KEY{"cybou/hash"};
@@ -82,6 +85,8 @@ std::optional<cybou::Hash256> CybouStateStore::ComputeCandidateStateRoot(
             return params.name_commit_max_lifetime > 0 && height > item.second.commit_height &&
                 height - item.second.commit_height > params.name_commit_max_lifetime;
         });
+    // Пустой блок без истекающих commit-ов не меняет каноническое состояние,
+    // поэтому reuse текущего state root детерминирован и не требует повторного исполнения.
     if (operations.empty() && !expires_name) {
         return GetStateRoot();
     }
@@ -241,6 +246,9 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     }
 
     if (observation == PoaConflictStatus::CANONICAL_REORG_REQUIRED) {
+        // Правило min(BlockID) из POA_FINALITY.md применяется только между двумя
+        // сертификатами для одного `(height,parent)`. Мы переисполняем блок поверх
+        // сохранённого родительского снимка, а не доверяем чужому `state root`.
         if (head->height != block.height) {
             return {BlockTransitionError::INVALID_HEIGHT};
         }
@@ -318,6 +326,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     std::optional<CybouState> next_state;
 
     if (is_empty_noop_block) {
+        // Даже "пустой" финализированный блок фиксируется в истории, но состояние
+        // не должно переписываться новыми байтами без логической причины.
         const auto current_root = GetStateRoot();
         if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
         candidate_root = *current_root;
@@ -364,6 +374,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         batch.Write(OperationKey(*op_id), block_id);
     }
     if (block.height > 16) {
+        // Храним ограниченное окно снимков по высоте только для локальных reorg/replay
+        // нужд; каноническая истина всё равно определяется последним финализированным состоянием.
         batch.Erase(StateHeightKey(block.height - 16));
     }
     m_db.WriteBatch(batch, sync);
@@ -384,8 +396,8 @@ std::optional<FinalizedBlock> CybouStateStore::GetBlockAtHeight(const uint64_t h
     if (height == 0) return std::nullopt;
     cybou::Hash256 block_id;
     if (!m_db.Read(BlockHeightKey(height), block_id)) {
-        // Older databases have no height index. Walk the finalized parent
-        // chain as a read-only compatibility path.
+        // Read-only fallback сохраняет доступ к старым локальным БД без изменения
+        // сетевого формата: canonical history всё равно проверяется по самим блокам.
         const auto head = GetFinalizedHead();
         if (!head || height > head->height) return std::nullopt;
         block_id = head->block_id;

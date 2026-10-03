@@ -18,29 +18,29 @@ namespace cybou {
 
 /// \brief Результат наблюдения PoA-сертификата на одной высоте/родителе.
 enum class PoaConflictStatus : uint8_t {
-    OBSERVED,
-    ALREADY_OBSERVED,
-    SAFETY_CONFLICT,
-    COMPETING_NON_CANONICAL,
-    CANONICAL_REORG_REQUIRED,
-    INVALID_CERTIFICATE,
-    ALREADY_HALTED,
-    CORRUPT_STORAGE,
-    STORAGE_ERROR,
+    OBSERVED,                 ///< Сертификат впервые увиден и сохранён как наблюдение.
+    ALREADY_OBSERVED,         ///< Тот же сертификат уже был сохранён на этой высоте/родителе.
+    SAFETY_CONFLICT,          ///< Зарезервировано для локального safety-конфликта; вызывающая сторона должна halt'иться fail-closed.
+    COMPETING_NON_CANONICAL,  ///< Подтверждён equivocating сертификат с `BlockID` больше канонического `min(BlockID)`.
+    CANONICAL_REORG_REQUIRED, ///< Подтверждён equivocating сертификат с меньшим `BlockID`; канон должен переключиться.
+    INVALID_CERTIFICATE,      ///< Сертификат/блок не проходят PoA-проверку.
+    ALREADY_HALTED,           ///< Детектор уже остановлен fail-closed.
+    CORRUPT_STORAGE,          ///< Durable observations/halt record повреждены.
+    STORAGE_ERROR,            ///< Ошибка записи/чтения не позволяет продолжать безопасно.
 };
 
 /// \brief Статус чтения durable halt evidence для PoA safety.
 enum class PoaEvidenceReadStatus : uint8_t {
-    NOT_HALTED,
-    EQUIVOCATION,
-    HALTED_CORRUPT_STORAGE,
-    UNAVAILABLE,
+    NOT_HALTED,             ///< Durable halt record отсутствует.
+    EQUIVOCATION,           ///< Найдены и заново проверены два конфликтующих сертификата.
+    HALTED_CORRUPT_STORAGE, ///< Узел остановлен из-за повреждения durable records.
+    UNAVAILABLE,            ///< Доказательство не удалось безопасно перечитать/повторно проверить.
 };
 
 /// \brief Два конфликтующих PoA-сертификата для одной сети, высоты и родителя.
 struct PoaEquivocationEvidence {
-    PoaFinalityCertificate first;
-    PoaFinalityCertificate second;
+    PoaFinalityCertificate first;  ///< Первое наблюдение для `(network,height,parent)`.
+    PoaFinalityCertificate second; ///< Конфликтующее наблюдение с другим `BlockID`.
 
     friend bool operator==(const PoaEquivocationEvidence&, const PoaEquivocationEvidence&) = default;
 };
@@ -58,6 +58,7 @@ public:
         const IdentityHybridPublicKey& genesis_finalizer_key);
 
     /// \brief Наблюдает PoA-сертификат и возвращает локальное решение safety guard.
+    /// \return Статус, включая детерминированное правило `min(BlockID)` при подтверждённом equivocation.
     PoaConflictStatus Observe(const PoaFinalityCertificate& certificate, const CybouBlock& block);
     /// \brief Возвращает факт перехода локального guard в fail-closed состояние.
     bool SafetyHalted() const;

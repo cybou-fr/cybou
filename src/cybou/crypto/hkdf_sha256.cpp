@@ -38,6 +38,8 @@ bool HkdfSha256(
     if (!context) return false;
 
     char digest[] = "SHA256";
+    // Пустую соль приводим к RFC 5869 zero-salt длиной HashLen, чтобы поведение
+    // не зависело от трактовки пустого span внутри конкретной OpenSSL версии.
     const auto effective_salt = salt.empty() ? std::span<const unsigned char>{DEFAULT_SALT} : salt;
     auto* key_data = const_cast<unsigned char*>(input_key_material.empty() ? &EMPTY_OCTET : input_key_material.data());
     auto* info_data = const_cast<unsigned char*>(info.empty() ? &EMPTY_OCTET : info.data());
@@ -52,6 +54,8 @@ bool HkdfSha256(
         OSSL_PARAM_construct_end(),
     };
     if (EVP_KDF_derive(context.get(), output.data(), output.size(), parameters) == 1) return true;
+    // На ошибке очищаем весь буфер derivation: частично записанный ключевой
+    // материал нельзя оставлять вызывающему коду.
     OPENSSL_cleanse(output.data(), output.size());
     return false;
 }

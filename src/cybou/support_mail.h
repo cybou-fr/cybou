@@ -26,12 +26,14 @@ inline constexpr std::string_view SUPPORT_NAME_LABEL{CENTRAL_AUTHORITY_NAME};
 inline constexpr std::uint64_t SUPPORT_MAIL_FEE_MULTIPLIER{5};
 
 /// Вычисляет минимальную комиссию support mail.
+/// \return `5 * (5 * fee_per_started_kib + fee_per_chunk)` для маскировки размера и наличия капсул.
 inline std::uint64_t SupportMailMinimumFee(const CybouProtocolParameters& params)
 {
     return SUPPORT_MAIL_FEE_MULTIPLIER * (5 * params.root_publication_fee_per_started_kib + params.root_publication_fee_per_chunk);
 }
 
 /// Возвращает AccountID, владеющий support-именем после его claim.
+/// \return AccountID владельца support name или `std::nullopt`, если claim ещё не финализирован.
 inline std::optional<AccountId> SupportAccount(const CybouState& state)
 {
     const auto* allocation = FindCentralAuthorityAllocation(state);
@@ -39,6 +41,7 @@ inline std::optional<AccountId> SupportAccount(const CybouState& state)
 }
 
 /// Вычисляет точную сетевую комиссию RootPublication.
+/// \return Комиссия или `std::nullopt`, если публикация не сериализуется.
 inline std::optional<std::uint64_t> RootPublicationOperationFee(
     const CybouProtocolParameters& params, const RootPublication& publication)
 {
@@ -48,6 +51,8 @@ inline std::optional<std::uint64_t> RootPublicationOperationFee(
 }
 
 /// Добавляет padding-capsules, пока публикация не достигнет `minimum_fee`.
+/// \return `true`, если публикация доведена до требуемой комиссии; `false` при исчерпании лимита капсул или ошибке RNG.
+/// \post Padding-capsules не несут семантики приложения и существуют только для выравнивания комиссии.
 inline bool PadPublicationToFee(const CybouProtocolParameters& params, RootPublication& publication,
     std::uint64_t minimum_fee)
 {

@@ -28,6 +28,8 @@ void OperationRelay::RememberSeen(const cybou::Hash256& operation_id)
     while (m_seen_order.size() > m_seen_limit) {
         const auto expired = m_seen_order.front();
         m_seen_order.pop_front();
+        // Do not forget an ID that is still queued: duplicate suppression must
+        // survive until the exact bytes either finalize or leave the FIFO.
         if (!m_queued_ids.contains(expired)) m_seen_ids.erase(expired);
     }
 }
@@ -91,6 +93,8 @@ void OperationRelay::Release(const cybou::Hash256& operation_id)
 bool OperationRelay::Acknowledge(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
+    // Ack only removes the currently claimed FIFO head. This prevents a late
+    // or misrouted peer acknowledgment from deleting a different operation.
     if (!m_claimed_id || *m_claimed_id != operation_id || m_queue.empty() ||
         m_queue.front().operation_id != operation_id) return false;
     m_queued_bytes -= m_queue.front().exact_bytes.size();
@@ -109,6 +113,8 @@ bool OperationRelay::HasQueued(const cybou::Hash256& operation_id) const
 void OperationRelay::ForgetFinalized(const cybou::Hash256& operation_id)
 {
     std::lock_guard lock{m_mutex};
+    // Finalization outranks hop-by-hop delivery bookkeeping: once canonical
+    // history contains the operation, exact relay bytes become dead weight.
     const auto item = std::find_if(m_queue.begin(), m_queue.end(), [&](const RelayedOperation& queued) {
         return queued.operation_id == operation_id;
     });

@@ -23,6 +23,8 @@ bool HasNonzero(std::span<const unsigned char> bytes)
     return std::any_of(bytes.begin(), bytes.end(), [](unsigned char b) { return b != 0; });
 }
 
+// Дескриптор жёстко фиксирует только Recovery и Authorization роли:
+// любые нулевые/совпадающие ключи отвергаются до сериализации и коммитмента.
 bool Valid(const IdentityAuthorization& auth)
 {
     return auth.recovery_root.purpose == IdentityKeyPurpose::RECOVERY_ROOT &&

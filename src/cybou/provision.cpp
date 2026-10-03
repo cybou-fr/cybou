@@ -23,6 +23,7 @@ namespace cybou {
 
 namespace {
 
+/// \brief Склеивает mnemonic words в одну фразу для секретных файлов.
 std::string JoinWords(const RecoveryWords& words)
 {
     std::string res;
@@ -34,6 +35,7 @@ std::string JoinWords(const RecoveryWords& words)
     return res;
 }
 
+/// \brief Форматирует mnemonic words с номерами строк для операторского чтения.
 std::string FormatWordsNumbered(const RecoveryWords& words)
 {
     std::ostringstream ss;
@@ -43,6 +45,7 @@ std::string FormatWordsNumbered(const RecoveryWords& words)
     return ss.str();
 }
 
+/// \brief Форматирует байты как C++ initializer list для generated public constants.
 std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t indent = 4)
 {
     std::ostringstream ss;
@@ -61,6 +64,7 @@ std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t inde
     return ss.str();
 }
 
+/// \brief Генерирует ненулевой stable random AccountID.
 std::optional<AccountId> GenerateRandomAccountId()
 {
     std::array<unsigned char, 32> acc_bytes{};
@@ -94,7 +98,9 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     res.cybou_entropy = *cybou_entropy;
     res.cybou_words = EncodeRecoveryWords(res.cybou_entropy);
 
-    // Stable non-zero random AccountID (DEC-165).
+    // Stable non-zero random AccountID (DEC-165): AccountID intentionally does
+    // not derive from mnemonic material, so network identity and account naming
+    // stay decoupled.
     auto parsed_acc = GenerateRandomAccountId();
     if (!parsed_acc) return std::nullopt;
     res.cybou_account_id = *parsed_acc;
@@ -137,6 +143,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     res.genesis_state_root = *state_root;
 
     // 4. Signed NetworkGenesis: the digest is only what the Network Key signs.
+    // Public constants are derived after this point; they never influence the
+    // immutable signed contents of the network itself.
     res.signed_genesis.network_public_key = res.network_public_key;
     res.signed_genesis.genesis_state_root = res.genesis_state_root;
     res.signed_genesis.poa_finalizer_public_key = res.cybou_poa_pub;
@@ -159,7 +167,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     if (!state_bytes) return std::nullopt;
     res.serialized_genesis_state = std::move(*state_bytes);
 
-    // Round-trip check
+    // Round-trip check catches mismatches between in-memory structures and the
+    // exact public bytes that will be embedded into the executable.
     auto roundtrip_genesis = DeserializeSignedNetworkGenesis(res.serialized_signed_genesis);
     if (!roundtrip_genesis || *roundtrip_genesis != res.signed_genesis) {
         return std::nullopt;
@@ -213,6 +222,8 @@ bool ProvisionDevnet(
     struct SecretCleanup {
         decltype(prov)& material;
         ~SecretCleanup() {
+            // Provisioning is offline-only, but in-memory cleanup still matters:
+            // network root and PoA seed must not linger after the tool exits.
             crypto::CleanseMemory(material->network_entropy.data(), material->network_entropy.size());
             crypto::CleanseMemory(material->cybou_entropy.data(), material->cybou_entropy.size());
             for (auto& word : material->network_words) crypto::CleanseMemory(word.data(), word.size());

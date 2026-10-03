@@ -22,6 +22,9 @@ bool IsZero(const std::span<const unsigned char> bytes)
 
 bool IsValid(const RootPublication& publication)
 {
+    // RootPublication — единственная консенсусная операция контентной плоскости,
+    // поэтому её payload проверяется особенно жёстко: без нулевых корней, без пустого
+    // списка капсул и без альтернативных KEM profile.
     if (IsZero(publication.root_chunk_id) || IsZero(publication.chunk_authorization_root) ||
         publication.chunk_count == 0 ||
         publication.recipient_capsules.empty() ||
@@ -82,6 +85,9 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(
     const CybouProtocolParameters& params,
     const std::size_t canonical_operation_bytes, const std::uint32_t chunk_count)
 {
+    // Формула соответствует docs/cybou/18_ECONOMICS_FEES.md:
+    // fee = per-started-KiB + per-chunk, обе части считаются детерминированно
+    // по каноническому размеру операции и заявленному числу chunk-ов.
     if (canonical_operation_bytes == 0 || canonical_operation_bytes > ROOT_PUBLICATION_MAX_OPERATION_BYTES ||
         chunk_count == 0 || chunk_count > MAX_PUBLICATION_CHUNKS) return std::nullopt;
     const auto kib = (canonical_operation_bytes + 1023) / 1024;

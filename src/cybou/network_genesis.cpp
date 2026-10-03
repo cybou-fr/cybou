@@ -33,6 +33,8 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
     const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
     const auto per_kib = params.root_publication_fee_per_started_kib;
     const auto per_chunk = params.root_publication_fee_per_chunk;
+    // Validate the worst-case RootPublication fee arithmetic up front so every
+    // Full Node can treat genesis parameters as safe for later fee computation.
     if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
         (per_chunk != 0 && MAX_PUBLICATION_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
         return false;
@@ -76,27 +78,32 @@ CybouState CreateDevGenesisState()
 
 namespace {
 
+/// \brief Возвращает точный размер сериализации CybouProtocolParameters.
 size_t SerializedProtocolParametersSize()
 {
     return 4 + 8 + 4 + 8 + 8 + 8 + 8 + 8 + 4 + 8 + 8 + 4 + 1;
 }
 
+/// \brief Пишет uint8_t в canonical little-endian payload.
 void WriteU8(std::vector<unsigned char>& out, uint8_t value) {
     out.push_back(value);
 }
 
+/// \brief Пишет uint32_t в canonical little-endian payload.
 void WriteU32LE(std::vector<unsigned char>& out, uint32_t value) {
     for (unsigned i = 0; i < 4; ++i) {
         out.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
     }
 }
 
+/// \brief Пишет uint64_t в canonical little-endian payload.
 void WriteU64LE(std::vector<unsigned char>& out, uint64_t value) {
     for (unsigned i = 0; i < 8; ++i) {
         out.push_back(static_cast<unsigned char>((value >> (8 * i)) & 0xFF));
     }
 }
 
+/// \brief Пишет Hash256 в его raw byte order без реверса.
 void WriteHash(std::vector<unsigned char>& out, const cybou::Hash256& hash) {
     out.insert(out.end(), hash.begin(), hash.end());
 }
@@ -177,7 +184,8 @@ std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& 
 
     out.insert(out.end(), poa_key_bytes.begin(), poa_key_bytes.end());
 
-    // Порядок и размеры ниже образуют canonical consensus payload.
+    // Порядок и размеры ниже образуют canonical consensus payload; changing
+    // them changes the signed genesis digest for the whole network.
     const auto& p = genesis.protocol_parameters;
     WriteU32LE(out, p.account_creation_work_bits);
     WriteU64LE(out, p.account_creation_epoch_lag);
@@ -273,7 +281,8 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     poa_key.ml_dsa.assign(bytes.begin() + pos, bytes.begin() + pos + *poa_ml_dsa_len);
     pos += *poa_ml_dsa_len;
 
-    // Порядок чтения обязан совпадать с SerializeNetworkGenesisPayload().
+    // Порядок чтения обязан совпадать с SerializeNetworkGenesisPayload():
+    // это один consensus layout, а не два независимых формата.
     CybouProtocolParameters p;
     const auto work_bits = read_u32le();
     const auto epoch_lag = read_u64le();
@@ -344,6 +353,8 @@ NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
         return NetworkGenesisError::INVALID_PROTOCOL_PARAMETERS;
     }
 
+    // Signature verification happens only after semantic guards above so
+    // malformed purposes/sizes cannot masquerade as a "bad signature".
     // Cryptographic signature check under Network Key
     const auto digest = ComputeNetworkGenesisDigest(genesis);
     if (!VerifyIdentityMessage(genesis.network_public_key, genesis.signature,
@@ -364,6 +375,8 @@ std::optional<VerifiedNetworkGenesis> VerifiedNetworkGenesis::Create(NetworkGene
     if (VerifySignedNetworkGenesis(genesis) != NetworkGenesisError::NONE) {
         return std::nullopt;
     }
+    // Store exact canonical NetworkID bytes once so every later user observes
+    // the same serialized form the Network Key signed indirectly via binding.
     auto id_bytes = CanonicalSerializeNetworkPublicKey(genesis.network_public_key);
     const auto digest = ComputeNetworkGenesisDigest(genesis);
     return VerifiedNetworkGenesis(std::move(genesis), std::move(id_bytes), digest);

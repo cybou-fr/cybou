@@ -35,7 +35,7 @@ constexpr std::string_view BRIDGE_INDEX_KEY{"recovery/index"};
 constexpr std::string_view RECOVERED_EPOCHS_KEY{"recovery/recovered-epochs"};
 constexpr std::string_view OWN_PUBLICATIONS_KEY{"storage/owned-publications"};
 constexpr std::string_view STORAGE_RECOVERY_INDEX_READY_KEY{"storage/recovery-index-ready"};
-/** 2: one full re-index repairs records written without atomic batches. */
+/** 2: однократный полный re-index ремонтирует записи, созданные до атомарных batch в Application DB. */
 constexpr std::string_view DRAFT_INDEX_KEY{"mail/drafts"};
 constexpr std::array<unsigned char, 4> DRAFT_MAGIC{'C', 'Y', 'D', 'R'};
 constexpr std::size_t MAX_DRAFT_TEXT{1U << 20};
@@ -49,7 +49,7 @@ bool ValidDraftId(std::string_view id)
 }
 
 std::string DraftKey(std::string_view id) { return "mail/draft/" + std::string{id}; }
-/** Private metadata roots only; application content lives in child trees. */
+/** 0: metadata root сам не несёт application plaintext; содержимое живёт только в дочерних encrypted trees. */
 constexpr std::uint64_t MAX_ROOT_PLAINTEXT_BYTES{0};
 
 template <typename Bytes>
@@ -140,7 +140,7 @@ std::optional<AccountId> ReadAccount(Reader& in)
 
 bool ReadUint256(Reader& in, cybou::Hash256& out) { return in.Bytes(std::span{out.begin(), 32}); }
 
-/** Fixed-width 32-byte ID lists used as indexes; the store itself is not enumerable. */
+/** Индексы — только фиксированные 32-байтовые ID; сама Application DB не считается перечислимым каталогом. */
 template <typename Id>
 std::vector<Id> ReadIds(const PrivateApplicationStore& db, std::string_view key)
 {

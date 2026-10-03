@@ -57,6 +57,8 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     adjustment_digests.reserve(operations.size());
     auth_credited_accounts.reserve(operations.size());
     if (params.name_commit_max_lifetime > 0) {
+        // Истечение pending commit-ов является частью детерминированного block execution:
+        // одинаковая высота должна давать одинаковый реестр имён даже при пустом блоке.
         std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
             return block_height > item.second.commit_height &&
                 block_height - item.second.commit_height > params.name_commit_max_lifetime;
@@ -147,6 +149,8 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
         }
     }
     const uint64_t final_supply = TotalSupply(candidate);
+    // Любой change total supply означает консенсусную ошибку: комиссии лишь
+    // перераспределяют CYBOU между canonical account values, а AUTH живёт отдельно.
     if (final_supply != initial_supply) return fail(BlockExecutionError::SUPPLY_CHANGED);
     if (ValidateCybouState(candidate) != StateValidationError::NONE) return fail(BlockExecutionError::INVALID_STATE);
     const auto root = CybouStateHash(candidate);

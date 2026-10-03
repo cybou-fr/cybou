@@ -11,7 +11,12 @@
 namespace cybou::crypto {
 
 /// \brief Выполняет RFC 5869 HKDF-SHA256 над входным ключевым материалом.
+/// \param input_key_material Входной ключевой материал IKM.
+/// \param salt Необязательная соль; пустой span трактуется как RFC 5869 zero-salt длиной 32 байта.
+/// \param info Контекстная строка domain separation.
+/// \param output Выходной буфер длиной от 1 до `255 * 32` байт.
 /// \return false, если OpenSSL EVP не смог выполнить derivation.
+/// \post При `false` `output` очищен fail-closed.
 [[nodiscard]] bool HkdfSha256(
     std::span<const unsigned char> input_key_material,
     std::span<const unsigned char> salt,

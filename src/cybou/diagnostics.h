@@ -11,25 +11,45 @@ namespace cybou {
 
 /// \brief Диагностические сведения об одном подключенном пире.
 struct PeerDiagnostics {
+    /// \brief Числовой `IP:port`, по которому установлена текущая P2P-сессия.
     std::string endpoint;
+    /// \brief Финализованная высота, заявленная пиром в последнем HELLO или ответе.
+    /// \details Это только удаленное объявление liveness/маршрутизации, а не локально подтвержденная каноническая высота.
     std::uint64_t advertised_height{0};
+    /// \brief Доказанный `StorageId` удаленного Full Node, если для этой сессии уже был выполнен on-demand `STORAGE_PROOF`.
     std::string storage_id;
 };
 
 /// \brief Диагностические сведения об одной операции во внутренних очередях.
 struct OperationDiagnostics {
+    /// \brief Канонический `OperationID` в прямом hex-порядке байт.
     std::string operation_id;
+    /// \brief Внутренний код состояния локальной обработки/ретрансляции.
     std::uint32_t state{0};
+    /// \brief Финализованная высота базы, относительно которой кандидат-операция сейчас отслеживается локально.
     std::uint64_t finalized_height{0};
 };
 
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
+    /// \brief `NetworkBinding` активной официальной сети в hex.
+    /// \brief Локальный тип узла для UI/CLI; в текущем базовом варианте это обычный `Full Node`.
+    /// \brief `BlockID` текущей локально финализованной вершины в hex.
+    /// \brief `state_root` текущего локально финализованного состояния в hex.
     std::string network_binding, node_type, tip, state_root;
+    /// \brief Высота локально финализованной вершины.
+    /// \brief Текущий объем занятых локальных storage-байт.
+    /// \brief Локальная политика емкости storage в байтах.
     std::uint64_t height{0}, storage_used{0}, storage_capacity{0};
+    /// \brief `true`, когда runtime инициализирован и может отвечать непротиворечивым состоянием.
+    /// \brief `true`, когда локальная защитная логика остановила небезопасный путь fail-closed.
+    /// \brief `true`, когда локальный PoA signer сейчас активен и не отключен правилами signing safety.
+    /// \brief `true`, когда у локальной Identity в финализованном состоянии AUTH достаточно для создания `Validation`.
     bool initialized{false}, safety_halted{false}, poa_signer_active{false}, validation_eligible{false};
+    /// \brief Снимок всех подключенных P2P-пиров на момент формирования структуры.
     std::vector<PeerDiagnostics> peers;
+    /// \brief Снимок операций, которые локальный runtime еще отслеживает вне уже финализованной истории.
     std::vector<OperationDiagnostics> operations;
 };
 } // namespace cybou

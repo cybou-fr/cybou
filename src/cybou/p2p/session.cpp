@@ -39,6 +39,8 @@ namespace {
 constexpr size_t HEADER_SIZE{9};
 constexpr size_t HELLO_SIZE{80};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
+// 10 секунд базового setup + минимум 16 KiB/s; это локальный анти-зависательный
+// лимит transport/storage пути и он не выражает никакой консенсусной политики.
 std::chrono::steady_clock::time_point StorageTransferDeadline(size_t bytes)
 {
     // 16 KiB/s minimum average throughput, with setup allowance and a hard cap.
@@ -63,6 +65,9 @@ struct TlsContexts {
     }
 };
 
+/// \brief Создает общие TLS 1.3 контексты для одноразовой P2P transport identity по умолчанию.
+/// \details Эфемерный сертификат нужен только для шифрования канала; авторитет
+///          сети доказывается не им, а `NetworkBinding`, PoA и при необходимости SPKI pin.
 std::optional<TlsContexts> CreateTlsContexts()
 {
     TlsContexts contexts;
@@ -126,6 +131,7 @@ SSL_CTX* CreateStableServerTlsContext(const std::filesystem::path& certificate_c
     return context;
 }
 
+/// \brief Считает SPKI SHA-256 именно от публичного ключа сертификата, а не от всего DER-сертификата.
 std::optional<std::array<unsigned char, 32>> CertificateSpkiSha256(X509* certificate)
 {
     if (!certificate) return std::nullopt;
@@ -148,6 +154,8 @@ bool MatchesPeerSpkiPin(SSL* ssl, const std::array<unsigned char, 32>& expected)
 {
     std::unique_ptr<X509, decltype(&X509_free)> certificate{SSL_get1_peer_certificate(ssl), X509_free};
     const auto actual = CertificateSpkiSha256(certificate.get());
+    // Сравнение держим в constant-time: pin публичный, но единая fail-closed
+    // практика для проверок идентичности упрощает сопровождение.
     return actual && CRYPTO_memcmp(actual->data(), expected.data(), expected.size()) == 0;
 }
 
@@ -632,6 +640,8 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     std::vector<unsigned char> bytes{header.begin(), header.end()};
     bytes.resize(HEADER_SIZE + size);
     if (size && !ReadExact(bytes.data() + HEADER_SIZE, size, deadline)) {
+        // После чтения заголовка границы фрейма уже сдвинуты: безопаснее
+        // оборвать сокет, чем пытаться ресинхронизироваться по оставшемуся потоку.
         boost::system::error_code ignored;
         m_socket.close(ignored); // A consumed header cannot be reused after an incomplete body.
         return std::nullopt;
@@ -689,7 +699,8 @@ std::optional<StorageId> VerifyStorageProof(const std::span<const unsigned char>
     std::copy_n(sig.begin(), STORAGE_ED25519_SIG, signature.ed25519.begin());
     signature.ml_dsa.assign(sig.begin() + STORAGE_ED25519_SIG, sig.end());
     if (!VerifyIdentityMessage(key, signature, message)) return std::nullopt;
-    // StorageId commits to both public keys under a provider domain.
+    // `StorageId` коммитит оба публичных ключа под отдельным provider domain,
+    // чтобы его нельзя было спутать ни с AccountID, ни с иными 32-байтовыми идентификаторами.
     constexpr std::string_view DOMAIN{"CYBOU/STORAGE-ID"};
     std::vector<unsigned char> id_input(DOMAIN.begin(), DOMAIN.end());
     id_input.insert(id_input.end(), payload.begin(), payload.begin() + STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
@@ -714,6 +725,8 @@ bool PeerSession::Handshake(const Hello& local)
     m_handshake_status = HandshakeStatus::INVALID_PEER;
     if (frame->type != MessageType::HELLO) return false;
     const auto peer = DecodeHello(frame->payload);
+    // Совпавший nonce трактуем как self-echo/loopback аномалию и завершаем
+    // рукопожатие до любого дальнейшего использования удаленного состояния.
     if (!peer || peer->nonce == local.nonce) return false;
     if (peer->network_binding != local.network_binding) {
         m_handshake_status = HandshakeStatus::WRONG_NETWORK;
@@ -736,6 +749,8 @@ std::optional<StorageId> PeerSession::ProveStorageIdentity()
     if (!response || response->type != MessageType::STORAGE_PROOF) return std::nullopt;
     auto message = StorageProofMessage(*m_peer, *m_local, m_tls_exporter);
     message.insert(message.end(), challenge.begin(), challenge.end());
+    // `StorageId` кэшируется только после proof, связанного и с текущим TLS
+    // exporter'ом, и со свежим challenge, чтобы endpoint не мог «унаследовать» чужое доказательство.
     m_peer_storage_id = VerifyStorageProof(response->payload, message);
     return m_peer_storage_id;
 }
@@ -802,6 +817,8 @@ BlockBatchResult PeerSession::RequestBlocks(uint64_t first_height, uint8_t max_b
         if (!meta) return {.status = m_last_read_status == ReadStatus::INVALID_FRAME ?
             BlockRequestStatus::INVALID_RESPONSE : BlockRequestStatus::UNAVAILABLE, .count = count};
         if (meta->type == MessageType::BLOCKS_END) {
+            // `BLOCKS_END` обязан точно совпасть с реально принятым числом
+            // блоков, иначе у удаленной стороны нет единственного непротиворечивого ответа.
             if (meta->payload.size() != 1 || meta->payload[0] != count)
                 return {.status = BlockRequestStatus::INVALID_RESPONSE, .count = count};
             return {.status = count ? BlockRequestStatus::OK : BlockRequestStatus::NOT_FOUND, .count = count};

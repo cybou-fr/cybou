@@ -25,8 +25,8 @@ namespace cybou {
 
 /// \brief Текущий канонический финализированный head: block id плюс высота.
 struct FinalizedHead {
-    cybou::Hash256 block_id;
-    uint64_t height{0};
+    cybou::Hash256 block_id; ///< `BlockID` текущего канонического финализированного tip.
+    uint64_t height{0}; ///< Высота этого tip; `0` означает genesis anchor.
 
     friend bool operator==(const FinalizedHead&, const FinalizedHead&) = default;
 };
@@ -55,10 +55,10 @@ struct LocalRecordCodec<FinalizedHead> {
 
 /// \brief Ошибки загрузки канонического состояния из локального KV store.
 enum class StateLoadError : uint8_t {
-    NONE,
-    NOT_FOUND,
-    CORRUPT,
-    NETWORK_MISMATCH,
+    NONE,             ///< Состояние загружено и прошло hash integrity check.
+    NOT_FOUND,        ///< Хранилище ещё не инициализировано genesis-снимком.
+    CORRUPT,          ///< Отсутствуют обязательные записи или нарушена hash/state целостность.
+    NETWORK_MISMATCH, ///< На диске записан `NetworkBinding` другой официальной сети.
 };
 
 /// \brief Результат загрузки канонического состояния с проверкой hash integrity.
@@ -71,9 +71,9 @@ struct StateLoadResult {
 
 /// \brief Ошибки первичной инициализации genesis.
 enum class GenesisInitError : uint8_t {
-    NONE,
-    ALREADY_INITIALIZED,
-    GENESIS_STATE_MISMATCH,
+    NONE,                ///< Genesis-состояние записано успешно.
+    ALREADY_INITIALIZED, ///< Хранилище уже содержит состояние/голову/привязку сети.
+    GENESIS_STATE_MISMATCH, ///< Переданный genesis snapshot не совпадает с VerifiedNetworkGenesis.
 };
 
 /// \brief Результат записи genesis state в пустое хранилище.
@@ -85,21 +85,21 @@ struct GenesisInitResult {
 
 /// \brief Ошибки атомарного коммита PoA-finalized блока.
 enum class BlockTransitionError : uint8_t {
-    NONE,
-    INVALID_BLOCK_ID,
-    STATE_NOT_INITIALIZED,
-    NETWORK_MISMATCH,
-    CORRUPT_STATE,
-    PARENT_MISMATCH,
-    BLOCK_ALREADY_APPLIED,
-    INVALID_HEIGHT,
-    CORRUPT_HEAD,
-    INVALID_OPERATION,
-    TOO_MANY_ACCOUNT_CREATES,
-    INVALID_CERTIFICATE,
-    STATE_ROOT_MISMATCH,
-    POA_EQUIVOCATION_DETECTED,
-    POA_SAFETY_HALTED,
+    NONE,                     ///< Финализированный блок детерминированно закоммичен.
+    INVALID_BLOCK_ID,         ///< Блок не даёт канонического ненулевого `BlockID`.
+    STATE_NOT_INITIALIZED,    ///< Genesis не инициализирован.
+    NETWORK_MISMATCH,         ///< Локальное хранилище принадлежит другой сети.
+    CORRUPT_STATE,            ///< Состояние или индексы на диске повреждены/неполны.
+    PARENT_MISMATCH,          ///< Родитель блока не совпал с канонической историей.
+    BLOCK_ALREADY_APPLIED,    ///< Этот `BlockID` уже является текущим tip или уже виден как канонический.
+    INVALID_HEIGHT,           ///< Высота блока не следует из канонической истории.
+    CORRUPT_HEAD,             ///< Запись о канонической голове повреждена.
+    INVALID_OPERATION,        ///< Одна из кандидат-операций не прошла детерминированное исполнение.
+    TOO_MANY_ACCOUNT_CREATES, ///< Нарушен лимит `AccountCreate` в блоке.
+    INVALID_CERTIFICATE,      ///< PoA certificate не соответствует блоку/сети/ключу genesis.
+    STATE_ROOT_MISMATCH,      ///< Выполненный `state root` не совпал с заявленным блоком.
+    POA_EQUIVOCATION_DETECTED, ///< Обнаружено подтверждённое equivocation PoA на той же высоте/родителе.
+    POA_SAFETY_HALTED,        ///< Локальный safety guard перевёл узел в fail-closed режим.
 };
 
 /// \brief Результат проверки и коммита финализированного блока.
@@ -118,9 +118,11 @@ public:
         VerifiedNetworkGenesis network_genesis);
 
     /// \brief Сохраняет genesis state на высоте 0; повторная инициализация запрещена.
+    /// \pre `genesis_state` должен соответствовать `VerifiedNetworkGenesis`.
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
 
     /// \brief Загружает каноническое состояние и проверяет его hash integrity.
+    /// \return `CORRUPT`, если состояние на диске нельзя канонически десериализовать или его hash не совпадает.
     StateLoadResult LoadState() const;
 
     /// \brief Возвращает текущий канонический state root.
@@ -135,7 +137,8 @@ public:
     /// \brief Возвращает финализированную высоту, начиная с 0 для genesis.
     std::optional<uint64_t> GetFinalizedHeight() const;
 
-    /// \brief Вычисляет candidate state root поверх канонического родительского состояния без коммита.
+    /// \brief Вычисляет candidate `state root` поверх канонического родительского состояния без коммита.
+    /// \return `std::nullopt`, если высота не следующая, состояние не загружено или исполнение кандидат-операций неуспешно.
     std::optional<cybou::Hash256> ComputeCandidateStateRoot(
         const std::vector<ProtocolOperation>& operations,
         uint64_t height) const;
@@ -155,6 +158,8 @@ public:
     std::optional<cybou::Hash256> GetStoredNetworkBinding() const;
 
     /// \brief Проверяет и атомарно коммитит PoA-finalized блок вместе с новым состоянием и индексами.
+    /// \pre Блок и сертификат относятся к текущей сети и не требуют внешней нормализации.
+    /// \post При успехе обновляются `STATE_KEY`, `HEAD_KEY`, индексы блоков/операций и снимок по высоте одним batch.
     BlockTransitionResult CommitFinalizedBlock(
         const FinalizedBlock& finalized_block,
         bool sync = true);
@@ -166,6 +171,7 @@ public:
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
 
     /// \brief Проверяет наличие операции в локальном индексе финализированных операций.
+    /// \return `true` только если индекс указывает на внутренне согласованный финализированный блок.
     bool HasIndexedFinalizedOperation(const cybou::Hash256& op_id) const;
     /// \brief Возвращает финализированную высоту операции, если локальный индекс и блок валидны.
     std::optional<uint64_t> GetFinalizedOperationHeight(const cybou::Hash256& op_id) const;

@@ -14,6 +14,8 @@
 
 namespace cybou {
 namespace {
+// Размеры подписей отражают текущий гибридный набор Recovery/Authorization:
+// Recovery POP = Ed25519 + ML-DSA-65, Authorization POP = Ed25519 + ML-DSA-44.
 constexpr size_t ROOT_SIG_SIZE{3309};
 constexpr size_t AUTHORIZATION_SIG_SIZE{2420};
 
@@ -32,6 +34,8 @@ uint64_t Read64(const unsigned char* in)
 std::optional<std::array<unsigned char, 32>> HashWithDomain(
     std::string_view domain, std::span<const unsigned char> bytes)
 {
+    // Domain separation делает PoW, POP и commitment криптографически несмешиваемыми
+    // даже при одинаковых исходных байтах.
     std::array<unsigned char, 32> digest{};
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), bytes}, digest.data())) return std::nullopt;
     return digest;
@@ -172,11 +176,15 @@ AccountCreateError ValidateAccountCreateOp(
     const auto commitment = package_id ? ComputeAccountCreateAuthorizationCommitment(op.authorization, *package_id) : std::nullopt;
     if (!commitment || op.work.authorization_commitment != *commitment) return AccountCreateError::COMMITMENT_MISMATCH;
     const uint64_t epoch = EpochForHeight(block_height, params);
+    // Work привязан к ограниченному окну epoch: это удерживает стоимость
+    // создания Identity актуальной и не даёт бесконечно накапливать PoW заранее.
     if (op.work.work_epoch > epoch) return AccountCreateError::FUTURE_WORK_EPOCH;
     if (epoch - op.work.work_epoch > params.account_creation_epoch_lag) return AccountCreateError::EXPIRED_WORK_EPOCH;
     const auto work_hash = ComputeAccountCreateWorkHash(op.work);
     if (!work_hash || !HasWork(*work_hash, params.account_creation_work_bits)) return AccountCreateError::INSUFFICIENT_WORK;
     const auto pop_digest = ComputeAccountCreatePopDigest(network_binding, op.account_id, op.authorization, *package_id);
+    // Оба POP подписывают один и тот же digest, чтобы доказать владение обоими
+    // ключевыми ролями над одинаковым сетевым и account-specific контекстом.
     if (!pop_digest || !VerifyIdentityMessage(op.authorization.recovery_root, op.recovery_pop, *pop_digest)) {
         return AccountCreateError::INVALID_RECOVERY_POP;
     }

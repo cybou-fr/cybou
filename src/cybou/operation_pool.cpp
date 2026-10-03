@@ -16,6 +16,8 @@ namespace cybou {
 
 bool OperationPool::FitsGlobalLimits(const size_t bytes) const
 {
+    // Keep arithmetic fail-closed against accidental underflow when callers
+    // hand us a pool already at or above its byte ceiling.
     return m_entries.size() < m_limits.max_count &&
         m_bytes <= m_limits.max_bytes &&
         bytes <= m_limits.max_bytes - m_bytes;
@@ -63,6 +65,9 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation,
     }
     const auto head = m_store.GetFinalizedHead();
     if (!head || head->height == std::numeric_limits<uint64_t>::max()) return PoolAdmission::REJECTED;
+    // Candidate execution always replays the whole ordered set plus the new
+    // operation. This preserves the Full Node invariant: relay never depends
+    // on trust in a peer's "already checked" claim.
     auto candidate = Snapshot();
     candidate.push_back(operation);
     if (!m_store.ComputeCandidateStateRoot(candidate, head->height + 1)) return PoolAdmission::REJECTED;
@@ -149,6 +154,9 @@ std::vector<cybou::Hash256> OperationPool::Revalidate()
             }
         }
 
+        // Revalidate sequentially against the evolving candidate state for the
+        // next block height; keeping a once-valid prefix while dropping only
+        // later conflicts avoids rebuilding an invalid mixed pool.
         auto exec = ExecuteBlockOperations(current_state, {entry.operation}, binding,
             target_height, params, &poa_key);
         if (!exec || !exec.state) {

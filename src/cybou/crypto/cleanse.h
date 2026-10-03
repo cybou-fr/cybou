@@ -13,6 +13,9 @@
 namespace cybou::crypto {
 
 /// \brief Очищает чувствительную память через примитив OpenSSL, который нельзя безопасно выкинуть оптимизацией.
+/// \param data Начало диапазона для очистки; допускается `nullptr` только при `size == 0`.
+/// \param size Длина диапазона в байтах.
+/// \post Если диапазон ненулевой, его прежнее содержимое больше нельзя считать допустимым для чтения.
 inline void CleanseMemory(void* data, std::size_t size) noexcept
 {
     if (data != nullptr && size != 0) OPENSSL_cleanse(data, size);

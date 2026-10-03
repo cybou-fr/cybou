@@ -34,6 +34,8 @@ std::span<const unsigned char> Bytes(const std::string_view value)
     return {reinterpret_cast<const unsigned char*>(value.data()), value.size()};
 }
 
+// Роль определяет ML-DSA suite: Recovery/PoA требуют более сильный профиль, тогда как
+// Authorization/Storage остаются компактнее для частых кандидат-операций и P2P идентификаторов.
 const char* Algorithm(IdentityKeyPurpose purpose)
 {
     switch (purpose) {
@@ -46,11 +48,14 @@ const char* Algorithm(IdentityKeyPurpose purpose)
     return nullptr;
 }
 
+// Размеры фиксируются ролью, чтобы сериализация и проверка digest fail-closed
+// отвергали несовместимый ключ вместо попытки "угадать" suite по длине входа.
 size_t PublicSize(IdentityKeyPurpose purpose)
 {
     return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE ? 1312 : 1952;
 }
 
+// Тот же принцип для подписей: протокол принимает только точный формат роли.
 size_t SignatureSize(IdentityKeyPurpose purpose)
 {
     return purpose == IdentityKeyPurpose::AUTHORIZATION || purpose == IdentityKeyPurpose::STORAGE ? 2420 : 3309;
@@ -61,6 +66,8 @@ bool HasNonzero(std::span<const unsigned char> bytes)
     return std::any_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte != 0; });
 }
 
+// Раздельные HKDF context не дают одному recovery entropy переиспользоваться
+// между Recovery, Authorization, Storage, PoA и offline Network Root.
 std::optional<std::string_view> DerivationInfo(
     const IdentityKeyPurpose purpose, const std::string_view component)
 {
@@ -110,9 +117,8 @@ Key MakeKey(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpos
         KeyCtx ctx{EVP_PKEY_CTX_new_from_name(nullptr, Algorithm(purpose), nullptr), EVP_PKEY_CTX_free};
         if (ctx && EVP_PKEY_keygen_init(ctx.get()) == 1) {
             OSSL_PARAM params[] = {
-                // Use the provider parameter name directly. The symbolic
-                // macro is absent from some OpenSSL 3.x headers even though
-                // the ML-DSA provider supports deterministic seed import.
+                // Имя параметра оставлено literal'ом: часть OpenSSL 3.x умеет
+                // deterministic seed import, но не экспортирует символическую macro.
                 OSSL_PARAM_construct_octet_string("seed", seed->data(), seed->size()),
                 OSSL_PARAM_construct_end(),
             };
@@ -236,6 +242,8 @@ public:
         }
 
         if (m_map.size() >= MAX_ENTRIES) {
+            // Кэш ускоряет повторные проверки публичных ключей, но жёсткий LRU-лимит
+            // не даёт атакующему раздувать память потоком одноразовых ключей.
             auto lru = --m_list.end();
             m_map.erase(lru->first);
             m_list.pop_back();

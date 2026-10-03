@@ -16,6 +16,7 @@ namespace {
 
 constexpr size_t BODY_SIZE{ 32 + 32 + 32 + 32};
 
+/// \brief Собирает canonical тело attestation без signature-хвоста.
 std::optional<std::vector<unsigned char>> SerializeBody(const ValidationAttestation& attestation)
 {
     if (attestation.network_binding.IsNull() ||
@@ -30,6 +31,7 @@ std::optional<std::vector<unsigned char>> SerializeBody(const ValidationAttestat
     return out;
 }
 
+/// \brief Читает 32 байта как Hash256 без дополнительной интерпретации порядка.
 cybou::Hash256 ReadUint256(std::span<const unsigned char> bytes)
 {
     cybou::Hash256 value;
@@ -54,6 +56,8 @@ std::optional<std::array<unsigned char, 32>> ComputeValidationAttestationDigest(
 std::optional<std::vector<unsigned char>> SerializeValidationAttestation(const ValidationAttestation& attestation)
 {
     auto out = SerializeBody(attestation);
+    // Validation wire currently fixes ML-DSA-44 size exactly, чтобы одна и та
+    // же attestation не имела нескольких допустимых длин кодирования.
     if (!out || attestation.signature.ml_dsa.size() != 2420) return std::nullopt;
     out->insert(out->end(), attestation.signature.ed25519.begin(), attestation.signature.ed25519.end());
     out->insert(out->end(), attestation.signature.ml_dsa.begin(), attestation.signature.ml_dsa.end());
@@ -80,6 +84,7 @@ std::optional<ValidationAttestation> DeserializeValidationAttestation(std::span<
 bool IsValidationEligible(const CybouState& finalized_state, const AccountId& account)
 {
     const auto found = finalized_state.accounts.find(account);
+    // Порог строгий: ровно 10 000 000 AUTH ещё не делает Identity eligible.
     return found != finalized_state.accounts.end() &&
         found->second.authority > VALIDATION_AUTHORITY_THRESHOLD;
 }
@@ -94,6 +99,8 @@ ValidationAttestationError VerifyValidationAttestation(const ValidationAttestati
     if (!IsValidationEligible(finalized_state, attestation.validator_account_id)) {
         return ValidationAttestationError::NOT_ELIGIBLE;
     }
+    // Authorization key берётся только из локального finalized state: peer не
+    // может "приклеить" внешний validator record к candidate operation.
     const auto* record = finalized_state.identities.Find(attestation.validator_account_id);
     if (!record || !VerifyIdentityMessage(record->authorization_key, attestation.signature, *digest)) {
         return ValidationAttestationError::INVALID_SIGNATURE;
@@ -118,6 +125,8 @@ std::optional<ValidationAttestation> SignValidationAttestation(const ValidationS
     const auto signature = signer.SignAuthorization(*digest);
     if (!signature) return std::nullopt;
     attestation.signature = *signature;
+    // Самопроверка удерживает контракт "подписываем только то, что сами же
+    // примем" и fail-closed ловит рассинхрон signer/state до gossip.
     if (VerifyValidationAttestation(attestation, network_binding, finalized_tip, finalized_state) !=
         ValidationAttestationError::NONE) return std::nullopt;
     return attestation;

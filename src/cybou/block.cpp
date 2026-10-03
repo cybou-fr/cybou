@@ -76,6 +76,8 @@ cybou::Hash256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& opera
     hashes.reserve(operations.size());
     for (const auto& op : operations) {
         const auto serialized = SerializeProtocolOperation(op);
+        // Невозможность сериализации уже делает блок неканоничным; здесь helper
+        // лишь пропускает такие операции, а внешний вызывающий код обязан отвергнуть блок раньше.
         if (!serialized) continue;
         cybou::Hash256 op_hash;
         ::cybou::crypto::Sha256().Write(serialized->data(), serialized->size()).Finalize(op_hash.begin());

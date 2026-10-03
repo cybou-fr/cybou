@@ -57,6 +57,7 @@ constexpr std::array RETRY_DELAYS{
     std::chrono::seconds{15}, std::chrono::seconds{60},
 };
 
+/// \brief Форматирует `year_month` как `YYYY-MM` для имен кэша и журналов.
 std::string MonthText(const std::chrono::year_month month)
 {
     return std::to_string(static_cast<int>(month.year())) + "-" +
@@ -64,6 +65,7 @@ std::string MonthText(const std::chrono::year_month month)
         std::to_string(static_cast<unsigned>(month.month()));
 }
 
+/// \brief Нормализует ASCII-строку к нижнему регистру без локали.
 std::string ToLowerAscii(std::string text)
 {
     std::transform(text.begin(), text.end(), text.begin(), [](const char c) {
@@ -72,6 +74,7 @@ std::string ToLowerAscii(std::string text)
     return text;
 }
 
+/// \brief Собирает строгий HTTPS GET без кэширования для официального DB-IP источника.
 http::request<http::empty_body> GeoRequest(std::string_view host, std::string_view target)
 {
     http::request<http::empty_body> request{http::verb::get, std::string{target}, 11};
@@ -221,6 +224,8 @@ std::string Gunzip(const std::string_view compressed)
         stream.avail_out = static_cast<uInt>(buffer.size());
         result = inflate(&stream, Z_NO_FLUSH);
         const auto produced = buffer.size() - stream.avail_out;
+        // Лимит проверяется до append: переполнение CSV-памяти должно
+        // завершать обновление fail-closed еще до публикации частичных данных.
         if (produced > MAX_CSV_BYTES - output.size()) {
             inflateEnd(&stream);
             throw std::runtime_error("Geo CSV exceeds the maximum allowed size");
@@ -297,6 +302,8 @@ void GeoDatabaseUpdater::LoadCached()
     for (std::filesystem::directory_iterator it{m_data_directory, ec}, end; !ec && it != end; it.increment(ec)) {
         if (!it->is_regular_file(ec)) continue;
         if (std::regex_match(it->path().filename().string(), part_name)) {
+            // Оставшийся `.part` означает незавершенную прежнюю установку; в
+            // кэш допускаются только полностью провалидированные atomically named CSV.
             std::error_code ignored;
             std::filesystem::remove(it->path(), ignored);
             continue;
@@ -325,6 +332,8 @@ GeoDatabaseUpdater::RefreshResult GeoDatabaseUpdater::RefreshOnce()
     if (!release) throw std::runtime_error("cannot parse the official DB-IP Lite release page");
 
     const auto current = m_current.load();
+    // Уже валидный локальный месяц не понижаем и не перекачиваем заново:
+    // downgrade недопустим, а повторная установка той же версии только расходует сеть.
     if (current && CurrentDataset() && release->month <= current->issued_month) return RefreshResult::CURRENT;
     const auto compressed = Fetch(DB_IP_FILE_HOST, release->download_path, MAX_GZIP_BYTES);
     if (Hex(ComputeSha1(compressed)) != release->sha1) {
@@ -349,6 +358,8 @@ GeoDatabaseUpdater::RefreshResult GeoDatabaseUpdater::RefreshOnce()
         output.flush();
         if (!output) throw std::runtime_error("cannot write Geo database cache file");
     }
+    // Перед atomically visible rename повторно валидируем ровно тот файл,
+    // который собираемся опубликовать в кэш, чтобы не разделять «скачано» и «разрешено к использованию».
     const auto dataset = LoadCachedDataset(temp, release->month, digest);
     if (!dataset) {
         std::filesystem::remove(temp);

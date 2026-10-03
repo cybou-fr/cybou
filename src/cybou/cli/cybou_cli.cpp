@@ -163,6 +163,8 @@ void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& da
     const bool has_sha256 = opts.Has("geo-sha256");
     const bool has_month = opts.Has("geo-issued-month");
     if (!has_csv && !has_sha256 && !has_month) {
+        // В онлайн-режиме CLI делегирует актуальность updater'у; пока готового
+        // датасета нет, публичный P2P останется fail-closed по месту использования.
         auto updater = p2p::GeoDatabaseUpdater::Start(data_directory / "geo");
         peer_admission_policy = std::make_shared<const p2p::PeerAdmissionPolicy>(
             p2p::PeerAdmissionPolicy::PublicWithUpdater(std::move(updater)));
@@ -322,6 +324,9 @@ int NetworkFollow(const Options& opts)
             });
             if (!present && !peers.Connect(host, port)) {
                 if (peers.LastConnectStatus() != p2p::PeerConnectStatus::UNAVAILABLE) {
+                    // Семантический отказ (wrong network, bad handshake, geo reject)
+                    // фиксируем навсегда для этого запуска, чтобы не крутиться по
+                    // заведомо плохому endpoint'у бесконечно.
                     rejected[i] = true;
                     std::cerr << "P2P peer rejected: " << host << ':' << port << '\n';
                 } else {
@@ -414,7 +419,8 @@ int RunNode(const Options& opts)
     const auto listen = opts.Has("listen") ? std::optional{ParseEndpoint(opts.Get("listen"))} : std::nullopt;
 
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
-    // Official networks discover peers from their compiled rendezvous locators.
+    // Official networks discover peers from their compiled rendezvous locators;
+    // CLI только добавляет operator hints поверх этой конституции сети.
     if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
     else if (network.rendezvous_locators.empty() && !opts.Has("peers") && !listen)
         throw std::invalid_argument("a network without bootstrap locators requires --peer, --peers or --listen");
@@ -430,6 +436,8 @@ int RunNode(const Options& opts)
         if (!bytes || bytes->size() != 32) throw std::runtime_error("PoA key file must be private and contain exactly 32 raw bytes");
         std::array<unsigned char, 32> seed{};
         std::copy(bytes->begin(), bytes->end(), seed.begin());
+        // Временный вектор очищается до передачи в `Secret32`, чтобы в памяти
+        // не оставалось двух живых копий одного и того же PoA секрета.
         crypto::CleanseMemory(bytes->data(), bytes->size());
         config.poa_finalizer_recovery_entropy = Secret32{seed};
         crypto::CleanseMemory(seed.data(), seed.size());

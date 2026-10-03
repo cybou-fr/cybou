@@ -159,13 +159,14 @@ bool DeserializeLocalRecord(const std::span<const unsigned char> bytes, T& value
 
 /// \brief Параметры открытия локального key-value store CYBOU.
 struct KVStoreOptions {
-    std::filesystem::path path;
-    size_t cache_bytes{8 << 20};
-    bool memory_only{false};
-    bool wipe_data{false};
+    std::filesystem::path path; ///< Каталог LevelDB; игнорируется только в `memory_only`.
+    size_t cache_bytes{8 << 20}; ///< Целевой бюджет кеша; нижняя граница принудительно повышается реализацией.
+    bool memory_only{false}; ///< Открыть временный in-memory store без файловой персистентности.
+    bool wipe_data{false}; ///< Уничтожить существующий store перед открытием; корневые пути отвергаются fail-closed.
 };
 
 /// \brief Минимальная типобезопасная оболочка над LevelDB для локальных записей CYBOU.
+/// \note Консенсусная детерминированность обеспечивается кодеками ключей/значений; сама оболочка не синхронизирует конкурентный доступ на уровне объекта.
 class KVStore final
 {
 public:
@@ -174,6 +175,7 @@ public:
         friend class KVStore;
 
     public:
+        /// \brief Создаёт пустой write batch.
         Batch();
         ~Batch();
 
@@ -182,6 +184,7 @@ public:
         Batch(const Batch&) = delete;
         Batch& operator=(const Batch&) = delete;
 
+        /// \brief Добавляет/заменяет запись в batch после локальной сериализации ключа и значения.
         template <typename K, typename V>
         void Write(const K& key, const V& value)
         {
@@ -190,6 +193,7 @@ public:
             PutRaw(serialized_key, serialized_value);
         }
 
+        /// \brief Помечает ключ к удалению в batch.
         template <typename K>
         void Erase(const K& key)
         {
@@ -203,12 +207,16 @@ public:
         void EraseRaw(const std::vector<unsigned char>& key);
     };
 
+    /// \brief Открывает локальный store.
+    /// \throws std::runtime_error при ошибках LevelDB или небезопасном `wipe_data`.
     explicit KVStore(const KVStoreOptions& options);
     ~KVStore();
 
     KVStore(const KVStore&) = delete;
     KVStore& operator=(const KVStore&) = delete;
 
+    /// \brief Читает типизированное значение по типизированному ключу.
+    /// \return `false`, если ключ отсутствует или локальная десериализация fail-closed не удалась.
     template <typename K, typename V>
     bool Read(const K& key, V& value) const
     {
@@ -223,6 +231,7 @@ public:
         }
     }
 
+    /// \brief Проверяет наличие ключа без десериализации значения.
     template <typename K>
     bool Exists(const K& key) const
     {
@@ -230,6 +239,7 @@ public:
         return ReadRaw(serialized_key).has_value();
     }
 
+    /// \brief Записывает одну запись как самостоятельный batch.
     template <typename K, typename V>
     void Write(const K& key, const V& value, bool sync = false)
     {
@@ -238,6 +248,8 @@ public:
         WriteBatch(batch, sync);
     }
 
+    /// \brief Атомарно применяет накопленный batch.
+    /// \throws std::runtime_error при ошибке LevelDB.
     void WriteBatch(Batch& batch, bool sync = false);
 
     /// \brief Обходит строки-ключи с заданным префиксом после локальной сериализации ключа.

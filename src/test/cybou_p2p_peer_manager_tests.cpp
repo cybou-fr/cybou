@@ -612,7 +612,7 @@ BOOST_AUTO_TEST_CASE(validation_attestations_gossip_only_to_nodes_holding_the_ca
     CybouServiceTestFixture fixture;
     const auto alice = fixture.CreateIdentity("gossip-validator.cybou");
     BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
-        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+        10'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     const auto bob = fixture.CreateIdentity("gossip-subject.cybou");
     const auto create = fixture.runtime->GetBlockAtHeight(*fixture.runtime->GetFinalizedHeight());
@@ -679,7 +679,7 @@ BOOST_AUTO_TEST_CASE(auth_validation_and_poa_end_to_end_over_p2p)
     auto& poa = *fixture.runtime;
     const auto alice = fixture.CreateIdentity("e2e-validator.cybou");
     BOOST_REQUIRE(poa.SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
-        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+        10'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
     BOOST_REQUIRE(poa.ProduceBlock());
     const auto head = *poa.GetFinalizedHeight();
 
@@ -782,7 +782,7 @@ BOOST_AUTO_TEST_CASE(auth_validation_and_poa_end_to_end_over_p2p)
         BOOST_CHECK(node->GetStateRoot() == poa.GetStateRoot());
         // AccountCreate earns no AUTH; the validator's AUTH came only from the PoA GRANT.
         BOOST_CHECK_EQUAL(node->GetAccountState(carol)->authority, 0U);
-        BOOST_CHECK_EQUAL(node->GetAccountState(*alice->GetAccountId())->authority, 1'000'001U);
+        BOOST_CHECK_EQUAL(node->GetAccountState(*alice->GetAccountId())->authority, 10'000'001U);
     }
 }
 

@@ -17,6 +17,7 @@
 namespace cybou {
 
 /// \brief Непрозрачный стабильный идентификатор аккаунта CYBOU.
+/// \note Нулевое значение зарезервировано как "невалидный/отсутствующий" маркер и не может появиться в каноническом состоянии.
 class AccountId
 {
 public:
@@ -25,7 +26,8 @@ public:
     AccountId() = default;
     explicit AccountId(const cybou::Hash256& value) : m_value{value} {}
 
-    /// \brief Создаёт AccountId из канонических 32 байт, отвергая нулевое значение.
+    /// \brief Создаёт `AccountId` из канонических 32 байт, отвергая нулевое значение.
+    /// \return `std::nullopt`, если длина не равна 32 или все байты нулевые.
     static std::optional<AccountId> FromBytes(std::span<const unsigned char> bytes)
     {
         if (bytes.size() != SIZE) return std::nullopt;
@@ -39,6 +41,7 @@ public:
     /// \brief Возвращает true только для зарезервированного нулевого идентификатора.
     bool IsNull() const { return m_value.IsNull(); }
     /// \brief Возвращает канонические 32 байта идентификатора.
+    /// \post Возвращаемое значение пригодно для консенсусной сериализации без преобразований.
     const cybou::Hash256& Value() const { return m_value; }
 
     friend bool operator==(const AccountId&, const AccountId&) = default;

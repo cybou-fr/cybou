@@ -34,6 +34,7 @@
 
 namespace cybou {
 namespace {
+// 60 = 16 magic/version/kdf header + 16 salt + 12 wrap nonce + 12 payload nonce + 4 payload length.
 constexpr size_t HEADER_SIZE{60};
 constexpr size_t SALT_OFFSET{16};
 constexpr size_t WRAP_NONCE_OFFSET{32};
@@ -132,6 +133,7 @@ uint32_t Load32(const unsigned char* in)
     return value;
 }
 
+// Временный путь получает случайный suffix в том же каталоге, чтобы atomic publish не выводил секреты за пределы vault domain.
 std::optional<std::filesystem::path> TemporaryPath(const std::filesystem::path& path)
 {
     std::array<unsigned char, 16> nonce{};
@@ -147,6 +149,7 @@ std::optional<std::filesystem::path> TemporaryPath(const std::filesystem::path& 
     return temp;
 }
 
+// Новый файл создаётся строго через CREATE_NEW/O_EXCL: vault никогда не должен бесшумно перезаписываться.
 bool WriteNewFile(const std::filesystem::path& path, std::span<const unsigned char> bytes)
 {
 #ifdef _WIN32
@@ -241,6 +244,7 @@ std::optional<std::vector<unsigned char>> ReadBoundedFile(const std::filesystem:
 #endif
 }
 
+// Argon2-параметры жёстко фиксированы форматом CYBV; несовпадение трактуется как ошибочный или чужой envelope.
 bool DeriveKek(std::string_view password, const unsigned char* salt,
     uint32_t memcost, uint32_t iterations, uint32_t lanes,
     std::array<unsigned char, 32>& kek)

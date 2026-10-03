@@ -24,6 +24,8 @@ bool Nonzero(const std::span<const unsigned char> bytes)
 const IdentityHybridPublicKey& ValidateRecoveryPoaKey(
     const RecoveryEntropy& entropy, const IdentityHybridPublicKey& expected)
 {
+    // Производим локальную сверку recovery phrase -> genesis PoA key до любого
+    // подписывания: PoA authority следует только из genesis-authorized key, а не из среды исполнения.
     if (!Nonzero(entropy)) throw std::invalid_argument{"empty operator recovery entropy"};
     const auto derived = DeriveIdentityPublicKey(entropy, IdentityKeyPurpose::POA_FINALIZER);
     if (!derived || *derived != expected) {
@@ -134,6 +136,8 @@ PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
     if (!m_signer) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
     const auto digest = ComputePoaFinalityDigest(m_network_binding, block_id, block.height, block.parent_block_id);
     const auto signature = m_signer->Sign(digest);
+    // Самопроверка подписи удерживает boundary signer'а fail-closed: наружный signer
+    // не может тихо вернуть некорректный сертификат.
     if (!signature || !VerifyIdentityMessage(m_public_key, *signature, digest)) {
         return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
     }

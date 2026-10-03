@@ -17,6 +17,8 @@
 namespace cybou::cli {
 
 /// \brief Проверяет, является ли токен именем опции формата `--name`.
+/// \param token Один токен argv.
+/// \return `true`, если токен начинается с `--` и содержит непустое имя.
 inline bool IsOptionToken(const std::string_view token) noexcept
 {
     return token.starts_with("--") && token.size() > 2;
@@ -27,6 +29,10 @@ class Options {
     std::map<std::string, std::string> m_values;
 public:
     /// \brief Разбирает хвост argv, начиная с указанного индекса.
+    /// \param argc Стандартное количество аргументов `main`.
+    /// \param argv Стандартный массив аргументов `main`.
+    /// \param start Индекс первого токена, который должен быть разобран как `--option value`.
+    /// \throw std::invalid_argument При непарной записи, повторе опции или позиционном токене.
     explicit Options(int argc, char* argv[], int start) {
         for (int i = start; i < argc; ++i) {
             const std::string_view key = argv[i];
@@ -39,24 +45,37 @@ public:
         }
     }
     /// \brief Возвращает true, если опция присутствует.
+    /// \param key Имя без префикса `--`.
     bool Has(const std::string& key) const { return m_values.contains(key); }
     /// \brief Возвращает значение опции или запасное значение.
+    /// \param key Имя без префикса `--`.
+    /// \param fallback Значение по умолчанию, если опция отсутствует.
     std::string Get(const std::string& key, const std::string& fallback = {}) const {
         auto it = m_values.find(key); return it == m_values.end() ? fallback : it->second;
     }
     /// \brief Возвращает обязательную опцию или выбрасывает исключение.
+    /// \param key Имя без префикса `--`.
+    /// \throw std::invalid_argument Если опция отсутствует или имеет пустое значение.
     std::string Require(const std::string& key) const {
         auto value = Get(key); if (value.empty()) throw std::invalid_argument("missing --" + key); return value;
     }
     /// \brief Разрешает только перечисленные опции.
+    /// \param keys Белый список допустимых имен без `--`.
     void Allow(std::initializer_list<std::string> keys) const { AllowSet(std::set<std::string>(keys)); }
     /// \brief Разрешает только заранее подготовленное множество опций.
+    /// \param allowed Белый список допустимых имен без `--`.
+    /// \throw std::invalid_argument Если встретилась неизвестная опция.
     void AllowSet(const std::set<std::string>& allowed) const {
         for (const auto& [key, value] : m_values) if (!allowed.contains(key)) throw std::invalid_argument("unknown --" + key);
     }
 };
 
 /// \brief Читает беззнаковое целое в заданном диапазоне.
+/// \param text Текстовое представление числа без знака.
+/// \param minimum Нижняя включительная граница.
+/// \param maximum Верхняя включительная граница.
+/// \return Разобранное значение.
+/// \throw std::invalid_argument При ошибке разбора или выходе за диапазон.
 inline std::uint64_t Number(std::string_view text, std::uint64_t minimum, std::uint64_t maximum) {
     std::uint64_t value{};
     auto result = std::from_chars(text.data(), text.data() + text.size(), value);
@@ -66,6 +85,10 @@ inline std::uint64_t Number(std::string_view text, std::uint64_t minimum, std::u
 }
 
 /// \brief Разбирает человекочитаемый размер или длительность с поддерживаемыми суффиксами.
+/// \param text Значение вроде `20GiB`, `5m`, `1000ms`.
+/// \param duration `true` для временных суффиксов (`ms`, `s`, `m`, `h`), `false` для size-суффиксов (`KiB`, `MiB`, `GiB`, `TiB`).
+/// \return Значение в базовых единицах: байты либо миллисекунды.
+/// \throw std::invalid_argument При неизвестном формате или выходе за диапазон.
 inline std::uint64_t Quantity(std::string text, bool duration = false) {
     std::uint64_t multiplier{1};
     static constexpr std::array duration_units{

@@ -32,6 +32,8 @@ namespace cybou {
 namespace {
 constexpr std::array<unsigned char, 4> JOURNAL_MAGIC{'C', 'Y', 'I', 'O'};
 constexpr std::string_view JOURNAL_DOMAIN{"CYBOU/IDENTITY-OPERATION-JOURNAL"};
+// 153 = 4 magic + 32 network binding + 32 AccountID + 8 nonce + 8 key_epoch
+//     + 1 kind + 32 payload commitment + 32 op_id + 4 payload length.
 constexpr size_t JOURNAL_FIXED_SIZE{4 + 32 + 32 + 8 + 8 + 1 + 32 + 32 + 4 + 32};
 constexpr size_t MAX_JOURNALED_OPERATION_BYTES{8U * 1024U * 1024U};
 constexpr size_t MAX_JOURNAL_BYTES{JOURNAL_FIXED_SIZE + MAX_JOURNALED_OPERATION_BYTES};
@@ -57,6 +59,8 @@ uint32_t Read32(std::span<const unsigned char> bytes)
     return value;
 }
 
+// Один durable replace гарантирует, что после сбоя координатор либо видит старые,
+// либо новые exact bytes, но не полусобранный replacement.
 bool DurableReplace(const std::filesystem::path& path, std::span<const unsigned char> bytes)
 {
     std::error_code ec;
@@ -107,6 +111,7 @@ bool DurableReplace(const std::filesystem::path& path, std::span<const unsigned 
 #endif
 }
 
+// Domain-separated checksum не позволяет принять как journal валидный hash из другого локального формата.
 std::optional<std::array<unsigned char, 32>> Checksum(std::span<const unsigned char> bytes)
 {
     std::array<unsigned char, 32> digest{};
@@ -114,6 +119,8 @@ std::optional<std::array<unsigned char, 32>> Checksum(std::span<const unsigned c
     return digest;
 }
 
+// Координатор выделяет только authorization-обвязку, чтобы повторно ретранслировать
+// exact bytes без знания внутренней структуры доменной payload-операции.
 std::optional<IdentityOperationAuthorization> AuthorizationOf(const ProtocolOperation& operation)
 {
     return std::visit([](const auto& value) -> std::optional<IdentityOperationAuthorization> {
@@ -125,6 +132,8 @@ std::optional<IdentityOperationAuthorization> AuthorizationOf(const ProtocolOper
     }, operation);
 }
 
+// KEM package commitment перечитывается из keystore, а не доверяется caller cache:
+// локальная ротация должна fail-closed сверяться с текущим секретным материалом.
 std::optional<std::array<unsigned char, 32>> PackageCommitment(
     const CybouNodeRuntime& runtime, const AccountId& account, uint64_t epoch,
     const CybouKeyStore& keystore)

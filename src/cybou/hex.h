@@ -7,8 +7,12 @@
 #include <span>
 namespace cybou {
 /// \brief Разбирает пользовательский 64-символьный hex Hash256 без префиксов.
+/// \param input Ввод пользователя.
+/// \return `Hash256`, либо `std::nullopt` при неверной длине или неhex-символах.
 std::optional<Hash256> ParseHash256UserHex(std::string_view input);
 /// \brief Кодирует произвольный буфер в строчный hex без разделителей.
+/// \param bytes Сырые байты в их фактическом порядке.
+/// \return Hex-строка длиной `bytes.size() * 2`.
 std::string HexEncode(std::span<const unsigned char> bytes);
 }
 #endif

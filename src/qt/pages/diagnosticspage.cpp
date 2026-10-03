@@ -9,6 +9,7 @@
 #include <qt/cybouui.h>
 
 #include <cybou/p2p/session.h>
+#include <cybou/validation_attestation.h>
 
 #include <QFrame>
 #include <QDialog>
@@ -223,7 +224,7 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
     const auto auth_val = m_model->authority();
     Row(m_rows, tr("Authority"), QStringLiteral("%1 AUTH").arg(QLocale{}.toString(auth_val)), parent);
-    Row(m_rows, tr("Validation eligible"), auth_val > 1000000 ? tr("Yes") : tr("No"), parent);
+    Row(m_rows, tr("Validation eligible"), auth_val > cybou::VALIDATION_AUTHORITY_THRESHOLD ? tr("Yes") : tr("No"), parent);
 
     ClearLayout(m_services);
     const auto& caps = m_model->featureAvailability();

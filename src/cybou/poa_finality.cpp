@@ -34,6 +34,8 @@ bool Nonzero(const std::span<const unsigned char> bytes)
 
 bool ValidFields(const PoaFinalityCertificate& certificate)
 {
+    // Нулевые значения запрещены, потому что PoA certificate должен uniquely bind
+    // сеть, блок и родителя; иначе min(BlockID) conflict rule теряет смысл.
     return !certificate.network_binding.IsNull() && !certificate.block_id.IsNull() &&
         certificate.height != 0 && !certificate.parent_block_id.IsNull() &&
         certificate.signature.ml_dsa.size() == 3309 &&
@@ -82,6 +84,8 @@ bool VerifyPoaCertificateForBlock(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
     const cybou::Hash256& expected_network_binding, const CybouBlock& block)
 {
+    // Сначала убеждаемся, что сам блок канонически сериализуем: PoA signature не
+    // может легализовать блок, у которого нет однозначного wire/header представления.
     if (!SerializeBlock(block)) return false;
     const auto block_id = ComputeBlockId(block);
     if (block_id.IsNull()) return false;

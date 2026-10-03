@@ -18,6 +18,7 @@ namespace {
 
 constexpr char HEX[] = "0123456789abcdef";
 
+/// Канонический lower-case hex для ключей metadata store.
 std::string Hex(const std::span<const unsigned char> bytes)
 {
     std::string result(bytes.size() * 2, '\0');
@@ -28,6 +29,7 @@ std::string Hex(const std::span<const unsigned char> bytes)
     return result;
 }
 
+/// Строгий разбор ChunkId из metadata key.
 std::optional<ChunkId> ParseChunkId(const std::string_view hex)
 {
     if (hex.size() != 64) return std::nullopt;
@@ -46,16 +48,19 @@ std::optional<ChunkId> ParseChunkId(const std::string_view hex)
     return id;
 }
 
+/// Ключ размера admitted blob.
 std::string ChunkKey(const std::string& name_space, const ChunkId& id)
 {
     return name_space + "/chunk/" + Hex(id);
 }
 
+/// Ключ привязки публикации к конкретному chunk proof.
 std::string PublicationChunkKey(const std::string& name_space, const cybou::Hash256& publication_id, const ChunkId& id)
 {
     return name_space + "/publication-chunk/" + publication_id.GetHex() + "/" + Hex(id);
 }
 
+/// Proof кодируется отдельно от blob: один physical ciphertext может быть авторизован несколькими публикациями.
 std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& proof)
 {
     std::vector<unsigned char> encoded;
@@ -69,6 +74,7 @@ std::vector<unsigned char> EncodeProofMetadata(const ChunkAuthorizationProof& pr
     return encoded;
 }
 
+/// Любая неоднозначность кодирования proof считается corruption.
 std::optional<ChunkAuthorizationProof> DecodeProofMetadata(const std::span<const unsigned char> encoded)
 {
     if (encoded.size() < 8 || encoded.size() > 8 + 32 * 32) return std::nullopt;
@@ -131,7 +137,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
                 size > std::numeric_limits<std::uint64_t>::max() - total) {
                 throw std::runtime_error{"invalid finalized chunk size metadata"};
             }
-            // На старте проверяем только наличие и размер; полная BLAKE3-проверка происходит на GET и owner-аудитах.
+            // На старте проверяем только наличие и размер; полная BLAKE3-проверка остаётся на GET и аудитах, чтобы reopen был дешёвым.
             if (m_blobs.StoredSize(*id) != std::optional<std::uint64_t>{size}) {
                 throw std::runtime_error{"provider chunk blob is missing or has the wrong size"};
             }
@@ -164,6 +170,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
     std::optional<RootPublication> publication;
     try { publication = lookup(publication_operation_id); }
     catch (...) { return {ChunkAdmissionStatus::NOT_FINALIZED}; }
+    // Finality-first admission: provider не принимает chunk, пока RootPublication не виден в finalized state.
     if (!publication) return {ChunkAdmissionStatus::NOT_FINALIZED};
     if (!VerifyChunkAuthorizationProof(*publication, chunk_id, proof)) return {ChunkAdmissionStatus::NOT_AUTHORIZED};
 
@@ -199,6 +206,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
             std::error_code ec;
             const auto space = std::filesystem::space(m_path, ec);
             const uint64_t reserve = std::max<uint64_t>(1ULL << 30, space.capacity / 20);
+            // Fail-closed reserve совпадает с архитектурой provider admission: нехватка или неизвестность места блокирует новый admission.
             if (ec || space.available <= reserve || stored_bytes.size() > space.available - reserve)
                 return {ChunkAdmissionStatus::CAPACITY_EXCEEDED};
         }
@@ -220,7 +228,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         m_db->WriteBatch(batch, true);
         return {ChunkAdmissionStatus::STORED};
     } catch (...) {
-        // Если метаданные не записались, сам корректный blob может ещё быть нужен локальному staging.
+        // Если metadata write не завершился, provisional-admission не существует: authoritative proof так и не появляется.
         return {ChunkAdmissionStatus::STORAGE_ERROR};
     }
 }

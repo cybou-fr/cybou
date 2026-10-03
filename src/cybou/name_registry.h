@@ -38,16 +38,16 @@ inline constexpr size_t AUTHORIZED_NAME_REVEAL_SIZE{2565 + NAME_REVEAL_PAYLOAD_S
 
 /// \brief Ошибки синтаксической проверки публичной label .cybou.
 enum class NameValidationError : uint8_t {
-    NONE,
-    EMPTY,
-    TOO_SHORT,
-    TOO_LONG,
-    INVALID_CHARACTER,
-    INVALID_START_END,
-    CONSECUTIVE_HYPHENS,
-    IDN_PREFIX,
-    ALL_DIGITS,
-    PROTECTED_NAME,
+    NONE,                ///< Label допустима для `.cybou`.
+    EMPTY,               ///< Пустая label.
+    TOO_SHORT,           ///< Длина меньше `NAME_MIN_LABEL_LENGTH`.
+    TOO_LONG,            ///< Длина больше `NAME_MAX_LABEL_LENGTH`.
+    INVALID_CHARACTER,   ///< Есть символ вне `[a-z0-9-]`.
+    INVALID_START_END,   ///< Label начинается или заканчивается `-`.
+    CONSECUTIVE_HYPHENS, ///< Запрещена последовательность `--`.
+    IDN_PREFIX,          ///< Запрещён зарезервированный префикс `xn--`.
+    ALL_DIGITS,          ///< Нужна хотя бы одна латинская буква.
+    PROTECTED_NAME,      ///< Label зарезервирована протоколом/genesis.
 };
 
 /// \brief Проверяет публичную label .cybou по каноническим правилам.
@@ -431,31 +431,31 @@ inline std::optional<NameRegistry> DeserializeNameRegistry(std::span<const unsig
 
 /// \brief Ошибки применения NameCommit к кандидатному состоянию.
 enum class NameCommitError : uint8_t {
-    NONE,
-    INVALID_PAYLOAD,
-    INVALID_AUTHORIZATION,
-    ACCOUNT_NOT_FOUND,
-    ACCOUNT_ALREADY_HAS_NAME,
-    ACCOUNT_HAS_PENDING_COMMIT,
-    COMMITMENT_EXISTS,
-    COMMITMENT_LIMIT_EXCEEDED,
+    NONE,                      ///< Commit принят.
+    INVALID_PAYLOAD,           ///< Payload неканоничен.
+    INVALID_AUTHORIZATION,     ///< Identity authorization невалидна.
+    ACCOUNT_NOT_FOUND,         ///< Авторизующий аккаунт отсутствует.
+    ACCOUNT_ALREADY_HAS_NAME,  ///< У аккаунта уже есть финализированное имя.
+    ACCOUNT_HAS_PENDING_COMMIT, ///< У аккаунта уже есть другой pending commit.
+    COMMITMENT_EXISTS,         ///< Такой commit уже зарегистрирован.
+    COMMITMENT_LIMIT_EXCEEDED, ///< Превышен лимит pending commit-ов.
 };
 
 /// \brief Ошибки применения NameReveal к кандидатному состоянию.
 enum class NameRevealError : uint8_t {
-    NONE,
-    INVALID_PAYLOAD,
-    INVALID_AUTHORIZATION,
-    INVALID_LABEL_SYNTAX,
-    ACCOUNT_NOT_FOUND,
-    ACCOUNT_ALREADY_HAS_NAME,
-    NAME_ALREADY_TAKEN,
-    COMMITMENT_NOT_FOUND,
-    COMMITMENT_ACCOUNT_MISMATCH,
-    INSUFFICIENT_COMMIT_DEPTH,
-    COMMIT_EXPIRED,
-    INVALID_WORK_TARGET,
-    INVALID_WORK_PROOF,
+    NONE,                      ///< Reveal принят и имя закреплено.
+    INVALID_PAYLOAD,           ///< Payload неканоничен.
+    INVALID_AUTHORIZATION,     ///< Identity authorization невалидна.
+    INVALID_LABEL_SYNTAX,      ///< Label нарушает правила `.cybou`.
+    ACCOUNT_NOT_FOUND,         ///< Авторизующий аккаунт отсутствует.
+    ACCOUNT_ALREADY_HAS_NAME,  ///< У аккаунта уже есть имя.
+    NAME_ALREADY_TAKEN,        ///< Имя уже занято либо зарезервировано genesis.
+    COMMITMENT_NOT_FOUND,      ///< Соответствующий pending commit отсутствует.
+    COMMITMENT_ACCOUNT_MISMATCH, ///< Commit принадлежит другому аккаунту.
+    INSUFFICIENT_COMMIT_DEPTH, ///< Не выдержана минимальная глубина между commit и reveal.
+    COMMIT_EXPIRED,            ///< Pending commit истёк.
+    INVALID_WORK_TARGET,       ///< Зарезервировано для ошибок цели сложности reveal PoW.
+    INVALID_WORK_PROOF,        ///< Reveal PoW или его binding некорректны.
 };
 
 /// \brief Псевдоним публичного типа для NameCommit operation payload.

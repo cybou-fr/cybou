@@ -22,11 +22,14 @@ constexpr std::array<std::string_view, 2048> WORDS{
 #include <cybou/bip39_english.inc>
 };
 
+// Recovery phrase хранит канонический bit order BIP-39; это стабильный формат экспорта,
+// а не локализуемый UI-словарь.
 unsigned char GetBit(const unsigned char* bytes, size_t position)
 {
     return (bytes[position / 8] >> (7 - position % 8)) & 1;
 }
 
+// Явная установка битов удерживает checksum в точном BIP-39 порядке без зависимости от битовых полей ABI.
 void SetBit(unsigned char* bytes, size_t position, unsigned char value)
 {
     bytes[position / 8] |= value << (7 - position % 8);

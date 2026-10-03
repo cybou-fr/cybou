@@ -18,6 +18,8 @@
 
 namespace cybou {
 namespace {
+// Восстановление сверяет Recovery/Authorization/KEM с финализированным состоянием:
+// владение словами без совпадения с canonical state не делает Identity активной.
 bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& account_id, const CybouKeyStore& keystore);
 }
 
@@ -131,6 +133,7 @@ namespace {
 
 struct PasswordWiper {
     std::string& value;
+    // Пароль живёт только в RAM текущего шага и должен исчезнуть и при успехе, и при ошибке.
     ~PasswordWiper() { if (!value.empty()) crypto::CleanseMemory(value.data(), value.size()); }
 };
 
@@ -141,6 +144,8 @@ bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& acco
     const auto kem_public = keystore.GetIdentityXWingPublicKey();
     const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
     const auto loaded = runtime.GetStore().LoadState();
+    // Сначала локально подтверждаем, что keystore самосогласован, и только потом
+    // сравниваем его с финализированным состоянием, чтобы не принять повреждённый секрет.
     if (!authorization_key || !recovery_key || !package || !keystore.ValidateIdentityXWingKeyPair() || !loaded || !loaded.state) return false;
     const auto* record = loaded.state->identities.Find(account_id);
     if (!record || record->authorization_key != *authorization_key || record->recovery_key != *recovery_key) return false;
@@ -208,8 +213,8 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
             .authorization_key = *authorization_key,
         };
 
-        // A new account cannot be broadcast until the portable vault has been
-        // durably published and authenticated by reopening it.
+        // Новый аккаунт нельзя публиковать, пока единственная переносимая копия секрета
+        // не сохранена durable и не открылась обратно: финализация не должна обогнать backup.
         if (!m_vault_saved) {
             if (password.size() < 12 || !m_keystore.SaveToFile(*m_storage_path, password)) {
                 m_phase.store(IdentityCreationPhase::FAILED);
@@ -327,8 +332,8 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
                 reason = "The network could not read the new Identity (invalid payload).";
                 break;
             default: {
-                // The finalizer does not say why; replay the exact operation
-                // against this node's own verified finalized state.
+                // PoA не обязан объяснять отказ; локальный Full Node переисполняет
+                // exact bytes на своей verified finalized state ради детерминированной диагностики.
                 reason = "The network rejected the new Identity";
                 const auto next_height = m_runtime.GetFinalizedHeight().value_or(0) + 1;
                 const auto check = ValidateAccountCreateOp(op, network_binding, next_height, params);

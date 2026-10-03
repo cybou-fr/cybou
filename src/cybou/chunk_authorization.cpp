@@ -16,25 +16,31 @@
 namespace cybou {
 namespace {
 
+/// Домен для leaf-хэша: отделяет авторизацию чанков от любых иных BLAKE3-коммитментов.
 constexpr std::string_view LEAF_DOMAIN{"CYBOU/CHUNK-AUTH/LEAF"};
+/// Домен для внутреннего узла: root нельзя подменить leaf-хэшем из другой структуры.
 constexpr std::string_view NODE_DOMAIN{"CYBOU/CHUNK-AUTH/NODE"};
 
+/// Представляет ASCII domain как span байтов без копирования.
 std::span<const unsigned char> Bytes(const std::string_view text)
 {
     return {reinterpret_cast<const unsigned char*>(text.data()), text.size()};
 }
 
+/// Нулевой ChunkId никогда не считается корректным leaf публикации.
 bool IsZero(const ChunkId& id)
 {
     return std::all_of(id.begin(), id.end(), [](const auto byte) { return byte == 0; });
 }
 
+/// Leaf коммитится именно по ChunkId stored-чанка, а не по plaintext или порядковому номеру.
 ChunkId HashLeaf(const AuthorizedChunk& chunk)
 {
     const std::array parts{Bytes(LEAF_DOMAIN), std::span<const unsigned char>{chunk.id}};
     return ComputeBlake3Digest(parts);
 }
 
+/// Внутренний узел хэширует упорядоченную пару дочерних хэшей с отдельным доменом.
 ChunkId HashNode(const ChunkId& left, const ChunkId& right)
 {
     const std::array parts{
@@ -45,6 +51,7 @@ ChunkId HashNode(const ChunkId& left, const ChunkId& right)
     return ComputeBlake3Digest(parts);
 }
 
+/// Базовая валидация без проверки дубликатов: порядок leaves задаётся вызывающей стороной.
 bool ValidChunkSet(const std::span<const AuthorizedChunk> chunks)
 {
     if (chunks.empty() || chunks.size() > MAX_PUBLICATION_CHUNKS) return false;
@@ -141,6 +148,7 @@ bool VerifyChunkAuthorizationPath(
             if ((index & 1U) != 0) {
                 current = HashNode(sibling, current);
             } else if (index + 1 >= width) {
+                // Нечётный хвост дублируется сам в себя, поэтому proof обязан вернуть тот же hash.
                 if (sibling != current) return false;
                 current = HashNode(current, sibling);
             } else {
@@ -165,6 +173,7 @@ std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(
             if (!unique_ids.insert(chunk.id).second) return std::nullopt;
         }
 
+        // Полное дерево нужно только там, где затем запрашиваются независимые Merkle proofs.
         std::vector<std::vector<ChunkId>> levels;
         levels.emplace_back();
         levels.back().reserve(chunks.size());

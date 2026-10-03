@@ -10,6 +10,8 @@ namespace cybou {
 
 ValidationPoolAdd ValidationPool::Add(const ValidationAttestation& attestation)
 {
+    // Sidecar deliberately shares one finalized base for every operation: once
+    // tip changes, mixed-base Validation would only mislead local UX/gossip.
     if (m_base.IsNull() || attestation.finalized_base_block_id != m_base) return ValidationPoolAdd::STALE_BASE;
     auto entry = m_entries.find(attestation.operation_id);
     if (entry == m_entries.end()) {
@@ -26,6 +28,8 @@ void ValidationPool::ResetBase(const cybou::Hash256& finalized_tip)
 {
     if (finalized_tip == m_base) return;
     m_base = finalized_tip;
+    // Validation never creates state, so advancing finality simply invalidates
+    // the whole evidence cache instead of migrating entries across bases.
     m_entries.clear();
 }
 

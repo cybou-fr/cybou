@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 }
 
-BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_million)
+BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_ten_million)
 {
     CybouServiceTestFixture fixture;
     const auto alice = fixture.CreateIdentity("alice.cybou");
@@ -268,9 +268,9 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
     BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 
-    grant(1'000'000);
+    grant(10'000'000);
     std::tie(state, tip) = finalized();
-    BOOST_CHECK_EQUAL(state.accounts.at(*account).authority, 1'000'000U);
+    BOOST_CHECK_EQUAL(state.accounts.at(*account).authority, 10'000'000U);
     BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
     BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
     CybouServiceTestFixture fixture;
     const auto alice = fixture.CreateIdentity("alice.cybou");
     BOOST_REQUIRE(fixture.runtime->SubmitPoaAuthAdjustment(cybou::PoaAuthAction::GRANT, *alice->GetAccountId(),
-        1'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
+        10'000'001).status == cybou::OperationSubmitStatus::ACCEPTED);
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     const auto bob = fixture.CreateIdentity("bob.cybou");
     cybou::CybouNameService names{*fixture.runtime, bob->GetKeyStore(), fixture.directory / "bob.cybou"};

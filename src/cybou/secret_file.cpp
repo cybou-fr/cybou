@@ -17,6 +17,7 @@
 namespace cybou {
 #ifdef _WIN32
 namespace {
+/// \brief Проверяет, что файл принадлежит текущему пользователю и разрешает доступ только owner/SYSTEM.
 bool OwnedPrivate(HANDLE file) {
     PSID owner=nullptr; PACL acl=nullptr; PSECURITY_DESCRIPTOR descriptor=nullptr;
     if(GetSecurityInfo(file,SE_FILE_OBJECT,OWNER_SECURITY_INFORMATION|DACL_SECURITY_INFORMATION,&owner,nullptr,&acl,nullptr,&descriptor)!=ERROR_SUCCESS) return false;
@@ -78,6 +79,8 @@ bool CreateSecretFile(const std::filesystem::path& path,std::span<const unsigned
     size_t offset=0;while(offset<bytes.size()) {const auto n=write(fd,bytes.data()+offset,bytes.size()-offset);if(n<0&&errno==EINTR)continue;if(n<=0)break;offset+=n;}
     bool ok=offset==bytes.size()&&fsync(fd)==0;if(close(fd)!=0)ok=false;
     if(!ok) {unlink(path.c_str());return false;}
+    // Отдельный fsync каталога делает durable не только содержимое, но и сам
+    // факт появления нового секретного файла после сбоя питания.
     const auto parent=path.parent_path().empty()?std::filesystem::path{"."}:path.parent_path();
     const int dir=open(parent.c_str(),O_RDONLY|O_DIRECTORY|O_CLOEXEC);if(dir<0)return false;ok=fsync(dir)==0;close(dir);return ok;
 #endif

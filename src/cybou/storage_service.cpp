@@ -23,6 +23,7 @@ namespace {
 
 constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'S', 'P'};
 
+/// Дедупликация идёт по StorageId, потому что один Full Node может отвечать с нескольких endpoint.
 bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoint& provider)
 {
     return std::any_of(replicas.begin(), replicas.end(),
@@ -31,24 +32,29 @@ bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoin
 /// Верхняя граница числа реплик, сериализуемых на один чанк placement.
 constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 
+/// Ключ индекса всех placements, за которыми идёт audit/repair.
 constexpr std::string_view PLACEMENT_INDEX_KEY{"storage/placements"};
 
+/// Placement metadata живут в Application DB, а не в consensus state.
 std::string PlacementKey(const cybou::Hash256& operation_id)
 {
     return "storage/placement/" + operation_id.GetHex();
 }
 
+/// Little-endian encoding достаточно для локального state.
 void Append16(std::vector<unsigned char>& out, const std::uint16_t value)
 {
     out.push_back(static_cast<unsigned char>(value));
     out.push_back(static_cast<unsigned char>(value >> 8));
 }
 
+/// Little-endian encoding достаточно для локального state.
 void Append32(std::vector<unsigned char>& out, const std::uint32_t value)
 {
     for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
+/// Минимальный локальный reader fail-closed для placement metadata.
 class Reader {
 public:
     explicit Reader(std::span<const unsigned char> bytes) : m_bytes{bytes} {}
@@ -177,6 +183,7 @@ std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const S
 
 struct StorageService::Placement {
     cybou::Hash256 operation_id;
+    /** Точный leaf-order finalized публикации; именно он нужен для Merkle proof каждого чанка. */
     std::vector<ChunkId> leaves;
     /** Удалённые providers, подтвердившие leaf; локальная копия здесь никогда не учитывается. */
     std::vector<std::vector<StorageEndpoint>> replicas;
@@ -315,6 +322,8 @@ PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id,
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Application DB is locked"};
     }
     // Размещаем только finalized публикации и только с их точным набором leaves.
+    // Это соответствует finality-first admission из docs/cybou/STORAGE_ADMISSION.md:
+    // Validation сама по себе не даёт права на placement.
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
     if (leaves.empty() || leaves.size() > MAX_PUBLICATION_CHUNKS || leaves.size() != publication->chunk_count) {
@@ -351,6 +360,7 @@ std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
     if (!publication) return std::nullopt;
     for (const auto& provider : m_transport.Providers()) {
         const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+        // Доверяем не provider-ответу самому по себе, а локальной повторной проверке proof против finalized state.
         if (proof && VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) return proof;
     }
     return std::nullopt;
@@ -384,6 +394,7 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
             lock.unlock();
             const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
             lock.lock();
+            // Rebuild принимает только те кандидаты, которые достижимый provider может доказать против finalized publication.
             if (!proof || !VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) continue;
             if (proof->leaf_index >= placement.leaves.size()) {
                 return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Provider returned an invalid leaf index"};
@@ -441,6 +452,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
 
     ActivePlacementGuard guard{lock, m_active_placements, m_placement_cv, placement.operation_id};
 
+    // Proof'ы пересобираются локально из сохранённого leaf-order; placement не хранит готовые Merkle paths.
     std::vector<AuthorizedChunk> chunks;
     chunks.reserve(placement.leaves.size());
     for (const auto& leaf : placement.leaves) chunks.push_back({leaf});
@@ -634,7 +646,7 @@ std::optional<std::vector<unsigned char>> StorageService::FetchInternal(const Ch
     for (const auto& provider : candidates) {
         auto bytes = m_transport.Get(provider, chunk_id);
         if (!bytes || ComputeChunkId(*bytes) != chunk_id) continue;
-        // Кешируем уже проверенный ciphertext; провал записи в кеш не ломает выдачу данных.
+        // Кешируем уже проверенный ciphertext; fetch не создаёт новых provider-обязательств и не меняет финализацию.
         (void)m_runtime.GetChunkBlobStore().Put(chunk_id, *bytes);
         (void)m_runtime.GetChunkRetention().NoteCacheUse(chunk_id, now_ms);
         return bytes;

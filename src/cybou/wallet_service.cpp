@@ -12,6 +12,7 @@
 
 namespace cybou {
 namespace {
+// Pending-журнал получает локальную отметку времени сразу, даже если финализация наступит позже или не наступит вовсе.
 std::uint64_t NowUnixSeconds()
 {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(

@@ -37,6 +37,7 @@ NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const st
 
 namespace {
 
+/// \brief Форматирует ChunkId в lower-case hex для diagnostics/event log.
 std::string ChunkIdHex(const ChunkId& id)
 {
     static constexpr char digits[]="0123456789abcdef";
@@ -50,6 +51,7 @@ std::string ChunkIdHex(const ChunkId& id)
 // no business dialing: unspecified, multicast, and (unless the local CYBOU P2P
 // listener lives in the same scope) loopback and link-local targets. Without a
 // known local listener the policy stays permissive for DEV tooling.
+/// \brief Определяет private/ULA адреса, которые нельзя безусловно dial'ить по чужим routing hints.
 bool IsPrivateAddress(const boost::asio::ip::address& addr)
 {
     const auto is_private_v4 = [](const uint32_t value) {
@@ -70,6 +72,7 @@ bool IsPrivateAddress(const boost::asio::ip::address& addr)
     return (bytes[0] & 0xFEU) == 0xFCU; // Unique-local IPv6 (fc00::/7).
 }
 
+/// \brief Отфильтровывает discovered endpoints, которые выглядели бы loopback/link-local/private из чужой зоны.
 bool IsConnectableDiscoveredAddress(
     const boost::asio::ip::address& addr,
     const std::optional<std::pair<std::string, uint16_t>>& advertised_endpoint)
@@ -106,7 +109,8 @@ bool IsConnectableDiscoveredAddress(
 } // namespace
 
 namespace {
-/** 32 random bytes kept beside provider data (0600); in memory for memory-only runtimes. */
+/// \brief Загружает или создаёт стабильный storage secret узла.
+/// \details 32 random bytes kept beside provider data (0600); in memory for memory-only runtimes.
 std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const std::filesystem::path& path)
 {
     std::array<unsigned char, 32> secret{};
@@ -159,6 +163,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
             const auto space = std::filesystem::space(storage_path, ec);
             const uint64_t reserve = std::max<uint64_t>(gib, space.capacity / 20);
             const uint64_t usable = space.available > reserve ? space.available - reserve : 0;
+            // Automatic storage is a local policy only: keep a floor for tiny
+            // installs, keep reserve space for the machine, and cap runaway use.
             if (!ec) target = std::clamp<uint64_t>(usable / 10, 64ULL << 20, 20 * gib);
         }
         m_config.storage_capacity_bytes = target;
@@ -310,6 +316,8 @@ bool CybouNodeRuntime::InitializeGenesis(const CybouState& genesis, const bool s
     if (loaded.error == StateLoadError::NONE && loaded.state.has_value()) {
         return true;
     }
+    // Any non-NOT_FOUND load error is treated as authoritative here: a caller
+    // must not overwrite corrupt or foreign-network data by "initializing again".
     if (loaded.error != StateLoadError::NOT_FOUND) {
         return false;
     }
@@ -347,6 +355,8 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     }
     status.poa_safety_halted = m_production_status == BlockProductionStatus::SAFETY_HALT || m_store.PoaSafetyHalted() ||
         (m_poa_finalizer && m_poa_finalizer->SafetyHalted());
+    // Safety halt intentionally dominates READY once state exists: UX must
+    // surface fail-closed signing state even though finalized reads still work.
     if (status.poa_safety_halted && status.is_initialized) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
     return status;
 }
@@ -488,6 +498,8 @@ void CybouNodeRuntime::SetValidationSigner(ValidationSignerRef signer)
 {
     std::lock_guard lock{m_mutex};
     m_validation_signer = std::move(signer);
+    // Refreshing local Validation eagerly keeps the sidecar aligned with the
+    // signer currently active on this node instead of leaking prior identity state.
     for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
 }
 
@@ -741,6 +753,8 @@ void CybouNodeRuntime::EmitFinalizedEvents(const FinalizedBlock& block, bool pro
         m_config.event_writer->Write(NodeEvent::block_finalized, fields);
     }
     for (const auto& op : block.block.operations) if (const auto id = ComputeOperationId(op)) {
+        // Finalization is the only canonical answer. Once known, clear any
+        // lingering relay work and collapse local status to FINALIZED.
         m_operation_relay.ForgetFinalized(*id);
         RememberOperationStatus(*id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = block.block.height});
           if (m_config.event_writer) std::visit([&](const auto& value) {
@@ -791,6 +805,8 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
             const auto operations = m_operation_pool.Snapshot();
             const auto root = m_store.ComputeCandidateStateRoot(operations, head->height + 1);
             if (!root) { RevalidateCandidates(); return std::nullopt; }
+            // Snapshot() preserves the node's locally validated candidate order;
+            // PoA finalization never imports an external mempool ordering.
             CybouBlock candidate{.parent_block_id = head->block_id,
                 .height = head->height + 1, .operations = operations, .resulting_state_root = *root};
             const auto encoded = SerializeBlock(candidate);
@@ -902,6 +918,8 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const cy
             return result;
         }
         const auto block_id = ComputeBlockId(finalized->block);
+        // Lookup is intentionally strict: any gap or certificate mismatch means
+        // the local history cannot be used as verified evidence for this answer.
         if (finalized->block.parent_block_id != previous_id ||
             finalized->certificate.network_binding != status.network_binding ||
             finalized->certificate.height != height ||
@@ -1036,6 +1054,8 @@ void CybouNodeRuntime::SchedulePeerRetry(
         retry.retry_after = now + backoff(retry.temporary_failures, 5, 300);
         break;
     case PeerFailureClass::PROTOCOL:
+        // Protocol mismatches back off far more aggressively than transient
+        // reachability to avoid hammering obviously incompatible peers.
         retry.protocol_failures = std::min<uint32_t>(retry.protocol_failures + 1, 16);
         retry.retry_after = now + backoff(retry.protocol_failures, 1800, 86400);
         break;

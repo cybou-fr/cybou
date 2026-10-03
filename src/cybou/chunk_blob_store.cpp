@@ -32,6 +32,7 @@ namespace {
 
 constexpr char HEX[] = "0123456789abcdef";
 
+/// Канонический lower-case hex для путей ChunkStore.
 std::string Hex(const std::span<const unsigned char> bytes)
 {
     std::string result(bytes.size() * 2, '\0');
@@ -42,11 +43,13 @@ std::string Hex(const std::span<const unsigned char> bytes)
     return result;
 }
 
+/// Для content-addressed store одинаковый ChunkId обязан означать побайтно тот же ciphertext.
 bool SameBytes(const std::vector<unsigned char>& left, const std::span<const unsigned char> right)
 {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin());
 }
 
+/// Разбирает имя файла обратно в ChunkId; любая неоднозначность делает путь недействительным.
 std::optional<ChunkId> ParseChunkId(const std::string_view hex)
 {
     if (hex.size() != 64) return std::nullopt;
@@ -65,12 +68,14 @@ std::optional<ChunkId> ParseChunkId(const std::string_view hex)
     return id;
 }
 
+/// Физическая раскладка blobs `chunks/aa/bb/fullhex` ограничивает число файлов в каталоге.
 std::filesystem::path BlobPath(const std::filesystem::path& root, const ChunkId& id)
 {
     const auto hex = Hex(id);
     return root / hex.substr(0, 2) / hex.substr(2, 2) / hex;
 }
 
+/// Чтение fail-closed: blob выдаётся только если размер и полный BLAKE3 совпадают.
 std::optional<std::vector<unsigned char>> ReadBlob(const std::filesystem::path& path, const ChunkId& id)
 {
     try {
@@ -92,6 +97,7 @@ std::optional<std::vector<unsigned char>> ReadBlob(const std::filesystem::path& 
     }
 }
 
+/// Полная запись нужна, чтобы временный файл не стал видимым как частичный blob.
 bool WriteAll(const int fd, const std::span<const unsigned char> bytes)
 {
     std::size_t offset{0};
@@ -108,6 +114,7 @@ bool WriteAll(const int fd, const std::span<const unsigned char> bytes)
     return true;
 }
 
+/// После rename каталог тоже синхронизируется, чтобы exact-byte blob пережил сбой питания.
 bool SyncDirectory(const std::filesystem::path& directory)
 {
 #ifdef _WIN32
@@ -122,7 +129,7 @@ bool SyncDirectory(const std::filesystem::path& directory)
 #endif
 }
 
-/** replace: overwrite a damaged existing blob (POSIX rename always replaces). */
+/// Повреждённый blob можно перезаписать только теми же exact bytes под тем же ChunkId.
 bool WriteBlobAtomically(const std::filesystem::path& path, const ChunkId& id,
     const std::span<const unsigned char> bytes, const bool replace = false)
 {
@@ -170,6 +177,7 @@ bool WriteBlobAtomically(const std::filesystem::path& path, const ChunkId& id,
     return true;
 }
 
+/// Стартовый scan не доверяет каталогу: symlink, мусорные файлы и неверные имена считаются corruption.
 std::uint64_t ScanBlobs(const std::filesystem::path& root)
 {
     if (!std::filesystem::exists(root)) return 0;
@@ -261,7 +269,7 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
             return ChunkBlobPutStatus::STORAGE_ERROR;
         }
         if (!WriteBlobAtomically(path, id, stored_bytes)) {
-            // Ошибка sync каталога может оставить корректный blob на диске; ёмкость считаем по факту.
+            // Ошибка fsync/rename может оставить корректный blob на диске; ёмкость пересчитываем по факту.
             m_used_bytes = ScanBlobs(m_root);
             return ChunkBlobPutStatus::STORAGE_ERROR;
         }

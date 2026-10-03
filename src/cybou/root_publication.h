@@ -23,29 +23,32 @@
 
 namespace cybou {
 
-/// \brief Верхние границы канонического формата RootPublication.
+/// \brief Верхние границы канонического формата `RootPublication`.
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_BYTES{128 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_OPERATION_BYTES{144 * 1024};
 inline constexpr std::size_t ROOT_PUBLICATION_MAX_CAPSULES{32};
+/// \brief Размер поля `wrapped_content_key`.
+/// \details ChaCha20-Poly1305 nonce 12 байт + ciphertext `ContentKey` 32 байта + tag 16 байт = 60.
 inline constexpr std::size_t ROOT_CAPSULE_WRAPPED_KEY_BYTES{60};
+/// \brief Размер ChaCha20-Poly1305 nonce в recipient capsule.
 inline constexpr std::size_t ROOT_CAPSULE_NONCE_BYTES{12};
 
 /// \brief Opaque recipient capsule, оборачивающая ContentKey под KEM-ключ получателя.
 struct RootRecipientCapsule {
-    std::uint16_t kem_profile{IDENTITY_KEM_PROFILE_XWING};
-    std::uint64_t key_epoch{0};
-    XWingCiphertext encapsulation{};
-    std::array<unsigned char, ROOT_CAPSULE_WRAPPED_KEY_BYTES> wrapped_content_key{};
+    std::uint16_t kem_profile{IDENTITY_KEM_PROFILE_XWING}; ///< Единственный поддерживаемый KEM profile для capsule.
+    std::uint64_t key_epoch{0}; ///< Epoch ключей получателя, для которого капсула создана.
+    XWingCiphertext encapsulation{}; ///< X-Wing ciphertext, несущий shared secret для обёртки ContentKey.
+    std::array<unsigned char, ROOT_CAPSULE_WRAPPED_KEY_BYTES> wrapped_content_key{}; ///< `nonce || ciphertext || tag`.
 
     friend bool operator==(const RootRecipientCapsule&, const RootRecipientCapsule&) = default;
 };
 
 /// \brief Единственная каноническая операция публикации контента в консенсусе.
 struct RootPublication {
-    ChunkId root_chunk_id{};
-    ChunkId chunk_authorization_root{};
-    std::uint32_t chunk_count{0};
-    std::vector<RootRecipientCapsule> recipient_capsules;
+    ChunkId root_chunk_id{}; ///< Корневой ChunkId опубликованного зашифрованного дерева.
+    ChunkId chunk_authorization_root{}; ///< Merkle root авторизации chunk-ов для finality-first storage admission.
+    std::uint32_t chunk_count{0}; ///< Число авторизованных chunk-ов.
+    std::vector<RootRecipientCapsule> recipient_capsules; ///< Капсулы для получателей ContentKey.
 
     friend bool operator==(const RootPublication&, const RootPublication&) = default;
 };
@@ -62,7 +65,8 @@ struct AuthorizedRootPublication {
 std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPublication& publication);
 /// \brief Десериализует и валидирует RootPublication.
 std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes);
-/// \brief Вычисляет протокольную комиссию RootPublication из размера операции и числа chunk'ов.
+/// \brief Вычисляет протокольную комиссию `RootPublication` из размера операции и числа chunk'ов.
+/// \return `std::nullopt` при нулевых/слишком больших значениях или арифметическом переполнении.
 std::optional<std::uint64_t> ComputeRootPublicationFee(
     const CybouProtocolParameters& params,
     std::size_t canonical_operation_bytes, std::uint32_t chunk_count);
@@ -70,6 +74,8 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 
 /// \brief Создаёт recipient capsule для публикации корневого контента.
+/// \return Капсулу только при корректных входных ключах и успешной KEM/AEAD-обёртке; иначе `std::nullopt`.
+/// \note Функция не меняет консенсусное состояние; это локальный helper публикации.
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,
@@ -80,7 +86,8 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::uint64_t recipient_key_epoch,
     std::span<const unsigned char, 32> content_key);
 
-/// \brief Открывает recipient capsule локальным seed'ом получателя и извлекает ContentKey.
+/// \brief Открывает recipient capsule локальным seed'ом получателя и извлекает `ContentKey`.
+/// \return `ContentKey` только если KEM decapsulation и AEAD-проверка прошли успешно; иначе `std::nullopt`.
 std::optional<ContentKey> OpenRootRecipientCapsule(
     std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,

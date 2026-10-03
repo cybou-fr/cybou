@@ -4,6 +4,7 @@
 /// \brief Реализация потокового SHA-256 на OpenSSL EVP.
 
 #include <cybou/crypto/sha256.h>
+#include <cybou/crypto/cleanse.h>
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -13,10 +14,12 @@
 namespace cybou::crypto {
 namespace {
 
+/// \brief Освобождает `EVP_MD_CTX` в unique_ptr без выброса исключений.
 struct EvpMdCtxDeleter {
     void operator()(EVP_MD_CTX* context) const noexcept { EVP_MD_CTX_free(context); }
 };
 
+/// \brief Централизует fail-closed исключение для нарушений жизненного цикла SHA-256 контекста.
 [[noreturn]] void ThrowSha256Failure()
 {
     throw std::runtime_error{"OpenSSL EVP SHA-256 operation failed"};
@@ -53,6 +56,8 @@ void Sha256::Finalize(unsigned char* output)
     if (!m_impl || m_impl->finalized || output == nullptr) ThrowSha256Failure();
 
     unsigned int output_size{0};
+    // Сначала помечаем контекст как завершенный: повторная попытка после
+    // частичного сбоя тоже считается нарушением жизненного цикла.
     m_impl->finalized = true;
     if (EVP_DigestFinal_ex(m_impl->context.get(), output, &output_size) != 1 || output_size != OUTPUT_SIZE) {
         ThrowSha256Failure();

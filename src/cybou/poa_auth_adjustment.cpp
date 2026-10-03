@@ -35,6 +35,8 @@ bool ValidAction(PoaAuthAction action)
 
 std::optional<std::vector<unsigned char>> SerializeBody(const PoaAuthAdjustment& adjustment)
 {
+    // Высота входит в signed body, чтобы PoA не мог корректно перепривязать ту же
+    // корректировку AUTH к другому блоку без выпуска новой подписи.
     if (!ValidAction(adjustment.action) || adjustment.target_account_id.IsNull() ||
         adjustment.amount == 0 || adjustment.block_height == 0) return std::nullopt;
     std::vector<unsigned char> out;
@@ -107,6 +109,7 @@ PoaAuthAdjustmentError ApplyPoaAuthAdjustment(const PoaAuthAdjustment& adjustmen
         }
         authority += adjustment.amount;
     } else {
+        // BURN saturates at zero by protocol design: AUTH отрицательным быть не может.
         authority -= std::min(authority, adjustment.amount);
     }
     return PoaAuthAdjustmentError::NONE;

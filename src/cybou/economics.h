@@ -12,8 +12,10 @@
 
 namespace cybou {
 /// \brief Метка единственной genesis allocation Центральной Authority до её claim.
+/// \details Это текстовый label внутри genesis allocation; он не даёт отдельной роли и не участвует в консенсусе.
 inline constexpr std::string_view CENTRAL_AUTHORITY_NAME{"cybou"};
 /// \brief Начальный размер DEV onboarding pool в spendable CYBOU.
+/// \details Единица измерения — целые CYBOU без дробной части; 100 000 000 используется только как стартовый размер пула DEVNET.
 inline constexpr uint64_t DEV_ONBOARDING_POOL{100'000'000};
 } // namespace cybou
 

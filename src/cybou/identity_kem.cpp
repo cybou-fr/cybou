@@ -121,6 +121,8 @@ PKey GenerateMlKem768Key(std::span<const unsigned char, ML_KEM_768_SEED_SIZE> se
 bool XWingExpandSeed(std::span<const unsigned char, XWING_SEED_SIZE> seed,
     MlKem768Seed& mlkem_seed, IdentityX25519PrivateKey& x25519_seed)
 {
+    // Один persisted seed разворачивается в две независимые ветви X-Wing, чтобы
+    // хранить один секрет на epoch и не смешивать роли вручную в keystore.
     std::array<unsigned char, ML_KEM_768_SEED_SIZE + X25519_PRIVATE_KEY_SIZE> expanded{};
     MdCtx context{EVP_MD_CTX_new(), EVP_MD_CTX_free};
     const bool ok = context && EVP_DigestInit_ex2(context.get(), EVP_shake256(), nullptr) == 1 &&
@@ -169,6 +171,8 @@ std::optional<XWingSharedSecret> CombineXWingSecrets(
     std::span<const unsigned char, 32> ephemeral_public,
     std::span<const unsigned char, 32> recipient_public)
 {
+    // Итоговый shared secret связывает обе ветви X-Wing и оба public key:
+    // подмена только PQ или только X25519 части не должна дать тот же ключ.
     static constexpr std::array<unsigned char, 6> LABEL{0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c};
     std::array<unsigned char, 134> input{};
     size_t offset{0};
@@ -366,6 +370,7 @@ std::optional<XWingEncapsulation> EncapsulateXWing(
     const auto ephemeral_public = ephemeral_seed ? DeriveIdentityX25519PublicKey(*ephemeral_seed) : std::nullopt;
     auto x25519_secret = ephemeral_seed && ephemeral_public ?
         X25519SharedSecret(*ephemeral_seed, recipient_x25519) : std::nullopt;
+    // Fail-closed: сбой любой ветви X-Wing аннулирует всю recipient capsule.
     if (!pq_encapsulation || !ephemeral_seed || !ephemeral_public || !x25519_secret) {
         if (ephemeral_seed) crypto::CleanseMemory(ephemeral_seed->data(), ephemeral_seed->size());
         if (x25519_secret) crypto::CleanseMemory(x25519_secret->data(), x25519_secret->size());
@@ -533,6 +538,8 @@ std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment
 std::optional<XWingSeed> DeriveIdentityXWingSeed(std::span<const unsigned char, 32> identity_entropy)
 {
     if (IsZero(identity_entropy)) return std::nullopt;
+    // KEM использует собственный HKDF context, поэтому signing roles и recipient KEM
+    // никогда не делят один и тот же derived seed.
     constexpr std::string_view salt_label{"CYBOU/IDENTITY/KEM"};
     constexpr std::string_view info_label{"X-Wing recipient key seed"};
     const auto salt = std::span<const unsigned char>{

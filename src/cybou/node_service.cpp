@@ -25,6 +25,7 @@
 namespace cybou {
 namespace {
 
+/// \brief Дробит долгий sleep на короткие интервалы, чтобы shutdown не ждал весь sync_interval целиком.
 void SleepUntilStopped(const std::atomic_bool& stop_flag, std::chrono::milliseconds duration)
 {
     constexpr auto SLEEP_SLICE = std::chrono::milliseconds{200};
@@ -65,6 +66,8 @@ void CybouNodeService::Start()
     if (m_started) return;
 
     const auto status = m_runtime->GetStatus();
+    // Чужую сеть и повреждённое состояние останавливаем до любых фоновых потоков:
+    // сетевой сервис не должен "лечить" network mismatch или corrupt local state.
     if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH) {
         throw std::runtime_error("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
     }
@@ -157,6 +160,9 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
             if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block) {
                 const auto block = m_runtime->ProduceBlock();
                 if (!block) {
+                    // Safety halt and transient retry are intentionally split:
+                    // the former disables signing fail-closed, the latter keeps
+                    // the single-current candidate for the next attempt.
                     if (m_runtime->LastBlockProductionStatus() == BlockProductionStatus::SAFETY_HALT) {
                         m_runtime->DisablePoaSigner();
                         report(NodeEvent::poa_safety_halt);

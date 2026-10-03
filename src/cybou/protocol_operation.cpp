@@ -14,6 +14,10 @@
 
 namespace cybou {
 namespace {
+// Эти размеры зафиксированы в текущем каноническом wire-формате:
+// Ed25519 public key/signature = 32/64, ML-DSA-44 public key/signature = 1312/2420,
+// ML-DSA-65 public key/signature = 1952/3309. См. docs/cybou/10_IDENTITY_NAMES.md
+// и docs/cybou/POA_FINALITY.md для разделения ролей Recovery/Authorization/PoA.
 constexpr size_t RECOVERY_PUBLIC_SIZE{32 + 1952};
 constexpr size_t AUTHORIZATION_PUBLIC_SIZE{32 + 1312};
 constexpr size_t ROOT_SIGNATURE_SIZE{64 + 3309};
@@ -39,6 +43,9 @@ bool IsAllZero(std::span<const unsigned char> bytes)
 bool SerializeIdentityOperationAuthorization(const IdentityOperationAuthorization& auth,
     IdentityOperationKind expected_kind, std::vector<unsigned char>& out)
 {
+    // Relay и block execution должны видеть ровно один канонический формат:
+    // неверный kind, нулевые коммитменты и усечённые подписи отбрасываются до
+    // сериализации, чтобы OperationID и payload commitment были однозначны.
     if (auth.kind != expected_kind || auth.account_id.IsNull() || auth.signature.ml_dsa.size() != 2420 ||
         IsAllZero(auth.payload_commitment) || IsAllZero(auth.signature.ed25519) || IsAllZero(auth.signature.ml_dsa)) return false;
     out.insert(out.end(), auth.account_id.Value().begin(), auth.account_id.Value().end());
@@ -191,6 +198,8 @@ void WriteSignature(std::vector<unsigned char>& out, const IdentityHybridSignatu
 
 std::optional<std::vector<unsigned char>> SerializeIdentityRotate(const IdentityRotate& op)
 {
+    // IdentityRotate остаётся фиксированного размера: это удерживает один
+    // канонический формат ротации и не допускает скрытых вариантов одной и той же операции.
     if (op.account_id.IsNull() || op.new_recovery_key.purpose != IdentityKeyPurpose::RECOVERY_ROOT ||
         op.new_authorization_key.purpose != IdentityKeyPurpose::AUTHORIZATION ||
         op.new_recovery_key.ml_dsa.size() != 1952 || op.new_authorization_key.ml_dsa.size() != 1312 ||
@@ -321,6 +330,9 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::ROOT_PUBLICATION: {
+        // RootPublication — единственный payload с переменным размером в этом union.
+        // Ограничение по верхней границе удерживает relay и block parsing в одном
+        // deterministic envelope без неограниченных аллокаций.
         if (bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
         const auto op = DeserializeRootPublicationOperation(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
@@ -404,7 +416,8 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
                 VerifyIdentityMessage(op.new_recovery_key, op.new_recovery_pop, *digest) &&
                 VerifyIdentityMessage(op.new_authorization_key, op.new_authorization_pop, *digest);
         } else if constexpr (std::is_same_v<T, PoaAuthAdjustment>) {
-            // Created by the PoA node for its own next block; never relayed.
+            // PoAAuthAdjustment не является mesh-relay операцией: её создаёт PoA
+            // для собственного следующего блока после локального решения finality.
             return false;
         } else {
             const auto* record = identities.Find(op.authorization.account_id);

@@ -14,6 +14,7 @@
 
 namespace cybou {
 namespace {
+// Little-endian фиксируется вручную, чтобы digest не зависел от ABI и endianness платформы.
 void Append64(std::vector<unsigned char>& out, uint64_t value)
 {
     for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
@@ -24,6 +25,7 @@ bool Nonzero(std::span<const unsigned char> value)
     return std::any_of(value.begin(), value.end(), [](unsigned char b) { return b != 0; });
 }
 
+// Отдельные домены не позволяют спутать digest ротации с digest обычной authorization-операции.
 std::optional<IdentityKeyId> Hash(std::string_view domain, std::span<const unsigned char> bytes)
 {
     IdentityKeyId digest{};
@@ -122,6 +124,8 @@ IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& req
     if (!old_id || !new_id || !new_auth_id || !package_id) return IdentityRegistryError::INVALID_KEY;
     if (m_recovery_index.contains(*new_id)) return IdentityRegistryError::RECOVERY_KEY_EXISTS;
     const auto digest = ComputeIdentityRotateDigest(network_binding, request);
+    // Сначала подтверждается старый recovery key, затем possession новых ключей:
+    // ротация атомарно заменяет Recovery/Authorization/KEM как единый набор ролей.
     if (!digest || !VerifyIdentityMessage(record.recovery_key, request.old_recovery_signature, *digest) ||
         !VerifyIdentityMessage(request.new_recovery_key, request.new_recovery_pop, *digest) ||
         !VerifyIdentityMessage(request.new_authorization_key, request.new_authorization_pop, *digest)) {
@@ -148,6 +152,8 @@ IdentityRegistryError IdentityRegistry::AuthorizeOperation(
     if (record.nonce == std::numeric_limits<uint64_t>::max()) return IdentityRegistryError::NONCE_EXHAUSTED;
     const auto digest = ComputeIdentityOperationDigest(network_binding, request);
     if (!digest) return IdentityRegistryError::INVALID_PAYLOAD;
+    // Реестр продвигает nonce только после локальной криптографической проверки exact bytes;
+    // Validation не заменяет локальную проверку Full Node.
     if (!VerifyIdentityMessage(record.authorization_key, request.signature, *digest)) return IdentityRegistryError::INVALID_SIGNATURE;
     ++record.nonce;
     return IdentityRegistryError::NONE;

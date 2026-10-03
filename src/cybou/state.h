@@ -25,21 +25,21 @@ namespace cybou {
 
 /// \brief Каноническое состояние аккаунта, коммитящееся в корень состояния.
 struct AccountState {
-    uint64_t balance{0};
-    uint64_t system_balance{0};
-    uint64_t authority{0};
-    uint64_t creation_height{0};
-    uint64_t creation_epoch{0};
+    uint64_t balance{0};          ///< Spendable Balance в CYBOU.
+    uint64_t system_balance{0};   ///< Непереводимый System Balance для сетевых комиссий и сервисного бюджета.
+    uint64_t authority{0};        ///< Канонический нетрансферабельный AUTH; не входит в total supply CYBOU.
+    uint64_t creation_height{0};  ///< Высота блока, на которой аккаунт был финализирован через `AccountCreate`.
+    uint64_t creation_epoch{0};   ///< Детерминированный epoch, вычисленный из `creation_height` и protocol params.
 
     friend bool operator==(const AccountState&, const AccountState&) = default;
 };
 
 /// \brief Неизменяемое genesis-выделение для recovery-ключа, заявляемое ровно одним AccountCreate.
 struct GenesisAllocation {
-    uint64_t balance{0};
-    uint64_t authority{0};
-    std::string label;
-    std::optional<AccountId> claimed_by;
+    uint64_t balance{0};                   ///< Начальный Balance, зарезервированный под один recovery key id.
+    uint64_t authority{0};                 ///< Начальный AUTH, заявляемый тем же самым `AccountCreate`.
+    std::string label;                     ///< Необязательная genesis-метка/имя, резервируемая без отдельного reveal.
+    std::optional<AccountId> claimed_by;   ///< Аккаунт, единожды заявивший allocation; `nullopt` до claim-а.
 
     friend bool operator==(const GenesisAllocation&, const GenesisAllocation&) = default;
 };
@@ -48,34 +48,56 @@ inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
 
 /// \brief Полный консенсусный снимок CYBOU, из которого вычисляется state root.
 struct CybouState {
-    uint64_t onboarding_pool{0};
-    std::map<AccountId, AccountState> accounts;
-    IdentityRegistry identities;
-    NameRegistry names;
+    uint64_t onboarding_pool{0};   ///< Остаток DEV OnboardingPool в CYBOU.
+    std::map<AccountId, AccountState> accounts; ///< Канонические аккаунтные значения, отсортированные по `AccountId`.
+    IdentityRegistry identities;   ///< Финализированный Identity registry, согласованный 1:1 с `accounts`.
+    NameRegistry names;            ///< Реестр `.cybou` имён и pending commit-ов.
     /** Keyed by recovery key id; only claim and pre-claim Central Authority fees mutate it. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
 };
 
 /// \brief Ищет уникальное genesis-выделение Central Authority; дубликаты считаются некорректным состоянием.
+/// \param state Состояние для поиска.
+/// \return Указатель на единственную allocation с меткой `cybou`, либо `nullptr`, если её нет или если найден дубликат.
+/// \note Потокобезопасно для неизменяемого доступа; не изменяет состояние и детерминировано.
 GenesisAllocation* FindCentralAuthorityAllocation(CybouState& state);
 /// \copydoc FindCentralAuthorityAllocation(CybouState&)
 const GenesisAllocation* FindCentralAuthorityAllocation(const CybouState& state);
 /// \brief Проверяет, можно ли безопасно зачислить комиссию Central Authority без переполнения.
+/// \param state Каноническое состояние.
+/// \param fee Комиссия в CYBOU, списываемая из `System Balance`.
+/// \return `true`, если место назначения комиссии однозначно определено и прибавление не переполняет `uint64_t`.
+/// \post Никаких изменений состояния.
 bool CanCreditCentralAuthorityFee(const CybouState& state, uint64_t fee);
 /// \brief Атомарно зачисляет комиссию Central Authority в текущее место учёта комиссии.
+/// \param state Изменяемое кандидатное состояние.
+/// \param fee Комиссия в CYBOU.
+/// \return `true` при успешном зачёте; `false`, если destination невалиден или произошло бы переполнение.
+/// \pre Перед вызовом обычно проверяют `CanCreditCentralAuthorityFee`.
+/// \post При успехе изменяется только баланс текущего получателя комиссии; при неуспехе состояние остаётся без изменений.
 bool CreditCentralAuthorityFee(CybouState& state, uint64_t fee);
 
 enum class AccountCreateStateError : uint8_t {
-    NONE,
-    INVALID_CREATE,
-    ACCOUNT_EXISTS,
-    RECOVERY_KEY_EXISTS,
-    ACCOUNT_LIMIT,
-    INSUFFICIENT_ONBOARDING_POOL,
-    INCONSISTENT_STATE,
+    NONE,                       ///< Переход выполнен детерминированно.
+    INVALID_CREATE,             ///< `AccountCreate` не прошёл форматную/криптографическую или registry-проверку.
+    ACCOUNT_EXISTS,             ///< `account_id` уже присутствует в каноническом состоянии.
+    RECOVERY_KEY_EXISTS,        ///< Recovery binding уже заявлен другим аккаунтом.
+    ACCOUNT_LIMIT,              ///< Достигнут лимит числа аккаунтов в состоянии.
+    INSUFFICIENT_ONBOARDING_POOL, ///< В OnboardingPool недостаточно CYBOU для onboarding bonus.
+    INCONSISTENT_STATE,         ///< Нарушены внутренние инварианты `accounts`/`identities`/fee destination.
 };
 
-/// \brief Применяет AccountCreate к кандидатному состоянию без коммита в хранилище.
+/// \brief Применяет `AccountCreate` к кандидатному состоянию без коммита в хранилище.
+/// \param op Кандидат-операция `AccountCreate`.
+/// \param network_binding Привязка текущей сети.
+/// \param block_height Высота финализируемого блока-контейнера.
+/// \param params Активные protocol parameters.
+/// \param state Кандидатное состояние, модифицируемое только при успехе.
+/// \return Код причины отказа либо `NONE`.
+/// \pre `state` должно быть внутренне согласованным; функция не исправляет уже испорченное состояние.
+/// \post При успехе атомарно создаются Identity и AccountState, списывается onboarding bonus и,
+///       при наличии matching genesis allocation, она заявляется ровно один раз.
+/// \note Детерминированно на всех Full Node; потокобезопасность не гарантируется для совместного доступа к `state`.
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
@@ -92,12 +114,12 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
 
 /// \brief Результаты валидации и применения RootPublication.
 enum class RootPublicationError : uint8_t {
-    NONE,
-    INVALID_PAYLOAD,
-    INVALID_AUTHORIZATION,
-    SENDER_NOT_FOUND,
-    INSUFFICIENT_SYSTEM_BALANCE,
-    FEE_TRANSFER_FAILED,
+    NONE,                      ///< Переход выполнен.
+    INVALID_PAYLOAD,           ///< Payload неканоничен либо не удалось вычислить/сопоставить комиссию.
+    INVALID_AUTHORIZATION,     ///< Identity authorization не совпала с payload или с финализированным Identity registry.
+    SENDER_NOT_FOUND,          ///< Авторизующий аккаунт отсутствует в состоянии.
+    INSUFFICIENT_SYSTEM_BALANCE, ///< Недостаточно `System Balance` для комиссии публикации.
+    FEE_TRANSFER_FAILED,       ///< Комиссия не может быть безопасно зачислена Central Authority fail-closed.
 };
 
 /// \brief Применяет RootPublication и маршрутизацию её комиссии.
@@ -106,25 +128,46 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
 
 /// \brief Ошибки детерминированной валидации канонического состояния.
 enum class StateValidationError : uint8_t {
-    NONE,
-    ACCOUNT_LIMIT_EXCEEDED,
-    ACCOUNT_IDENTITY_COUNT_MISMATCH,
-    MISSING_IDENTITY,
-    DUPLICATE_RECOVERY_BINDING,
-    BALANCE_OVERFLOW,
-    INVALID_NAME_REGISTRY,
+    NONE,                           ///< Все инварианты канонического состояния соблюдены.
+    ACCOUNT_LIMIT_EXCEEDED,         ///< Число аккаунтов превысило консенсусный лимит.
+    ACCOUNT_IDENTITY_COUNT_MISMATCH, ///< `accounts` и `identities` потеряли взаимно-однозначность.
+    MISSING_IDENTITY,               ///< Для AccountState нет matching Identity record.
+    DUPLICATE_RECOVERY_BINDING,     ///< RecoveryKeyId неоднозначен или не индексируется обратно.
+    BALANCE_OVERFLOW,               ///< TotalSupply переполнен либо превысил `MAX_SUPPLY`.
+    INVALID_NAME_REGISTRY,          ///< Нарушены правила имён, pending commit-ов или genesis-label binding.
 };
 
 /// \brief Проверяет внутренние инварианты консенсусного состояния.
+/// \param state Полный снимок состояния.
+/// \return Детализированный код ошибки; `NONE` только для канонически допустимого состояния.
+/// \post Состояние не изменяется.
+/// \note Потокобезопасно при неизменяемом доступе; детерминировано и fail-closed.
 StateValidationError ValidateCybouState(const CybouState& state);
 /// \brief Считает канонический total supply, исключая AUTH и обнаруживая переполнения.
+/// \param state Полный снимок состояния.
+/// \return Сумма OnboardingPool + незаявленных genesis allocation + `Balance` + `System Balance`;
+///         при переполнении возвращает `std::numeric_limits<uint64_t>::max()`.
+/// \post AUTH сознательно не включается в вычисление в соответствии с `docs/cybou/57_IDENTITY_AUTHORITY.md`.
 uint64_t TotalSupply(const CybouState& state);
 
 /// \brief Сериализует каноническое состояние в детерминированный бинарный формат.
+/// \param state Валидное каноническое состояние.
+/// \return Байты единственного поддерживаемого wire/storage-формата либо `std::nullopt`, если
+///         состояние нарушает инварианты или не сериализуется без неоднозначности.
+/// \pre `ValidateCybouState(state) == StateValidationError::NONE`.
+/// \post При успехе порядок байтов полностью каноничен: все map уже отсортированы по ключу.
 std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state);
 /// \brief Десериализует и валидирует каноническое состояние.
+/// \param bytes Полный сериализованный state snapshot.
+/// \return `CybouState`, если вход точен, все поля каноничны и итоговый снимок проходит `ValidateCybouState`;
+///         иначе `std::nullopt`.
+/// \note Потокобезопасно; legacy-декодеры отсутствуют по инварианту single-current-baseline.
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes);
 /// \brief Вычисляет domain-separated hash канонического состояния.
+/// \param state Валидное состояние.
+/// \return `state root` либо `std::nullopt`, если состояние не сериализуется канонически.
+/// \post При успехе hash зависит только от канонических байтов состояния.
+/// \note Потокобезопасно и детерминировано.
 std::optional<cybou::Hash256> CybouStateHash(const CybouState& state);
 
 } // namespace cybou

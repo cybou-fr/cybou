@@ -25,6 +25,8 @@ bool VerifyComponent(
     const std::span<const unsigned char> signature,
     const std::span<const unsigned char> message)
 {
+    // Backend helper intentionally fails closed: любой сбой OpenSSL трактуется
+    // как недействительная подпись, а не как "не удалось проверить".
     PKey key{EVP_PKEY_new_raw_public_key_ex(
         nullptr, algorithm, nullptr, public_key.data(), public_key.size()), EVP_PKEY_free};
     if (!key) return false;

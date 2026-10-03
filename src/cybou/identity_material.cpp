@@ -27,6 +27,8 @@ bool Nonzero(const std::array<unsigned char, N>& value)
     return std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte != 0; });
 }
 
+// Материал считается годным только если из одной recovery entropy воспроизводятся все роли
+// и KEM проходит полный self-check, иначе локальный vault не сохраняет "почти рабочий" секрет.
 bool DerivedKeysValid(const RecoveryEntropy& entropy)
 {
     if (!Nonzero(entropy)) return false;
@@ -38,6 +40,8 @@ bool DerivedKeysValid(const RecoveryEntropy& entropy)
     return valid;
 }
 
+// Формат payload минимален: stable AccountID + recovery entropy. Остальные роли
+// детерминированно восстанавливаются локально и не дублируются в переносимом vault.
 std::optional<IdentityMaterial> Parse(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != PAYLOAD_SIZE || !std::equal(MAGIC.begin(), MAGIC.end(), bytes.begin())) return std::nullopt;

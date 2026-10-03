@@ -27,7 +27,10 @@ constexpr std::string_view CHECK_VALUE{"CYBOU local application store"};
 constexpr std::string_view CHECK_DB_KEY{"app/check"};
 constexpr std::string_view ROW_DB_PREFIX{"app/row/"};
 constexpr std::string_view RECORD_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/record/"};
+// Key-check жёстко привязывает app.db к текущей Identity, чтобы старая или чужая БД
+// не открылась "частично верно" после смены recovery phrase или AccountID.
 constexpr std::string_view KEY_CHECK_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/key-check"};
+// Верхние границы ограничивают rebuildable store и fail-closed отсеивают аномально большие plaintext.
 constexpr std::size_t MAX_NAME_BYTES{512};
 constexpr std::size_t MAX_VALUE_BYTES{4 * 1024 * 1024};
 constexpr char HEX[] = "0123456789abcdef";
@@ -60,6 +63,8 @@ bool Mac(const std::span<const unsigned char, 32> key, const std::span<const uns
         data.data(), data.size(), output.data(), output.size(), &written) && written == output.size();
 }
 
+// Имя записи аутентифицируется вместе с AccountID, чтобы одинаковые application keys разных Identity
+// не делили namespace и не могли взаимно принимать ciphertext.
 std::vector<unsigned char> AssociatedData(const AccountId& account, const std::string_view name)
 {
     std::vector<unsigned char> result;
@@ -106,6 +111,8 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
         m_db->ForEachStringPrefix(std::string{ROW_DB_PREFIX}, std::string{ROW_DB_PREFIX}.size() + 64,
             [&](const std::string&, const std::string&) { has_rows = true; });
         if (has_rows) throw std::runtime_error{"private application store key check is missing"};
+        // Пустая база инициализируется key-check записью сразу, чтобы все следующие открытия
+        // либо однозначно подтверждали владельца, либо fail-closed останавливались.
         auto encoded = Encrypt(*key, CHECK_NAME, Bytes(CHECK_VALUE));
         if (!encoded) throw std::runtime_error{"cannot encrypt private application store key check"};
         m_db->Write(std::string{CHECK_DB_KEY}, *encoded, true);
@@ -124,6 +131,8 @@ std::optional<std::array<unsigned char, 32>> PrivateApplicationStore::AccessKey(
         CRYPTO_memcmp(check.data(), m_key_check.data(), check.size()) == 0;
     crypto::CleanseMemory(check.data(), check.size());
     if (!valid) {
+        // Несовпадение ключа трактуется как полная блокировка доступа: rebuildable store
+        // не должен отдавать ни одной записи, если Identity больше не совпадает.
         crypto::CleanseMemory(key->data(), key->size());
         return std::nullopt;
     }

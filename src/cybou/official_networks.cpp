@@ -27,11 +27,14 @@ inline constexpr std::array<RendezvousLocator, 1> DEVNET_BOOTSTRAP_LOCATORS{{
     },
 }};
 
+/// \brief Верифицирует собранные DEVNET constants до первого использования профиля.
 OfficialNetwork VerifyCompiledDevnet()
 {
     auto genesis = DeserializeSignedNetworkGenesis(devnet_constants::SIGNED_GENESIS_BYTES);
     if (!genesis) throw std::runtime_error("failed to deserialize compiled DEVNET genesis");
     const auto key = CanonicalSerializeNetworkPublicKey(genesis->network_public_key);
+    // NetworkID bytes and signed genesis are checked independently so an
+    // accidental mismatch fails closed before any runtime state is opened.
     if (!std::equal(key.begin(), key.end(), devnet_constants::NETWORK_ID_BYTES.begin(),
             devnet_constants::NETWORK_ID_BYTES.end())) {
         throw std::runtime_error("compiled DEVNET genesis is not bound to the compiled Network Public Key");
@@ -43,6 +46,8 @@ OfficialNetwork VerifyCompiledDevnet()
         throw std::runtime_error("compiled DEVNET genesis state is invalid for state; provision a new NetworkID before DEVNET startup");
     }
     const auto state_hash = CybouStateHash(*state);
+    // The compiled state root is the final cross-check that constants describe
+    // one immutable network rather than a mixed artifact set.
     if (!state_hash || *state_hash != verified->GetGenesisStateRoot()) {
         throw std::runtime_error("compiled DEVNET genesis state root mismatch");
     }
@@ -63,6 +68,7 @@ const OfficialNetwork& RequireOfficialNetwork(const NetworkKind kind)
 {
     switch (kind) {
     case NetworkKind::DEVNET: {
+        // Function-local static keeps verification one-shot and thread-safe.
         static const OfficialNetwork s_devnet = VerifyCompiledDevnet();
         return s_devnet;
     }

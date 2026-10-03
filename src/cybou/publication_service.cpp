@@ -31,6 +31,8 @@ namespace cybou {
 namespace {
 
 /// Локальный pin staged-чанков job: opaque holder Identity + opaque reference job.
+///
+/// Pin защищает локальную единственную копию до финализации и удалённой durability.
 RetentionKey JobRetention(const AccountId& account, const std::string_view job_id)
 {
     const auto& value = account.Value();
@@ -39,6 +41,7 @@ RetentionKey JobRetention(const AccountId& account, const std::string_view job_i
             std::span{reinterpret_cast<const unsigned char*>(job_id.data()), job_id.size()})};
 }
 
+/// Метка времени для cache/LRU решений; consensus-смысла не имеет.
 std::uint64_t NowMs()
 {
     return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -46,20 +49,25 @@ std::uint64_t NowMs()
 }
 
 constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'P', 'J'};
+/// 4 magic + 32 network_binding + 32 account + 1 phase + 8 nonce + 8 key_epoch + 32 op_id + 4 serialized publication size.
 constexpr std::size_t FIXED_SIZE{4 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
 constexpr std::string_view JOB_INDEX_KEY{"publication/jobs"};
 
+/// Leaves сохраняются отдельно, чтобы StorageService позже воспроизвёл ровно тот же authorization order.
 std::string LeavesKey(const std::string_view id)
 {
     return "publication/leaves/" + std::string{id};
 }
 
 /// Сохранённый intent с content key; удаляется после перехода публикации в finalized state.
+///
+/// Пока candidate-операция не зафиксирована, intent позволяет безопасно пересобрать capsule на новом nonce.
 std::string IntentKey(const std::string_view id)
 {
     return "publication/intent/" + std::string{id};
 }
 
+/// Job id намеренно короткий и ASCII-only, чтобы оставаться безопасным ключом Application DB.
 bool ValidJobId(const std::string_view value)
 {
     return !value.empty() && value.size() <= 64 &&
@@ -68,26 +76,31 @@ bool ValidJobId(const std::string_view value)
         });
 }
 
+/// Ключ сериализованного состояния job.
 std::string JobKey(const std::string_view id)
 {
     return "publication/job/" + std::string{id};
 }
 
+/// Отдельный ключ отложенной отмены: cleanup может переживать перезапуск процесса.
 std::string CancelKey(const std::string_view id)
 {
     return "publication/cancel/" + std::string{id};
 }
 
+/// Little-endian кодирование локальных счётчиков достаточно для Application DB.
 void Append64(std::vector<unsigned char>& out, const std::uint64_t value)
 {
     for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
+/// Little-endian кодирование локальных счётчиков достаточно для Application DB.
 void Append32(std::vector<unsigned char>& out, const std::uint32_t value)
 {
     for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
 }
 
+/// Парсер локального little-endian поля.
 std::uint64_t Read64(const std::span<const unsigned char> bytes)
 {
     std::uint64_t value{0};
@@ -95,6 +108,7 @@ std::uint64_t Read64(const std::span<const unsigned char> bytes)
     return value;
 }
 
+/// Парсер локального little-endian поля.
 std::uint32_t Read32(const std::span<const unsigned char> bytes)
 {
     std::uint32_t value{0};
@@ -102,6 +116,7 @@ std::uint32_t Read32(const std::span<const unsigned char> bytes)
     return value;
 }
 
+/// Единая запись failure keeps caller in control without mutating protocol objects.
 PublicationJobResult Failure(std::string message)
 {
     return {.phase = PublicationJobPhase::NEEDS_ATTENTION, .error = std::move(message)};
@@ -128,6 +143,9 @@ PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore&
         const std::string job{attempt->begin(), attempt->end()};
         if (!ValidJobId(job)) throw std::runtime_error{"invalid local publication staging marker"};
         if (!m_application_db.Has(JobKey(job)) && !m_application_db.Has(IntentKey(job))) {
+            // Если процесс оборвался до сохранения intent/job, staged pin очищается как чисто локальная незавершённая попытка.
+            // Это соответствует разделению PublicationService и StorageService из docs/cybou/APPLICATION_DATA_PLANE.md:
+            // без candidate-операции здесь ещё нет сетевого обязательства.
             if (!m_runtime.GetChunkRetention().Release(JobRetention(m_application_db.Account(), job), NowMs()) ||
                 !m_application_db.Erase(LeavesKey(job))) throw std::runtime_error{"cannot clean interrupted publication pins"};
         }
@@ -308,7 +326,7 @@ PublicationJobResult PublicationService::ResumeLocked(const std::string_view loc
 {
     if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (job.phase == PublicationJobPhase::QUEUED) {
-        // Ещё не подписывали: безопасно пересобираем capsule на текущем finalized nonce.
+        // Ещё не подписывали: безопасно пересобираем capsule на текущем finalized nonce, не создавая вторую candidate-операцию.
         const auto intent = LoadIntent(local_job_id);
         if (!intent) return Failure("Queued publication intent is missing");
         return BuildAndSubmit(local_job_id, *intent);
@@ -539,7 +557,7 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     const auto retention = JobRetention(m_application_db.Account(), local_job_id);
     auto& pins = m_runtime.GetChunkRetention();
-    // Повторная попытка локального staging переустанавливает pin'ы: операция ещё не была отправлена.
+    // Повторная попытка локального staging переустанавливает pin'ы: candidate-операции ещё нет, значит локальный intent можно перестроить.
     if (!pins.Release(retention, NowMs())) { error = "Cannot reset local staging pins"; return std::nullopt; }
     if (!m_application_db.Put("publication/staging-attempt", std::span{
             reinterpret_cast<const unsigned char*>(local_job_id.data()), local_job_id.size()})) {
@@ -630,7 +648,7 @@ PublicationJobResult PublicationService::PublishMail(const std::string_view loca
         children.push_back(std::move(content));
     }
     for (std::size_t i{0}; i < message.attachments.size(); ++i) {
-        // Переиспользуемое вложение обязано уже ссылаться на PROTECTED-контент.
+        // Переиспользуемое вложение обязано уже ссылаться на PROTECTED-контент: PublishMail не делает скрытого provisional placement.
         if (!targets.contains(i) && (message.attachments[i].root_chunk_id == ChunkId{} ||
                 message.attachments[i].content_key == ContentKey{})) return Failure("Attachment has no content");
     }

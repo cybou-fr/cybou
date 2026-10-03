@@ -64,7 +64,9 @@ PaymentError ApplyPayment(const AuthorizedPayment& operation,
     if (recipient->second.balance > std::numeric_limits<uint64_t>::max() - operation.payment.amount) return PaymentError::RECIPIENT_OVERFLOW;
     if (!CanCreditCentralAuthorityFee(state, params.payment_fee)) return PaymentError::FEE_TRANSFER_FAILED;
     const auto* authority = FindCentralAuthorityAllocation(state);
-    // A payment to Central Authority credits amount and fee to the same Balance.
+    // Если платёж адресован уже заявленному Central Authority аккаунту, сумма и fee
+    // сходятся в одном Balance. Проверяем это до авторизации, чтобы fail-closed
+    // избежать переполнения и не расходовать nonce на заведомо некоммитимую операцию.
     if (authority->claimed_by == operation.payment.recipient &&
         recipient->second.balance + operation.payment.amount > std::numeric_limits<uint64_t>::max() - params.payment_fee) {
         return PaymentError::FEE_TRANSFER_FAILED;
@@ -118,6 +120,8 @@ SystemLockError ApplySystemLock(const AuthorizedSystemLock& operation,
     if (!state.identities.Find(account_id)) return SystemLockError::INCONSISTENT_STATE;
     if (account->second.balance < operation.lock.amount) return SystemLockError::INSUFFICIENT_BALANCE;
     if (account->second.system_balance > std::numeric_limits<uint64_t>::max() - operation.lock.amount) return SystemLockError::SYSTEM_BALANCE_OVERFLOW;
+    // Подпись проверяем после дешёвых локальных инвариантов, но до мутации
+    // балансов: это сохраняет детерминизм и не расходует состояние на неавторизованные операции.
     if (state.identities.AuthorizeOperation(operation.authorization, network_binding) != IdentityRegistryError::NONE) return SystemLockError::INVALID_AUTHORIZATION;
     account->second.balance -= operation.lock.amount;
     account->second.system_balance += operation.lock.amount;

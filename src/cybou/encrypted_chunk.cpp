@@ -21,11 +21,13 @@
 namespace cybou {
 namespace {
 
+/// Магия stored-формата, чтобы reject происходил до криптографической работы.
 constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'C', 'H'};
 constexpr std::size_t MAGIC_OFFSET{0};
 constexpr std::size_t SALT_OFFSET{4};
 constexpr std::size_t NONCE_OFFSET{SALT_OFFSET + 32};
 constexpr std::size_t CIPHERTEXT_OFFSET{NONCE_OFFSET + crypto::CHACHA20_POLY1305_NONCE_SIZE};
+/// Бакеты скрывают точный размер plaintext; ChunkId при этом всё равно якорится в exact ciphertext.
 constexpr std::array<std::size_t, 6> PAD_BUCKETS{1024, 4096, 16 * 1024, 64 * 1024, 256 * 1024, 512 * 1024};
 constexpr std::string_view KEY_INFO_DOMAIN{"CYBOU/CHUNK-KEY"};
 constexpr std::string_view AAD_DOMAIN{"CYBOU/CHUNK-AAD"};
@@ -42,11 +44,13 @@ private:
     std::span<unsigned char> m_bytes;
 };
 
+/// Нулевые секреты не принимаются даже при случайной генерации.
 bool IsZero(const std::span<const unsigned char> bytes)
 {
     return std::all_of(bytes.begin(), bytes.end(), [](const auto byte) { return byte == 0; });
 }
 
+/// Минимальный bucket для данного frame; если его нет, chunk в этот формат не помещается.
 std::optional<std::size_t> BucketFor(const std::size_t frame_bytes)
 {
     const auto bucket = std::find_if(PAD_BUCKETS.begin(), PAD_BUCKETS.end(), [frame_bytes](const auto size) {
@@ -56,6 +60,7 @@ std::optional<std::size_t> BucketFor(const std::size_t frame_bytes)
     return *bucket;
 }
 
+/// Случайный выбор между соседними bucket уменьшает утечки о точном размере plaintext.
 std::optional<std::size_t> RandomizedBucketFor(const std::size_t frame_bytes)
 {
     const auto first = std::find_if(PAD_BUCKETS.begin(), PAD_BUCKETS.end(), [frame_bytes](const auto size) {
@@ -74,6 +79,7 @@ bool IsPadBucket(const std::size_t size)
     return std::find(PAD_BUCKETS.begin(), PAD_BUCKETS.end(), size) != PAD_BUCKETS.end();
 }
 
+/// Key info связывает ключ чанка с конкретной сетью, чтобы один ContentKey нельзя было безопасно переносить между сетями.
 std::vector<unsigned char> MakeKeyInfo(
     const std::span<const unsigned char, 32> network_binding)
 {
@@ -84,6 +90,7 @@ std::vector<unsigned char> MakeKeyInfo(
     return info;
 }
 
+/// AAD аутентифицирует и заголовок, и NetworkBinding; подмена сети ломает decrypt.
 std::vector<unsigned char> MakeAad(
     const std::span<const unsigned char> header,
     const std::span<const unsigned char, 32> network_binding)
@@ -96,6 +103,7 @@ std::vector<unsigned char> MakeAad(
     return aad;
 }
 
+/// Из одного ContentKey выводятся независимые per-chunk ключи через salt и NetworkBinding.
 bool DeriveChunkKey(
     const std::span<const unsigned char, 32> content_key,
     const std::span<const unsigned char, 32> salt,
@@ -106,6 +114,7 @@ bool DeriveChunkKey(
     return crypto::HkdfSha256(content_key, salt, info, output);
 }
 
+/// Быстрая структурная проверка до пересчёта ChunkId и AEAD-decrypt.
 bool HasValidHeader(const std::span<const unsigned char> stored_bytes)
 {
     return stored_bytes.size() >= CIPHERTEXT_OFFSET + crypto::CHACHA20_POLY1305_TAG_SIZE &&
@@ -113,6 +122,7 @@ bool HasValidHeader(const std::span<const unsigned char> stored_bytes)
         std::equal(MAGIC.begin(), MAGIC.end(), stored_bytes.begin() + MAGIC_OFFSET);
 }
 
+/// Frame хранит длину plaintext отдельно, чтобы padding не влиял на восстановленный payload.
 std::vector<unsigned char> MakeFrame(const std::span<const unsigned char> encoded, const std::size_t bucket)
 {
     std::vector<unsigned char> frame(bucket);
@@ -131,6 +141,7 @@ std::vector<unsigned char> MakeFrame(const std::span<const unsigned char> encode
     return frame;
 }
 
+/// При чтении принимаем только известные bucket-ы и ограниченный случайный padding.
 std::optional<std::size_t> ReadFrameLength(const std::span<const unsigned char> frame)
 {
     if (frame.size() < 4) return std::nullopt;
@@ -195,6 +206,7 @@ std::optional<EncryptedChunk> EncryptChunk(
             std::span<unsigned char>{result.stored_bytes}.subspan(header.size()))) {
         return std::nullopt;
     }
+    // ChunkId всегда вычисляется по exact stored bytes, чтобы transport/storage проверяли один и тот же объект.
     result.id = ComputeChunkId(result.stored_bytes);
     return result;
 }
@@ -206,6 +218,7 @@ std::optional<std::vector<unsigned char>> DecryptChunk(
     const std::span<const unsigned char> stored_bytes)
 {
     if (!HasValidHeader(stored_bytes)) return std::nullopt;
+    // Сначала проверяем content address, затем AEAD: так storage/service работают в одной модели exact bytes.
     const auto actual_id = ComputeChunkId(stored_bytes);
     if (actual_id != expected_id) return std::nullopt;
 
