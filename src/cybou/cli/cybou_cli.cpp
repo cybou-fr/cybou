@@ -19,7 +19,6 @@
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/private_application_store.h>
 #include <cybou/protocol_limits.h>
-#include <cybou/provision.h>
 #include <cybou/secret32.h>
 #include <cybou/secret_file.h>
 #include <cybou/storage_service.h>
@@ -64,7 +63,6 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
            [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
            [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
-  network provision-devnet [--private-dir DIR] [--out-constants FILE] [--force yes]
   network probe --network devnet --data-dir DIR --peer IP:PORT
   network sync --network devnet --data-dir DIR --peer IP:PORT [--count 100]
   network follow --network devnet --data-dir DIR (--peer IP:PORT | --peers FILE) [--until-height N]
@@ -368,12 +366,6 @@ int NetworkCommand(const std::string& action, const Options& opts)
     if (action == "probe") return NetworkProbe(opts);
     if (action == "sync") return NetworkSync(opts);
     if (action == "follow") return NetworkFollow(opts);
-    if (action == "provision-devnet") {
-        Allow(opts, {"private-dir", "out-constants", "force"});
-        if (opts.Has("force") && opts.Get("force") != "yes") throw std::invalid_argument("--force takes the value yes");
-        return ProvisionDevnet(opts.Get("private-dir", "private/devnet"),
-            opts.Get("out-constants", "src/cybou/official_devnet_constants.h"), opts.Has("force")) ? 0 : 1;
-    }
 #if defined(CYBOU_ENABLE_LAB_NETWORK)
     if (action == "lab-poa-seed") {
         // Test builds only: the LAB PoA seed is public and fixed.
@@ -438,7 +430,11 @@ int RunNode(const Options& opts)
         throw std::invalid_argument("a network without bootstrap locators requires --peer, --peers or --listen");
     if (listen) config.advertised_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
-    config.storage_capacity_bytes = opts.Has("capacity") ? Quantity(opts.Get("capacity")) : 0;
+    if (opts.Has("capacity")) {
+        const auto capacity = Quantity(opts.Get("capacity"));
+        if (capacity == 0) throw std::invalid_argument("--capacity must be positive; omit it for automatic allocation");
+        config.storage_capacity_bytes = capacity;
+    }
     if (opts.Has("poa-key-file")) {
         auto bytes = ReadSecretFile(opts.Require("poa-key-file"), 32);
         if (!bytes || bytes->size() != 32) throw std::runtime_error("PoA key file must be private and contain exactly 32 raw bytes");

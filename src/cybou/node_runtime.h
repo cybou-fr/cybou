@@ -71,7 +71,8 @@ struct NodeRuntimeConfig {
     bool wipe_data{false};
     /** Only on the node serving a bootstrap locator; ordinary nodes use ephemeral TLS. */
     std::optional<TlsServerIdentity> tls_server_identity;
-    uint64_t storage_capacity_bytes{0};
+    /** nullopt selects automatic allocation; explicit zero is restricted to memory-only tests. */
+    std::optional<uint64_t> storage_capacity_bytes;
     std::shared_ptr<EventWriter> event_writer;
     /** Required local address policy for all public P2P sockets. */
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
@@ -87,6 +88,8 @@ enum class NodeRuntimeState : uint8_t {
     CORRUPT = 3,
     SAFETY_HALTED = 4,
 };
+
+enum class BlockProductionStatus : uint8_t { PRODUCED, SIGNER_UNAVAILABLE, RETRY, SAFETY_HALT };
 
 struct NodeRuntimeStatus {
     cybou::Hash256 network_binding;
@@ -204,6 +207,7 @@ public:
 
     /** Produce a block if running as the PoA finalizer */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
+    BlockProductionStatus LastBlockProductionStatus() const;
     /** Arm the local PoA signer with a signer matching this network's genesis key. */
     bool EnablePoaSigner(std::shared_ptr<PoaSigner> signer);
     /** Stop signing while preserving the node's pending operation pool and journal. */
@@ -339,6 +343,10 @@ private:
     /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
     OperationPool m_operation_pool{m_store};
     std::unique_ptr<PoaFinalizer> m_poa_finalizer;
+    // Preserve the exact journaled candidate across signing/commit retries.
+    BlockProductionStatus m_production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};
+    std::optional<CybouBlock> m_production_candidate;
+    std::optional<FinalizedBlock> m_production_finalized;
     ValidationPool m_validation_pool;
     ValidationSignerRef m_validation_signer;
     OperationRelay m_operation_relay;

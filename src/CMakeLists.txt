@@ -91,7 +91,6 @@ add_library(cybou_node STATIC
   cybou/storage_service.cpp
   cybou/application_service.cpp
   cybou/secret_file.cpp
-  cybou/provision.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_signing_journal.cpp
   cybou/state_store.cpp
@@ -136,6 +135,11 @@ target_link_libraries(cybou_node
 # operator commands (`cybou finalizer run`, `cybou network info`, ...).
 add_library(cybou_cli STATIC cybou/cli/cybou_cli.cpp)
 target_link_libraries(cybou_cli PUBLIC cybou_node)
+option(BUILD_PROVISION_TOOL "Build the offline network provisioning and verification tool" OFF)
+if(BUILD_PROVISION_TOOL)
+  add_executable(cybou-provision cybou_provision.cpp cybou/provision.cpp)
+  target_link_libraries(cybou-provision PRIVATE cybou_node)
+endif()
 if(NOT BUILD_GUI)
   add_executable(cybou cybou_main.cpp)
   target_link_libraries(cybou PRIVATE cybou_cli)

@@ -2,7 +2,6 @@
 // Distributed under the MIT software license, see COPYING.
 #ifndef CYBOU_OPERATION_SUBMIT_H
 #define CYBOU_OPERATION_SUBMIT_H
-#include <cybou/operation_submit.h>
 #include <cybou/hash256.h>
 #include <cstdint>
 namespace cybou {
@@ -14,7 +13,7 @@ enum class OperationSubmitStatus : uint8_t {
     INVALID_PAYLOAD = 0x04,
     NETWORK_MISMATCH = 0x05,
     RELAY_QUEUED = 0x06,
-    FINALIZER_UNAVAILABLE = 0x07,
+    POA_SIGNER_UNAVAILABLE = 0x07,
     RELAY_QUEUE_FULL = 0x08,
 };
 
@@ -22,7 +21,7 @@ struct OperationSubmitResult {
     OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
     cybou::Hash256 op_id;
     // Local transport metadata: no acknowledgment after sending does not prove
-    // that the remote finalizer rejected the operation.
+    // that the relay peer rejected the operation.
     bool delivery_uncertain{false};
 
     explicit operator bool() const {

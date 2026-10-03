@@ -258,11 +258,8 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     folder_row->addWidget(choose);
     files->addLayout(folder_row);
 
-    auto* contribution = Section(root, tr("Storage contribution"),
-        tr("Contribute disk space to the CYBOU network. This advanced option arrives in a later release."), this);
-    auto* later = new QCheckBox{tr("Contribute storage"), this};
-    later->setEnabled(false);
-    contribution->addWidget(later);
+    Section(root, tr("Network storage"),
+        tr("Every Full Node stores encrypted network content. Disk space is allocated automatically while keeping free space for your computer."), this);
 
     auto* advanced = Section(root, tr("Advanced"), {}, this);
     auto* data_row = new QHBoxLayout;
