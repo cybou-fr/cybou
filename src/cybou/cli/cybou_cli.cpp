@@ -64,6 +64,9 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
            [--capacity 20GiB] [--poa-key-file FILE] [--block-interval 1000ms]
            [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
            [--event-log FILE] [--event-log-mode minimal|detailed]
+           [--identity-vault FILE --identity-password-file FILE]   (sign Validation as this Identity)
+  identity restore --network devnet --data-dir DIR --vault NEW_FILE --phrase-file FILE
+                   --password-file FILE [--peer IP:PORT] [--timeout 600s]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
   network probe --network devnet --data-dir DIR --peer IP:PORT
   network sync --network devnet --data-dir DIR --peer IP:PORT [--count 100]
@@ -408,12 +411,97 @@ int OperationCommand(const std::string& action, const Options& opts)
     return PrintPeerSubmitResult(peers.SubmitOperationToAny(endpoints, *operation, *work));
 }
 
+// ---- Identity ----
+
+/** Reads a private password file; trailing newlines are not part of the password. */
+std::string ReadPassword(const std::filesystem::path& path)
+{
+    auto bytes = ReadSecretFile(path, 1024);
+    if (!bytes) throw std::runtime_error("password file must be a private regular file");
+    std::string password(bytes->begin(), bytes->end());
+    crypto::CleanseMemory(bytes->data(), bytes->size());
+    while (!password.empty() && (password.back() == '\n' || password.back() == '\r')) password.pop_back();
+    if (password.size() < 12) {
+        crypto::CleanseMemory(password.data(), password.size());
+        throw std::runtime_error("vault password must have at least 12 characters");
+    }
+    return password;
+}
+
+/**
+ * Restores an Identity from its 24 words into a new encrypted vault. A
+ * genesis allocation that names this phrase and is still unclaimed is
+ * claimed by a finalized AccountCreate, so the network must be finalizing.
+ */
+int IdentityCommand(const std::string& action, const Options& opts)
+{
+    if (action != "restore") throw std::invalid_argument("unknown identity command; use --help");
+    Allow(opts, {"network", "data-dir", "vault", "phrase-file", "password-file", "peer", "timeout"}, true);
+    ConfigurePeerAdmission(opts, opts.Require("data-dir"));
+    const auto& network = RequireOfficialNetwork(opts.Require("network"));
+    const std::filesystem::path vault = opts.Require("vault");
+    if (std::filesystem::exists(vault)) throw std::runtime_error("refusing to replace an existing vault");
+    const auto timeout_ms = Quantity(opts.Get("timeout", "600s"), true);
+
+    RecoveryWords words;
+    {
+        auto bytes = ReadSecretFile(opts.Require("phrase-file"), 1024);
+        if (!bytes) throw std::runtime_error("phrase file must be a private regular file");
+        std::string text(bytes->begin(), bytes->end());
+        crypto::CleanseMemory(bytes->data(), bytes->size());
+        std::istringstream in{text};
+        size_t count{0};
+        std::string word;
+        while (in >> word) {
+            if (count < words.size()) words[count] = word;
+            ++count;
+            crypto::CleanseMemory(word.data(), word.size());
+        }
+        crypto::CleanseMemory(text.data(), text.size());
+        if (count != words.size() || !DecodeRecoveryWords(words)) throw std::runtime_error("the phrase file must hold one valid 24-word recovery phrase");
+    }
+    std::string password = ReadPassword(opts.Require("password-file"));
+
+    auto config = RuntimeConfig(network, opts.Require("data-dir"));
+    if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
+    auto node = StartNode(network, std::move(config));
+    std::atomic_bool synced{false};
+    node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}},
+        [&synced](const SyncPeerResult& sync, const NodeRuntimeStatus&, size_t) {
+            if (sync.IsConnected() && sync.caught_up_with_known_peers) synced = true;
+            return true;
+        });
+    // The phrase is resolved against verified state: catch up first.
+    const auto sync_deadline = std::chrono::steady_clock::now() + std::chrono::minutes{2};
+    while (!synced && !stopping && std::chrono::steady_clock::now() < sync_deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds{250});
+    }
+    if (!synced) {
+        node->StopNetwork();
+        crypto::CleanseMemory(password.data(), password.size());
+        throw std::runtime_error("could not catch up with the network");
+    }
+    CybouIdentityService identity{node->Runtime(), vault};
+    const auto result = identity.RestoreIdentitySync(words, std::move(password),
+        [](IdentityCreationPhase, const std::string& message) { std::cout << message << std::endl; },
+        std::chrono::milliseconds{timeout_ms});
+    for (auto& word : words) crypto::CleanseMemory(word.data(), word.size());
+    node->StopNetwork();
+    if (!result.success) throw std::runtime_error(result.error_message);
+    std::cout << "account=" << result.account_id.Value().GetHex() << " height=" << result.creation_height << '\n';
+    return 0;
+}
+
 // ---- ordinary Full Node ----
 
 int RunNode(const Options& opts)
 {
     Allow(opts, {"network", "data-dir", "peer", "listen", "peers", "capacity", "advertise",
-        "tls-certificate", "tls-key", "event-log", "event-log-mode", "poa-key-file", "block-interval"}, true);
+        "tls-certificate", "tls-key", "event-log", "event-log-mode", "poa-key-file", "block-interval",
+        "identity-vault", "identity-password-file"}, true);
+    if (opts.Has("identity-vault") != opts.Has("identity-password-file")) {
+        throw std::invalid_argument("--identity-vault and --identity-password-file go together");
+    }
     if (opts.Has("advertise") && !opts.Has("listen")) throw std::invalid_argument("--advertise requires --listen");
     ConfigurePeerAdmission(opts, opts.Require("data-dir"));
     StartEvents(opts, "Full Node");
@@ -447,6 +535,18 @@ int RunNode(const Options& opts)
     const auto interval = Quantity(opts.Get("block-interval", "1000ms"), true);
     if (interval == 0 || interval > 60000) throw std::invalid_argument("invalid block interval");
     auto node = StartNode(network, std::move(config));
+    // An ordinary Identity of this node's operator: it signs Validation while
+    // its finalized AUTH is above the threshold. It never finalizes.
+    std::unique_ptr<CybouIdentityService> identity;
+    if (opts.Has("identity-vault")) {
+        identity = std::make_unique<CybouIdentityService>(node->Runtime(), opts.Require("identity-vault"));
+        std::string password = ReadPassword(opts.Require("identity-password-file"));
+        const bool unlocked = identity->LoadVault(password);
+        crypto::CleanseMemory(password.data(), password.size());
+        if (!unlocked || !identity->GetAccountId()) throw std::runtime_error("cannot unlock the Identity vault");
+        node->Runtime().SetValidationSigner(std::make_shared<CybouKeyStoreValidationSigner>(identity->GetKeyStore()));
+        std::cout << "identity=" << identity->GetAccountId()->Value().GetHex() << " validation signer enabled" << std::endl;
+    }
     if (auto peers = PeerList(opts)) {
         if (opts.Has("peer")) peers->insert(peers->begin(), ParseEndpoint(opts.Get("peer")));
         node->Runtime().SetConfiguredPeerEndpoints(*peers);
@@ -476,6 +576,8 @@ int RunNode(const Options& opts)
         });
     while (!stopping.load()) std::this_thread::sleep_for(std::chrono::milliseconds{250});
     node->StopNetwork();
+    // The signer references the vault's key store: never let it outlive it.
+    node->Runtime().SetValidationSigner(nullptr);
     const auto final_status = node->Runtime().GetStatus();
     return final_status.runtime_state != NodeRuntimeState::READY || (events && !events->Good()) ? 2 : 0;
 }
@@ -643,6 +745,7 @@ int Dispatch(int argc, char* argv[])
     if (group == "network") return NetworkCommand(action, opts);
     if (group == "operation") return OperationCommand(action, opts);
     if (group == "storage") return StorageCommand(action, opts);
+    if (group == "identity") return IdentityCommand(action, opts);
     if (action != "run") throw std::invalid_argument("unknown command; use --help");
     int result{0};
     if (group == "node") result = RunNode(opts);
@@ -655,7 +758,7 @@ int Dispatch(int argc, char* argv[])
 
 bool IsCommand(const std::string_view first)
 {
-    return first == "node" || first == "network" ||
+    return first == "node" || first == "network" || first == "identity" ||
         first == "operation" || first == "doctor" || first == "storage" || first == "--help" || first == "help";
 }
 
