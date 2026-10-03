@@ -176,7 +176,7 @@ std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveApplicationSto
     return key;
 }
 
-std::optional<ContentKey> CybouKeyStore::OpenRootCapsule(const std::span<const unsigned char, 32> network_id,
+std::optional<ContentKey> CybouKeyStore::OpenRootCapsule(const std::span<const unsigned char, 32> network_binding,
     const AccountId& sender, const std::uint64_t sender_nonce, const std::uint64_t sender_key_epoch,
     const ChunkId& root_chunk_id, const RootRecipientCapsule& capsule, const std::uint64_t current_key_epoch) const
 {
@@ -188,7 +188,7 @@ std::optional<ContentKey> CybouKeyStore::OpenRootCapsule(const std::span<const u
         seed = &it->second;
     }
     if (!seed) return std::nullopt;
-    return OpenRootRecipientCapsule(network_id,
+    return OpenRootRecipientCapsule(network_binding,
         std::span<const unsigned char, 32>{sender.Value().begin(), 32}, sender_nonce, sender_key_epoch,
         root_chunk_id, capsule, *seed);
 }

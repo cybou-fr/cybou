@@ -39,7 +39,7 @@ enum class PoaJournalStatus : uint8_t {
 /** Durable pre-sign intent journal. It never stores private signing material. */
 class PoaSigningJournal final {
 public:
-    PoaSigningJournal(KVStore& db, const uint256& network_id,
+    PoaSigningJournal(KVStore& db, const uint256& network_binding,
         const uint256& genesis_block_id, const IdentityHybridPublicKey& finalizer_key);
 
     /** Check the canonical head before the finalizer session may sign. */
@@ -56,7 +56,7 @@ private:
     bool PersistHalt(PoaJournalStatus reason) noexcept;
 
     KVStore& m_db;
-    const uint256 m_network_id;
+    const uint256 m_network_binding;
     const uint256 m_genesis_block_id;
     const std::array<unsigned char, 32> m_finalizer_key_id;
     const std::string m_prefix;

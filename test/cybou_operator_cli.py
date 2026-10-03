@@ -16,12 +16,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="cybou-lab-cli-") as temp:
         root = Path(temp)
         key = root / "key"
-        key.write_bytes(os.urandom(32))
-        key.chmod(0o600)
-        if os.name == "nt":
-            subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
-                            f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
-        network = root / "network.bin"
+        network = "lab"
         def run(*args, ok=True):
             result = subprocess.run([binary, *map(str,args)], capture_output=True, text=True, timeout=90)
             if ok and result.returncode:
@@ -31,7 +26,12 @@ def main():
             return result
         run("--help")
         run("serve", ok=False)
-        run("network", "init-dev", "--network", network, "--key-file", key)
+        # Only compiled networks start: DEVNET, the test-build LAB network, never a file or MAINNET.
+        info = run("network", "info", "--network", "devnet").stdout
+        assert "bootstrap=51.255.46.58:29461" in info and "network_binding=" in info
+        run("network", "info", "--network", "mainnet", ok=False)
+        run("network", "info", "--network", root / "network.bin", ok=False)
+        run("network", "lab-poa-seed", "--out", key)
         run("network", "info", "--network", network)
         run("observer", "run", "--network", network, "--data-dir", root/"no-policy", "--peer", "127.0.0.1:31001", ok=False)
         assert not (root/"no-policy").exists()

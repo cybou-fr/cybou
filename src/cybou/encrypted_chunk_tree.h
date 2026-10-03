@@ -43,7 +43,7 @@ using EncryptedTreeVisit = std::function<bool(const ChunkId& chunk_id)>;
 
 /** Stream source bytes into local encrypted-chunk staging; no network or whole-file buffer is used. */
 std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     const EncryptedTreeSource& source,
     const EncryptedTreeStage& stage,
     std::span<const unsigned char> private_root_metadata = {});
@@ -53,7 +53,7 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
  * Sink may receive partial output on later failure and should write to local staging.
  */
 std::optional<std::uint64_t> FetchEncryptedChunkTree(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key,
     const ChunkId& root_chunk_id,
     const EncryptedChunkLookup& lookup,
@@ -63,7 +63,7 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
     std::uint64_t max_output_bytes);
 
 /** Enumerates a tree's root/index/data ChunkIDs without downloading DATA chunks. */
-bool EnumerateEncryptedTreeChunks(std::span<const unsigned char, 32> network_id,
+bool EnumerateEncryptedTreeChunks(std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key, const ChunkId& root_chunk_id,
     const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit);
 

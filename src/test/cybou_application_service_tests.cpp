@@ -94,7 +94,7 @@ std::optional<std::vector<unsigned char>> Download(CybouServiceTestFixture& fixt
     std::vector<unsigned char> out;
     std::set<cybou::ChunkId> seen;
     const auto written = cybou::FetchEncryptedChunkTree(
-        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkId().begin(), 32}, key, root,
+        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkBinding().begin(), 32}, key, root,
         [&](const cybou::ChunkId& id) { return storage.Fetch(id); },
         [](std::span<const unsigned char>) { return true; },
         [&](const cybou::ChunkId& id) { return seen.insert(id).second; },

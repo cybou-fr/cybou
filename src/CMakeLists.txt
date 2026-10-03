@@ -76,6 +76,9 @@ target_link_libraries(cybou_core
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
+if(CYBOU_ENABLE_LAB_NETWORK)
+  target_compile_definitions(cybou_core PUBLIC CYBOU_ENABLE_LAB_NETWORK=1)
+endif()
 
 include(InstallBinaryComponent)
 
@@ -131,13 +134,21 @@ target_link_libraries(cybou_node
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
 
-# CYBOU daemon executables.
-add_executable(cybou-node cybou_node.cpp)
-target_link_libraries(cybou-node PRIVATE cybou_node)
-add_executable(cybou-loadgen cybou_loadgen.cpp)
-target_link_libraries(cybou-loadgen PRIVATE cybou_node)
-add_windows_application_manifest(cybou-node)
-add_windows_application_manifest(cybou-loadgen)
+# One production executable `cybou`: the desktop, plus headless node roles and
+# operator commands (`cybou finalizer run`, `cybou network info`, ...).
+add_library(cybou_cli STATIC cybou/cli/cybou_cli.cpp)
+target_link_libraries(cybou_cli PUBLIC cybou_node)
+if(NOT BUILD_GUI)
+  add_executable(cybou cybou_main.cpp)
+  target_link_libraries(cybou PRIVATE cybou_cli)
+  add_windows_application_manifest(cybou)
+endif()
+# Developer/test load generator; never part of a production build.
+if(BUILD_TESTS)
+  add_executable(cybou-loadgen cybou_loadgen.cpp)
+  target_link_libraries(cybou-loadgen PRIVATE cybou_node)
+  add_windows_application_manifest(cybou-loadgen)
+endif()
 
 if(BUILD_GUI)
   add_subdirectory(qt)

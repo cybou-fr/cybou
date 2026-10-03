@@ -22,7 +22,7 @@ inline constexpr size_t ACCOUNT_CREATE_WORK_SIZE{113};
 inline constexpr size_t ACCOUNT_CREATE_SIZE{10553};
 
 struct AccountCreationWork {
-    uint256 network_id;
+    uint256 network_binding;
     AccountId account_id;
     std::array<unsigned char, 32> authorization_commitment{};
     uint64_t work_epoch{0};
@@ -63,14 +63,14 @@ std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCr
 std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsigned char> bytes);
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const AccountCreationWork& work);
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
-    const uint256& network_id, const AccountId& account_id,
+    const uint256& network_binding, const AccountId& account_id,
     const IdentityAuthorization& authorization,
     std::span<const unsigned char, 32> kem_package_id);
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreateAuthorizationCommitment(
     const IdentityAuthorization& authorization,
     std::span<const unsigned char, 32> kem_package_id);
 AccountCreateError ValidateAccountCreateOp(
-    const AccountCreateOp& op, const uint256& network_id,
+    const AccountCreateOp& op, const uint256& network_binding,
     uint64_t block_height, const CybouProtocolParameters& params);
 
 inline bool CheckAccountCreationWork(const AccountCreationWork& work, unsigned required_bits)

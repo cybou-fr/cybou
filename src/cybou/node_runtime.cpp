@@ -116,14 +116,14 @@ std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const st
 
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
-      m_network_id{ComputeNetworkBinding(m_config.network_definition.network_public_key)},
+      m_network_binding{ComputeNetworkBinding(m_config.network_definition.network_public_key)},
       m_db{std::make_unique<KVStore>(KVStoreOptions{
           .path = m_config.data_dir,
           .cache_bytes = m_config.db_cache_bytes,
           .memory_only = m_config.memory_only,
           .wipe_data = m_config.wipe_data,
       })},
-      m_store{*m_db, m_config.network_definition, m_config.genesis_digest}
+      m_store{*m_db, m_config.network_definition}
 {
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
@@ -140,7 +140,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
             throw std::invalid_argument("storage provider requires a positive capacity");
         }
         m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
-            std::span<const unsigned char, 32>{m_network_id.begin(), 32},
+            std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
             m_config.storage_capacity_bytes, m_config.wipe_data);
         // The provider key is this node's stable storage identity across restarts.
         m_provider_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
@@ -308,7 +308,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
 {
     std::lock_guard lock(m_mutex);
     NodeRuntimeStatus status;
-    status.network_id = m_network_id;
+    status.network_binding = m_network_binding;
     status.is_finalizer = m_finalizer_node && m_finalizer_node->SignerEnabled();
 
     const auto loaded = m_store.LoadState();
@@ -377,11 +377,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
     return SubmitOperationInternal(std::move(op), std::nullopt);
 }
 
-OperationSubmitResult CybouNodeRuntime::SubmitPeerOperation(ProtocolOperation op, std::string source_peer)
-{
-    return SubmitOperationInternal(std::move(op), std::move(source_peer));
-}
-
 OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
     const PoaAuthAction action, const AccountId& target, const uint64_t amount)
 {
@@ -394,21 +389,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
         RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
     }
     return result;
-}
-
-std::optional<OperationRelay::FinalizerSession> CybouNodeRuntime::AttachAuthenticatedFinalizerRelay()
-{
-    return m_operation_relay.AttachAuthenticatedFinalizer();
-}
-
-void CybouNodeRuntime::DetachAuthenticatedFinalizerRelay(const OperationRelay::FinalizerSession session)
-{
-    m_operation_relay.DetachFinalizer(session);
-}
-
-bool CybouNodeRuntime::HasAuthenticatedFinalizerRoute() const
-{
-    return IsPoaFinalizerEnabled() || m_operation_relay.HasAuthenticatedFinalizer();
 }
 
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
@@ -425,7 +405,7 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         std::lock_guard lock{m_mutex};
         const auto loaded = m_store.LoadState();
         if (loaded.error != StateLoadError::NONE || !loaded.state ||
-            !VerifyProtocolOperationRelayProofs(*operation, m_network_id, loaded.state->identities)) {
+            !VerifyProtocolOperationRelayProofs(*operation, m_network_binding, loaded.state->identities)) {
             return OperationRelayEnqueueStatus::INVALID_OPERATION;
         }
         // Full candidate execution, the same path PoA uses. A node never
@@ -473,7 +453,7 @@ void CybouNodeRuntime::AttestCandidate(const uint256& operation_id)
     const auto loaded = m_store.LoadState();
     if (!tip || !loaded || !loaded.state) return;
     m_validation_pool.ResetBase(*tip);
-    const auto attestation = SignValidationAttestation(*m_validation_signer, m_network_id, operation_id, *tip,
+    const auto attestation = SignValidationAttestation(*m_validation_signer, m_network_binding, operation_id, *tip,
         *loaded.state);
     if (attestation) m_validation_pool.Add(*attestation);
 }
@@ -502,7 +482,7 @@ ValidationAcceptStatus CybouNodeRuntime::AcceptValidationAttestation(const Valid
     const auto tip = m_store.GetFinalizedTip();
     const auto loaded = m_store.LoadState();
     if (!tip || !loaded || !loaded.state) return ValidationAcceptStatus::INVALID;
-    switch (VerifyValidationAttestation(attestation, m_network_id, *tip, *loaded.state)) {
+    switch (VerifyValidationAttestation(attestation, m_network_binding, *tip, *loaded.state)) {
     case ValidationAttestationError::NONE: break;
     case ValidationAttestationError::STALE_BASE: return ValidationAcceptStatus::STALE_BASE;
     default: return ValidationAcceptStatus::INVALID;
@@ -676,19 +656,14 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
                 OperationSubmitStatus::ACCEPTED : OperationSubmitStatus::ALREADY_PENDING, .op_id = op_id};
         }
         p2p_endpoint = m_config.p2p_endpoint;
-        net_id = m_network_id;
+        net_id = m_network_binding;
     }
     if (m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
-        // Bring up the configured route if possible, then prefer a live
-        // genesis-key-authenticated finalizer session over an ordinary relay.
+        // Ordinary mesh relay: any connected relay peer executes the operation
+        // itself and forwards it. There is no preferred finalizer route.
         if (p2p_endpoint) m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second);
         std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
-        for (const auto& peer : m_peer_manager->AuthenticatedFinalizerSessions()) {
-            if (peer.hello.capabilities & p2p::CAP_ACCEPT_OPERATIONS) {
-                accepting_candidates.emplace_back(peer.address, peer.port);
-            }
-        }
         for (const auto& peer : m_peer_manager->Peers()) {
             if (peer.hello.capabilities & p2p::CAP_OPERATION_RELAY) {
                 const auto endpoint = std::make_pair(peer.address, peer.port);
@@ -854,7 +829,7 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const ui
         }
         const auto block_id = ComputeBlockId(finalized->block);
         if (finalized->block.parent_block_id != previous_id ||
-            finalized->certificate.network_id != status.network_id ||
+            finalized->certificate.network_binding != status.network_binding ||
             finalized->certificate.height != height ||
             finalized->certificate.block_id != block_id) {
             result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
@@ -924,7 +899,7 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
         if (!finalized) return result;
         const auto block_id = ComputeBlockId(finalized->block);
         if (finalized->block.parent_block_id != previous_id ||
-            finalized->certificate.network_id != m_network_id ||
+            finalized->certificate.network_binding != m_network_binding ||
             finalized->certificate.height != height ||
             finalized->certificate.block_id != block_id) return result;
         for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
@@ -945,7 +920,7 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
             if (found) return result;
             const auto account_bytes = account_id.Value();
             const auto commitment = ComputeIdentityKemPackageCommitment(
-                std::span<const unsigned char, 32>{m_network_id.begin(), 32},
+                std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
                 std::span<const unsigned char, 32>{account_bytes.begin(), 32}, key_epoch, *package);
             if (!commitment) return result;
             if (key_epoch == identity->key_epoch && *commitment != identity->kem_package_id) {
@@ -1131,7 +1106,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
-    snapshot.network_id = status.network_id.GetHex();
+    snapshot.network_binding = status.network_binding.GetHex();
     snapshot.role = status.is_finalizer ? "finalizer" : (HasStorageProvider() ? "provider" : "observer");
     snapshot.height = status.finalized_height;
     snapshot.tip = status.finalized_tip.GetHex();
@@ -1170,10 +1145,13 @@ size_t CybouNodeRuntime::ConnectedPeerCount() const
     return m_peer_manager ? m_peer_manager->ConnectedCount() : 0;
 }
 
-bool CybouNodeRuntime::CanSubmitOperations() const
+std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::PinnedSpki(
+    const std::string& address, const uint16_t port) const
 {
-    std::lock_guard lock(m_mutex);
-    return (m_finalizer_node && m_finalizer_node->SignerEnabled()) || m_peer_manager != nullptr;
+    for (const auto& locator : m_config.bootstrap_locators) {
+        if (locator.host == address && locator.port == port) return locator.tls_spki_sha256;
+    }
+    return std::nullopt;
 }
 
 std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpointsForGossip() const
@@ -1184,6 +1162,11 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpoints
     const auto& configured = m_config.p2p_endpoint;
     if (configured.has_value()) {
         result.push_back(*configured);
+    }
+    // Compiled bootstrap locators are ordinary peers with a known address.
+    for (const auto& locator : m_config.bootstrap_locators) {
+        const std::pair<std::string, uint16_t> ep{std::string{locator.host}, locator.port};
+        if (std::find(result.begin(), result.end(), ep) == result.end()) result.push_back(ep);
     }
     // Explicit operator-configured peer endpoints come first: a flood of
     // malicious discovered hints must never eclipse the configured peer topology.

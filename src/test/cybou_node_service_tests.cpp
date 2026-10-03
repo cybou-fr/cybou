@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     std::jthread first_server{[&] {
         tcp::socket socket{io}; first.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        if (session.Handshake({.network_id=primary.runtime->GetNetworkId(),
+        if (session.Handshake({.network_binding=primary.runtime->GetNetworkBinding(),
                 .finalized_height=0,.finalized_tip=primary.definition.genesis_block_id,
                 .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30001})) {
             while (session.ServeNext(*configured_source.runtime)) {}
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     second_server.emplace([&] {
         tcp::socket socket{io}; second.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        if (session.Handshake({.network_id=secondary.runtime->GetNetworkId(),
+        if (session.Handshake({.network_binding=secondary.runtime->GetNetworkBinding(),
                 .finalized_height=1,.finalized_tip=cybou::ComputeBlockId(block->block),
                 .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30002})) {
             while (session.ServeNext(*secondary.runtime)) {}
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         const auto foreign_block = foreign.runtime->GetBlockAtHeight(1);
         if (foreign_block && session.Handshake({
-                .network_id = local.runtime->GetNetworkId(),
+                .network_binding = local.runtime->GetNetworkBinding(),
                 .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(foreign_block->block),
                 .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         const auto valid_block = local.runtime->GetBlockAtHeight(1);
         if (valid_block && session.Handshake({
-                .network_id = local.runtime->GetNetworkId(),
+                .network_binding = local.runtime->GetNetworkBinding(),
                 .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(valid_block->block),
                 .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,

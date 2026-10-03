@@ -21,7 +21,7 @@ BlockProductionResult Failure(const BlockProductionError error)
 CybouFinalizerNode::CybouFinalizerNode(
     CybouStateStore& store, OperationPool& pool)
     : m_store{store},
-      m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
+      m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkBinding(),
           store.GetNetworkDefinition().genesis_block_id, store.GetNetworkDefinition().poa_finalizer_public_key)},
       m_pool{pool}
 {
@@ -30,7 +30,7 @@ CybouFinalizerNode::CybouFinalizerNode(
 CybouFinalizerNode::CybouFinalizerNode(
     CybouStateStore& store, OperationPool& pool, const RecoveryEntropy& poa_recovery_entropy)
     : m_store{store},
-      m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkId(),
+      m_finalizer{std::make_unique<PoaFinalizer>(store.GetDatabase(), store.GetNetworkBinding(),
           store.GetNetworkDefinition().genesis_block_id, poa_recovery_entropy,
           store.GetNetworkDefinition().poa_finalizer_public_key)},
       m_pool{pool}

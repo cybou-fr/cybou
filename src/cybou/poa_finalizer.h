@@ -30,9 +30,9 @@ struct PoaSigningResult {
 /** Journals every intent before calling its local signer. */
 class PoaFinalizer final {
 public:
-    PoaFinalizer(KVStore& db, const uint256& network_id,
+    PoaFinalizer(KVStore& db, const uint256& network_binding,
         const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key);
-    PoaFinalizer(KVStore& db, const uint256& network_id,
+    PoaFinalizer(KVStore& db, const uint256& network_binding,
         const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
         const IdentityHybridPublicKey& genesis_finalizer_key);
     ~PoaFinalizer() = default;
@@ -53,7 +53,7 @@ public:
     bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
 
 private:
-    const uint256 m_network_id;
+    const uint256 m_network_binding;
     IdentityHybridPublicKey m_public_key;
     PoaSignerRef m_signer;
     PoaSigningJournal m_journal;

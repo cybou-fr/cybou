@@ -114,7 +114,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     if (!vault_material || AccountId::FromBytes(vault_material->account_id) != account) {
         return Fail("Identity vault password is incorrect or vault does not match");
     }
-    const auto network = m_runtime.GetNetworkId();
+    const auto network = m_runtime.GetNetworkBinding();
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     auto state = m_runtime.GetStore().LoadState();
     if (!state || !state.state || !state.state->accounts.contains(*account)) return Fail("Account is not finalized");
@@ -177,7 +177,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     }
     if (m_cancelled.load() || std::chrono::steady_clock::now() >= deadline) return Fail("Waiting for commit depth timed out");
     if (on_phase) on_phase(NameClaimPhase::WORKING, "Computing NameClaimWork...");
-    NameClaimWork work{.network_id = network, .account_id = *account, .commitment = commitment,
+    NameClaimWork work{.network_binding = network, .account_id = *account, .commitment = commitment,
         .work_epoch = EpochForHeight(m_runtime.GetFinalizedHeight().value_or(0) + 1, params)};
     while (!m_cancelled.load() && !CheckNameClaimWork(work, params.name_claim_work_bits)) ++work.nonce;
     if (m_cancelled.load()) return Fail("Name claim cancelled");

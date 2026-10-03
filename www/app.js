@@ -503,7 +503,7 @@ const translations = {
     eStep3Title: "Nœuds d'Amorçage Initiaux",
     eStep3Desc: "Déploiement de 1 à 4 pairs CYBOU ordinaires avec points de contact connus sur votre intranet pour l'aiguillage initial des pairs et la synchronisation.",
     eStep4Title: "Grappe de Stockage",
-    eStep4Desc: "Activation du rôle stockage (cybou-node provider run) sur vos serveurs internes pour héberger les fragments chiffrés.",
+    eStep4Desc: "Activation du rôle stockage (cybou provider run) sur vos serveurs internes pour héberger les fragments chiffrés.",
 
     eCompTableTitle: "Tableau Comparatif : Réseau Public vs. Réseau Privé d'Entreprise",
     eThParam: "Caractéristique",
@@ -545,7 +545,7 @@ const translations = {
     eArt4P1: "Contrairement aux solutions propriétaires lourdes nécessitant des serveurs d'annuaire fragiles et des dizaines de composants hétérogènes, CYBOU repose sur une architecture épurée :",
 
     eGovItem1Title: "Un binaire unique pour toute l'infrastructure :",
-    eGovItem1Desc: "Le même exécutable unifié cybou-node sert de nœud complet, de serveur d'amorçage (bootstrap) et de serveur de stockage (provider). Il tourne en tâche de fond sous Linux avec un service systemd standard, consomme peu de mémoire et s'intègre naturellement à vos outils de déploiement Ansible, Puppet ou Terraform.",
+    eGovItem1Desc: "Le même exécutable unifié cybou sert de nœud complet, de serveur d'amorçage (bootstrap) et de serveur de stockage (provider). Il tourne en tâche de fond sous Linux avec un service systemd standard, consomme peu de mémoire et s'intègre naturellement à vos outils de déploiement Ansible, Puppet ou Terraform.",
     eGovItem2Title: "Application de bureau intuitive pour les collaborateurs :",
     eGovItem2Desc: "Les équipes utilisent CYBOU Desktop sur leurs postes de travail (Windows, Linux, macOS). Une interface soignée unifiant messagerie chiffrée, espace de fichiers et identité souveraine sans formation technique préalable.",
     eGovItem3Title: "Élimination des mots de passe et bases d'identifiants compromises :",
@@ -1270,7 +1270,7 @@ const translations = {
     eStep3Title: "Initial Bootstrap Peers (1 to 4)",
     eStep3Desc: "Deployment of 1 to 4 ordinary CYBOU full peers with known locators across your corporate intranet for initial peer discovery and synchronization.",
     eStep4Title: "Private Storage Cluster",
-    eStep4Desc: "Enabling storage provider capability (cybou-node provider run) on internal servers to host encrypted chunk replicas.",
+    eStep4Desc: "Enabling storage provider capability (cybou provider run) on internal servers to host encrypted chunk replicas.",
 
     eCompTableTitle: "Comparison Matrix: Public Network vs. Dedicated Enterprise Network",
     eThParam: "Feature",
@@ -1312,7 +1312,7 @@ const translations = {
     eArt4P1: "Unlike cumbersome legacy enterprise software requiring fragile directory servers and disparate middleware, CYBOU relies on a clean, unified architecture:",
 
     eGovItem1Title: "A single unified binary across the infrastructure:",
-    eGovItem1Desc: "The exact same cybou-node binary acts as a full node, bootstrap node, and storage provider. It runs headlessly under Linux as a standard systemd service with negligible memory footprint, easily deployable via Ansible, Puppet, or Terraform.",
+    eGovItem1Desc: "The exact same cybou binary acts as a full node, bootstrap node, and storage provider. It runs headlessly under Linux as a standard systemd service with negligible memory footprint, easily deployable via Ansible, Puppet, or Terraform.",
     eGovItem2Title: "Intuitive desktop application for team members:",
     eGovItem2Desc: "Employees run CYBOU Desktop on workstations (Windows, Linux, macOS). An intuitive interface combining encrypted mail, file drive, and sovereign identity with zero employee retraining needed.",
     eGovItem3Title: "Elimination of vulnerable passwords and compromised directory stores:",

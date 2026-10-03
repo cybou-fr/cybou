@@ -6,5 +6,6 @@ operator CLI acceptance, desktop controller checks, storage smoke, and storage
 soak. The desktop workflow covers the Qt/vcpkg build.
 
 For a local core run, configure with `-DBUILD_GUI=OFF -DBUILD_TESTS=ON`, build
-`cybou-core-test` and `cybou-node`, then run `ctest --test-dir <build-dir> --output-on-failure`
-and `python test/cybou_operator_cli.py <build-dir>/bin/cybou-node`.
+`cybou-core-test` and `cybou` with `-DCYBOU_ENABLE_LAB_NETWORK=ON`, then run
+`ctest --test-dir <build-dir> --output-on-failure` and
+`python test/cybou_operator_cli.py <build-dir>/bin/cybou`.

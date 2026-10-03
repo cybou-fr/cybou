@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const bool handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+        const bool handshake = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = cybou::ComputeBlockId(account_block->block),
             .capabilities = cybou::p2p::CAP_OPERATION_RELAY, .nonce = 7401});
         if (!handshake) return;
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
     std::array<unsigned char, 32> salt{};
     salt[0] = 0x61;
     const auto payload = cybou::NameCommitPayload{
-        .commitment = cybou::ComputeNameCommitment(client.GetNetworkId(), *account, "relayretry", salt)};
+        .commitment = cybou::ComputeNameCommitment(client.GetNetworkBinding(), *account, "relayretry", salt)};
     const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
     BOOST_REQUIRE(payload_commitment);
     const auto submitted = coordinator.Execute(cybou::IdentityOperationKind::NAME_COMMIT,
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     const auto genesis = cybou::CreateDevGenesisState();
     auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey());
     definition.protocol_parameters.account_creation_work_bits = 0;
-    const auto network_id = cybou::ComputeNetworkBinding(definition.network_public_key);
+    const auto network_binding = cybou::ComputeNetworkBinding(definition.network_public_key);
 
     cybou::NodeRuntimeConfig producer_config{
         .network_definition = definition,
@@ -171,9 +171,9 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
                 proof.insert(proof.end(), signature->ml_dsa.begin(), signature->ml_dsa.end());
                 return proof;
             };
-            (void)session.Handshake({.network_id = network_id, .finalized_height = 1,
+            (void)session.Handshake({.network_binding = network_binding, .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(account_block->block),
-                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS,
+                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_FINALIZER_PROOF,
                 .nonce = static_cast<std::uint64_t>(4100 + attempt)}, {}, signer,
                 &definition.poa_finalizer_public_key);
             std::this_thread::sleep_for(std::chrono::milliseconds{200});
@@ -199,7 +199,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
 
         std::array<unsigned char, 32> salt{};
         salt[0] = 0x51;
-        const auto commitment = cybou::ComputeNameCommitment(network_id, *account, "alicecy", salt);
+        const auto commitment = cybou::ComputeNameCommitment(network_binding, *account, "alicecy", salt);
         const auto payload = cybou::NameCommitPayload{.commitment = commitment};
         const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
         BOOST_REQUIRE(payload_commitment);
@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         BOOST_REQUIRE(restarted.InitializeGenesis(genesis));
         auto& coordinator = restarted.GetIdentityOperationCoordinator(identity.GetKeyStore());
         const auto commitment = cybou::ComputeNameCommitment(
-            network_id, *account, "alicecy", std::array<unsigned char, 32>{0x51});
+            network_binding, *account, "alicecy", std::array<unsigned char, 32>{0x51});
         const auto payload = cybou::NameCommitPayload{.commitment = commitment};
         const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
         BOOST_REQUIRE(payload_commitment);
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         std::array<unsigned char, 32> competing_salt{};
         competing_salt[0] = 0x53;
         const auto competing_commitment = cybou::ComputeNameCommitment(
-            network_id, *account, "competingcy", competing_salt);
+            network_binding, *account, "competingcy", competing_salt);
         const cybou::NameCommitPayload competing_payload{.commitment = competing_commitment};
         const auto competing_digest = cybou::ComputeNameCommitPayloadCommitment(competing_payload);
         BOOST_REQUIRE(competing_digest);
@@ -291,7 +291,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         auto& coordinator = damaged_runtime.GetIdentityOperationCoordinator(identity.GetKeyStore());
         std::array<unsigned char, 32> salt{};
         salt[0] = 0x52;
-        const auto name_commitment = cybou::ComputeNameCommitment(network_id, *account, "bobcy", salt);
+        const auto name_commitment = cybou::ComputeNameCommitment(network_binding, *account, "bobcy", salt);
         const cybou::NameCommitPayload payload{.commitment = name_commitment};
         const auto payload_commitment = cybou::ComputeNameCommitPayloadCommitment(payload);
         BOOST_REQUIRE(payload_commitment);
@@ -330,7 +330,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         };
         cybou::CybouNodeRuntime foreign_runtime{std::move(foreign_config)};
         BOOST_REQUIRE(foreign_runtime.InitializeGenesis(foreign_genesis));
-        BOOST_REQUIRE(foreign_runtime.GetNetworkId() != network_id);
+        BOOST_REQUIRE(foreign_runtime.GetNetworkBinding() != network_binding);
         auto& foreign_coordinator = foreign_runtime.GetIdentityOperationCoordinator(identity.GetKeyStore());
         bool foreign_builder_called{false};
         const auto foreign_result = foreign_coordinator.Execute(cybou::IdentityOperationKind::NAME_COMMIT,
@@ -401,7 +401,7 @@ BOOST_AUTO_TEST_CASE(concurrent_execute_reserves_only_one_identity_operation)
         salt[0] = static_cast<unsigned char>(0x70 + i);
         const std::string label = i == 0 ? "firstcy" : "secondcy";
         payloads[i].commitment = cybou::ComputeNameCommitment(
-            fixture.runtime->GetNetworkId(), *account, label, salt);
+            fixture.runtime->GetNetworkBinding(), *account, label, salt);
         const auto digest = cybou::ComputeNameCommitPayloadCommitment(payloads[i]);
         BOOST_REQUIRE(digest);
         commitments[i] = *digest;

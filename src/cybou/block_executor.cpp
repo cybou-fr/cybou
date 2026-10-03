@@ -12,7 +12,7 @@ namespace cybou {
 
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
     const IdentityHybridPublicKey* poa_key)
 {
@@ -37,7 +37,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     }
     for (size_t i{0}; i < operations.size(); ++i) {
         if (const auto* create = std::get_if<AccountCreateOp>(&operations[i])) {
-            const auto result = ApplyAccountCreate(*create, network_id, block_height, params, candidate);
+            const auto result = ApplyAccountCreate(*create, network_binding, block_height, params, candidate);
             if (result != AccountCreateStateError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_ACCOUNT_CREATE);
                 failure.failed_operation_index = i;
@@ -45,7 +45,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* payment = std::get_if<AuthorizedPayment>(&operations[i])) {
-            const auto result = ApplyPayment(*payment, network_id, params, candidate);
+            const auto result = ApplyPayment(*payment, network_binding, params, candidate);
             if (result != PaymentError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_PAYMENT);
                 failure.failed_operation_index = i;
@@ -53,7 +53,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* rotate = std::get_if<IdentityRotate>(&operations[i])) {
-            const auto result = candidate.identities.RotateIdentity(*rotate, network_id);
+            const auto result = candidate.identities.RotateIdentity(*rotate, network_binding);
             if (result != IdentityRegistryError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_IDENTITY_ROTATE);
                 failure.failed_operation_index = i;
@@ -61,7 +61,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* lock = std::get_if<AuthorizedSystemLock>(&operations[i])) {
-            const auto result = ApplySystemLock(*lock, network_id, candidate);
+            const auto result = ApplySystemLock(*lock, network_binding, candidate);
             if (result != SystemLockError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_SYSTEM_LOCK);
                 failure.failed_operation_index = i;
@@ -69,7 +69,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* commit = std::get_if<AuthorizedNameCommit>(&operations[i])) {
-            const auto result = ApplyNameCommit(*commit, network_id, block_height, params, candidate);
+            const auto result = ApplyNameCommit(*commit, network_binding, block_height, params, candidate);
             if (result != NameCommitError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_NAME_COMMIT);
                 failure.failed_operation_index = i;
@@ -77,7 +77,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* reveal = std::get_if<AuthorizedNameReveal>(&operations[i])) {
-            const auto result = ApplyNameReveal(*reveal, network_id, block_height, params, candidate);
+            const auto result = ApplyNameReveal(*reveal, network_binding, block_height, params, candidate);
             if (result != NameRevealError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_NAME_REVEAL);
                 failure.failed_operation_index = i;
@@ -85,7 +85,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operations[i])) {
-            const auto result = ApplyRootPublication(*publication, network_id, params, candidate);
+            const auto result = ApplyRootPublication(*publication, network_binding, params, candidate);
             if (result != RootPublicationError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_ROOT_PUBLICATION);
                 failure.failed_operation_index = i;
@@ -93,10 +93,10 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operations[i])) {
-            const auto digest = ComputePoaAuthAdjustmentDigest(network_id, *adjustment);
+            const auto digest = ComputePoaAuthAdjustmentDigest(network_binding, *adjustment);
             auto result = !poa_key ? PoaAuthAdjustmentError::INVALID_SIGNATURE
                 : !digest || !adjustment_digests.insert(*digest).second ? PoaAuthAdjustmentError::INVALID_PAYLOAD
-                : ApplyPoaAuthAdjustment(*adjustment, network_id, block_height, *poa_key, candidate);
+                : ApplyPoaAuthAdjustment(*adjustment, network_binding, block_height, *poa_key, candidate);
             if (result != PoaAuthAdjustmentError::NONE) {
                 auto failure = fail(BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
                 failure.failed_operation_index = i;

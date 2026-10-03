@@ -22,29 +22,6 @@ OperationRelay::OperationRelay(const size_t max_operations,
     }
 }
 
-std::optional<OperationRelay::FinalizerSession>
-OperationRelay::AttachAuthenticatedFinalizer()
-{
-    std::lock_guard lock{m_mutex};
-    if (m_finalizer_session || m_next_session == 0) return std::nullopt;
-    const auto session = m_next_session++;
-    m_finalizer_session = session;
-    return session;
-}
-
-void OperationRelay::DetachFinalizer(const FinalizerSession session)
-{
-    std::lock_guard lock{m_mutex};
-    if (!m_finalizer_session || *m_finalizer_session != session) return;
-    m_finalizer_session.reset();
-}
-
-bool OperationRelay::HasAuthenticatedFinalizer() const
-{
-    std::lock_guard lock{m_mutex};
-    return m_finalizer_session.has_value();
-}
-
 OperationRelayEnqueueStatus OperationRelay::Enqueue(
     const std::span<const unsigned char> exact_operation_bytes, const bool allow_seen_retry)
 {

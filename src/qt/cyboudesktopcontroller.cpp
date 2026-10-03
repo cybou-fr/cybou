@@ -151,7 +151,7 @@ void CybouDesktopController::start()
             : (peer_admission.policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting));
         cybou::NodeRuntimeConfig config{
             .network_definition = definition,
-            .genesis_digest = network.genesis.GetGenesisDigest(),
+            .bootstrap_locators = {network.bootstrap_locators.begin(), network.bootstrap_locators.end()},
             .data_dir = data_dir,
             .poa_finalizer_recovery_entropy = std::nullopt,
             .p2p_endpoint = configured_p2p,

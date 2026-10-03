@@ -318,7 +318,7 @@ std::vector<unsigned char> EncodeHello(const Hello& hello)
 {
     std::vector<unsigned char> out;
     out.reserve(HELLO_SIZE);
-    out.insert(out.end(), hello.network_id.begin(), hello.network_id.end());
+    out.insert(out.end(), hello.network_binding.begin(), hello.network_binding.end());
     Put64(out, hello.finalized_height);
     out.insert(out.end(), hello.finalized_tip.begin(), hello.finalized_tip.end());
     Put64(out, hello.capabilities);
@@ -330,12 +330,12 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != HELLO_SIZE) return std::nullopt;
     Hello hello;
-    std::copy_n(bytes.begin(), 32, hello.network_id.begin());
+    std::copy_n(bytes.begin(), 32, hello.network_binding.begin());
     hello.finalized_height = Read64(bytes.data() + 32);
     std::copy_n(bytes.begin() + 40, 32, hello.finalized_tip.begin());
     hello.capabilities = Read64(bytes.data() + 72);
     hello.nonce = Read64(bytes.data() + 80);
-    if (hello.network_id.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
+    if (hello.network_binding.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
     return hello;
 }
 
@@ -677,7 +677,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
     m_peer_provider_id.reset();
     m_peer_finalizer_authenticated = false;
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-    if (local.network_id.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
+    if (local.network_binding.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
     if (!EstablishSecureTransport(std::chrono::steady_clock::now() + TLS_HANDSHAKE_TIMEOUT)) return false;
     if (!Write(Frame{MessageType::HELLO, EncodeHello(local)})) return false;
@@ -690,7 +690,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
     if (frame->type != MessageType::HELLO) return false;
     const auto peer = DecodeHello(frame->payload);
     if (!peer || peer->nonce == local.nonce) return false;
-    if (peer->network_id != local.network_id) {
+    if (peer->network_binding != local.network_binding) {
         m_handshake_status = HandshakeStatus::WRONG_NETWORK;
         return false;
     }
@@ -706,7 +706,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             return false;
         }
     }
-    if (local.capabilities & CAP_ACCEPT_OPERATIONS) {
+    if (local.capabilities & CAP_FINALIZER_PROOF) {
         if (!finalizer_signer) {
             m_handshake_status = HandshakeStatus::INVALID_LOCAL;
             return false;
@@ -724,7 +724,7 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
             ProviderProofMessage(*peer, local, m_tls_exporter));
         if (!m_peer_provider_id) return false;
     }
-    if (peer->capabilities & CAP_ACCEPT_OPERATIONS) {
+    if (peer->capabilities & CAP_FINALIZER_PROOF) {
         if (!genesis_finalizer_key || genesis_finalizer_key->purpose != IdentityKeyPurpose::POA_FINALIZER) {
             m_handshake_status = HandshakeStatus::INVALID_LOCAL;
             return false;
@@ -883,7 +883,7 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
 {
-    if (!m_peer || !(m_peer->capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY))) return std::nullopt;
+    if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY)) return std::nullopt;
     const auto bytes = SerializeProtocolOperation(operation);
     const auto op_id = ComputeOperationId(operation);
     if (!bytes || !op_id || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
@@ -934,18 +934,8 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
     const auto endpoint = m_socket.remote_endpoint(endpoint_error);
     if (endpoint_error) return false;
     bool can_acknowledge{false};
-    if (runtime.IsPoaFinalizerEnabled() && (m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
-        // Finality authority consumes the operation and independently checks it.
-        const auto admitted = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
-        can_acknowledge = admitted.status == OperationSubmitStatus::ACCEPTED ||
-            admitted.status == OperationSubmitStatus::ALREADY_PENDING ||
-            admitted.status == OperationSubmitStatus::ALREADY_FINALIZED ||
-            admitted.status == OperationSubmitStatus::REJECTED ||
-            admitted.status == OperationSubmitStatus::INVALID_PAYLOAD ||
-            admitted.status == OperationSubmitStatus::NETWORK_MISMATCH;
-    } else {
-        // Intermediate full nodes execute the operation themselves, then move
-        // it one hop while the bounded seen-ID cache suppresses mesh cycles.
+    {
+        // Every node, including PoA, executes the operation itself before keeping it.
         const auto queued = runtime.EnqueueRelayedOperation(bytes, false, endpoint.address().to_string());
         can_acknowledge = queued == OperationRelayEnqueueStatus::QUEUED ||
             (queued == OperationRelayEnqueueStatus::DUPLICATE && runtime.HasRelayedOperation(operation_id));
@@ -1216,7 +1206,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
-        if ((m_local_capabilities & (CAP_ACCEPT_OPERATIONS | CAP_OPERATION_RELAY)) == 0) return false;
+        if (!(m_local_capabilities & CAP_OPERATION_RELAY)) return false;
         if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
@@ -1244,7 +1234,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         // state; only a locally valid candidate is staged and forwarded.
         if (runtime.GetOperationStatus(*operation_id).kind == OperationStatusKind::FINALIZED) {
             result = {.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = *operation_id};
-        } else if (!runtime.IsPoaFinalizerEnabled() || !(m_local_capabilities & CAP_ACCEPT_OPERATIONS)) {
+        } else {
             switch (runtime.EnqueueRelayedOperation(bytes, true, endpoint.address().to_string())) {
             case OperationRelayEnqueueStatus::QUEUED:
             case OperationRelayEnqueueStatus::DUPLICATE:
@@ -1257,8 +1247,6 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
                 result = {.status = OperationSubmitStatus::INVALID_PAYLOAD, .op_id = *operation_id};
                 break;
             }
-        } else {
-            result = runtime.SubmitPeerOperation(*operation, endpoint.address().to_string());
         }
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         response.insert(response.end(), result.op_id.begin(), result.op_id.end());
@@ -1313,7 +1301,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             }
             const auto block = DeserializeFinalizedBlock(bytes);
             if (!block || block->block.height != h ||
-                block->certificate.network_id != status.network_id ||
+                block->certificate.network_binding != status.network_binding ||
                 block->certificate.height != h) return std::nullopt;
             if (!expected_id.IsNull() &&
                 (ComputeBlockId(block->block) != expected_id || block->certificate.block_id != expected_id)) {

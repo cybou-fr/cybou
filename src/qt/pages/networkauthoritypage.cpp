@@ -159,7 +159,7 @@ void NetworkAuthorityPage::refresh()
         : tr("Waiting to observe a height change in this view"));
     Row(m_finality, tr("Tip"), QString::fromStdString(d.tip));
     Row(m_finality, tr("State root"), QString::fromStdString(d.state_root));
-    Row(m_finality, tr("Network ID"), QString::fromStdString(d.network_id));
+    Row(m_finality, tr("Network ID"), QString::fromStdString(d.network_binding));
     Row(m_finality, tr("Pending .cybou name commits"), locale.toString(a.pending_name_commits));
 
     ClearLayout(m_economy);

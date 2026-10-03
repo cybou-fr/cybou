@@ -20,7 +20,7 @@ class ControllerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             lab=object.__new__(stress.Lab)
             lab.dir=Path(directory); lab.evidence_invalid=False; lab.loadgen=None
-            lab.network_id="lab"; lab.failures=[]; lab.heads={0:("tip","root")}
+            lab.network_binding="lab"; lab.failures=[]; lab.heads={0:("tip","root")}
             lab.latest={}; lab.node_heads={}; lab.finalized={}; lab.convergence_target=None
             lab.loadgen_passed=False
             lab.nodes=[{"name":"finalizer","role":"finalizer","host":"shared"},
@@ -67,16 +67,16 @@ class ControllerTests(unittest.TestCase):
             manifest=root/"lab.toml"
             manifest.write_text('[lab]\nname="replay"\nrun_dir='+json.dumps(str(root))+ '\n[hosts.local]\ntype="local"\nroot="/tmp/cybou-lab-test"\n[[nodes]]\nname="finalizer"\nhost="local"\nrole="finalizer"\n')
             (root/"network.id").write_text("lab")
-            events=[{"node":"finalizer","v":1,"run_id":"run","seq":height,"time_ms":height*100,"event":"node_status","height":height,"tip":str(height),"state_root":str(height),"network_id":"lab"} for height in (1,2)]
-            events.append({"node":"finalizer","v":1,"run_id":"run","seq":3,"time_ms":201,"event":"block_finalized","height":2,"block_id":"2","state_root":"2","network_id":"lab"})
+            events=[{"node":"finalizer","v":1,"run_id":"run","seq":height,"time_ms":height*100,"event":"node_status","height":height,"tip":str(height),"state_root":str(height),"network_binding":"lab"} for height in (1,2)]
+            events.append({"node":"finalizer","v":1,"run_id":"run","seq":3,"time_ms":201,"event":"block_finalized","height":2,"block_id":"2","state_root":"2","network_binding":"lab"})
             (root/"timeline.jsonl").write_text("".join(json.dumps(event)+"\n" for event in events))
-            (root/"completed.json").write_text(json.dumps({"network_id":"lab","loadgen_passed":False,"convergence_target":2}))
+            (root/"completed.json").write_text(json.dumps({"network_binding":"lab","loadgen_passed":False,"convergence_target":2}))
             lab=stress.Lab(manifest)
             self.assertEqual(lab.report()["result"],"PASS")
             self.assertEqual(len(lab.heads),2)
-            (root/"completed.json").write_text(json.dumps({"network_id":"lab","loadgen_passed":False}))
+            (root/"completed.json").write_text(json.dumps({"network_binding":"lab","loadgen_passed":False}))
             self.assertEqual(stress.Lab(manifest).report()["result"],"INCOMPLETE")
-            (root/"completed.json").write_text(json.dumps({"network_id":"lab","loadgen_passed":False,"convergence_target":3}))
+            (root/"completed.json").write_text(json.dumps({"network_binding":"lab","loadgen_passed":False,"convergence_target":3}))
             self.assertEqual(stress.Lab(manifest).report()["result"],"FAIL")
             (root/"failure.json").write_text(json.dumps(["native client failed"]))
             self.assertEqual(stress.Lab(manifest).report()["result"],"FAIL")
@@ -104,18 +104,18 @@ class ControllerTests(unittest.TestCase):
 
     def test_invariants(self):
         lab=object.__new__(stress.Lab)
-        lab.sequence={}; lab.latest={}; lab.heads={}; lab.finalized={}; lab.accepted={}; lab.latencies=[];lab.failures=[];lab.network_id="lab"
+        lab.sequence={}; lab.latest={}; lab.heads={}; lab.finalized={}; lab.accepted={}; lab.latencies=[];lab.failures=[];lab.network_binding="lab"
         lab.nonces={}; lab.transitions={}; lab.transition_latencies={"protection":[],"repair":[],"reconnect":[]}
         lab.node_heads={}
         def event(seq,**fields):
             return {"v":1,"seq":seq,"run_id":"run","time_ms":100,"event":"node_status",
-                "height":10,"tip":"tip","state_root":"root","network_id":"lab",**fields}
+                "height":10,"tip":"tip","state_root":"root","network_binding":"lab",**fields}
         lab.ingest("a",event(1))
         with self.assertRaises(RuntimeError): lab.ingest("b",event(1,tip="fork"))
         with self.assertRaises(RuntimeError): lab.ingest("a",event(2,height=9))
         with self.assertRaises(RuntimeError): lab.ingest("c",event(1,event="content_protected",replicas=1,target=2))
         with self.assertRaises(RuntimeError): lab.ingest("d",event(1,safety_halted=True))
-        with self.assertRaises(RuntimeError): lab.ingest("e",event(1,network_id="DEV"))
+        with self.assertRaises(RuntimeError): lab.ingest("e",event(1,network_binding="DEV"))
         lab.ingest("f",event(1,event="operation_finalized",operation_id="one",account_id="account",nonce=1))
         # Confirmation on another full node is valid; a different operation is not.
         lab.ingest("g",event(1,event="operation_finalized",operation_id="one",account_id="account",nonce=1))

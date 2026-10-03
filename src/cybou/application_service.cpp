@@ -477,7 +477,7 @@ bool ApplicationService::ProcessPublication(const std::uint64_t height, const st
         }
         return true;
     }
-    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     const auto& authorization = publication.authorization;
     for (const auto& capsule : publication.publication.recipient_capsules) {
         if (!m_identity.HasKemSeedForEpoch(capsule.key_epoch, my_key_epoch)) continue;
@@ -527,7 +527,7 @@ bool ApplicationService::RecoverPlacement(const uint256& operation_id, Accessibl
 {
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication || publication->chunk_count == 0 || publication->chunk_count > (1U << 20)) return false;
-    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     std::vector<unsigned char> metadata;
     bool duplicate{false};
     std::set<ChunkId> candidates;
@@ -598,7 +598,7 @@ AccessibleRootState ApplicationService::Index(const uint256& operation_id, Acces
     bool missing{false};
     std::set<ChunkId> seen;
     const auto fetched = FetchEncryptedChunkTree(
-        std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32}, accessible.content_key,
+        std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32}, accessible.content_key,
         accessible.root_chunk_id,
         [&](const ChunkId& id) {
             auto bytes = m_storage.Fetch(id);

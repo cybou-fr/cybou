@@ -170,11 +170,11 @@ void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
     Q_EMIT capabilitiesChanged();
 }
 
-void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_id)
+void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_binding)
 {
-    if (m_status.network_name == network_name && m_status.network_id == network_id) return;
+    if (m_status.network_name == network_name && m_status.network_binding == network_binding) return;
     m_status.network_name = network_name;
-    m_status.network_id = network_id;
+    m_status.network_binding = network_binding;
     Q_EMIT statusChanged();
 }
 

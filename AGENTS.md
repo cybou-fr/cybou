@@ -15,6 +15,8 @@ Official networks:
 
 Network identity:
     NetworkID = Network Public Key
+    NetworkBinding = SHA-256("CYBOU/NETWORK-ID/V6" || NetworkID), the 32-byte
+      form used in HELLO, signatures, certificates, operations and DB keys
     Exactly one signed genesis per NetworkID forever
 
 OfficialNetwork:
@@ -47,7 +49,8 @@ No:
 
 Bootstrap:
     - ordinary CYBOU full peer
-    - same executable
+    - same executable (`cybou`)
+    - nodes dial the compiled locators first, checking the compiled TLS SPKI pin
     - same CYP2 protocol
     - no CAP_BOOTSTRAP
     - no BootstrapNode class
@@ -85,7 +88,7 @@ Validation:
     - an additional signature, never a substitute for local execution
     - an Identity with finalized AUTH > 1,000,000 may sign an operation
       only after its own node independently validated it
-    - signs NetworkID, OperationID, finalized base BlockID, AccountID
+    - signs NetworkBinding, OperationID, finalized base BlockID, AccountID
       with the ordinary Identity Authorization key
     - receiving nodes MUST independently validate the operation regardless
       of Validation signatures
@@ -104,6 +107,9 @@ PoA:
     - cybou.cybou is an ordinary CYBOU Identity with a PoA key role
     - finalization right is the PoA public key authorized by genesis
     - no separate PoA Identity entity
+    - no special operation routing to PoA: operations travel the ordinary
+      mesh relay; the PoA key holder only proves its key in-session
+      (FINALIZER_PROOF) so peers can confirm finalized tips
 
 Canonical truth:
     latest valid PoA-finalized state
@@ -128,9 +134,9 @@ There is no production network.
   (`cybou-bootstrap.service`, state in `/var/lib/cybou/bootstrap/state`, TLS files under
   `/etc/cybou-bootstrap/tls/`) built from an older commit. This repository no longer builds
   that executable or speaks its protocol; the coordinated migration replaces it with the
-  ordinary `cybou-node` on the re-provisioned DEVNET.
+  ordinary `cybou` node on the re-provisioned DEVNET.
 - Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
-  its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.h` for initial transport
+  its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.cpp` for initial transport
   discovery only. This grants no consensus role, no special protocol capability, and does not make
   the bootstrap a separate node class.
 - The target uses one full-node core software with optional storage and PoA finalization
@@ -141,7 +147,19 @@ There is no production network.
   state or consensus. Authenticate its current route per live session and
   discard that route on disconnect.
 - Connect as `debian@vps-d0669a91.vps.ovh.net`; checkout: `/home/debian/cybou`;
-  service binary: `/home/debian/cybou/build/bin/cybou-node`.
+  service binary: `/home/debian/cybou/build/bin/cybou` (headless build).
+
+## Executables and test networks
+
+- `cybou` is the single production executable: without a command it is the
+  desktop; `cybou finalizer|provider|observer run`, `cybou network ...`,
+  `cybou doctor`, `cybou operation ...` and `cybou storage ...` run headless.
+  A `BUILD_GUI=OFF` build contains only the headless commands.
+- `cybou-loadgen`, storage smoke/soak and other tools exist only with
+  `BUILD_TESTS=ON`.
+- Multi-process LAB/CI networks use `--network lab`, compiled only with
+  `-DCYBOU_ENABLE_LAB_NETWORK=ON` test builds: its own fixed public Network and
+  PoA keys, never the DEVNET PoA key (one active signer per official key).
 
 ## Network and node architecture
 

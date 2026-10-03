@@ -4,7 +4,7 @@ This file describes isolated LAB/test processes, not the official DEV VPS
 deployment. The target production/DEV bootstrap and desktop-finalizer model is
 defined in [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 
-The operator interface uses named commands and CYP2. Run `cybou-node --help`
+The operator interface uses named commands of the single `cybou` executable and CYP2. Run `cybou --help`
 for the complete grammar. The former positional commands are removed.
 `finalizer run` alone signs PoA blocks; `provider run` and `observer run`
 independently verify canonical transitions. An observer does not advertise
@@ -14,7 +14,10 @@ An active DB may change during inspection; stop that LAB process and retry.
 
 ## Start a disposable network
 
-Build `cybou-node` and `cybou-loadgen`. Python 3.11 or later runs the controller.
+Build `cybou` and `cybou-loadgen` with `-DBUILD_TESTS=ON -DCYBOU_ENABLE_LAB_NETWORK=ON`.
+LAB runs use `--network lab`: a compiled test-only network with its own fixed public
+Network and PoA keys (`cybou network lab-poa-seed --out FILE` writes the finalizer key).
+It never uses the DEVNET PoA key. Python 3.11 or later runs the controller.
 Copy [lab.example.toml](../../test/stress/lab.example.toml), set absolute binary
 paths and give each run fresh roots containing `cybou-lab`.
 

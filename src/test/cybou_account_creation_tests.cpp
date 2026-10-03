@@ -23,14 +23,14 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     }
     uint256 account_bytes{};
     account_bytes.begin()[0] = 0x42;
-    uint256 network_id{};
-    network_id.begin()[0] = 0x99;
+    uint256 network_binding{};
+    network_binding.begin()[0] = 0x99;
     const cybou::AccountId account_id{account_bytes};
     const auto root = cybou::DeriveIdentityPublicKey(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
     const auto device = cybou::DeriveIdentityPublicKey(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION);
     BOOST_REQUIRE(root && device);
     cybou::IdentityAuthorization auth{*root, *device};
-    const auto binding = cybou::test::MakeIdentityKemBinding(network_id, account_id, auth);
+    const auto binding = cybou::test::MakeIdentityKemBinding(network_binding, account_id, auth);
     const auto root_pop = cybou::SignIdentityMessage(root_seed, cybou::IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest);
     const auto authorization_pop = cybou::SignIdentityMessage(device_seed, cybou::IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest);
     BOOST_REQUIRE(root_pop && authorization_pop);
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
         .account_id = account_id,
         .authorization = auth,
         .kem_package = binding.package,
-        .work = {.network_id = network_id, .account_id = account_id, .authorization_commitment = binding.authorization_commitment,
+        .work = {.network_binding = network_binding, .account_id = account_id, .authorization_commitment = binding.authorization_commitment,
                  .work_epoch = 0, .nonce = 0},
         .recovery_pop = *root_pop,
         .authorization_pop = *authorization_pop,
@@ -53,27 +53,27 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
         if ((*hash)[0] == 0 || (*hash)[0] < 16) { mined = true; break; }
     }
     BOOST_REQUIRE(mined);
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, network_id, 0, params) == cybou::AccountCreateError::NONE);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(op, network_binding, 0, params) == cybou::AccountCreateError::NONE);
     const auto bytes = cybou::SerializeAccountCreateOp(op);
     BOOST_REQUIRE(bytes);
     const auto decoded = cybou::DeserializeAccountCreateOp(*bytes);
     BOOST_REQUIRE(decoded);
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(*decoded, network_id, 0, params) == cybou::AccountCreateError::NONE);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(*decoded, network_binding, 0, params) == cybou::AccountCreateError::NONE);
     uint256 other_network{};
     other_network.begin()[0] = 0x98;
     BOOST_CHECK(cybou::ValidateAccountCreateOp(*decoded, other_network, 0, params) == cybou::AccountCreateError::NETWORK_MISMATCH);
     auto damaged = *decoded;
     damaged.recovery_pop.ed25519[0] ^= 1;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::INVALID_RECOVERY_POP);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_binding, 0, params) == cybou::AccountCreateError::INVALID_RECOVERY_POP);
     damaged = *decoded;
     damaged.authorization_pop.ml_dsa[0] ^= 1;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::INVALID_AUTHORIZATION_POP);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_binding, 0, params) == cybou::AccountCreateError::INVALID_AUTHORIZATION_POP);
     damaged = *decoded;
     damaged.work.authorization_commitment[0] ^= 1;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::COMMITMENT_MISMATCH);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_binding, 0, params) == cybou::AccountCreateError::COMMITMENT_MISMATCH);
     damaged = *decoded;
     damaged.work.work_epoch = 1;
-    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_id, 0, params) == cybou::AccountCreateError::FUTURE_WORK_EPOCH);
+    BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_binding, 0, params) == cybou::AccountCreateError::FUTURE_WORK_EPOCH);
     auto truncated = std::span{*bytes}.first(bytes->size() - 1);
     BOOST_CHECK(!cybou::DeserializeAccountCreateOp(truncated));
     auto legacy_version = *bytes;

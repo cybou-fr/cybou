@@ -10,7 +10,7 @@ user = "root"
 namespace = "cybou-lab-netem-20260930"
 root = "/tmp/cybou-lab-netem-20260930"
 worker = "/mnt/c/Users/cybou/Desktop/cybou/tools/cybou_stress.py"
-binary = "/home/cybou/cybou-lab-operator-bin/cybou-node"
+binary = "/home/cybou/cybou-lab-operator-bin/cybou"
 loadgen_binary = "/home/cybou/cybou-lab-operator-bin/cybou-loadgen"
 python = "python3"
 

@@ -40,7 +40,7 @@ struct PreparedPublicationBundle {
 class PublicationBundleStager final {
 public:
     PublicationBundleStager(ChunkBlobStore& blobs, KVStore& proof_db,
-        std::string local_index_id, std::span<const unsigned char, 32> network_id);
+        std::string local_index_id, std::span<const unsigned char, 32> network_binding);
 
     std::optional<StagedApplicationTree> StageTree(const EncryptedTreeSource& source,
         std::span<const unsigned char> private_root_metadata = {});
@@ -55,7 +55,7 @@ private:
     ChunkAuthorizationProofIndex m_index;
     std::string m_binding_key;
     std::string m_in_progress_key;
-    std::array<unsigned char, 32> m_network_id{};
+    std::array<unsigned char, 32> m_network_binding{};
     std::uint32_t m_next_leaf{0};
     bool m_failed{false};
     bool m_finished{false};

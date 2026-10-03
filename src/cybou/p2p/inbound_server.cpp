@@ -26,12 +26,12 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     uint64_t nonce{0};
     for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[i]} << (8 * i);
     if (nonce == 0) return std::nullopt;
-    return Hello{.network_id = status.network_id, .finalized_height = status.finalized_height,
+    return Hello{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
         .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
             CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY |
             (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
-            (status.is_finalizer ? CAP_ACCEPT_OPERATIONS : 0),
+            (status.is_finalizer ? CAP_FINALIZER_PROOF : 0),
         .nonce = nonce};
 }
 
@@ -69,7 +69,12 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
         }
         auto done = std::make_shared<std::atomic_bool>(false);
         m_workers.push_back(Worker{done, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
-            PeerSession session{std::move(socket), TransportRole::SERVER};
+            TlsSessionConfig tls;
+            if (const auto& identity = m_runtime.GetTlsServerIdentity()) {
+                tls.certificate_chain_file = identity->certificate_chain_file;
+                tls.private_key_file = identity->private_key_file;
+            }
+            PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
             const auto hello = LocalHello(m_runtime);
             const auto signer = [this](std::span<const unsigned char> message) {
                 return m_runtime.SignProviderProof(message);
@@ -80,10 +85,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             if (hello && session.Handshake(*hello, signer, finalizer_signer,
                     &m_runtime.GetNetworkDefinition().poa_finalizer_public_key) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
-                auto relay_session = session.PeerFinalizerAuthenticated()
-                    ? m_runtime.AttachAuthenticatedFinalizerRelay() : std::nullopt;
                 while (!stopping && session.ServeNext(m_runtime)) {}
-                if (relay_session) m_runtime.DetachAuthenticatedFinalizerRelay(*relay_session);
             }
             done->store(true);
         }}});

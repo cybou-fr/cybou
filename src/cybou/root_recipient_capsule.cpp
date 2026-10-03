@@ -60,7 +60,7 @@ std::vector<unsigned char> CapsuleKeyInfo(
 }
 
 std::vector<unsigned char> CapsuleAad(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const ChunkId& root_chunk_id,
     const std::span<const unsigned char, 32> sender_account_id,
     const std::uint64_t sender_nonce,
@@ -68,7 +68,7 @@ std::vector<unsigned char> CapsuleAad(
     const std::uint64_t recipient_key_epoch)
 {
     std::vector<unsigned char> aad(CAPSULE_AAD_DOMAIN.begin(), CAPSULE_AAD_DOMAIN.end());
-    aad.insert(aad.end(), network_id.begin(), network_id.end());
+    aad.insert(aad.end(), network_binding.begin(), network_binding.end());
     aad.insert(aad.end(), root_chunk_id.begin(), root_chunk_id.end());
     aad.insert(aad.end(), sender_account_id.begin(), sender_account_id.end());
     AppendU64Be(aad, sender_nonce);
@@ -80,7 +80,7 @@ std::vector<unsigned char> CapsuleAad(
 } // namespace
 
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> sender_account_id,
     const std::uint64_t sender_nonce,
     const std::uint64_t sender_key_epoch,
@@ -100,9 +100,9 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     CleanseOnExit cleanse_key{wrapping_key};
     const auto info = CapsuleKeyInfo(root_chunk_id, sender_account_id, sender_nonce,
         sender_key_epoch, recipient_key_epoch);
-    const auto aad = CapsuleAad(network_id, root_chunk_id, sender_account_id,
+    const auto aad = CapsuleAad(network_binding, root_chunk_id, sender_account_id,
         sender_nonce, sender_key_epoch, recipient_key_epoch);
-    if (!crypto::HkdfSha256(encapsulated->shared_secret, network_id, info, wrapping_key)) return std::nullopt;
+    if (!crypto::HkdfSha256(encapsulated->shared_secret, network_binding, info, wrapping_key)) return std::nullopt;
 
     std::array<unsigned char, ROOT_CAPSULE_NONCE_BYTES> nonce{};
     if (RAND_bytes(nonce.data(), static_cast<int>(nonce.size())) != 1) return std::nullopt;
@@ -114,7 +114,7 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
 }
 
 std::optional<ContentKey> OpenRootRecipientCapsule(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> sender_account_id,
     const std::uint64_t sender_nonce,
     const std::uint64_t sender_key_epoch,
@@ -131,9 +131,9 @@ std::optional<ContentKey> OpenRootRecipientCapsule(
     CleanseOnExit cleanse_key{wrapping_key};
     const auto info = CapsuleKeyInfo(root_chunk_id, sender_account_id, sender_nonce,
         sender_key_epoch, capsule.key_epoch);
-    const auto aad = CapsuleAad(network_id, root_chunk_id, sender_account_id,
+    const auto aad = CapsuleAad(network_binding, root_chunk_id, sender_account_id,
         sender_nonce, sender_key_epoch, capsule.key_epoch);
-    if (!crypto::HkdfSha256(*shared_secret, network_id, info, wrapping_key)) return std::nullopt;
+    if (!crypto::HkdfSha256(*shared_secret, network_binding, info, wrapping_key)) return std::nullopt;
 
     const auto nonce = std::span<const unsigned char, ROOT_CAPSULE_NONCE_BYTES>{
         capsule.wrapped_content_key.data(), ROOT_CAPSULE_NONCE_BYTES};

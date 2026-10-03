@@ -29,14 +29,14 @@ std::optional<IdentityKeyId> Hash(std::string_view domain, std::span<const unsig
 }
 } // namespace
 
-std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_id, const IdentityRotate& request)
+std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_binding, const IdentityRotate& request)
 {
-    if (network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
+    if (network_binding.IsNull() || request.account_id.IsNull()) return std::nullopt;
     const auto recovery_id = ComputeRecoveryKeyId(request.new_recovery_key);
     const auto authorization_id = ComputeAuthorizationKeyId(request.new_authorization_key);
     const auto account = request.account_id.Value();
     const auto package_id = recovery_id && authorization_id ? ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account.begin(), 32}, request.key_epoch,
         request.new_kem_package) : std::nullopt;
     if (!recovery_id || !authorization_id || !package_id) return std::nullopt;
@@ -44,7 +44,7 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_
     std::vector<unsigned char> preimage;
     constexpr std::string_view domain{"CYBOU/IDENTITY-ROTATE/V1"};
     preimage.insert(preimage.end(), domain.begin(), domain.end());
-    preimage.insert(preimage.end(), network_id.begin(), network_id.end());
+    preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     preimage.insert(preimage.end(), account.begin(), account.end());
     Append64(preimage, request.nonce);
     Append64(preimage, request.key_epoch);
@@ -55,15 +55,15 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const uint256& network_
 }
 
 std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
-    const uint256& network_id, const IdentityOperationAuthorization& request)
+    const uint256& network_binding, const IdentityOperationAuthorization& request)
 {
     const auto kind = static_cast<uint8_t>(request.kind);
     if (kind < 1 || kind > 5 || !Nonzero(request.payload_commitment) ||
-        network_id.IsNull() || request.account_id.IsNull()) return std::nullopt;
+        network_binding.IsNull() || request.account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> preimage;
     constexpr std::string_view domain{"CYBOU/IDENTITY-OP/V2"};
     preimage.insert(preimage.end(), domain.begin(), domain.end());
-    preimage.insert(preimage.end(), network_id.begin(), network_id.end());
+    preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     const auto account = request.account_id.Value();
     preimage.insert(preimage.end(), account.begin(), account.end());
     Append64(preimage, request.nonce);
@@ -74,15 +74,15 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
 }
 
 IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,
-    const uint256& network_id, const uint64_t block_height, const CybouProtocolParameters& params)
+    const uint256& network_binding, const uint64_t block_height, const CybouProtocolParameters& params)
 {
-    if (ValidateAccountCreateOp(create, network_id, block_height, params) != AccountCreateError::NONE) return IdentityRegistryError::INVALID_CREATE;
+    if (ValidateAccountCreateOp(create, network_binding, block_height, params) != AccountCreateError::NONE) return IdentityRegistryError::INVALID_CREATE;
     if (m_accounts.contains(create.account_id)) return IdentityRegistryError::ACCOUNT_EXISTS;
     const auto recovery_id = ComputeRecoveryKeyId(create.authorization.recovery_root);
     const auto authorization_id = ComputeAuthorizationKeyId(create.authorization.authorization_key);
     const auto account = create.account_id.Value();
     const auto package_id = ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account.begin(), 32}, 0, create.kem_package);
     if (!recovery_id || !authorization_id || !package_id) return IdentityRegistryError::INVALID_KEY;
     if (m_recovery_index.contains(*recovery_id)) return IdentityRegistryError::RECOVERY_KEY_EXISTS;
@@ -98,7 +98,7 @@ IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,
     return IdentityRegistryError::NONE;
 }
 
-IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& request, const uint256& network_id)
+IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& request, const uint256& network_binding)
 {
     auto it = m_accounts.find(request.account_id);
     if (it == m_accounts.end()) return IdentityRegistryError::ACCOUNT_NOT_FOUND;
@@ -112,11 +112,11 @@ IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& req
     const auto new_auth_id = ComputeAuthorizationKeyId(request.new_authorization_key);
     const auto account = request.account_id.Value();
     const auto package_id = ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account.begin(), 32}, request.key_epoch, request.new_kem_package);
     if (!old_id || !new_id || !new_auth_id || !package_id) return IdentityRegistryError::INVALID_KEY;
     if (m_recovery_index.contains(*new_id)) return IdentityRegistryError::RECOVERY_KEY_EXISTS;
-    const auto digest = ComputeIdentityRotateDigest(network_id, request);
+    const auto digest = ComputeIdentityRotateDigest(network_binding, request);
     if (!digest || !VerifyIdentityMessage(record.recovery_key, request.old_recovery_signature, *digest) ||
         !VerifyIdentityMessage(request.new_recovery_key, request.new_recovery_pop, *digest) ||
         !VerifyIdentityMessage(request.new_authorization_key, request.new_authorization_pop, *digest)) {
@@ -134,14 +134,14 @@ IdentityRegistryError IdentityRegistry::RotateIdentity(const IdentityRotate& req
 }
 
 IdentityRegistryError IdentityRegistry::AuthorizeOperation(
-    const IdentityOperationAuthorization& request, const uint256& network_id)
+    const IdentityOperationAuthorization& request, const uint256& network_binding)
 {
     auto account = m_accounts.find(request.account_id);
     if (account == m_accounts.end()) return IdentityRegistryError::ACCOUNT_NOT_FOUND;
     auto& record = account->second;
     if (request.nonce != record.nonce || request.key_epoch != record.key_epoch) return IdentityRegistryError::BAD_NONCE;
     if (record.nonce == std::numeric_limits<uint64_t>::max()) return IdentityRegistryError::NONCE_EXHAUSTED;
-    const auto digest = ComputeIdentityOperationDigest(network_id, request);
+    const auto digest = ComputeIdentityOperationDigest(network_binding, request);
     if (!digest) return IdentityRegistryError::INVALID_PAYLOAD;
     if (!VerifyIdentityMessage(record.authorization_key, request.signature, *digest)) return IdentityRegistryError::INVALID_SIGNATURE;
     ++record.nonce;

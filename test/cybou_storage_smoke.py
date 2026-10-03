@@ -4,14 +4,14 @@
 # file COPYING or https://opensource.org/license/mit/.
 """Multi-process PoA + storage provider smoke test.
 
-Starts a real PoA finalizer, two real storage providers (`cybou-node provide`)
+Starts a real PoA finalizer, two real storage providers (`cybou provider run`)
 and the `cybou-storage-smoke` client, all as separate processes on loopback:
 
     block production -> verified sync -> Identity -> RootPublication
     -> finality -> authorized chunk PUT -> remote durability
     -> provider loss -> audit -> repair -> remote GET of exact bytes
 
-Usage: cybou_storage_smoke.py CYBOU_NODE CYBOU_STORAGE_SMOKE
+Usage: cybou_storage_smoke.py CYBOU CYBOU_STORAGE_SMOKE  (CYBOU built with -DCYBOU_ENABLE_LAB_NETWORK=ON)
 """
 
 import os
@@ -31,14 +31,10 @@ TIMEOUT_SECONDS = 600
 def main() -> int:
     node, client = sys.argv[1], sys.argv[2]
     work = Path(tempfile.mkdtemp(prefix="cybou-storage-smoke-"))
+    # The test-build LAB network: its own Network and PoA keys, never DEVNET's.
     key = work / "finalizer.key"
-    key.write_bytes(os.urandom(32))
-    key.chmod(0o600)
-    if os.name == "nt":
-        subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
-                        f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
-    network = work / "network.bin"
-    subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
+    subprocess.run([node, "network", "lab-poa-seed", "--out", str(key)], check=True)
+    network = "lab"
     peers = work / "peers.txt"
     peers.write_text("".join(f"127.0.0.1 {port}\n" for port in PROVIDERS.values()))
 

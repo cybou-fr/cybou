@@ -8,10 +8,10 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 314 | 77fbaa2d726a4939 |
-| CONTRIBUTING.md | 49 | f58a502f16b96450 |
-| INSTALL.md | 37 | 87271f52265cb6af |
-| README.md | 128 | e18981c213849e92 |
+| AGENTS.md | 332 | 7d454658735cc480 |
+| CONTRIBUTING.md | 49 | 1560938a1a187d62 |
+| INSTALL.md | 37 | 7b13446c3e77413f |
+| README.md | 128 | 3f6bbb237dfe812e |
 | SECURITY.md | 59 | 781bf2357a5cd2e4 |
 | docs/cybou/00_VISION.md | 73 | 856787283b43882a |
 | docs/cybou/02_ARCHITECTURE.md | 135 | a3ad168726e9298f |
@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 55 | 376fde826a290f71 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 37 | 85631fe5a8ba5de1 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 33 | f33f14a8c61ac206 |
-| docs/cybou/24_DECISIONS.md | 120 | 24884f65a5d04cd3 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 51 | a9e10029b0858923 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 39 | 4bbc45914d21688c |
+| docs/cybou/22_ROADMAP.md | 33 | 4d667a2bdd4d8d8d |
+| docs/cybou/24_DECISIONS.md | 120 | 67dd385179d15269 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 49 | f8fd36051d472d5c |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 40 | 2688a27d10f891f2 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 57 | d8544d0e77a797de |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | f82d26a4d1681de3 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 57b6f77412a36a94 |
@@ -44,7 +44,7 @@ editing an included file.
 | docs/cybou/59_DETERMINISTIC_FEE_ROUTER.md | 89 | cfbf1329a4e0f587 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 27 | e7715c9b9f54348d |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 3cdcec3902215bd7 |
-| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | 66a9d4385aa69bf2 |
+| docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | 19c87a68c4e4749d |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | d58fb6c8a3ad9144 |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 96 | b65cb6a50279c946 |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | d5d4128e730330c6 |
@@ -60,17 +60,17 @@ editing an included file.
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | feaf7a136cba1025 |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 461 | 8945acf5033d0f7c |
-| docs/cybou/CYP2_TRANSPORT_V3.md | 61 | 852fa3a4246d92d2 |
+| docs/cybou/CYP2_TRANSPORT_V3.md | 69 | 6aba17d30567366f |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 85 | f32d4f33bab42f19 |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
-| docs/cybou/OPERATOR_LAB.md | 181 | b67ccd06cbaf5675 |
+| docs/cybou/OPERATOR_LAB.md | 184 | 483bdfa9663d163a |
 | docs/cybou/POA_FINALITY.md | 56 | 6b829216a3e45f9a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 107 | 3d1f06214ad59f4f |
 | docs/cybou/README.md | 85 | 69c6ce56388ef3bb |
 | docs/cybou/ROOT_PUBLICATION.md | 113 | c737c5ee18676159 |
 | docs/cybou/STORAGE_ADMISSION.md | 92 | 5c4a54f3ab077c24 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 55877f4ce32d689b |
-| docs/cybou/VALIDATION.md | 96 | 895111661fc1e99f |
+| docs/cybou/VALIDATION.md | 96 | 36e878321ceb82ee |
 | spec/circulation_scenarios.csv | 74 | db240cf0d3280644 |
 | spec/fee_router.yaml | 18 | ccebf298d9eb9ec0 |
 | spec/fee_router_test_vectors.csv | 9 | db9274d10b0a3dfa |

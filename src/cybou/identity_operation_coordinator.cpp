@@ -129,13 +129,13 @@ std::optional<std::array<unsigned char, 32>> PackageCommitment(
     const auto package = public_key ? EncodeIdentityKemPackage(*public_key) : std::nullopt;
     const auto raw_account = account.Value();
     return package ? ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32},
+        std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32},
         std::span<const unsigned char, 32>{raw_account.begin(), 32}, epoch, *package) : std::nullopt;
 }
 } // namespace
 
 struct IdentityOperationCoordinator::JournalEntry {
-    uint256 network_id;
+    uint256 network_binding;
     AccountId account_id;
     uint64_t nonce{0};
     uint64_t key_epoch{0};
@@ -177,7 +177,7 @@ bool IdentityOperationCoordinator::LoadJournal()
     }
     size_t offset{5};
     auto entry = std::make_unique<JournalEntry>();
-    std::copy_n(bytes.begin() + offset, 32, entry->network_id.begin()); offset += 32;
+    std::copy_n(bytes.begin() + offset, 32, entry->network_binding.begin()); offset += 32;
     const auto account = AccountId::FromBytes(std::span<const unsigned char>{bytes}.subspan(offset, 32)); offset += 32;
     if (!account) { m_load_error = "Identity operation journal has an invalid AccountID"; return false; }
     entry->account_id = *account;
@@ -187,7 +187,7 @@ bool IdentityOperationCoordinator::LoadJournal()
     std::copy_n(bytes.begin() + offset, 32, entry->payload_commitment.begin()); offset += 32;
     std::copy_n(bytes.begin() + offset, 32, entry->op_id.begin()); offset += 32;
     const uint32_t operation_size = Read32(std::span<const unsigned char>{bytes}.subspan(offset, 4)); offset += 4;
-    if (entry->network_id != m_runtime.GetNetworkId() || operation_size > MAX_JOURNALED_OPERATION_BYTES ||
+    if (entry->network_binding != m_runtime.GetNetworkBinding() || operation_size > MAX_JOURNALED_OPERATION_BYTES ||
         bytes.size() != offset + operation_size + 32) {
         m_load_error = "Identity operation journal belongs to a different network or has invalid lengths"; return false;
     }
@@ -221,7 +221,7 @@ bool IdentityOperationCoordinator::SaveJournal(const JournalEntry& entry)
     if (m_journal_path.empty() || entry.operation_bytes.empty() || entry.operation_bytes.size() > MAX_JOURNALED_OPERATION_BYTES ||
         entry.operation_bytes.size() > std::numeric_limits<uint32_t>::max()) return false;
     std::vector<unsigned char> bytes(JOURNAL_MAGIC.begin(), JOURNAL_MAGIC.end());
-    bytes.insert(bytes.end(), entry.network_id.begin(), entry.network_id.end());
+    bytes.insert(bytes.end(), entry.network_binding.begin(), entry.network_binding.end());
     bytes.insert(bytes.end(), entry.account_id.Value().begin(), entry.account_id.Value().end());
     Append64(bytes, entry.nonce);
     Append64(bytes, entry.key_epoch);
@@ -319,7 +319,7 @@ IdentityOperationResult IdentityOperationCoordinator::Reconcile(JournalEntry& en
             .error = "Identity rotation journal is invalid"};
         const auto account_bytes = entry.account_id.Value();
         const auto expected_package = ComputeIdentityKemPackageCommitment(
-            std::span<const unsigned char, 32>{entry.network_id.begin(), 32},
+            std::span<const unsigned char, 32>{entry.network_binding.begin(), 32},
             std::span<const unsigned char, 32>{account_bytes.begin(), 32},
             rotate->key_epoch, rotate->new_kem_package);
         if (record->nonce == entry.nonce + 1 && record->key_epoch == entry.key_epoch && expected_package &&
@@ -391,7 +391,7 @@ IdentityOperationResult IdentityOperationCoordinator::Execute(IdentityOperationK
         .account_id = *account, .nonce = record->nonce, .key_epoch = record->key_epoch,
         .kind = kind, .payload_commitment = payload_commitment, .signature = {},
     };
-    const auto digest = ComputeIdentityOperationDigest(m_runtime.GetNetworkId(), auth);
+    const auto digest = ComputeIdentityOperationDigest(m_runtime.GetNetworkBinding(), auth);
     const auto signature = digest ? m_keystore.SignAuthorization(*digest) : std::nullopt;
     const auto operation = signature ? [&] {
         auth.signature = *signature;
@@ -402,7 +402,7 @@ IdentityOperationResult IdentityOperationCoordinator::Execute(IdentityOperationK
     if (!bytes || !op_id) return {.phase = IdentityOperationPhase::REJECTED,
         .error = "Could not sign or build canonical Identity operation"};
     auto entry = std::make_unique<JournalEntry>(JournalEntry{
-        .network_id = m_runtime.GetNetworkId(), .account_id = *account, .nonce = record->nonce,
+        .network_binding = m_runtime.GetNetworkBinding(), .account_id = *account, .nonce = record->nonce,
         .key_epoch = record->key_epoch, .kind = static_cast<uint8_t>(kind),
         .payload_commitment = payload_commitment, .phase = IdentityOperationPhase::PREPARED,
         .op_id = *op_id, .operation_bytes = *bytes,
@@ -454,7 +454,7 @@ IdentityOperationResult IdentityOperationCoordinator::RotateIdentity(
         .nonce = record->nonce,
         .key_epoch = record->key_epoch + 1,
     };
-    const auto digest = ComputeIdentityRotateDigest(m_runtime.GetNetworkId(), rotate);
+    const auto digest = ComputeIdentityRotateDigest(m_runtime.GetNetworkBinding(), rotate);
     const auto old_signature = digest ? m_keystore.SignRecovery(*digest) : std::nullopt;
     const auto new_root_pop = digest ? SignIdentityMessage(new_identity_entropy, IdentityKeyPurpose::RECOVERY_ROOT, *digest) : std::nullopt;
     const auto new_auth_pop = digest ? SignIdentityMessage(new_identity_entropy, IdentityKeyPurpose::AUTHORIZATION, *digest) : std::nullopt;
@@ -471,7 +471,7 @@ IdentityOperationResult IdentityOperationCoordinator::RotateIdentity(
     IdentityKeyId payload{};
     std::copy_n(op_id->begin(), payload.size(), payload.begin());
     auto entry = std::make_unique<JournalEntry>(JournalEntry{
-        .network_id = m_runtime.GetNetworkId(), .account_id = *account, .nonce = record->nonce,
+        .network_binding = m_runtime.GetNetworkBinding(), .account_id = *account, .nonce = record->nonce,
         .key_epoch = rotate.key_epoch, .kind = 0, .payload_commitment = payload,
         .phase = IdentityOperationPhase::PREPARED, .op_id = *op_id, .operation_bytes = *bytes,
     });
@@ -508,7 +508,7 @@ bool IdentityOperationCoordinator::CompleteIdentityRotation(const IdentityRecord
     const auto* rotate = operation ? std::get_if<IdentityRotate>(&*operation) : nullptr;
     const auto account_bytes = rotate ? rotate->account_id.Value() : uint256{};
     const auto expected_package = rotate ? ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32},
+        std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
         rotate->key_epoch, rotate->new_kem_package) : std::nullopt;
     if (!rotate || !expected_package || finalized_identity.kem_package_id != *expected_package ||

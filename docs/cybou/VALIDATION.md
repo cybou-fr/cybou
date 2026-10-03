@@ -57,14 +57,14 @@ validator registry, ValidatorSet, `CAP_VALIDATOR`, validator key or staking.
 ```text
 ValidationAttestation:
     version                  1
-    network_id               NetworkID
+    network_binding          NetworkBinding (32-byte binding of NetworkID)
     operation_id             OperationID
     finalized_base_block_id  BlockID of the finalized state the operation was executed on
     validator_account_id     AccountID
     signature                Ed25519 + ML-DSA-44 (Identity Authorization key)
 ```
 
-The signature covers domain `CYBOU/VALIDATION/V1`, NetworkID, OperationID,
+The signature covers domain `CYBOU/VALIDATION/V1`, NetworkBinding, OperationID,
 finalized base BlockID and validator AccountID. It is stored beside the
 operation and never changes its OperationID. Exact wire encoding is defined
 with the implementation.

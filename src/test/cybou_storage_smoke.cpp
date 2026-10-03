@@ -165,7 +165,7 @@ int main(int argc, char* argv[])
         std::vector<unsigned char> downloaded;
         std::set<cybou::ChunkId> seen;
         const auto written = cybou::FetchEncryptedChunkTree(
-            std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}, *file->item.content_key,
+            std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}, *file->item.content_key,
             *file->item.root_chunk_id, [&](const cybou::ChunkId& id) { return storage.Fetch(id); },
             [](std::span<const unsigned char>) { return true; },
             [&](const cybou::ChunkId& id) { return seen.insert(id).second; },

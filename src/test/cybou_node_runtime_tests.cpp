@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(event_log_privacy_modes_filter_sensitive_identifiers)
     const auto lab_path = fixture.directory / "lab-events.jsonl";
     const cybou::EventFields fields{{"operation_id", std::string{"operation-secret"}},
         {"account_id", std::string{"account-secret"}}, {"peer", std::string{"peer-secret"}},
-        {"network_id", std::string{"public-network"}}};
+        {"network_binding", std::string{"public-network"}}};
     {
         cybou::EventWriter writer{minimal_path};
         writer.Write(cybou::NodeEvent::operation_accepted, fields);
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
     cybou::EventWriter writer{path};
     BOOST_CHECK_THROW(writer.Write(cybou::NodeEvent::node_started, {{"mnemonic", std::string{"secret"}}}), std::invalid_argument);
     BOOST_CHECK_THROW(writer.Write(cybou::NodeEvent::node_started, {{"role", std::string(257, 'x')}}), std::invalid_argument);
-    writer.Write(cybou::NodeEvent::node_status, {{"network_id", fixture.runtime->GetNetworkId().GetHex()},{"height",std::uint64_t{1}}});
+    writer.Write(cybou::NodeEvent::node_status, {{"network_binding", fixture.runtime->GetNetworkBinding().GetHex()},{"height",std::uint64_t{1}}});
     BOOST_CHECK(writer.Good());
     const auto snapshot=fixture.runtime->GetDiagnostics();
     BOOST_CHECK(snapshot.initialized);
@@ -170,17 +170,17 @@ BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
     const auto loaded = fixture.runtime->GetStore().LoadState();
     BOOST_REQUIRE(loaded.state);
     const auto& params = fixture.definition.protocol_parameters;
-    const auto& network_id = fixture.runtime->GetNetworkId();
+    const auto& network_binding = fixture.runtime->GetNetworkBinding();
     const auto& poa_key = fixture.definition.poa_finalizer_public_key;
-    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_id, head + 2, params, &poa_key).error ==
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_binding, head + 2, params, &poa_key).error ==
         cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
-    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_id, head + 1, params).error ==
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_binding, head + 1, params).error ==
         cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
-    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op, signed_op}, network_id, head + 1, params,
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op, signed_op}, network_binding, head + 1, params,
         &poa_key).error == cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
     auto forged = std::get<cybou::PoaAuthAdjustment>(signed_op);
     forged.amount = 6;
-    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {cybou::ProtocolOperation{forged}}, network_id, head + 1,
+    BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {cybou::ProtocolOperation{forged}}, network_binding, head + 1,
         params, &poa_key).poa_auth_error == cybou::PoaAuthAdjustmentError::INVALID_SIGNATURE);
     const auto wire = cybou::SerializeProtocolOperation(signed_op);
     BOOST_REQUIRE(wire);
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     const auto account = alice->GetAccountId();
     BOOST_REQUIRE(account);
     const cybou::CybouKeyStoreValidationSigner signer{alice->GetKeyStore()};
-    const auto& network_id = fixture.runtime->GetNetworkId();
+    const auto& network_binding = fixture.runtime->GetNetworkBinding();
     uint256 operation_id;
     operation_id.begin()[0] = 0x42;
     const auto finalized = [&] {
@@ -265,20 +265,20 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
 
     auto [state, tip] = finalized();
     BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
-    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 
     grant(1'000'000);
     std::tie(state, tip) = finalized();
     BOOST_CHECK_EQUAL(state.accounts.at(*account).authority, 1'000'000U);
     BOOST_CHECK(!cybou::IsValidationEligible(state, *account));
-    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 
     grant(1);
     std::tie(state, tip) = finalized();
     BOOST_REQUIRE(cybou::IsValidationEligible(state, *account));
-    const auto attestation = cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state);
+    const auto attestation = cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state);
     BOOST_REQUIRE(attestation);
-    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_id, tip, state) ==
+    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_binding, tip, state) ==
         cybou::ValidationAttestationError::NONE);
     const auto bytes = cybou::SerializeValidationAttestation(*attestation);
     BOOST_REQUIRE(bytes);
@@ -292,11 +292,11 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     other.begin()[0] = 0x43;
     BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, other, tip, state) ==
         cybou::ValidationAttestationError::WRONG_NETWORK);
-    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_id, other, state) ==
+    BOOST_CHECK(cybou::VerifyValidationAttestation(*attestation, network_binding, other, state) ==
         cybou::ValidationAttestationError::STALE_BASE);
     auto tampered = *attestation;
     tampered.operation_id = other;
-    BOOST_CHECK(cybou::VerifyValidationAttestation(tampered, network_id, tip, state) ==
+    BOOST_CHECK(cybou::VerifyValidationAttestation(tampered, network_binding, tip, state) ==
         cybou::ValidationAttestationError::INVALID_SIGNATURE);
 
     // Eligibility is read from the verifier's own finalized state, not from the claim.
@@ -306,14 +306,14 @@ BOOST_AUTO_TEST_CASE(validation_attestation_requires_finalized_auth_above_one_mi
     const auto [burned_state, burned_tip] = finalized();
     auto rebased = *attestation;
     rebased.finalized_base_block_id = burned_tip;
-    BOOST_CHECK(cybou::VerifyValidationAttestation(rebased, network_id, burned_tip, burned_state) ==
+    BOOST_CHECK(cybou::VerifyValidationAttestation(rebased, network_binding, burned_tip, burned_state) ==
         cybou::ValidationAttestationError::NOT_ELIGIBLE);
 
     // A locked vault signs nothing.
     grant(1);
     std::tie(state, tip) = finalized();
     alice->GetKeyStore().Clear();
-    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_id, operation_id, tip, state));
+    BOOST_CHECK(!cybou::SignValidationAttestation(signer, network_binding, operation_id, tip, state));
 }
 
 BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
@@ -442,7 +442,7 @@ BOOST_AUTO_TEST_CASE(runtime_halts_on_valid_poa_equivocation)
     cybou::KVStore alternate_signer_db{cybou::KVStoreOptions{.memory_only = true}};
     cybou::RecoveryEntropy operator_entropy{};
     operator_entropy[0] = fixture.validator_seed[0];
-    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkId(),
+    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
         fixture.definition.genesis_block_id, operator_entropy,
         fixture.definition.poa_finalizer_public_key};
     const auto alternate_signature = alternate_signer.SignFinality(0,
@@ -489,7 +489,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_only_finalized_root_publications)
         .kind = cybou::IdentityOperationKind::ROOT_PUBLICATION,
         .payload_commitment = *commitment,
     };
-    const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkId(), auth);
+    const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), auth);
     BOOST_REQUIRE(digest);
     const auto signature = identity->GetKeyStore().SignAuthorization(*digest);
     BOOST_REQUIRE(signature);
@@ -526,7 +526,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_current_identity_kem_package_by_key_epoch)
     BOOST_CHECK(create->kem_package == initial.package);
     const auto account_bytes = account->Value();
     const auto expected_initial = cybou::ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkId().begin(), 32},
+        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkBinding().begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32}, 0, initial.package);
     BOOST_REQUIRE(expected_initial);
     BOOST_CHECK(*expected_initial == initial.package_id);
@@ -719,9 +719,9 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
         tcp::socket socket{io};
         finalizer_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const bool handshake = fixture.HandshakeAsFinalizer(session, {.network_id = fixture.runtime->GetNetworkId(),
+        const bool handshake = fixture.HandshakeAsFinalizer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *tip,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_ACCEPT_OPERATIONS, .nonce = 1301});
+            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_FINALIZER_PROOF, .nonce = 1301});
         finalizer_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
     }};
 
@@ -744,7 +744,7 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
         tcp::socket socket{io};
         provider_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const bool handshake = session.Handshake({.network_id = fixture.runtime->GetNetworkId(),
+        const bool handshake = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *tip,
             .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 1302});
         provider_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);

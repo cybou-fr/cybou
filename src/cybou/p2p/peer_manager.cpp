@@ -93,15 +93,17 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
         CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    // The Central Authority proves itself to an explicitly configured peer;
-    // the address only selects the live route and never grants the role.
+    // The PoA key holder proves its key to an explicitly configured peer (or every peer);
+    // the proof confirms finalized tips and never routes operations.
     if (m_runtime.IsPoaFinalizerEnabled() &&
         (m_runtime.AuthenticatesFinalizerToAnyPeer() || m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port))) {
-        caps |= CAP_ACCEPT_OPERATIONS;
+        caps |= CAP_FINALIZER_PROOF;
     }
-    Hello local{.network_id = status.network_id, .finalized_height = status.finalized_height,
+    Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
-    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT);
+    TlsSessionConfig tls;
+    tls.expected_server_spki_sha256 = m_runtime.PinnedSpki(endpoint.first, port);
+    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
     const auto signer = [this](std::span<const unsigned char> message) { return m_runtime.SignProviderProof(message); };
     const auto finalizer_signer = [this](std::span<const unsigned char> message) {
         return m_runtime.SignFinalizerTransportProof(message);
@@ -272,7 +274,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         const auto block = DeserializeFinalizedBlock(response.bytes);
         const auto& announced = *it->second->Peer();
         if (!block || block->block.height != height ||
-            block->certificate.network_id != status.network_id ||
+            block->certificate.network_binding != status.network_binding ||
             block->certificate.block_id != ComputeBlockId(block->block) ||
             (use_inventory && block->certificate.block_id != inventory[inventory_cursor].block_id) ||
             (height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
@@ -330,10 +332,7 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
         }
         if (it == m_peers.end() || !it->second->Peer()) continue;
         const auto capabilities = it->second->Peer()->capabilities;
-        const bool accepts_direct = (capabilities & CAP_ACCEPT_OPERATIONS) &&
-            it->second->PeerFinalizerAuthenticated();
-        const bool accepts_relay = capabilities & CAP_OPERATION_RELAY;
-        if (!accepts_direct && !accepts_relay) continue;
+        if (!(capabilities & CAP_OPERATION_RELAY)) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;
@@ -455,18 +454,6 @@ std::vector<PeerInfo> PeerManager::Peers() const
         }
     }
     return peers;
-}
-
-std::vector<PeerInfo> PeerManager::AuthenticatedFinalizerSessions() const
-{
-    std::vector<PeerInfo> sessions;
-    for (const auto& [endpoint, session] : m_peers) {
-        if (session->Peer() && session->PeerFinalizerAuthenticated()) {
-            sessions.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(),
-                session->PeerProviderId(), true});
-        }
-    }
-    return sessions;
 }
 
 std::vector<PeerInfo> PeerManager::StoragePeers() const

@@ -34,13 +34,13 @@ std::optional<ContentKey> GenerateContentKey();
 
 /** Pad and encrypt one bounded byte chunk. */
 std::optional<EncryptedChunk> EncryptChunk(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key,
     std::span<const unsigned char> plaintext);
 
 /** Verify the address before authenticating and returning one bounded byte chunk. */
 std::optional<std::vector<unsigned char>> DecryptChunk(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> content_key,
     const ChunkId& expected_id,
     std::span<const unsigned char> stored_bytes);

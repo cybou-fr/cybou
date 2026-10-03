@@ -12,26 +12,26 @@
 namespace cybou {
 
 PublicationBundleStager::PublicationBundleStager(ChunkBlobStore& blobs, KVStore& proof_db,
-    std::string local_index_id, const std::span<const unsigned char, 32> network_id)
+    std::string local_index_id, const std::span<const unsigned char, 32> network_binding)
     : m_blobs{blobs}, m_db{proof_db}, m_index{proof_db, local_index_id},
       m_binding_key{"publication-stager/" + local_index_id + "/network-id"},
       m_in_progress_key{"publication-stager/" + local_index_id + "/in-progress"},
       m_next_leaf{m_index.StagedCount()}
 {
-    std::copy(network_id.begin(), network_id.end(), m_network_id.begin());
-    if (std::all_of(m_network_id.begin(), m_network_id.end(), [](unsigned char byte) { return byte == 0; })) {
+    std::copy(network_binding.begin(), network_binding.end(), m_network_binding.begin());
+    if (std::all_of(m_network_binding.begin(), m_network_binding.end(), [](unsigned char byte) { return byte == 0; })) {
         throw std::invalid_argument{"publication stager requires a network ID"};
     }
     std::vector<unsigned char> saved_network;
     if (m_db.Read(m_binding_key, saved_network)) {
-        if (!std::equal(saved_network.begin(), saved_network.end(), m_network_id.begin(), m_network_id.end())) {
+        if (!std::equal(saved_network.begin(), saved_network.end(), m_network_binding.begin(), m_network_binding.end())) {
             throw std::runtime_error{"publication proof index belongs to another network"};
         }
     } else {
         if (m_db.Exists(m_binding_key) || m_next_leaf != 0) {
             throw std::runtime_error{"publication proof index has no valid network binding"};
         }
-        m_db.Write(m_binding_key, std::vector<unsigned char>{m_network_id.begin(), m_network_id.end()}, true);
+        m_db.Write(m_binding_key, std::vector<unsigned char>{m_network_binding.begin(), m_network_binding.end()}, true);
     }
     m_failed = m_db.Exists(m_in_progress_key);
 }
@@ -48,7 +48,7 @@ std::optional<StagedApplicationTree> PublicationBundleStager::StageTree(
         m_failed = true;
         return std::nullopt;
     }
-    const auto staged = BuildEncryptedChunkTree(m_network_id, source,
+    const auto staged = BuildEncryptedChunkTree(m_network_binding, source,
         [&](const std::uint32_t, const EncryptedChunk& chunk) {
             if (m_next_leaf == MAX_PUBLICATION_CHUNKS) return false;
             const auto status = m_blobs.Put(chunk.id, chunk.stored_bytes);
@@ -88,7 +88,7 @@ std::optional<PreparedPublicationBundle> PublicationBundleStager::Finish(
     if (!root_in_main_tree) return std::nullopt;
     if (main_tree.tree.chunk_count != main_tree.leaf_count) return std::nullopt;
     const auto root_bytes = m_blobs.Get(main_tree.tree.root_chunk_id);
-    auto opened_root = root_bytes ? DecryptChunk(m_network_id, main_tree.tree.content_key,
+    auto opened_root = root_bytes ? DecryptChunk(m_network_binding, main_tree.tree.content_key,
         main_tree.tree.root_chunk_id, *root_bytes) : std::nullopt;
     if (!opened_root) return std::nullopt;
     crypto::CleanseMemory(opened_root->data(), opened_root->size());

@@ -318,7 +318,7 @@ bool EnumerateTreeNode(const std::span<const unsigned char, 32> network,
 } // namespace
 
 std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const EncryptedTreeSource& source,
     const EncryptedTreeStage& stage,
     const std::span<const unsigned char> private_root_metadata)
@@ -335,7 +335,7 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
     summary.content_key = *key;
     CleanseOnExit cleanse_summary_key{summary.content_key};
     try {
-        TreeBuilder builder(network_id, summary.content_key, stage, summary, private_root_metadata);
+        TreeBuilder builder(network_binding, summary.content_key, stage, summary, private_root_metadata);
         bool eof{false};
         while (!eof) {
             const auto target = RandomDataTarget();
@@ -363,7 +363,7 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
 }
 
 std::optional<std::uint64_t> FetchEncryptedChunkTree(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> content_key,
     const ChunkId& root_chunk_id,
     const EncryptedChunkLookup& lookup,
@@ -376,7 +376,7 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
     try {
         const auto stored_root = lookup(root_chunk_id);
         if (!stored_root) return std::nullopt;
-        auto root_plaintext = DecryptChunk(network_id, content_key, root_chunk_id, *stored_root);
+        auto root_plaintext = DecryptChunk(network_binding, content_key, root_chunk_id, *stored_root);
         if (!root_plaintext) return std::nullopt;
         std::uint64_t child_kind{0};
         std::vector<unsigned char> app_metadata;
@@ -401,7 +401,7 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
         for (const auto& child : *children) {
             auto typed_child = child;
             typed_child.kind = child_kind;
-            if (!ReadTreeNode(network_id, content_key, typed_child, lookup, visit, sink,
+            if (!ReadTreeNode(network_binding, content_key, typed_child, lookup, visit, sink,
                     max_output_bytes, 1, path, written)) return std::nullopt;
         }
         return written;
@@ -410,7 +410,7 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
     }
 }
 
-bool EnumerateEncryptedTreeChunks(const std::span<const unsigned char, 32> network_id,
+bool EnumerateEncryptedTreeChunks(const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> content_key, const ChunkId& root_chunk_id,
     const EncryptedChunkLookup& lookup, const EncryptedTreeVisit& visit)
 {
@@ -418,7 +418,7 @@ bool EnumerateEncryptedTreeChunks(const std::span<const unsigned char, 32> netwo
     try {
         const auto stored_root = lookup(root_chunk_id);
         if (!stored_root) return false;
-        auto plaintext = DecryptChunk(network_id, content_key, root_chunk_id, *stored_root);
+        auto plaintext = DecryptChunk(network_binding, content_key, root_chunk_id, *stored_root);
         if (!plaintext) return false;
         std::uint64_t child_kind{0};
         std::vector<unsigned char> private_metadata;
@@ -430,7 +430,7 @@ bool EnumerateEncryptedTreeChunks(const std::span<const unsigned char, 32> netwo
         for (const auto& child : *children) {
             auto typed = child;
             typed.kind = child_kind;
-            if (!EnumerateTreeNode(network_id, content_key, typed, lookup, visit, 1, seen)) return false;
+            if (!EnumerateTreeNode(network_binding, content_key, typed, lookup, visit, 1, seen)) return false;
         }
         return true;
     } catch (...) {

@@ -85,12 +85,12 @@ std::optional<ChunkAuthorizationProof> DecodeProofMetadata(const std::span<const
 } // namespace
 
 FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
-    const std::span<const unsigned char, 32> network_id, const std::uint64_t capacity_bytes,
+    const std::span<const unsigned char, 32> network_binding, const std::uint64_t capacity_bytes,
     const bool wipe_data)
-    : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_id)}, m_capacity_bytes{capacity_bytes}
+    : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}
 {
     if (capacity_bytes == 0 ||
-        std::all_of(network_id.begin(), network_id.end(), [](const auto byte) { return byte == 0; }) ||
+        std::all_of(network_binding.begin(), network_binding.end(), [](const auto byte) { return byte == 0; }) ||
         (!m_blobs.MemoryOnly() && path.empty())) {
         throw std::invalid_argument{"invalid finalized chunk store configuration"};
     }
@@ -104,14 +104,14 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
     // Provider metadata is network-bound even though the common blob store is
     // keyed only by the hash of exact encrypted bytes.
     const std::string network_key{"chunk-store/v4/network-id"};
-    std::vector<unsigned char> saved_network_id;
-    if (m_db->Read(network_key, saved_network_id)) {
-        if (!std::equal(saved_network_id.begin(), saved_network_id.end(), network_id.begin(), network_id.end())) {
+    std::vector<unsigned char> saved_network_binding;
+    if (m_db->Read(network_key, saved_network_binding)) {
+        if (!std::equal(saved_network_binding.begin(), saved_network_binding.end(), network_binding.begin(), network_binding.end())) {
             throw std::invalid_argument{"finalized chunk store network ID mismatch"};
         }
     } else {
         if (m_db->Exists(network_key)) throw std::runtime_error{"corrupt finalized chunk store network ID"};
-        m_db->Write(network_key, std::vector<unsigned char>{network_id.begin(), network_id.end()}, true);
+        m_db->Write(network_key, std::vector<unsigned char>{network_binding.begin(), network_binding.end()}, true);
     }
 
     if (!m_blobs.MemoryOnly()) {

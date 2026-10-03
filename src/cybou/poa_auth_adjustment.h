@@ -48,13 +48,13 @@ enum class PoaAuthAdjustmentError : uint8_t {
 };
 
 std::optional<std::array<unsigned char, 32>> ComputePoaAuthAdjustmentDigest(
-    const uint256& network_id, const PoaAuthAdjustment& adjustment);
+    const uint256& network_binding, const PoaAuthAdjustment& adjustment);
 std::optional<std::vector<unsigned char>> SerializePoaAuthAdjustment(const PoaAuthAdjustment& adjustment);
 std::optional<PoaAuthAdjustment> DeserializePoaAuthAdjustment(std::span<const unsigned char> bytes);
 
 /** GRANT adds `amount`; BURN removes min(AUTH, amount). */
 PoaAuthAdjustmentError ApplyPoaAuthAdjustment(const PoaAuthAdjustment& adjustment,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const IdentityHybridPublicKey& poa_key, CybouState& state);
 
 } // namespace cybou

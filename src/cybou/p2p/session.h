@@ -32,7 +32,8 @@ namespace cybou::p2p {
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
 inline constexpr uint8_t WIRE_VERSION{4};
 inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
-inline constexpr uint64_t CAP_ACCEPT_OPERATIONS{1ULL << 1};
+/** The peer proves the genesis PoA finalizer key in this session (FINALIZER_PROOF); it grants no routing role. */
+inline constexpr uint64_t CAP_FINALIZER_PROOF{1ULL << 1};
 inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
 inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
 inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
@@ -120,7 +121,7 @@ struct Frame {
 };
 
 struct Hello {
-    uint256 network_id;
+    uint256 network_binding;
     uint64_t finalized_height{0};
     uint256 finalized_tip;
     uint64_t capabilities{0};

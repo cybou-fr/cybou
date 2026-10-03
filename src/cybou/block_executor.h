@@ -50,7 +50,7 @@ inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
 /** Without the genesis PoA key every PoaAuthAdjustment is invalid. */
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
     const IdentityHybridPublicKey* poa_key = nullptr);
 

@@ -19,7 +19,7 @@ struct OperationDiagnostics {
 };
 /** One immutable canonical head; peer heights are untrusted advertisements. */
 struct NodeDiagnosticsSnapshot {
-    std::string network_id, role, tip, state_root;
+    std::string network_binding, role, tip, state_root;
     std::uint64_t height{0}, storage_used{0}, storage_capacity{0};
     bool initialized{false}, safety_halted{false};
     std::vector<PeerDiagnostics> peers;

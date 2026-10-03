@@ -2,7 +2,7 @@
 
 Это **единственная авторитетная процедура сборки** CYBOU core на Windows.
 Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собираются
-`cybou-core-test.exe`, `cybou-node.exe`,
+`cybou-core-test.exe`, `cybou.exe` (desktop + headless node),
 `cybou-loadgen.exe` и Qt GUI.
 
 ## Что требуется (один раз)
@@ -33,7 +33,7 @@ preset. Для прямых команд в PowerShell задайте его я�
 
 ```powershell
 $env:PATH = "C:\Qt\Tools\mingw1310_64\bin;C:\Qt\Tools\Ninja;$env:PATH"
-cmake --build build_cybou_qt_mingw --target cybou-core-test cybou-node --parallel 4
+cmake --build build_cybou_qt_mingw --target cybou-core-test cybou --parallel 4
 ```
 
 Для запуска приложения и тестов добавьте также каталоги runtime DLL Qt и vcpkg:
@@ -113,7 +113,7 @@ qtbase/qttools/sqlite3/zeromq и vcpkg начнёт собирать Qt (~час
 ## Шаг 3 — сборка
 
 ```bat
-"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target cybou-core-test cybou-node cybou cybou_qt -j 4
+"C:\Program Files\CMake\bin\cmake.exe" --build build_cybou_qt_mingw --target cybou-core-test cybou cybou_qt -j 4
 ```
 
 For a focused Qt GUI rebuild after editing `src/qt`, use:

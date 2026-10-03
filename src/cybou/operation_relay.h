@@ -29,22 +29,11 @@ struct RelayedOperation {
     std::vector<unsigned char> exact_bytes;
 };
 
-/**
- * Bounded, volatile operation queue for hop-by-hop P2P relay.
- * Finalizer route handles are local process tokens and are never serialized.
- */
+/** Bounded, volatile queue of locally executed operations for hop-by-hop P2P relay. */
 class OperationRelay final {
 public:
-    using FinalizerSession = uint64_t;
-
     explicit OperationRelay(size_t max_operations = 256,
         size_t max_queued_bytes = 8U * 1024U * 1024U);
-
-    /** Caller must invoke this only after verifying the genesis PoA proof for a live session. */
-    std::optional<FinalizerSession> AttachAuthenticatedFinalizer();
-    /** Disconnect removes the live route; queued operations remain volatile and can use another hop. */
-    void DetachFinalizer(FinalizerSession session);
-    bool HasAuthenticatedFinalizer() const;
 
     /** allow_seen_retry lets a submitting origin retry bytes already forwarded from this queue. */
     OperationRelayEnqueueStatus Enqueue(std::span<const unsigned char> exact_operation_bytes,
@@ -66,8 +55,6 @@ private:
     const size_t m_max_queued_bytes;
     const size_t m_seen_limit;
     mutable std::mutex m_mutex;
-    FinalizerSession m_next_session{1};
-    std::optional<FinalizerSession> m_finalizer_session;
     std::deque<RelayedOperation> m_queue;
     std::optional<uint256> m_claimed_id;
     std::set<uint256> m_queued_ids;

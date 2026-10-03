@@ -52,13 +52,13 @@ private:
 };
 
 std::optional<PoaFinalityCertificate> CreateCertificate(
-    const IdentityHybridSignature& signature, const uint256& network_id,
+    const IdentityHybridSignature& signature, const uint256& network_binding,
     const uint256& block_id, const uint64_t height, const uint256& parent_block_id)
 {
-    if (network_id.IsNull() || block_id.IsNull() || height == 0 || parent_block_id.IsNull()) return std::nullopt;
+    if (network_binding.IsNull() || block_id.IsNull() || height == 0 || parent_block_id.IsNull()) return std::nullopt;
     PoaFinalityCertificate certificate{
         .version = POA_FINALITY_CERTIFICATE_VERSION,
-        .network_id = network_id,
+        .network_binding = network_binding,
         .block_id = block_id,
         .height = height,
         .parent_block_id = parent_block_id,
@@ -70,10 +70,10 @@ std::optional<PoaFinalityCertificate> CreateCertificate(
 
 } // namespace
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_id,
+PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
     const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key)
-    : m_network_id{network_id}, m_public_key{genesis_finalizer_key},
-      m_journal{db, network_id, genesis_block_id, m_public_key}
+    : m_network_binding{network_binding}, m_public_key{genesis_finalizer_key},
+      m_journal{db, network_binding, genesis_block_id, m_public_key}
 {
     if (genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
         genesis_finalizer_key.ml_dsa.size() != 1952) {
@@ -81,10 +81,10 @@ PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_id,
     }
 }
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_id,
+PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
     const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
     const IdentityHybridPublicKey& genesis_finalizer_key)
-    : PoaFinalizer{db, network_id, genesis_block_id,
+    : PoaFinalizer{db, network_binding, genesis_block_id,
           ValidateRecoveryPoaKey(operator_recovery_entropy, genesis_finalizer_key)}
 {
     auto signer = std::make_shared<RecoveryEntropyPoaSigner>(operator_recovery_entropy);
@@ -131,12 +131,12 @@ PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
         return {.status = PoaSigningStatus::JOURNAL_REJECTED, .journal_status = journal_status};
     }
     if (!m_signer) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
-    const auto digest = ComputePoaFinalityDigest(m_network_id, block_id, block.height, block.parent_block_id);
+    const auto digest = ComputePoaFinalityDigest(m_network_binding, block_id, block.height, block.parent_block_id);
     const auto signature = m_signer->Sign(digest);
     if (!signature || !VerifyIdentityMessage(m_public_key, *signature, digest)) {
         return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
     }
-    const auto certificate = CreateCertificate(*signature, m_network_id, block_id, block.height, block.parent_block_id);
+    const auto certificate = CreateCertificate(*signature, m_network_binding, block_id, block.height, block.parent_block_id);
     if (!certificate) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
     return {
         .status = journal_status == PoaJournalStatus::ALREADY_PREPARED ?
@@ -157,7 +157,7 @@ std::optional<IdentityHybridSignature> PoaFinalizer::SignTransportProof(
 
 bool PoaFinalizer::SignAuthAdjustment(PoaAuthAdjustment& adjustment) const
 {
-    const auto digest = ComputePoaAuthAdjustmentDigest(m_network_id, adjustment);
+    const auto digest = ComputePoaAuthAdjustmentDigest(m_network_binding, adjustment);
     if (!digest || m_journal.SafetyHalted() || !m_signer) return false;
     const auto signature = m_signer->Sign(*digest);
     if (!signature || !VerifyIdentityMessage(m_public_key, *signature, *digest)) return false;

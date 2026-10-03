@@ -66,17 +66,17 @@ std::optional<PoaJournalHead> DecodeHead(const std::span<const unsigned char> by
 
 } // namespace
 
-PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_id,
+PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding,
     const uint256& genesis_block_id, const IdentityHybridPublicKey& finalizer_key)
-    : m_db{db}, m_network_id{network_id}, m_genesis_block_id{genesis_block_id},
+    : m_db{db}, m_network_binding{network_binding}, m_genesis_block_id{genesis_block_id},
       m_finalizer_key_id{[&finalizer_key] {
           const auto id = ComputePoaFinalizerKeyId(finalizer_key);
           if (!id) throw std::invalid_argument{"invalid PoA finalizer public key"};
           return *id;
       }()},
-      m_prefix{"poa-finalizer-journal/" + Hex(network_id) + "/"}
+      m_prefix{"poa-finalizer-journal/" + Hex(network_binding) + "/"}
 {
-    if (network_id.IsNull() || genesis_block_id.IsNull()) {
+    if (network_binding.IsNull() || genesis_block_id.IsNull()) {
         throw std::invalid_argument{"invalid PoA signing journal identity"};
     }
     const auto metadata_key = m_prefix + "metadata";
@@ -86,7 +86,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_id,
     std::vector<unsigned char> expected_metadata;
     expected_metadata.reserve(JOURNAL_METADATA_SIZE);
     expected_metadata.push_back(JOURNAL_FORMAT_VERSION);
-    expected_metadata.insert(expected_metadata.end(), network_id.begin(), network_id.end());
+    expected_metadata.insert(expected_metadata.end(), network_binding.begin(), network_binding.end());
     expected_metadata.insert(expected_metadata.end(), key_id.begin(), key_id.end());
     expected_metadata.insert(expected_metadata.end(), genesis_block_id.begin(), genesis_block_id.end());
     if (expected_metadata.size() != JOURNAL_METADATA_SIZE) {

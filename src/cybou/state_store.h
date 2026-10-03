@@ -56,7 +56,6 @@ enum class StateLoadError : uint8_t {
     CORRUPT,
     INVALID_NETWORK_DEFINITION,
     NETWORK_MISMATCH,
-    GENESIS_DIGEST_MISMATCH,
 };
 
 struct StateLoadResult {
@@ -119,8 +118,7 @@ class CybouStateStore
 public:
     CybouStateStore(
         KVStore& db,
-        CybouNetworkDefinition network_definition,
-        uint256 genesis_digest = uint256::ZERO);
+        CybouNetworkDefinition network_definition);
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -145,17 +143,15 @@ public:
         const std::vector<ProtocolOperation>& operations,
         uint64_t height) const;
 
-    /** Network identity derived from the immutable canonical definition. */
-    const uint256& GetNetworkId() const { return m_network_id; }
+    /** 32-byte NetworkBinding of the definition's Network Public Key (NetworkID). */
+    const uint256& GetNetworkBinding() const { return m_network_binding; }
     const CybouNetworkDefinition& GetNetworkDefinition() const { return m_network_definition; }
-    const uint256& GetGenesisDigest() const noexcept { return m_genesis_digest; }
     KVStore& GetDatabase() const { return m_db; }
     bool PoaSafetyHalted() const;
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
-    /** Network identity persisted with genesis, if initialized. */
-    std::optional<uint256> GetStoredNetworkId() const;
-    std::optional<uint256> GetStoredGenesisDigest() const;
+    /** NetworkBinding persisted with genesis, if initialized. */
+    std::optional<uint256> GetStoredNetworkBinding() const;
 
     /**
      * Atomically commit a PoA-finalized block:
@@ -186,8 +182,7 @@ private:
     KVStore& m_db;
     const CybouNetworkDefinition m_network_definition;
     const NetworkDefinitionError m_network_definition_error;
-    const uint256 m_network_id;
-    const uint256 m_genesis_digest{uint256::ZERO};
+    const uint256 m_network_binding;
     std::unique_ptr<PoaConflictDetector> m_poa_conflict_detector;
 };
 

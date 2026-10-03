@@ -79,7 +79,7 @@ QString AdvertisedCapabilities(const std::uint64_t capabilities)
     QStringList result;
     const auto translate = [](const char* source) { return QCoreApplication::translate("DiagnosticsPage", source); };
     if (capabilities & cybou::p2p::CAP_SERVE_BLOCKS) result << translate("Serve blocks");
-    if (capabilities & cybou::p2p::CAP_ACCEPT_OPERATIONS) result << translate("Accept operations");
+    if (capabilities & cybou::p2p::CAP_FINALIZER_PROOF) result << translate("PoA key proof");
     if (capabilities & cybou::p2p::CAP_BLOCK_INVENTORY) result << translate("Block inventory");
     if (capabilities & cybou::p2p::CAP_BLOCK_ANNOUNCEMENTS) result << translate("Block announcements");
     if (capabilities & cybou::p2p::CAP_PEER_DISCOVERY) result << translate("Peer discovery");
@@ -170,7 +170,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             head->setText(tr("%1 | %2 | Height %3 | Safety halt %4\nNetworkID %5\nTip %6\nState root %7")
                 .arg(m_model->status().network_name, m_model->status().online ? tr("Online") : tr("Offline"))
                 .arg(d.height).arg(d.safety_halted ? tr("YES") : tr("No"))
-                .arg(QString::fromStdString(d.network_id),QString::fromStdString(d.tip),QString::fromStdString(d.state_root)));
+                .arg(QString::fromStdString(d.network_binding),QString::fromStdString(d.tip),QString::fromStdString(d.state_root)));
             auto row = [](QTableWidget* table, const QStringList& values) {
                 int r=table->rowCount(); table->insertRow(r);
                 for (int c=0;c<values.size();++c) table->setItem(r,c,new QTableWidgetItem{values[c]});
@@ -230,7 +230,7 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Peer admission Geo database"), geo_status, parent);
     Row(m_rows, tr("Last sync"), m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("Not yet"), parent);
     if (!status.sync_error.isEmpty()) Row(m_rows, tr("Last error"), status.sync_error, parent);
-    Row(m_rows, tr("Network ID"), status.network_id.isEmpty() ? tr("Available after node startup") : status.network_id, parent);
+    Row(m_rows, tr("Network ID"), status.network_binding.isEmpty() ? tr("Available after node startup") : status.network_binding, parent);
     Row(m_rows, tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory, parent);
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
     const auto auth_val = m_model->authority();

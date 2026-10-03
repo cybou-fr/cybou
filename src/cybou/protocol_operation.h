@@ -52,7 +52,7 @@ std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation);
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
 /** Verify operation signatures and payload bindings before volatile mesh relay. */
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
-    const uint256& network_id, const IdentityRegistry& identities);
+    const uint256& network_binding, const IdentityRegistry& identities);
 
 } // namespace cybou
 #endif // CYBOU_PROTOCOL_OPERATION_H

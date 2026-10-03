@@ -65,7 +65,7 @@ cybou::AccountCreateOp MakeTestAccountCreate(const TestIdentity& id)
         .authorization = id.auth,
         .kem_package = binding.package,
         .work = {
-            .network_id = net_id,
+            .network_binding = net_id,
             .account_id = id.account_id,
             .authorization_commitment = binding.authorization_commitment,
             .work_epoch = 0,
@@ -125,9 +125,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     BOOST_REQUIRE(first_bytes);
     BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
 
-    const auto session = relay.AttachAuthenticatedFinalizer();
-    BOOST_REQUIRE(session);
-    BOOST_CHECK(!relay.AttachAuthenticatedFinalizer());
     BOOST_CHECK(relay.Enqueue(*first_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 1U);
     BOOST_CHECK_EQUAL(relay.QueuedBytes(), first_bytes->size());
@@ -162,15 +159,11 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     BOOST_REQUIRE(relay.Claim());
     BOOST_CHECK(relay.Acknowledge(*first_id));
     BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::QUEUED);
-    relay.DetachFinalizer(*session);
-    BOOST_CHECK(!relay.HasAuthenticatedFinalizer());
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 1U);
     BOOST_CHECK_EQUAL(relay.QueuedBytes(), second_bytes->size());
     BOOST_REQUIRE(relay.Peek());
     BOOST_CHECK(relay.Enqueue(*second_bytes) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 
-    const auto next_session = relay.AttachAuthenticatedFinalizer();
-    BOOST_REQUIRE(next_session);
     const auto second_id = cybou::ComputeOperationId(cybou::ProtocolOperation{second});
     BOOST_REQUIRE(second_id);
     BOOST_REQUIRE(relay.Claim());
@@ -183,11 +176,7 @@ BOOST_AUTO_TEST_CASE(operation_relay_is_volatile_bounded_and_mesh_deduplicated)
     relay.ForgetFinalized(*second_id);
     BOOST_CHECK(!relay.HasQueued(*second_id));
     BOOST_CHECK_EQUAL(relay.QueuedOperations(), 0U);
-    relay.DetachFinalizer(*session);
-    BOOST_CHECK(relay.HasAuthenticatedFinalizer());
     BOOST_CHECK(!relay.Peek());
-    relay.DetachFinalizer(*next_session);
-    BOOST_CHECK(!relay.HasAuthenticatedFinalizer());
 }
 
 BOOST_AUTO_TEST_CASE(account_create_canonical_typed_roundtrip)

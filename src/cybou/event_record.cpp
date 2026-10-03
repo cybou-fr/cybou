@@ -53,7 +53,7 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
         if (!peer.provider_id.empty()) Write(NodeEvent::provider_disconnected,{{"provider_id",peer.provider_id}});
     }
     m_peers = std::move(peers);
-    Write(NodeEvent::node_status,{{"network_id",d.network_id},{"role",d.role},{"height",d.height},
+    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"role",d.role},{"height",d.height},
         {"tip",d.tip},{"state_root",d.state_root},{"peers",std::uint64_t{d.peers.size()}},
         {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}});
     if (d.safety_halted) Write(NodeEvent::poa_safety_halt);
@@ -62,7 +62,7 @@ EventWriter::~EventWriter() { if(m_file)std::fclose(m_file); }
 bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file && std::ferror(m_file)==0; }
 void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     static const std::set<std::string> ALLOWED{
-        "network_id","role","height","tip","state_root","peers","storage_used",
+        "network_binding","role","height","tip","state_root","peers","storage_used",
         "storage_capacity","safety_halted","operation_id","block_id","provider_id",
         "chunk_id","peer","bytes","duration_ms","error_code","replicas","target","account_id","nonce",
         "nonce","account_id","base_height","advertised_height","capabilities"};

@@ -34,14 +34,10 @@ TIMEOUT_SECONDS = 1800
 def main() -> int:
     node, client = sys.argv[1], sys.argv[2]
     work = Path(tempfile.mkdtemp(prefix="cybou-storage-soak-"))
+    # The test-build LAB network: its own Network and PoA keys, never DEVNET's.
     key = work / "finalizer.key"
-    key.write_bytes(os.urandom(32))
-    key.chmod(0o600)
-    if os.name == "nt":
-        subprocess.run(["icacls", str(key), "/inheritance:r", "/grant:r",
-                        f"{os.getlogin()}:(F)", "SYSTEM:(F)"], check=True, capture_output=True)
-    network = work / "network.bin"
-    subprocess.run([node, "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True)
+    subprocess.run([node, "network", "lab-poa-seed", "--out", str(key)], check=True)
+    network = "lab"
     peers = work / "peers.txt"
     peers.write_text("".join(f"127.0.0.1 {port}\n" for port in PROVIDERS.values()))
 

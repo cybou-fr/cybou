@@ -56,7 +56,7 @@ std::optional<IdentityKemPackage> EncodeIdentityKemPackage(
 std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned char> package);
 std::optional<XWingSeed> DeriveIdentityXWingSeed(std::span<const unsigned char, 32> identity_entropy);
 std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> account_id,
     uint64_t key_epoch,
     std::span<const unsigned char> package);

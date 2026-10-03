@@ -15,7 +15,7 @@ struct IdentityKemBinding {
     std::array<unsigned char, 32> pop_digest{};
 };
 
-inline IdentityKemBinding MakeIdentityKemBinding(const uint256& network_id,
+inline IdentityKemBinding MakeIdentityKemBinding(const uint256& network_binding,
     const AccountId& account_id, const IdentityAuthorization& authorization,
     uint64_t key_epoch = 0)
 {
@@ -26,10 +26,10 @@ inline IdentityKemBinding MakeIdentityKemBinding(const uint256& network_id,
 
     const auto account_bytes = account_id.Value();
     const auto package_id = package ? ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32}, key_epoch, *package) : std::nullopt;
     const auto commitment = package_id ? ComputeAccountCreateAuthorizationCommitment(authorization, *package_id) : std::nullopt;
-    const auto digest = package_id ? ComputeAccountCreatePopDigest(network_id, account_id, authorization, *package_id) : std::nullopt;
+    const auto digest = package_id ? ComputeAccountCreatePopDigest(network_binding, account_id, authorization, *package_id) : std::nullopt;
     if (!package || !package_id || !commitment || !digest) throw std::runtime_error("cannot prepare Identity KEM test binding");
     return {*package, *package_id, *commitment, *digest};
 }

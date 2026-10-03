@@ -186,7 +186,7 @@ void CybouMainWindow::showDebugWindow()
             const auto& status = m_desktop_model->status();
             details->setPlainText(tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
                                      "Finalized height: %5\nData directory: %6")
-                .arg(status.network_name, status.network_id,
+                .arg(status.network_name, status.network_binding,
                     status.node_running ? tr("yes") : tr("no"))
                 .arg(status.peer_count)
                 .arg(status.finality_known ? QString::number(status.finalized_height) : tr("unknown"))

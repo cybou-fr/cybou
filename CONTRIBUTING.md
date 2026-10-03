@@ -44,6 +44,6 @@ code from integration and deployment gates.
 - Add focused tests for new serialization, cryptography integration, bounds,
   and state-machine behavior. Run the relevant tests and build targets before
   reporting completion.
-- For CYBOU core or `cybou-node` changes, follow the DEV deployment and safety
+- For CYBOU core or headless `cybou` node changes, follow the DEV deployment and safety
   gates in `AGENTS.md`. Preserve rollback artifacts and do not reset DEV except
   after the coordinated integration gate.

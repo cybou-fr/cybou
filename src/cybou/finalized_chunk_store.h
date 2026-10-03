@@ -49,7 +49,7 @@ using FinalizedPublicationLookup = std::function<std::optional<RootPublication>(
 class FinalizedChunkStore final {
 public:
     FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
-        std::span<const unsigned char, 32> network_id, std::uint64_t capacity_bytes,
+        std::span<const unsigned char, 32> network_binding, std::uint64_t capacity_bytes,
         bool wipe_data = false);
     ~FinalizedChunkStore();
     FinalizedChunkStore(const FinalizedChunkStore&) = delete;

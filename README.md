@@ -25,8 +25,8 @@ bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le cœur finalizer de bureau existe, mais la découverte bootstrap
 et la vérification de la genèse signée / Network Key ne sont pas intégrées de bout en bout.
-`cybou-node` sait encore charger un fichier réseau externe et propose notamment
-`finalizer run`, `provider run` et `observer run`, mais le
+L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
+interface, `finalizer run`, `provider run` et `observer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en
 service d'un réseau privé d'entreprise.
 
@@ -60,7 +60,7 @@ service d'un réseau privé d'entreprise.
   Validation, simple preuve pré-finalisation. L'AUTH est stockée dans l'état du
   compte, non transférable et exclue des 100 milliards de CYBOU. Le PoA
   ré-exécute tout et reste seul à finaliser.
-- **Admission réseau.** Les commandes réseau de `cybou-node` exigent une
+- **Admission réseau.** Les commandes réseau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
   validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.
 
@@ -111,7 +111,7 @@ tests correspondantes. Les presets et cibles sont définis dans
 - [Client de bureau et démarrage réseau](src/qt/cyboudesktopcontroller.cpp)
 - [Adaptateur applicatif Mail et Files](src/qt/cyboucoreapplicationadapter.cpp)
 - [Runtime du nœud](src/cybou/node_runtime.cpp)
-- [Commandes de `cybou-node`](src/cybou_node.cpp)
+- [Commandes de `cybou`](src/cybou/cli/cybou_cli.cpp)
 - [Tests natifs](src/test/CMakeLists.txt)
 - [Tests du shell Qt](src/qt/test/cyboushelltests.cpp)
 

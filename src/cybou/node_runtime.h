@@ -11,6 +11,7 @@
 #include <cybou/protocol_limits.h>
 #include <cybou/sync_result.h>
 #include <cybou/network_definition.h>
+#include <cybou/official_networks.h>
 #include <cybou/p2p/ingress_budget.h>
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
@@ -41,20 +42,31 @@ class CybouKeyStore;
 class IdentityOperationCoordinator;
 class PoaSigner;
 
+/** Stable TLS identity for a node whose address is a compiled bootstrap locator. */
+struct TlsServerIdentity {
+    std::filesystem::path certificate_chain_file;
+    std::filesystem::path private_key_file;
+};
+
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
-    /** Digest of the verified signed genesis; stored in the DB as an integrity marker, not a trust anchor. */
-    uint256 genesis_digest{};
+    /**
+     * Compiled rendezvous peers of the official network: dialed first like any
+     * ordinary peer, with the session TLS SPKI checked against the compiled pin.
+     */
+    std::vector<OfficialBootstrapLocator> bootstrap_locators;
     std::filesystem::path data_dir;
     std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
-    /** When this desktop holds the genesis PoA key, authenticate its live route to every mesh peer. */
+    /** When this node holds the genesis PoA key, prove it (FINALIZER_PROOF) to every mesh peer, not only the configured one. */
     bool authenticate_finalizer_to_any_peer{false};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
+    /** Only on the node serving a bootstrap locator; ordinary nodes use ephemeral TLS. */
+    std::optional<TlsServerIdentity> tls_server_identity;
     bool storage_enabled{false};
     uint64_t storage_capacity_bytes{0};
     std::shared_ptr<EventWriter> event_writer;
@@ -71,7 +83,7 @@ enum class NodeRuntimeState : uint8_t {
 };
 
 struct NodeRuntimeStatus {
-    uint256 network_id;
+    uint256 network_binding;
     uint64_t finalized_height{0};
     uint256 finalized_tip;
     uint256 state_root;
@@ -166,7 +178,7 @@ public:
 
     /** Network definition and identifier */
     const CybouNetworkDefinition& GetNetworkDefinition() const { return m_config.network_definition; }
-    const uint256& GetNetworkId() const { return m_network_id; }
+    const uint256& GetNetworkBinding() const { return m_network_binding; }
 
     /** Finalized height and head */
     std::optional<uint64_t> GetFinalizedHeight() const;
@@ -178,7 +190,6 @@ public:
 
     /** Submit an operation to pending pool (producer) or direct execution */
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
-    OperationSubmitResult SubmitPeerOperation(ProtocolOperation op, std::string source_peer);
     /** PoA only: sign and queue an AUTH GRANT/BURN valid solely in the next block. */
     OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
     OperationStatus GetOperationStatus(const uint256& op_id) const;
@@ -196,10 +207,6 @@ public:
     bool IsConfiguredP2pEndpoint(std::string_view address, uint16_t port) const;
     bool AuthenticatesFinalizerToAnyPeer() const { return m_config.authenticate_finalizer_to_any_peer; }
 
-    /** Attach only after a live CYP2 session has verified the genesis finalizer proof. */
-    std::optional<OperationRelay::FinalizerSession> AttachAuthenticatedFinalizerRelay();
-    void DetachAuthenticatedFinalizerRelay(OperationRelay::FinalizerSession session);
-    bool HasAuthenticatedFinalizerRoute() const;
     /** Relay only after this node independently executed the operation on its finalized state. */
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
         bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
@@ -279,8 +286,6 @@ public:
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
 
-    /** True for the PoA finalizer or a node with a configured CYP2 finalizer peer. */
-    bool CanSubmitOperations() const;
 
     /** Peer discovery endpoints */
     /** Local pre-parse abuse limiter; it has no protocol or Authority effect. */
@@ -297,6 +302,9 @@ public:
     /** The explicit peer endpoints as last configured. */
     std::vector<std::pair<std::string, uint16_t>> GetExplicitPeerEndpoints() const;
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
+    /** Compiled SPKI pin for a bootstrap locator endpoint; nullopt for every other peer. */
+    std::optional<std::array<unsigned char, 32>> PinnedSpki(const std::string& address, uint16_t port) const;
+    const std::optional<TlsServerIdentity>& GetTlsServerIdentity() const { return m_config.tls_server_identity; }
 
     /** Access underlying store */
     CybouStateStore& GetStore() { return m_store; }
@@ -319,7 +327,7 @@ private:
     /** Attest one locally accepted candidate on the current finalized base, if eligible. */
     void AttestCandidate(const uint256& operation_id);
     NodeRuntimeConfig m_config;
-    uint256 m_network_id;
+    uint256 m_network_binding;
     std::unique_ptr<KVStore> m_db;
     std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
     std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;

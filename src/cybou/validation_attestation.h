@@ -29,7 +29,7 @@ inline constexpr size_t VALIDATION_ATTESTATION_SIZE{1 + 32 + 32 + 32 + 32 + 64 +
  */
 struct ValidationAttestation {
     uint8_t version{VALIDATION_ATTESTATION_VERSION};
-    uint256 network_id;
+    uint256 network_binding;
     uint256 operation_id;
     uint256 finalized_base_block_id;
     AccountId validator_account_id;
@@ -61,7 +61,7 @@ bool IsValidationEligible(const CybouState& finalized_state, const AccountId& ac
  * operation: the caller must have executed it independently first.
  */
 ValidationAttestationError VerifyValidationAttestation(const ValidationAttestation& attestation,
-    const uint256& network_id, const uint256& finalized_tip, const CybouState& finalized_state);
+    const uint256& network_binding, const uint256& finalized_tip, const CybouState& finalized_state);
 
 /** Signing boundary for the local Identity; key material never leaves the implementation. */
 class ValidationSigner {
@@ -75,7 +75,7 @@ using ValidationSignerRef = std::shared_ptr<ValidationSigner>;
 
 /** Sign only when the local Identity is eligible in this finalized state; nullopt otherwise. */
 std::optional<ValidationAttestation> SignValidationAttestation(const ValidationSigner& signer,
-    const uint256& network_id, const uint256& operation_id, const uint256& finalized_tip,
+    const uint256& network_binding, const uint256& operation_id, const uint256& finalized_tip,
     const CybouState& finalized_state);
 
 } // namespace cybou

@@ -46,7 +46,7 @@ struct Client {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime={.network_definition=net.network_definition,.genesis_digest=net.genesis.GetGenesisDigest(),.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis_state});
+            .runtime={.network_definition=net.network_definition,.data_dir=dir/"node",.p2p_endpoint=peer,.event_writer=events},.genesis=net.genesis_state});
         node->Start();
         node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;
@@ -84,7 +84,7 @@ struct Client {
         application=std::make_unique<cybou::ApplicationService>(runtime,keys,*db,*storage);
         wallet=std::make_unique<cybou::CybouWalletService>(runtime,keys);
         jobs=publication->Jobs(); // Restart resumes durable exact operations and publication intents.
-        events->Write(cybou::NodeEvent::node_started,{{"role",std::string{"loadgen"}},{"network_id",runtime.GetNetworkId().GetHex()}});
+        events->Write(cybou::NodeEvent::node_started,{{"role",std::string{"loadgen"}},{"network_binding",runtime.GetNetworkBinding().GetHex()}});
     }
     bool Advance() {
         publication->ProcessDurability(*storage);
@@ -115,7 +115,7 @@ struct Client {
             uint64_t offset{0};
             std::set<cybou::ChunkId> seen;
             const auto written = cybou::FetchEncryptedChunkTree(
-                std::span<const unsigned char,32>{node->Runtime().GetNetworkId().begin(),32},
+                std::span<const unsigned char,32>{node->Runtime().GetNetworkBinding().begin(),32},
                 *file.item.content_key, *file.item.root_chunk_id,
                 [&](const cybou::ChunkId& id) { return storage->Fetch(id); },
                 [](std::span<const unsigned char>) { return true; },

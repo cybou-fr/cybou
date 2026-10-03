@@ -108,24 +108,13 @@ def worker(req):
         if not name: raise ValueError("network faults require an owned isolated namespace")
         if action == "namespace_cleanup": return lab_network.cleanup(root,name)
         return lab_network.fault(root,name,int(req["port"]),int(req.get("delay_ms",0)),int(req.get("loss_percent",0)),action=="network_reset",req.get("all_tcp",False))
-    if action == "put_network":
-        path = inside(root, root / "network.bin")
-        content = bytes.fromhex(req["hex"])
-        if path.exists() and path.read_bytes() != content:
-            raise ValueError("refusing LAB network replacement")
-        path.write_bytes(content)
-        return {"ok": True}
     if action == "init":
+        # The LAB network is compiled into test builds of cybou; no network file exists.
         key = inside(root, root / "finalizer.seed")
-        network = inside(root, root / "network.bin")
-        if not network.exists():
-            if not key.exists():
-                descriptor = os.open(key, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-                with os.fdopen(descriptor, "wb") as stream:
-                    stream.write(os.urandom(32))
-            subprocess.run([req["binary"], "network", "init-dev", "--network", str(network), "--key-file", str(key)], check=True, stdout=subprocess.DEVNULL)
-        public = subprocess.check_output([req["binary"], "network", "info", "--network", str(network)], text=True)
-        return {"network_hex": network.read_bytes().hex(), "info": public}
+        if not key.exists():
+            subprocess.run([req["binary"], "network", "lab-poa-seed", "--out", str(key)], check=True, stdout=subprocess.DEVNULL)
+        public = subprocess.check_output([req["binary"], "network", "info", "--network", "lab"], text=True)
+        return {"info": public}
     if action == "prepare_password":
         path = inside(root, root / "loadgen.password")
         if not path.exists():
@@ -280,7 +269,7 @@ class Lab:
         self.failures = []
         self.loadgen = self.config.get("loadgen")
         self.loadgen_passed = False
-        self.network_id = (self.dir / "network.id").read_text() if (self.dir / "network.id").exists() else None
+        self.network_binding = (self.dir / "network.id").read_text() if (self.dir / "network.id").exists() else None
         names = [node["name"] for node in self.nodes]
         if len(set(names)) != len(names) or len(names) > 128:
             raise ValueError("duplicate names or too many nodes")
@@ -335,7 +324,7 @@ class Lab:
         sep = "\\" if host["type"] == "windows" else "/"
         join = lambda name: root + sep + name
         args = [host["binary"], "doctor"] if doctor else [host["binary"], node["role"], "run"]
-        args += ["--network", join("network.bin"), "--data-dir", join(node["name"] + ".db")]
+        args += ["--network", "lab", "--data-dir", join(node["name"] + ".db")]
         if "listen" in node:
             args += ["--listen", node["listen"]]
         if not doctor and "advertise" in node:
@@ -358,20 +347,18 @@ class Lab:
             self.call(host, "prepare")
         finalizer = next(node for node in self.nodes if node["role"] == "finalizer")
         network = self.call(finalizer["host"], "init", binary=self.hosts[finalizer["host"]]["binary"])
-        for host in self.hosts:
-            self.call(host, "put_network", hex=network["network_hex"])
         for node in self.nodes:
             peers = [other.get("advertise", other.get("listen")) for other in self.nodes if "listen" in other and other["name"] != node["name"]]
             self.call(node["host"], "write_peers", name=node["name"], peers=[(text.rsplit(":", 1)[0].strip("[]"), int(text.rsplit(":", 1)[1])) for text in peers])
-        self.network_id = re.search(r"network_id=([0-9a-f]{64})", network["info"])[1]
-        (self.dir / "network.id").write_text(self.network_id)
+        self.network_binding = re.search(r"network_binding=([0-9a-f]{64})", network["info"])[1]
+        (self.dir / "network.id").write_text(self.network_binding)
         (self.dir / "manifest.toml").write_bytes(self.path.read_bytes())
         if self.loadgen:
             self.call(self.loadgen["host"], "prepare_password")
-        print("LAB initialized", self.network_id)
+        print("LAB initialized", self.network_binding)
 
     def doctor(self):
-        if not self.network_id:
+        if not self.network_binding:
             raise ValueError("init LAB before doctor")
         for node in self.nodes:
             result = self.call(node["host"], "doctor", name=node["name"], args=self.args(node, True))
@@ -412,7 +399,7 @@ class Lab:
         if event["seq"] != previous + 1:
             self.fail("event sequence gap or replay")
         self.sequence[key] = event["seq"]
-        if event.get("network_id", self.network_id) != self.network_id:
+        if event.get("network_binding", self.network_binding) != self.network_binding:
             self.fail("foreign NetworkID")
         if event.get("safety_halted") or event["event"] == "poa_safety_halt":
             self.fail("PoA safety halt")
@@ -533,12 +520,12 @@ class Lab:
             completed = self.dir / "completed.json"
             if completed.exists():
                 evidence = json.loads(completed.read_text())
-                complete = evidence.get("network_id") == self.network_id
+                complete = evidence.get("network_binding") == self.network_binding
                 self.loadgen_passed = evidence.get("loadgen_passed", False)
         completed = self.dir / "completed.json"
         if completed.exists():
             evidence = json.loads(completed.read_text())
-            complete = evidence.get("network_id") == self.network_id
+            complete = evidence.get("network_binding") == self.network_binding
             self.loadgen_passed = evidence.get("loadgen_passed", False)
             self.convergence_target=evidence.get("convergence_target")
             complete=bool(complete and isinstance(self.convergence_target,int) and self.convergence_target>0)
@@ -547,7 +534,7 @@ class Lab:
                     self.failures.append("incomplete recovery evidence")
         latency = sorted(self.latencies)
         pct = lambda p: latency[min(len(latency)-1, int((len(latency)-1)*p))] if latency else None
-        report = {"network_id": self.network_id, "result": "FAIL" if self.failures else "PASS" if complete else "INCOMPLETE",
+        report = {"network_binding": self.network_binding, "result": "FAIL" if self.failures else "PASS" if complete else "INCOMPLETE",
             "failures": self.failures, "nodes": self.latest, "unique_finalized_operations": len(self.finalized),
             "submit_finality_ms": {"p50": pct(.5), "p95": pct(.95), "p99": pct(.99)},
             "latency_samples": len(latency), "verified_heights": len(self.heads),
@@ -611,7 +598,7 @@ class Lab:
             spec = self.hosts[self.loadgen["host"]]
             root = spec["root"].rstrip("/\\")
             sep = "\\" if spec["type"] == "windows" else "/"
-            args = [spec["loadgen_binary"], "--network", root+sep+"network.bin", "--data-dir", root+sep+"loadgen",
+            args = [spec["loadgen_binary"], "--network", "lab", "--data-dir", root+sep+"loadgen",
                 "--peer", self.loadgen["peer"], "--password-file", root+sep+"loadgen.password",
                 "--duration", str(duration)+"s", "--identities", str(self.loadgen.get("identities",2)),
                 "--profile", self.loadgen.get("profile","files"), "--file-size", self.loadgen.get("file_size","1MiB"),
@@ -694,7 +681,7 @@ class Lab:
                     if not self.call(node["host"],"status",name=node["name"])["alive"]:
                         self.fail("process exited during recovery: "+node["name"])
                 time.sleep(2)
-            (self.dir / "completed.json").write_text(json.dumps({"network_id": self.network_id, "loadgen_passed": self.loadgen_passed,"convergence_target":self.convergence_target}))
+            (self.dir / "completed.json").write_text(json.dumps({"network_binding": self.network_binding, "loadgen_passed": self.loadgen_passed,"convergence_target":self.convergence_target}))
             self.report(complete=True)
         except BaseException as exc:
             self.failures.append(str(exc))

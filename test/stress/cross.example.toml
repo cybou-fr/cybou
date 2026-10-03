@@ -8,7 +8,7 @@ type = "ssh"
 target = "debian@vps-d0669a91.vps.ovh.net"
 root = "/home/debian/cybou-lab-cross"
 worker = "/home/debian/cybou/tools/cybou_stress.py"
-binary = "/home/debian/cybou/build/bin/cybou-node"
+binary = "/home/debian/cybou/build/bin/cybou"
 python = "python3"
 
 [hosts.wsl]
@@ -16,14 +16,14 @@ type = "wsl"
 distro = "Ubuntu-26.04"
 root = "/home/cybou/cybou-lab-cross"
 worker = "/mnt/c/Users/cybou/Desktop/cybou/tools/cybou_stress.py"
-binary = "/home/cybou/cybou-lab-operator-bin/cybou-node"
+binary = "/home/cybou/cybou-lab-operator-bin/cybou"
 loadgen_binary = "/home/cybou/cybou-lab-operator-bin/cybou-loadgen"
 python = "python3"
 
 [hosts.windows]
 type = "windows"
 root = "C:/Users/cybou/AppData/Local/Temp/cybou-lab-cross"
-binary = "C:/Users/cybou/Desktop/cybou/build_cybou_qt_mingw/bin/cybou-node.exe"
+binary = "C:/Users/cybou/Desktop/cybou/build_cybou_qt_mingw/bin/cybou.exe"
 python = "C:/Python314/python.exe"
 
 [[nodes]]

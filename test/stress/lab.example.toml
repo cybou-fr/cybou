@@ -6,7 +6,7 @@ run_dir = "/tmp/cybou-lab-controller"
 [hosts.local]
 type = "local"
 root = "/tmp/cybou-lab-nodes"
-binary = "/absolute/path/to/build/bin/cybou-node"
+binary = "/absolute/path/to/build/bin/cybou"
 python = "python3"
 loadgen_binary = "/absolute/path/to/build/bin/cybou-loadgen"
 

@@ -107,7 +107,7 @@ PublicationJobResult Failure(std::string message)
 } // namespace
 
 struct PublicationService::Job {
-    uint256 network_id;
+    uint256 network_binding;
     AccountId account_id;
     PublicationJobPhase phase{PublicationJobPhase::WAITING_FINALITY};
     std::uint64_t nonce{0};
@@ -138,10 +138,10 @@ std::optional<PublicationService::Job> PublicationService::Load(const std::strin
         !std::equal(MAGIC.begin(), MAGIC.end(), encoded->begin())) return std::nullopt;
     Job job;
     std::size_t offset{MAGIC.size()};
-    std::copy_n(encoded->begin() + offset, 32, job.network_id.begin()); offset += 32;
+    std::copy_n(encoded->begin() + offset, 32, job.network_binding.begin()); offset += 32;
     const auto account = AccountId::FromBytes(std::span<const unsigned char>{*encoded}.subspan(offset, 32));
     offset += 32;
-    if (!account || job.network_id != m_runtime.GetNetworkId() ||
+    if (!account || job.network_binding != m_runtime.GetNetworkBinding() ||
         *account != m_application_db.Account() || m_identity.GetAccountId() != account) return std::nullopt;
     job.account_id = *account;
     const auto phase = (*encoded)[offset++];
@@ -164,13 +164,13 @@ std::optional<PublicationService::Job> PublicationService::Load(const std::strin
 bool PublicationService::Save(const std::string_view local_job_id, const Job& job)
 {
     if (!ValidJobId(local_job_id) || job.account_id != m_application_db.Account() ||
-        job.network_id != m_runtime.GetNetworkId()) return false;
+        job.network_binding != m_runtime.GetNetworkBinding()) return false;
     const auto publication = SerializeRootPublication(job.publication);
     if (!publication || publication->empty() || publication->size() > std::numeric_limits<std::uint32_t>::max()) {
         return false;
     }
     std::vector<unsigned char> encoded(MAGIC.begin(), MAGIC.end());
-    encoded.insert(encoded.end(), job.network_id.begin(), job.network_id.end());
+    encoded.insert(encoded.end(), job.network_binding.begin(), job.network_binding.end());
     encoded.insert(encoded.end(), job.account_id.Value().begin(), job.account_id.Value().end());
     encoded.push_back(static_cast<unsigned char>(job.phase));
     Append64(encoded, job.nonce);
@@ -237,7 +237,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     }
     const auto self_public = m_identity.GetIdentityXWingPublicKey();
     const auto self_package = self_public ? EncodeIdentityKemPackage(*self_public) : std::nullopt;
-    const auto network_bytes = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    const auto network_bytes = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     const auto account_bytes = std::span<const unsigned char, 32>{account->Value().begin(), 32};
     const auto self_commitment = self_package ? ComputeIdentityKemPackageCommitment(
         network_bytes, account_bytes, sender->key_epoch, *self_package) : std::nullopt;
@@ -289,7 +289,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
         return Failure("Cannot commit RootPublication payload");
     }
 
-    Job job{.network_id = m_runtime.GetNetworkId(), .account_id = *account,
+    Job job{.network_binding = m_runtime.GetNetworkBinding(), .account_id = *account,
         .phase = PublicationJobPhase::WAITING_FINALITY, .nonce = sender->nonce,
         .key_epoch = sender->key_epoch, .publication = std::move(publication)};
     if (!Save(local_job_id, job)) return Failure("Cannot save private publication job");
@@ -524,7 +524,7 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
         error = "No local staging store";
         return std::nullopt;
     }
-    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     // Job IDs already satisfy the proof-index namespace rules.
     const std::string index_id{local_job_id};
     bool pinned{false};
@@ -752,7 +752,7 @@ bool PublicationService::VerifyRecoveryBridge(const std::string_view local_job_i
     if (!finalized || *finalized != job->publication) return false;
     auto seed = DeriveIdentityXWingSeed(new_recovery_entropy);
     if (!seed) return false;
-    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkId().begin(), 32};
+    const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
     std::optional<ContentKey> key;
     for (const auto& capsule : finalized->recipient_capsules) {
         if (capsule.key_epoch != job->key_epoch + 1) continue;

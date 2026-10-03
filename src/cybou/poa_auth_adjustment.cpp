@@ -47,14 +47,14 @@ std::optional<std::vector<unsigned char>> SerializeBody(const PoaAuthAdjustment&
 } // namespace
 
 std::optional<std::array<unsigned char, 32>> ComputePoaAuthAdjustmentDigest(
-    const uint256& network_id, const PoaAuthAdjustment& adjustment)
+    const uint256& network_binding, const PoaAuthAdjustment& adjustment)
 {
     constexpr std::string_view domain{"CYBOU/POA-AUTH-ADJUSTMENT/V1"};
     const auto body = SerializeBody(adjustment);
-    if (network_id.IsNull() || !body) return std::nullopt;
+    if (network_binding.IsNull() || !body) return std::nullopt;
     std::array<unsigned char, 32> digest{};
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain),
-            std::span<const unsigned char>{network_id.begin(), 32}, std::span<const unsigned char>{*body}},
+            std::span<const unsigned char>{network_binding.begin(), 32}, std::span<const unsigned char>{*body}},
             digest.data())) return std::nullopt;
     return digest;
 }
@@ -86,10 +86,10 @@ std::optional<PoaAuthAdjustment> DeserializePoaAuthAdjustment(std::span<const un
 }
 
 PoaAuthAdjustmentError ApplyPoaAuthAdjustment(const PoaAuthAdjustment& adjustment,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const IdentityHybridPublicKey& poa_key, CybouState& state)
 {
-    const auto digest = ComputePoaAuthAdjustmentDigest(network_id, adjustment);
+    const auto digest = ComputePoaAuthAdjustmentDigest(network_binding, adjustment);
     if (!digest) return PoaAuthAdjustmentError::INVALID_PAYLOAD;
     if (adjustment.block_height != block_height) return PoaAuthAdjustmentError::WRONG_HEIGHT;
     if (poa_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||

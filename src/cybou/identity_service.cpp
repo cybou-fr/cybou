@@ -140,10 +140,10 @@ bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& acco
     if (!authorization_key || !recovery_key || !package || !keystore.ValidateIdentityXWingKeyPair() || !loaded || !loaded.state) return false;
     const auto* record = loaded.state->identities.Find(account_id);
     if (!record || record->authorization_key != *authorization_key || record->recovery_key != *recovery_key) return false;
-    const auto network_id = runtime.GetNetworkId();
+    const auto network_binding = runtime.GetNetworkBinding();
     const auto account_bytes = account_id.Value();
     const auto commitment = ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
         record->key_epoch, *package);
     return commitment && *commitment == record->kem_package_id;
@@ -247,10 +247,10 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
     const uint64_t current_epoch = EpochForHeight(height, params);
 
-    const uint256 network_id = m_runtime.GetNetworkId();
+    const uint256 network_binding = m_runtime.GetNetworkBinding();
     const auto account_bytes = account_id.Value();
     const auto kem_package_id = ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32},
         0, kem_package);
     const auto auth_commitment = kem_package_id ?
@@ -261,7 +261,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     }
 
     AccountCreationWork work{
-        .network_id = m_runtime.GetNetworkId(),
+        .network_binding = m_runtime.GetNetworkBinding(),
         .account_id = account_id,
         .authorization_commitment = *auth_commitment,
         .work_epoch = current_epoch,
@@ -281,7 +281,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::BROADCASTING);
     if (on_phase) on_phase(IdentityCreationPhase::BROADCASTING, "Signing and submitting AccountCreateOp...");
 
-    const auto pop_digest = ComputeAccountCreatePopDigest(network_id, account_id, auth, *kem_package_id);
+    const auto pop_digest = ComputeAccountCreatePopDigest(network_binding, account_id, auth, *kem_package_id);
     if (!pop_digest) {
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Failed to compute proof of possession digest", account_id);
@@ -327,12 +327,12 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
                 // against this node's own verified finalized state.
                 reason = "The network rejected the new Identity";
                 const auto next_height = m_runtime.GetFinalizedHeight().value_or(0) + 1;
-                const auto check = ValidateAccountCreateOp(op, network_id, next_height, params);
+                const auto check = ValidateAccountCreateOp(op, network_binding, next_height, params);
                 const auto loaded = m_runtime.GetStore().LoadState();
                 if (check != AccountCreateError::NONE) {
                     reason += " (operation check " + std::to_string(static_cast<int>(check)) + ")";
                 } else if (loaded && loaded.state) {
-                    const auto replay = ExecuteBlockOperations(*loaded.state, {ProtocolOperation{op}}, network_id,
+                    const auto replay = ExecuteBlockOperations(*loaded.state, {ProtocolOperation{op}}, network_binding,
                         next_height, params);
                     reason += replay ? ". This computer may still be catching up with the network: wait until CYBOU shows Synced and try again"
                         : " (block error " + std::to_string(static_cast<int>(replay.error)) + ", create error " +
@@ -456,10 +456,10 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
         return Failure(IdentityCreationPhase::FAILED, "Recovery phrase is not in verified state; finish synchronization first");
     }
     const auto* record = loaded.state->identities.Find(*account);
-    const auto network_id = m_runtime.GetNetworkId();
+    const auto network_binding = m_runtime.GetNetworkBinding();
     const auto account_bytes = account->Value();
     const auto package_id = record ? ComputeIdentityKemPackageCommitment(
-        std::span<const unsigned char, 32>{network_id.begin(), 32},
+        std::span<const unsigned char, 32>{network_binding.begin(), 32},
         std::span<const unsigned char, 32>{account_bytes.begin(), 32}, record->key_epoch, *package) : std::nullopt;
     if (!record || record->recovery_key != *recovery_key || record->authorization_key != *authorization_key ||
         !package_id || *package_id != record->kem_package_id) {

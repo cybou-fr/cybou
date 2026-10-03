@@ -74,30 +74,30 @@ bool IsPadBucket(const std::size_t size)
 }
 
 std::vector<unsigned char> MakeKeyInfo(
-    const std::span<const unsigned char, 32> network_id)
+    const std::span<const unsigned char, 32> network_binding)
 {
     std::vector<unsigned char> info(KEY_INFO_DOMAIN.begin(), KEY_INFO_DOMAIN.end());
-    info.insert(info.end(), network_id.begin(), network_id.end());
+    info.insert(info.end(), network_binding.begin(), network_binding.end());
     return info;
 }
 
 std::vector<unsigned char> MakeAad(
     const std::span<const unsigned char> header,
-    const std::span<const unsigned char, 32> network_id)
+    const std::span<const unsigned char, 32> network_binding)
 {
     std::vector<unsigned char> aad(AAD_DOMAIN.begin(), AAD_DOMAIN.end());
     aad.insert(aad.end(), header.begin(), header.end());
-    aad.insert(aad.end(), network_id.begin(), network_id.end());
+    aad.insert(aad.end(), network_binding.begin(), network_binding.end());
     return aad;
 }
 
 bool DeriveChunkKey(
     const std::span<const unsigned char, 32> content_key,
     const std::span<const unsigned char, 32> salt,
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     std::span<unsigned char, 32> output)
 {
-    const auto info = MakeKeyInfo(network_id);
+    const auto info = MakeKeyInfo(network_binding);
     return crypto::HkdfSha256(content_key, salt, info, output);
 }
 
@@ -154,7 +154,7 @@ std::optional<ContentKey> GenerateContentKey()
 }
 
 std::optional<EncryptedChunk> EncryptChunk(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> content_key,
     const std::span<const unsigned char> plaintext)
 {
@@ -168,7 +168,7 @@ std::optional<EncryptedChunk> EncryptChunk(
     CleanseOnExit cleanse_key{chunk_key};
     if (RAND_bytes(salt.data(), static_cast<int>(salt.size())) != 1 ||
         RAND_bytes(nonce.data(), static_cast<int>(nonce.size())) != 1 ||
-        !DeriveChunkKey(content_key, salt, network_id, chunk_key)) {
+        !DeriveChunkKey(content_key, salt, network_binding, chunk_key)) {
         return std::nullopt;
     }
 
@@ -177,7 +177,7 @@ std::optional<EncryptedChunk> EncryptChunk(
     header[VERSION_OFFSET] = VERSION;
     std::copy(salt.begin(), salt.end(), header.begin() + SALT_OFFSET);
     std::copy(nonce.begin(), nonce.end(), header.begin() + NONCE_OFFSET);
-    const auto aad = MakeAad(header, network_id);
+    const auto aad = MakeAad(header, network_binding);
 
     auto frame = MakeFrame(plaintext, *bucket);
     if (frame.empty()) return std::nullopt;
@@ -197,7 +197,7 @@ std::optional<EncryptedChunk> EncryptChunk(
 }
 
 std::optional<std::vector<unsigned char>> DecryptChunk(
-    const std::span<const unsigned char, 32> network_id,
+    const std::span<const unsigned char, 32> network_binding,
     const std::span<const unsigned char, 32> content_key,
     const ChunkId& expected_id,
     const std::span<const unsigned char> stored_bytes)
@@ -214,10 +214,10 @@ std::optional<std::vector<unsigned char>> DecryptChunk(
     const auto nonce = std::span<const unsigned char, crypto::CHACHA20_POLY1305_NONCE_SIZE>{stored_bytes.subspan(NONCE_OFFSET, crypto::CHACHA20_POLY1305_NONCE_SIZE)};
     std::array<unsigned char, crypto::CHACHA20_POLY1305_KEY_SIZE> chunk_key{};
     CleanseOnExit cleanse_key{chunk_key};
-    if (!DeriveChunkKey(content_key, salt, network_id, chunk_key)) return std::nullopt;
+    if (!DeriveChunkKey(content_key, salt, network_binding, chunk_key)) return std::nullopt;
 
     const auto header = stored_bytes.first(ENCRYPTED_CHUNK_HEADER_SIZE);
-    const auto aad = MakeAad(header, network_id);
+    const auto aad = MakeAad(header, network_binding);
     std::vector<unsigned char> frame(frame_size);
     CleanseOnExit cleanse_frame{frame};
     if (!crypto::ChaCha20Poly1305Decrypt(chunk_key, nonce, aad, encrypted_frame, frame)) return std::nullopt;

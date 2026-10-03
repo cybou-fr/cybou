@@ -29,8 +29,8 @@ public:
     std::string Require(const std::string& key) const {
         auto value = Get(key); if (value.empty()) throw std::invalid_argument("missing --" + key); return value;
     }
-    void Allow(std::initializer_list<std::string> keys) const {
-        std::set<std::string> allowed(keys);
+    void Allow(std::initializer_list<std::string> keys) const { AllowSet(std::set<std::string>(keys)); }
+    void AllowSet(const std::set<std::string>& allowed) const {
         for (const auto& [key, value] : m_values) if (!allowed.contains(key)) throw std::invalid_argument("unknown --" + key);
     }
 };

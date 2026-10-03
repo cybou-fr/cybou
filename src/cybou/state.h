@@ -74,15 +74,15 @@ enum class AccountCreateStateError : uint8_t {
 // The caller applies this to a candidate state and commits after the entire
 // block succeeds. On a validation error the supplied state is unchanged.
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state);
 
 enum class RootPublicationError : uint8_t {
@@ -95,7 +95,7 @@ enum class RootPublicationError : uint8_t {
 };
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_id, const CybouProtocolParameters& params, CybouState& state);
+    const uint256& network_binding, const CybouProtocolParameters& params, CybouState& state);
 
 enum class StateValidationError : uint8_t {
     NONE,

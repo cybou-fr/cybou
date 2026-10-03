@@ -23,7 +23,7 @@ A `CAP_STORAGE` peer proves its stable `STORAGE_PROVIDER` key in a session
 proof bound to both HELLOs and the TLS exporter. The receiver derives
 `ProviderID = BLAKE3(provider public key)`.
 
-A peer advertising `CAP_ACCEPT_OPERATIONS` operates the genesis-authorized PoA
+A peer advertising `CAP_FINALIZER_PROOF` operates the genesis-authorized PoA
 key. Missing or invalid role proofs fail the handshake. These proofs identify
 live services, not globally authenticated ordinary peers. Operation signatures,
 PoA certificates, publication proofs, Validation signatures, and ChunkID checks
@@ -47,6 +47,14 @@ is new. The receiver stores it, and offers it onward, only if it already holds
 the operation as a candidate it executed itself, the base is its finalized tip,
 the signer's finalized AUTH exceeds 1,000,000 and the Authorization signature
 verifies. There is no validator capability bit.
+
+`CAP_FINALIZER_PROOF` only announces the in-session PoA key proof; operations
+never take a preferred route to the finalizer and travel the ordinary relay.
+A connection to a compiled bootstrap locator additionally requires the
+locator's TLS SPKI pin; the locator node serves a stable certificate.
+
+The 32-byte network field of HELLO and of every signature domain is the
+NetworkBinding, SHA-256("CYBOU/NETWORK-ID/V6" || NetworkID).
 
 ## Admission and scope
 

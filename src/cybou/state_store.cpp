@@ -19,7 +19,6 @@ const std::string STATE_KEY{"cybou/state"};
 const std::string HASH_KEY{"cybou/hash"};
 const std::string HEAD_KEY{"cybou/head"};
 const std::string NETWORK_ID_KEY{"cybou/network-id"};
-const std::string GENESIS_DIGEST_KEY{"cybou/genesis-digest"};
 
 inline std::string BlockKey(const uint256& block_id)
 {
@@ -40,16 +39,14 @@ inline std::string OperationKey(const uint256& op_id)
 
 CybouStateStore::CybouStateStore(
     KVStore& db,
-    CybouNetworkDefinition network_definition,
-    uint256 genesis_digest)
+    CybouNetworkDefinition network_definition)
     : m_db{db},
       m_network_definition{std::move(network_definition)},
       m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
-      m_network_id{ComputeNetworkBinding(m_network_definition.network_public_key)},
-      m_genesis_digest{genesis_digest}
+      m_network_binding{ComputeNetworkBinding(m_network_definition.network_public_key)}
 {
     if (m_network_definition_error == NetworkDefinitionError::NONE) {
-        m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_id,
+        m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_binding,
             m_network_definition.poa_finalizer_public_key);
     }
 }
@@ -84,7 +81,7 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
     if (operations.empty() && loaded.state->pending_fee_pool == 0 && !expires_name) {
         return GetStateRoot();
     }
-    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_id, height,
+    const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_binding, height,
         m_network_definition.protocol_parameters, &m_network_definition.poa_finalizer_public_key);
     return execution ? execution.state_root : std::nullopt;
 }
@@ -97,7 +94,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
         return {GenesisInitError::INVALID_NETWORK_DEFINITION};
     }
     if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(HEAD_KEY) ||
-        m_db.Exists(NETWORK_ID_KEY) || m_db.Exists(GENESIS_DIGEST_KEY)) {
+        m_db.Exists(NETWORK_ID_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
     }
     const auto state_hash = CybouStateHash(genesis_state);
@@ -116,10 +113,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(STATE_KEY, *serialized_state);
     batch.Write(HASH_KEY, *state_hash);
     batch.Write(HEAD_KEY, initial_head);
-    batch.Write(NETWORK_ID_KEY, m_network_id);
-    if (!m_genesis_digest.IsNull()) {
-        batch.Write(GENESIS_DIGEST_KEY, m_genesis_digest);
-    }
+    batch.Write(NETWORK_ID_KEY, m_network_binding);
     m_db.WriteBatch(batch, sync);
     return {};
 }
@@ -135,24 +129,18 @@ StateLoadResult CybouStateStore::LoadState() const
     const bool hash_exists{m_db.Exists(HASH_KEY)};
     const bool head_exists{m_db.Exists(HEAD_KEY)};
     const bool network_exists{m_db.Exists(NETWORK_ID_KEY)};
-    const bool digest_exists{m_db.Exists(GENESIS_DIGEST_KEY)};
-    if (!state_exists && !hash_exists && !head_exists && !network_exists && !digest_exists) {
+    if (!state_exists && !hash_exists && !head_exists && !network_exists) {
         return {StateLoadError::NOT_FOUND, std::nullopt};
     }
     if (!state_exists || !hash_exists || !head_exists || !network_exists) {
         return {StateLoadError::CORRUPT, std::nullopt};
     }
-    const auto stored_network_id{GetStoredNetworkId()};
-    if (!stored_network_id) {
+    const auto stored_network_binding{GetStoredNetworkBinding()};
+    if (!stored_network_binding) {
         return {StateLoadError::CORRUPT, std::nullopt};
     }
-    if (*stored_network_id != m_network_id) {
+    if (*stored_network_binding != m_network_binding) {
         return {StateLoadError::NETWORK_MISMATCH, std::nullopt};
-    }
-    const auto stored_digest{GetStoredGenesisDigest()};
-    if (stored_digest.has_value() != !m_genesis_digest.IsNull() ||
-        (stored_digest && *stored_digest != m_genesis_digest)) {
-        return {StateLoadError::GENESIS_DIGEST_MISMATCH, std::nullopt};
     }
     if (!m_db.Read(STATE_KEY, bytes) || !m_db.Read(HASH_KEY, stored_hash)) {
         return {StateLoadError::CORRUPT, std::nullopt};
@@ -196,18 +184,11 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedHeight() const
     return head->height;
 }
 
-std::optional<uint256> CybouStateStore::GetStoredNetworkId() const
+std::optional<uint256> CybouStateStore::GetStoredNetworkBinding() const
 {
-    uint256 network_id;
-    if (!m_db.Read(NETWORK_ID_KEY, network_id)) return std::nullopt;
-    return network_id;
-}
-
-std::optional<uint256> CybouStateStore::GetStoredGenesisDigest() const
-{
-    uint256 digest;
-    if (!m_db.Read(GENESIS_DIGEST_KEY, digest)) return std::nullopt;
-    return digest;
+    uint256 network_binding;
+    if (!m_db.Read(NETWORK_ID_KEY, network_binding)) return std::nullopt;
+    return network_binding;
 }
 
 BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
@@ -239,13 +220,13 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const auto head{GetFinalizedHead()};
     if (!head) return {BlockTransitionError::CORRUPT_HEAD};
     if (head->block_id == block_id) return {BlockTransitionError::BLOCK_ALREADY_APPLIED};
-    if (cert.network_id != m_network_id || cert.block_id != block_id || cert.height != block.height ||
+    if (cert.network_binding != m_network_binding || cert.block_id != block_id || cert.height != block.height ||
         cert.parent_block_id != block.parent_block_id) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
     if (!VerifyPoaCertificateForBlock(cert, m_network_definition.poa_finalizer_public_key,
-        m_network_id, block)) {
+        m_network_binding, block)) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
@@ -284,7 +265,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         if (!current_root) return {BlockTransitionError::CORRUPT_STATE};
         candidate_root = *current_root;
     } else {
-        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_id, block.height, params,
+        auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_binding, block.height, params,
             &m_network_definition.poa_finalizer_public_key);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
@@ -374,7 +355,7 @@ std::optional<uint64_t> CybouStateStore::GetFinalizedOperationHeight(const uint2
         finalized->block.height > head->height || ComputeBlockId(finalized->block) != block_id ||
         finalized->certificate.block_id != block_id ||
         finalized->certificate.height != finalized->block.height ||
-        finalized->certificate.network_id != m_network_id) return std::nullopt;
+        finalized->certificate.network_binding != m_network_binding) return std::nullopt;
     const bool found = std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
         [&](const ProtocolOperation& operation) { return ComputeOperationId(operation) == op_id; });
     if (!found) return std::nullopt;

@@ -27,7 +27,7 @@ cybou::PreparedPublicationBundle Prepare(cybou::CybouNodeRuntime& runtime,
     cybou::KVStore& proof_db, const std::string& index_id)
 {
     cybou::PublicationBundleStager stager{runtime.GetChunkBlobStore(), proof_db, index_id,
-        std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}};
+        std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}};
     const auto metadata = cybou::EncodeCanonicalCbor(cybou::CborValue::ArrayValue({
         cybou::CborValue::Unsigned(2), cybou::CborValue::Unsigned(1)
     }));

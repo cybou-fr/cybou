@@ -61,7 +61,7 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication);
 
 std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,
     std::uint64_t sender_nonce,
     std::uint64_t sender_key_epoch,
@@ -71,7 +71,7 @@ std::optional<RootRecipientCapsule> CreateRootRecipientCapsule(
     std::span<const unsigned char, 32> content_key);
 
 std::optional<ContentKey> OpenRootRecipientCapsule(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> sender_account_id,
     std::uint64_t sender_nonce,
     std::uint64_t sender_key_epoch,

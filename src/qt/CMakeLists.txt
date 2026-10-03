@@ -120,6 +120,7 @@ add_windows_application_manifest(cybou)
 
 target_link_libraries(cybou
   cybou_qt
+  cybou_cli
 )
 
 import_plugins(cybou)

@@ -19,6 +19,10 @@ namespace cybou {
 enum class NetworkKind : uint8_t {
     DEVNET = 0,
     MAINNET = 1,
+#if defined(CYBOU_ENABLE_LAB_NETWORK)
+    /** Test builds only: an isolated in-memory network for multi-process LAB/CI. */
+    LAB = 2,
+#endif
 };
 
 /** Known rendezvous peer: an ordinary full node, pinned for transport discovery only. */
@@ -50,6 +54,14 @@ struct OfficialNetwork {
  */
 const OfficialNetwork& RequireOfficialNetwork(std::string_view name);
 const OfficialNetwork& RequireOfficialNetwork(NetworkKind kind);
+
+#if defined(CYBOU_ENABLE_LAB_NETWORK)
+/**
+ * Public, fixed recovery entropy of the LAB PoA finalizer. The LAB network has
+ * its own Network and PoA keys, so it can never be confused with DEVNET.
+ */
+std::array<unsigned char, 32> LabPoaFinalizerSeed();
+#endif
 
 } // namespace cybou
 

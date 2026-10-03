@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(finality_digest_key_and_encoding_golden_vectors)
     BOOST_CHECK_EQUAL(BytesHex(ml_public_hash), "d4992c7d44ab1ceb9ed7bf307af728d8118374417e2290d61a98c5f3ab8de977");
 
     cybou::PoaFinalityCertificate certificate{
-        .network_id = network,
+        .network_binding = network,
         .block_id = block_id,
         .height = 7,
         .parent_block_id = parent,
@@ -224,7 +224,7 @@ BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)
         const auto retry = finalizer.SignFinality(0, genesis, block);
         BOOST_REQUIRE(retry.certificate);
         BOOST_CHECK(retry.status == cybou::PoaSigningStatus::ALREADY_PREPARED);
-        BOOST_CHECK(retry.certificate->network_id == first.certificate->network_id);
+        BOOST_CHECK(retry.certificate->network_binding == first.certificate->network_binding);
         BOOST_CHECK(retry.certificate->block_id == first.certificate->block_id);
         BOOST_CHECK(retry.certificate->height == first.certificate->height);
         BOOST_CHECK(retry.certificate->parent_block_id == first.certificate->parent_block_id);

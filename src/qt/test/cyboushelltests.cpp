@@ -743,7 +743,7 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
 {
     CybouDesktopModel model{QStringLiteral("LAB")};
     cybou::NodeDiagnosticsSnapshot snapshot;
-    snapshot.network_id="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
+    snapshot.network_binding="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
     snapshot.peers.push_back({"127.0.0.1:30471",9,
         cybou::p2p::CAP_OPERATION_RELAY | cybou::p2p::CAP_STORAGE,"provider"});
     snapshot.operations.push_back({"operation",3,12});

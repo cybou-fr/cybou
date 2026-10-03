@@ -506,12 +506,12 @@ std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned 
 }
 
 std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment(
-    std::span<const unsigned char, 32> network_id,
+    std::span<const unsigned char, 32> network_binding,
     std::span<const unsigned char, 32> account_id,
     uint64_t key_epoch,
     std::span<const unsigned char> package)
 {
-    if (IsZero(network_id) || IsZero(account_id) ||
+    if (IsZero(network_binding) || IsZero(account_id) ||
         !DecodeIdentityKemPackage(package)) return std::nullopt;
     std::array<unsigned char, 8> epoch{};
     for (size_t i{0}; i < epoch.size(); ++i) {
@@ -523,7 +523,7 @@ std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment
     constexpr std::string_view domain{"CYBOU/IDENTITY-KEM-PACKAGE/V2"};
     constexpr std::array<unsigned char, 1> separator{0};
     std::array<unsigned char, 32> digest{};
-    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), separator, network_id, account_id,
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), separator, network_binding, account_id,
             epoch, length_le, package}, digest.data())) return std::nullopt;
     return digest;
 }

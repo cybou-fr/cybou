@@ -94,7 +94,7 @@ inline NameValidationError ValidateNameLabel(std::string_view label)
 }
 
 inline uint256 ComputeNameCommitment(
-    const uint256& network_id,
+    const uint256& network_binding,
     const AccountId& account_id,
     std::string_view label,
     std::span<const unsigned char, 32> salt)
@@ -104,7 +104,7 @@ inline uint256 ComputeNameCommitment(
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
     hasher.Write(&VERSION, 1);
-    hasher.Write(network_id.begin(), 32);
+    hasher.Write(network_binding.begin(), 32);
     hasher.Write(account_id.Value().begin(), 32);
     const uint8_t len = static_cast<uint8_t>(label.size());
     hasher.Write(&len, 1);
@@ -164,7 +164,7 @@ struct AuthorizedNameCommit {
 
 struct NameClaimWork {
     uint8_t version{NAME_REGISTRY_VERSION};
-    uint256 network_id;
+    uint256 network_binding;
     AccountId account_id;
     uint256 commitment;
     uint64_t work_epoch{0};
@@ -176,12 +176,12 @@ struct NameClaimWork {
 inline std::optional<std::array<unsigned char, NAME_CLAIM_WORK_SIZE>> SerializeNameClaimWork(
     const NameClaimWork& work)
 {
-    if (work.version != NAME_REGISTRY_VERSION || work.network_id.IsNull() || work.account_id.IsNull() || work.commitment.IsNull()) {
+    if (work.version != NAME_REGISTRY_VERSION || work.network_binding.IsNull() || work.account_id.IsNull() || work.commitment.IsNull()) {
         return std::nullopt;
     }
     std::array<unsigned char, NAME_CLAIM_WORK_SIZE> out{};
     out[0] = work.version;
-    std::copy_n(work.network_id.begin(), 32, out.begin() + 1);
+    std::copy_n(work.network_binding.begin(), 32, out.begin() + 1);
     std::copy_n(work.account_id.Value().begin(), 32, out.begin() + 33);
     std::copy_n(work.commitment.begin(), 32, out.begin() + 65);
     for (int i = 0; i < 8; ++i) out[97 + i] = static_cast<unsigned char>(work.work_epoch >> (8 * i));
@@ -194,7 +194,7 @@ inline std::optional<NameClaimWork> DeserializeNameClaimWork(std::span<const uns
     if (bytes.size() != NAME_CLAIM_WORK_SIZE || bytes[0] != NAME_REGISTRY_VERSION) return std::nullopt;
     NameClaimWork work;
     work.version = bytes[0];
-    std::copy_n(bytes.begin() + 1, 32, work.network_id.begin());
+    std::copy_n(bytes.begin() + 1, 32, work.network_binding.begin());
     const auto acc = AccountId::FromBytes(bytes.subspan(33, 32));
     if (!acc) return std::nullopt;
     work.account_id = *acc;
@@ -205,7 +205,7 @@ inline std::optional<NameClaimWork> DeserializeNameClaimWork(std::span<const uns
     uint64_t nonce{0};
     for (int i = 0; i < 8; ++i) nonce |= uint64_t{bytes[105 + i]} << (8 * i);
     work.nonce = nonce;
-    if (work.network_id.IsNull() || work.commitment.IsNull()) return std::nullopt;
+    if (work.network_binding.IsNull() || work.commitment.IsNull()) return std::nullopt;
     return work;
 }
 

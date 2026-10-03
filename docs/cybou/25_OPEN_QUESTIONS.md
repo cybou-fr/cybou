@@ -5,9 +5,7 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Network and cryptographic identity
 
-- coordinated DEV VPS cutover to ordinary `cybou-node` on the re-provisioned DEVNET;
-- automatic dialing of the compiled bootstrap locator (with its TLS SPKI pin) by nodes and the desktop;
-- multi-process LAB/CI networks: without external network files, a LAB finalizer needs the DEVNET PoA key;
+- coordinated DEV VPS cutover to an ordinary headless `cybou` node on the re-provisioned DEVNET, serving a TLS certificate that matches the compiled SPKI pin (or a re-pinned locator);
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
 ## AUTH and Validation

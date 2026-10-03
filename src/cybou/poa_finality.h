@@ -24,7 +24,7 @@ inline constexpr size_t POA_FINALITY_CERTIFICATE_SIZE{1 + 32 + 32 + 8 + 32 + 64 
 /** Single-operator hybrid signature authorizing one canonical block as final. */
 struct PoaFinalityCertificate {
     uint8_t version{POA_FINALITY_CERTIFICATE_VERSION};
-    uint256 network_id;
+    uint256 network_binding;
     uint256 block_id;
     uint64_t height{0};
     uint256 parent_block_id;
@@ -33,18 +33,18 @@ struct PoaFinalityCertificate {
     friend bool operator==(const PoaFinalityCertificate&, const PoaFinalityCertificate&) = default;
 };
 
-uint256 ComputePoaFinalityDigest(const uint256& network_id, const uint256& block_id,
+uint256 ComputePoaFinalityDigest(const uint256& network_binding, const uint256& block_id,
     uint64_t height, const uint256& parent_block_id);
 
 bool VerifyPoaFinalityCertificate(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
-    const uint256& expected_network_id, const uint256& expected_block_id,
+    const uint256& expected_network_binding, const uint256& expected_block_id,
     uint64_t expected_height, const uint256& expected_parent_block_id);
 
 /** Verify the certificate against the exact canonical block it finalizes. */
 bool VerifyPoaCertificateForBlock(const PoaFinalityCertificate& certificate,
     const IdentityHybridPublicKey& genesis_finalizer_key,
-    const uint256& expected_network_id, const CybouBlock& block);
+    const uint256& expected_network_binding, const CybouBlock& block);
 
 std::optional<std::vector<unsigned char>> SerializePoaFinalityCertificate(
     const PoaFinalityCertificate& certificate);

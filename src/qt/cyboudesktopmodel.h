@@ -49,7 +49,7 @@ enum class CybouGeoAdmissionStatus : quint8 { NotRequired, Waiting, Ready };
 struct CybouDesktopStatus {
     QString network_name{"CYBOU DEV"};
     /** Canonical network identifier once core exposes it; empty until then. */
-    QString network_id{};
+    QString network_binding{};
 
     bool node_running{false};
     bool online{false};
@@ -137,7 +137,7 @@ public:
     /* ---- Core adapter entries (doc 73). Unchanged values are a no-op. ---- */
     void setNodeStatus(bool running, int peer_count, bool online, const QString& data_directory = {});
     void setCapabilities(const CybouCapabilities& capabilities);
-    void setNetworkInfo(const QString& network_name, const QString& network_id);
+    void setNetworkInfo(const QString& network_name, const QString& network_binding);
     void setFinalizedHeight(quint64 finalized_height);
     void setPeerCount(int peer_count);
     void setGeoAdmissionStatus(CybouGeoAdmissionStatus status);

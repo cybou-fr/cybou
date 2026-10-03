@@ -79,7 +79,7 @@ public:
      * epoch; older epochs open only with seeds imported from a verified
      * RecoveryBridge.
      */
-    std::optional<ContentKey> OpenRootCapsule(std::span<const unsigned char, 32> network_id,
+    std::optional<ContentKey> OpenRootCapsule(std::span<const unsigned char, 32> network_binding,
         const AccountId& sender, std::uint64_t sender_nonce, std::uint64_t sender_key_epoch,
         const ChunkId& root_chunk_id, const RootRecipientCapsule& capsule,
         std::uint64_t current_key_epoch) const;

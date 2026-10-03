@@ -34,7 +34,7 @@ PublishedContent Publish(CybouServiceTestFixture& fixture, cybou::CybouIdentityS
 {
     cybou::KVStore proof_db{cybou::KVStoreOptions{.memory_only = true}};
     cybou::PublicationBundleStager stager{fixture.runtime->GetChunkBlobStore(), proof_db, "storage-pub",
-        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkId().begin(), 32}};
+        std::span<const unsigned char, 32>{fixture.runtime->GetNetworkBinding().begin(), 32}};
     std::size_t remaining{600 * 1024};
     const auto source = [&remaining](std::span<unsigned char> out) -> std::optional<std::size_t> {
         const auto n = std::min(out.size(), remaining);
@@ -363,9 +363,9 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
         .storage_enabled = true, .storage_capacity_bytes = 1ULL << 20};
     cybou::CybouNodeRuntime provider{std::move(config)};
     BOOST_REQUIRE(provider.InitializeGenesis(fixture.genesis));
-    const auto network_id = provider.GetNetworkId();
-    cybou::p2p::Hello signer{.network_id = network_id, .nonce = 11};
-    cybou::p2p::Hello verifier{.network_id = network_id, .nonce = 22};
+    const auto network_binding = provider.GetNetworkBinding();
+    cybou::p2p::Hello signer{.network_binding = network_binding, .nonce = 11};
+    cybou::p2p::Hello verifier{.network_binding = network_binding, .nonce = 22};
     std::array<unsigned char, 32> exporter{};
     exporter[0] = 1;
     const auto message = cybou::p2p::ProviderProofMessage(signer, verifier, exporter);
@@ -377,7 +377,7 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     other_session.nonce = 23;
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(signer, other_session, exporter)));
     auto other_network = signer;
-    other_network.network_id = uint256{};
+    other_network.network_binding = uint256{};
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(other_network, verifier, exporter)));
     (*proof)[5] ^= 0x01;
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, message));

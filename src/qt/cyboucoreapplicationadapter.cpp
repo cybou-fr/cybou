@@ -190,7 +190,7 @@ struct CybouCoreApplicationAdapter::Session {
         const auto& blobs = runtime.GetChunkBlobStore();
         bool all_present{true};
         const bool walked = cybou::EnumerateEncryptedTreeChunks(
-            std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}, *item.content_key,
+            std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}, *item.content_key,
             *item.root_chunk_id, [&](const cybou::ChunkId& id) { return blobs.Get(id); },
             [&](const cybou::ChunkId& id) {
                 all_present = all_present && blobs.Has(id);
@@ -477,7 +477,7 @@ struct CybouCoreApplicationAdapter::Session {
         std::set<cybou::ChunkId> seen;
         bool missing{false};
         const auto written = cybou::FetchEncryptedChunkTree(
-            std::span<const unsigned char, 32>{runtime.GetNetworkId().begin(), 32}, key, root,
+            std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}, key, root,
             [&](const cybou::ChunkId& chunk) {
                 auto bytes = storage->Fetch(chunk);
                 if (!bytes) missing = true;

@@ -70,7 +70,7 @@ private:
 } // namespace
 
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (state.accounts.size() != state.identities.Accounts().size()) return AccountCreateStateError::INCONSISTENT_STATE;
@@ -80,7 +80,7 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     if (state.accounts.size() >= MAX_IDENTITY_REGISTRY_ACCOUNTS) return AccountCreateStateError::ACCOUNT_LIMIT;
     if (state.accounts.contains(op.account_id)) return AccountCreateStateError::ACCOUNT_EXISTS;
     if (state.onboarding_pool < params.onboarding_bonus) return AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL;
-    const auto identity_result = state.identities.Register(op, network_id, block_height, params);
+    const auto identity_result = state.identities.Register(op, network_binding, block_height, params);
     switch (identity_result) {
     case IdentityRegistryError::NONE: break;
     case IdentityRegistryError::ACCOUNT_EXISTS: return AccountCreateStateError::ACCOUNT_EXISTS;
@@ -114,7 +114,7 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
 }
 
 NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.commit.version != NAME_REGISTRY_VERSION) {
@@ -144,7 +144,7 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     if (state.names.pending_commits.contains(op.commit.commitment)) {
         return NameCommitError::COMMITMENT_EXISTS;
     }
-    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return NameCommitError::INVALID_AUTHORIZATION;
     }
 
@@ -153,7 +153,7 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
 }
 
 NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
-    const uint256& network_id, uint64_t block_height,
+    const uint256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.reveal.version != NAME_REGISTRY_VERSION) {
@@ -180,7 +180,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
             [&](const auto& entry) { return entry.second.label == op.reveal.label; })) {
         return NameRevealError::NAME_ALREADY_TAKEN;
     }
-    const auto expected_commitment = ComputeNameCommitment(network_id, op.authorization.account_id, op.reveal.label, op.reveal.salt);
+    const auto expected_commitment = ComputeNameCommitment(network_binding, op.authorization.account_id, op.reveal.label, op.reveal.salt);
     if (op.reveal.work.commitment != expected_commitment) {
         return NameRevealError::INVALID_WORK_PROOF;
     }
@@ -198,7 +198,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
         return NameRevealError::COMMIT_EXPIRED;
     }
 
-    if (op.reveal.work.network_id != network_id || op.reveal.work.account_id != op.authorization.account_id) {
+    if (op.reveal.work.network_binding != network_binding || op.reveal.work.account_id != op.authorization.account_id) {
         return NameRevealError::INVALID_WORK_PROOF;
     }
     const uint64_t current_epoch = EpochForHeight(block_height, params);
@@ -210,7 +210,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
         return NameRevealError::INVALID_WORK_PROOF;
     }
 
-    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return NameRevealError::INVALID_AUTHORIZATION;
     }
 
@@ -221,7 +221,7 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
 }
 
 RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
-    const uint256& network_id, const CybouProtocolParameters& params, CybouState& state)
+    const uint256& network_binding, const CybouProtocolParameters& params, CybouState& state)
 {
     if (op.authorization.kind != IdentityOperationKind::ROOT_PUBLICATION) {
         return RootPublicationError::INVALID_AUTHORIZATION;
@@ -242,7 +242,7 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     if (state.pending_fee_pool > std::numeric_limits<std::uint64_t>::max() - *fee) {
         return RootPublicationError::FEE_POOL_OVERFLOW;
     }
-    if (state.identities.AuthorizeOperation(op.authorization, network_id) != IdentityRegistryError::NONE) {
+    if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return RootPublicationError::INVALID_AUTHORIZATION;
     }
     sender->second.system_balance -= *fee;

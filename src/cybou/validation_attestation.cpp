@@ -15,13 +15,13 @@ constexpr size_t BODY_SIZE{1 + 32 + 32 + 32 + 32};
 
 std::optional<std::vector<unsigned char>> SerializeBody(const ValidationAttestation& attestation)
 {
-    if (attestation.version != VALIDATION_ATTESTATION_VERSION || attestation.network_id.IsNull() ||
+    if (attestation.version != VALIDATION_ATTESTATION_VERSION || attestation.network_binding.IsNull() ||
         attestation.operation_id.IsNull() || attestation.finalized_base_block_id.IsNull() ||
         attestation.validator_account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> out;
     out.reserve(VALIDATION_ATTESTATION_SIZE);
     out.push_back(attestation.version);
-    out.insert(out.end(), attestation.network_id.begin(), attestation.network_id.end());
+    out.insert(out.end(), attestation.network_binding.begin(), attestation.network_binding.end());
     out.insert(out.end(), attestation.operation_id.begin(), attestation.operation_id.end());
     out.insert(out.end(), attestation.finalized_base_block_id.begin(), attestation.finalized_base_block_id.end());
     out.insert(out.end(), attestation.validator_account_id.Value().begin(), attestation.validator_account_id.Value().end());
@@ -65,7 +65,7 @@ std::optional<ValidationAttestation> DeserializeValidationAttestation(std::span<
     if (!account) return std::nullopt;
     ValidationAttestation attestation{
         .version = bytes[0],
-        .network_id = ReadUint256(bytes.subspan(1, 32)),
+        .network_binding = ReadUint256(bytes.subspan(1, 32)),
         .operation_id = ReadUint256(bytes.subspan(33, 32)),
         .finalized_base_block_id = ReadUint256(bytes.subspan(65, 32)),
         .validator_account_id = *account,
@@ -84,11 +84,11 @@ bool IsValidationEligible(const CybouState& finalized_state, const AccountId& ac
 }
 
 ValidationAttestationError VerifyValidationAttestation(const ValidationAttestation& attestation,
-    const uint256& network_id, const uint256& finalized_tip, const CybouState& finalized_state)
+    const uint256& network_binding, const uint256& finalized_tip, const CybouState& finalized_state)
 {
     const auto digest = ComputeValidationAttestationDigest(attestation);
     if (!digest || attestation.signature.ml_dsa.size() != 2420) return ValidationAttestationError::INVALID_PAYLOAD;
-    if (attestation.network_id != network_id) return ValidationAttestationError::WRONG_NETWORK;
+    if (attestation.network_binding != network_binding) return ValidationAttestationError::WRONG_NETWORK;
     if (attestation.finalized_base_block_id != finalized_tip) return ValidationAttestationError::STALE_BASE;
     if (!IsValidationEligible(finalized_state, attestation.validator_account_id)) {
         return ValidationAttestationError::NOT_ELIGIBLE;
@@ -101,13 +101,13 @@ ValidationAttestationError VerifyValidationAttestation(const ValidationAttestati
 }
 
 std::optional<ValidationAttestation> SignValidationAttestation(const ValidationSigner& signer,
-    const uint256& network_id, const uint256& operation_id, const uint256& finalized_tip,
+    const uint256& network_binding, const uint256& operation_id, const uint256& finalized_tip,
     const CybouState& finalized_state)
 {
     const auto account = signer.Account();
     if (!account || !IsValidationEligible(finalized_state, *account)) return std::nullopt;
     ValidationAttestation attestation{
-        .network_id = network_id,
+        .network_binding = network_binding,
         .operation_id = operation_id,
         .finalized_base_block_id = finalized_tip,
         .validator_account_id = *account,
@@ -117,7 +117,7 @@ std::optional<ValidationAttestation> SignValidationAttestation(const ValidationS
     const auto signature = signer.SignAuthorization(*digest);
     if (!signature) return std::nullopt;
     attestation.signature = *signature;
-    if (VerifyValidationAttestation(attestation, network_id, finalized_tip, finalized_state) !=
+    if (VerifyValidationAttestation(attestation, network_binding, finalized_tip, finalized_state) !=
         ValidationAttestationError::NONE) return std::nullopt;
     return attestation;
 }
