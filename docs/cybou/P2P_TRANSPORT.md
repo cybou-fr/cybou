@@ -53,7 +53,7 @@ Every node executes candidates against its own finalized state before staging
 or relaying; signatures from other nodes never substitute execution.
 VALIDATION_ATTESTATION_POLL (24) and VALIDATION_ATTESTATION (25) retain their
 existing encodings and rules: only locally held valid candidates, current
-finalized base, eligible AUTH > 1,000,000 and valid Identity Authorization signature.
+finalized base, eligible AUTH > 10,000,000 and valid Identity Authorization signature.
 
 All peers can relay correctly signed finalized blocks. No session identifies
 the PoA key holder. Local signer activation affects block production only and

@@ -148,7 +148,7 @@ Advanced details expose exact algorithms/evidence.
 [ ] a Validated payment does not modify spendable Balance
 [ ] a Validated Mail/File never displays as Sent / Protected
 [ ] Balance, System Balance and Authority (AUTH) display from finalized AccountState
-[ ] Validation eligibility displays Yes only when finalized AUTH > 1,000,000
+[ ] Validation eligibility displays Yes only when finalized AUTH > 10,000,000
 [ ] no Age, Activity, System contribution or Authority index fields appear
 ```
 

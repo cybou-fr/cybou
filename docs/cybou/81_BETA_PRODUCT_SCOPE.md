@@ -107,7 +107,7 @@ reconstruction.
 
 AUTH is a canonical network value attached to the Identity, read from the
 latest finalized state. Its sole protocol effect is qualifying an Identity to
-sign Validation when `Authority > 1,000,000 AUTH`. Validation is shown as
+sign Validation when `Authority > 10,000,000 AUTH`. Validation is shown as
 additional pre-finalization confidence, never as a quorum or BFT guarantee.
 It does not allocate resources,
 confer stake weight, or grant PoA finalization power, and is not a gamified social score.

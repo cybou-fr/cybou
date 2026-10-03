@@ -102,3 +102,40 @@ uses 10% of space remaining after a reserve of max(1 GiB, 5% of filesystem size)
 clamped to 64 MiB–20 GiB. Admission preserves the same reserve and fails closed
 on unavailable disk-space information. Existing replicas survive quota reductions.
 Block sync, candidate relay and Validation transport remain operational.
+
+## Notarial object register and deterministic quotas
+
+The blockchain acts as the canonical Notarial Register for application content:
+- Tracks `RootPublication` metadata, Merkle roots, recipient capsules, and verified placements.
+- Remote storage allowances and admission rights are computed deterministically strictly from PoA-finalized state.
+- Local configuration declarations and off-chain vouchers convey zero authority. The network only respects what is notarized and finalized by PoA.
+
+## Onboarding trust credit and 1:3 reciprocal ratio
+
+Every newly registered Identity receives an immediate **Onboarding Trust Credit of 5 GB** of remote storage in the network (DEC-269).
+- **Physical ratio (1:3)**: 1 GB of stored user data requires 2 remote replicas plus 1 local copy = 3 physical copies total.
+- **Reciprocal baseline**: Each Full Node allocates ~10–15 GB of local storage to house reciprocal chunks for other network peers.
+- Frictionless onboarding: new users immediately store files and send mail without waiting to accumulate reputation.
+
+## AUTH resource ladder
+
+Remote storage allowances scale according to finalized Identity Authority (DEC-268):
+- `0 AUTH`: 5 GB remote network storage (Onboarding Credit);
+- `10,000 AUTH`: 25 GB remote network storage;
+- `100,000 AUTH`: 100 GB remote network storage;
+- `1,000,000 AUTH`: 500 GB remote network storage;
+- `> 10,000,000 AUTH`: Validator tier — unconstrained storage and operational limits.
+
+## Mutual proof of storage and uptime auditing
+
+Peers storing chunks for each other perform periodic mutual cryptographic audits (DEC-270):
+1. **Challenge**: Storing peer A sends a randomized challenge (byte offset, length, salt/nonce) to peer B holding its chunk.
+2. **Response**: Peer B computes a deterministic cryptographic proof over the exact stored chunk bytes and returns it.
+3. **Notarization**: Verified challenge proofs and uptime attestations are included in PoA blocks, feeding peer reliability coefficients and maintaining active storage allowances.
+
+## State synthesis and object pruning
+
+Block finalization synthesizes transaction history into active state (`CybouState`) (DEC-271):
+- **Object deletion**: When a user deletes a file or mail, an authenticated `RevokePublication` operation is published and finalized.
+- **State compaction**: The active publication record is tombstoned and pruned from active state.
+- **Local garbage collection**: Storing peers observing publication revocation immediately purge the associated chunks from their local `ChunkStore`, freeing disk space and preventing dead storage accumulation.

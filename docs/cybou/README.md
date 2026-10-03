@@ -80,5 +80,5 @@ from or conflicting with higher levels:
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
 | [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |
-| [`VALIDATION.md`](VALIDATION.md) | Validation signatures after independent execution, eligibility (> 1M AUTH) | Level 2 | Active |
+| [`VALIDATION.md`](VALIDATION.md) | Validation signatures after independent execution, eligibility (> 10M AUTH) | Level 2 | Active |
 | [`future/VALIDATION.md`](future/VALIDATION.md) | Archived historical note on early advisory validation design | Future | Historical |

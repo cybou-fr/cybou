@@ -22,7 +22,7 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 - **A — AUTH transitions** (Completed `99af6db`, `4a393fd`): +1 AUTH per finalized Identity-authorized operation; one PoA-signed `PoaAuthAdjustment` operation (GRANT / BURN, floor 0).
 - **B — Full-node independent candidate execution** (Completed `7f447d4`): move `OperationPool` from `PoaFinalizer` into `CybouNodeRuntime`; every node executes candidates before relay; PoA produces blocks from the same pool.
-- **C — Validation signatures** (Completed `c9422a8`, `f7f894f`, `037e6b0`): `ValidationAttestation` (NetworkBinding, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 1,000,000, bounded Validation store, `VALIDATION_ATTESTATION` CYBOU P2P gossip.
+- **C — Validation signatures** (Completed `c9422a8`, `f7f894f`, `037e6b0`): `ValidationAttestation` (NetworkBinding, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 10,000,000, bounded Validation store, `VALIDATION_ATTESTATION` CYBOU P2P gossip.
 - **D — UI** (Wallet completed `885986f`): AUTH, Validation eligibility, Submitted / Validated · N / Finalized; Mail/Files publication jobs and a PoA adjustment action remain.
 - **E — Hardening**: evidence for invalid Validation and a frozen AUTH penalty table.
 

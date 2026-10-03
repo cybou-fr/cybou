@@ -7,7 +7,7 @@ implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -73,7 +73,7 @@ The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
 The bootstrap node runs an ordinary CYBOU Identity with no special consensus
 grant or wire structure. Whether that Identity holds AUTH is an ordinary
 GenesisAllocation decision for the network, not a property of the bootstrap
-role. Genesis may give `cybou.cybou` more than 1,000,000 AUTH so the network
+role. Genesis may give `cybou.cybou` more than 10,000,000 AUTH so the network
 starts with an eligible Validation Identity.
 
 ## Network creation and joining
@@ -105,7 +105,7 @@ Authority is non-transferable AUTH stored in each finalized AccountState and
 committed by the state root; see `57_IDENTITY_AUTHORITY.md`.
 
 Every full node independently executes every candidate. Validation is an
-additional signature by an Identity with finalized AUTH > 1,000,000 after its
+additional signature by an Identity with finalized AUTH > 10,000,000 after its
 own node validated the operation; it is evidence only. See `VALIDATION.md`.
 
 ## Canonical PoA finality

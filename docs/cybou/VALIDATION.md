@@ -7,7 +7,7 @@ implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -23,7 +23,7 @@ signature produced after a node has independently validated an operation.
 
 ```text
 Every full node independently validates every candidate operation.
-An Identity with finalized AUTH > 1,000,000 may additionally sign an
+An Identity with finalized AUTH > 10,000,000 may additionally sign an
 operation its own node has independently validated.
 That signature is pre-finalization evidence.
 Every receiving node still independently validates the operation.
@@ -39,7 +39,7 @@ receive Operation
 -> execute against local finalized state + locally accepted candidates
 -> invalid: reject, do not relay, never sign
 -> valid:   keep in bounded volatile pool, relay
--> local Identity unlocked and finalized AUTH > 1,000,000?
+-> local Identity unlocked and finalized AUTH > 10,000,000?
    yes: may sign and relay a ValidationAttestation
 ```
 
@@ -49,7 +49,7 @@ receive Operation
 receive Operation + ValidationAttestation
 -> independently validate the Operation (as above); invalid -> discard both
 -> validator AccountID exists in local finalized state
--> its finalized AUTH > 1,000,000
+-> its finalized AUTH > 10,000,000
 -> hybrid Authorization signature verifies under its current Authorization key
 -> keep as Validation evidence
 ```
@@ -60,10 +60,10 @@ A signature never authorizes relay of an otherwise invalid operation.
 
 ```text
 validation_eligible(identity) :=
-    latest_finalized_state.accounts[identity].authority > 1,000,000 AUTH
+    latest_finalized_state.accounts[identity].authority > 10,000,000 AUTH
 ```
 
-999,999 and 1,000,000 AUTH are not eligible; 1,000,001 is. There is no
+9,999,999 and 10,000,000 AUTH are not eligible; 10,000,001 is. There is no
 validator registry, ValidatorSet, validator key or staking.
 
 ## ValidationAttestation

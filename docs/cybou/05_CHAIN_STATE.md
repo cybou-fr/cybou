@@ -40,9 +40,20 @@ deterministic finalized state transitions: GenesisAllocation claimed once by
 AccountCreate, +1 AUTH per finalized Identity-authorized operation, and
 PoA-signed `PoaAuthAdjustment` GRANT / BURN (floor 0). There is no derived Authority
 index. Its sole protocol eligibility effect is qualifying an Identity to sign
-Validation when its latest finalized `AccountState.authority > 1,000,000`.
+Validation when its latest finalized `AccountState.authority > 10,000,000`.
+It also determines the Identity's resource rate limits and remote storage allowance.
 
 Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
+
+## State synthesis and object pruning
+
+Block finalization synthesizes transaction history into canonical `CybouState`.
+Active publications remain in the notarial registry to authorize chunk storage
+and verify inclusion proofs. When an authenticated `RevokePublication` is finalized,
+the publication is pruned from the active state registry (or tombstoned for a bounded
+transition window), signaling storing nodes that the associated chunks are no longer
+authorized for network retention and can be garbage-collected from local `ChunkStore`.
+Historical blocks remain immutable, but active consensus state does not accumulate dead objects.
 
 ## Invariants
 

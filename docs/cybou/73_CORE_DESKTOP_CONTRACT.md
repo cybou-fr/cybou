@@ -57,7 +57,7 @@ Local → Preparing → Submitted → Validated (optional) → Finalized, or Fai
 ```
 
 - **Submitted**: locally executed as valid and held in the volatile candidate pool, awaiting finality.
-- **Validated**: locally valid and holding at least one valid Validation signature from an Identity with finalized AUTH > 1,000,000, displayed as `Validated · N signatures`. Informational only; it changes no Balance, System Balance, AUTH or other state.
+- **Validated**: locally valid and holding at least one valid Validation signature from an Identity with finalized AUTH > 10,000,000, displayed as `Validated · N signatures`. Informational only; it changes no Balance, System Balance, AUTH or other state.
 - **Finalized**: included in a valid block signed by the PoA key and independently verified locally. Finalized never regresses.
 - **Failed**: terminal for an exact OperationID unless verified PoA finality includes it.
 
@@ -89,7 +89,7 @@ The account panel shows, from the latest finalized `AccountState`:
 Balance: X CYBOU
 System Balance: Y CYBOU
 Authority: Z AUTH
-Validation eligible: Yes / No   (Yes iff Z > 1,000,000)
+Validation eligible: Yes / No   (Yes iff Z > 10,000,000)
 ```
 
 The controller does not maintain an Authority index and shows no Age,

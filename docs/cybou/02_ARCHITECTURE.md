@@ -7,7 +7,7 @@ implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -32,7 +32,7 @@ ApplicationService / PublicationService / StorageService
 native CYBOU NodeRuntime
   + canonical state execution and independent candidate execution
   + single-operator hybrid-PQ PoA finality (genesis-authorized P)
-  + Validation signatures (local Identity AUTH > 1,000,000)
+  + Validation signatures (local Identity AUTH > 10,000,000)
   + P2P mesh synchronization and operation relay
   + RootPublication
   + common encrypted ChunkStore
@@ -131,7 +131,7 @@ Authority is a canonical non-transferable AUTH account value committed by the
 state root, separate from CYBOU Balance and System Balance. It changes only
 through finalized transitions (genesis, +1 for utility operations RootPublication
 and SystemLock, capped at +1 per account per block, PoA-signed `PoaAuthAdjustment` GRANT / BURN). An Identity whose finalized
-AccountState.authority exceeds 1,000,000 AUTH may add a Validation signature to
+AccountState.authority exceeds 10,000,000 AUTH may add a Validation signature to
 an operation its own node has independently validated. Every receiving node and
 PoA still re-execute the operation.
 

@@ -61,15 +61,26 @@ IdentityRotate preserves the account and its AUTH (and earns 0 AUTH).
 
 ```text
 validation_eligible(identity) :=
-    latest_finalized_state.accounts[identity].authority > 1,000,000 AUTH
+    latest_finalized_state.accounts[identity].authority > 10,000,000 AUTH
 ```
 
 See [`VALIDATION.md`](VALIDATION.md).
 
+## Resource ladder and anti-spam limits
+
+AUTH serves as the network's deterministic rate-limiting and resource-allocation governor:
+- **Anti-Spam protection**: freshly created identities with 0 AUTH start with conservative per-epoch operation limits and a 5 GB remote network storage credit (DEC-269). This prevents Sybil attackers from flooding the network with massive publications.
+- **Progressive tier scaling**: as an account demonstrates utility through verified storage retention, high uptime, and finalized operations, its AUTH increases. Remote storage allowances expand proportionally:
+  - `0 AUTH`: 5 GB remote network storage (Onboarding Trust Credit);
+  - `10,000 AUTH`: 25 GB remote network storage;
+  - `100,000 AUTH`: 100 GB remote network storage;
+  - `1,000,000 AUTH`: 500 GB remote network storage;
+  - `> 10,000,000 AUTH`: Validator tier — eligible to sign Validation attestations; operational rate limits and network storage allowances are unconstrained.
+
 ## What AUTH does not do
 
 AUTH does not grant PoA finalization, transfer or redeem CYBOU, create stake,
-voting weight or quorum, create validator registry membership, or allocate
-resources. Nodes read `state.accounts[id].authority`; nothing is derived from
-history, and there is no AuthorityIndex, AuthorityPolicy, age or activity
+voting weight or quorum, or create validator registry membership. Nodes read
+`state.accounts[id].authority` directly; nothing is derived from loose off-chain
+heuristics, and there is no AuthorityIndex, AuthorityPolicy, age or activity
 accumulator.

@@ -53,4 +53,4 @@ AUTH           += 1   (flat finalized-operation reward, independent of X)
 AUTH is not CYBOU and is excluded from CYBOU supply. Onboarding credit
 leaves AUTH unchanged, and no CYBOU amount (locked, held or spent) scales AUTH. AUTH issuance and burn are defined in
 [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md). Finalized AUTH above
-1,000,000 enables Validation signatures, never PoA finalization.
+10,000,000 enables Validation signatures, never PoA finalization.

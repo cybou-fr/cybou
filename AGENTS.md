@@ -7,7 +7,7 @@ implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 1,000,000. PoA is
+Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -107,7 +107,7 @@ AUTH:
     - PoaAuthAdjustment BURN  (signed by the genesis PoA key) -> -N AUTH, floor 0
     - PoaAuthAdjustment itself earns no AUTH
     - no transfer between Identities
-    - Authority > 1,000,000 AUTH makes an Identity eligible to sign Validation
+    - Authority > 10,000,000 AUTH makes an Identity eligible to sign Validation
     - Authority never grants PoA finalization power
     - automatic penalties are not frozen
 
@@ -119,7 +119,7 @@ Candidate execution:
 
 Validation:
     - an additional signature, never a substitute for local execution
-    - an Identity with finalized AUTH > 1,000,000 may sign an operation
+    - an Identity with finalized AUTH > 10,000,000 may sign an operation
       only after its own node independently validated it
     - signs NetworkBinding, OperationID, finalized base BlockID, AccountID
       with the ordinary Identity Authorization key
@@ -284,7 +284,7 @@ architecture that is absent from higher levels:
 - Full nodes independently validate every candidate operation, block transition,
   state root, and PoA certificate.
 - Validation is an additional signature by an Identity whose Authority in the
-  latest finalized state exceeds 1,000,000, made only after its own node
+  latest finalized state exceeds 10,000,000, made only after its own node
   independently validated the operation. It is pre-finalization evidence and
   never substitutes local or PoA execution, never changes state, and creates
   no provisional state. Receiving nodes and PoA always re-execute.
@@ -338,7 +338,7 @@ architecture that is absent from higher levels:
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized; durability requires confirmed remote replicas.
 
-## Canonical Identity Authority
+## Canonical Identity Authority and Resource Governance
 
 - Every AccountState has three canonical account values: spendable Balance in CYBOU,
   non-transferable System Balance in CYBOU, and non-transferable Authority in AUTH.
@@ -352,17 +352,35 @@ architecture that is absent from higher levels:
   ping-pong and zero-cost Sybil farming. AUTH is never transferred between Identities.
   Amounts locked, paid as fees, credited at onboarding or stored never scale AUTH;
   such an operation earns only the flat +1.
-- Authority > 1,000,000 AUTH qualifies an Identity to sign Validation.
-- Authority grants NO PoA finalization power, NO consensus voting rights, NO stake weight,
-  and NO balance or resource allocations.
+- Authority > 10,000,000 AUTH qualifies an Identity to sign Validation.
+- Authority grants NO PoA finalization power, NO consensus voting rights, and NO stake weight.
+- AUTH acts as the anti-spam and resource scaling governor:
+  Low-AUTH identities have bounded per-epoch operation rates and storage allowances.
+  As finalized AUTH scales through proven utility and verified storage, limits expand
+  progressively up to the Validator tier (AUTH > 10,000,000) where operational limits
+  are unconstrained.
+- Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB
+  remote storage in the network, grounded in the reciprocal 1:3 physical storage obligation
+  (storing 10–15 GB of foreign data locally on desktop).
 - Automatic AUTH penalties require objectively verifiable protocol evidence and
   are not frozen. Signed Validation of an operation that is invalid against its
   stated finalized base is evidence a future penalty rule may use.
-- There is no canonical ValidatorSet, validator registry, NodeID binding,
-  liveness/storage evidence, resource budget, reservation, ticket, or
-  per-I/O accounting, and no derived AuthorityIndex.
 - Local peer failures use local disconnect, backoff, and abuse limits; they do
   not change global Authority.
+
+## Notarial object storage register, mutual proofs, and pruning
+
+- The blockchain is the canonical Notarial Register: it records object publications,
+  Merkle roots, recipient capsules, and mutual storage proofs. Quotas, allowances,
+  and admission rights are derived deterministically strictly from PoA-finalized state.
+  Local capacity declarations and off-chain vouchers convey zero authority.
+- Mutual Proof of Storage & Uptime: storing peers periodically challenge each other
+  with randomized byte-offset/nonce verification of stored chunks. Verified challenge
+  results are notarized in PoA blocks, establishing deterministic peer reliability coefficients.
+- State Synthesis & Object Pruning: block finalization synthesizes history into state.
+  When an object is deleted by its author (`RevokePublication`), its active state record
+  is retired/tombstoned, authorizing storing nodes to immediately purge the underlying chunks
+  from local ChunkStore, preventing storage bloat.
 
 ## Economics
 
