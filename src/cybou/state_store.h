@@ -8,7 +8,7 @@
 #include <cybou/block.h>
 #include <cybou/block_executor.h>
 #include <cybou/kv_store.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/poa_conflict_detector.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
@@ -54,7 +54,6 @@ enum class StateLoadError : uint8_t {
     NONE,
     NOT_FOUND,
     CORRUPT,
-    INVALID_NETWORK_DEFINITION,
     NETWORK_MISMATCH,
 };
 
@@ -68,7 +67,6 @@ struct StateLoadResult {
 enum class GenesisInitError : uint8_t {
     NONE,
     ALREADY_INITIALIZED,
-    INVALID_NETWORK_DEFINITION,
     GENESIS_STATE_MISMATCH,
 };
 
@@ -82,7 +80,6 @@ enum class BlockTransitionError : uint8_t {
     NONE,
     INVALID_BLOCK_ID,
     STATE_NOT_INITIALIZED,
-    INVALID_NETWORK_DEFINITION,
     NETWORK_MISMATCH,
     CORRUPT_STATE,
     PARENT_MISMATCH,
@@ -117,7 +114,7 @@ class CybouStateStore
 public:
     CybouStateStore(
         KVStore& db,
-        CybouNetworkDefinition network_definition);
+        VerifiedNetworkGenesis network_genesis);
 
     /** Persist genesis state at height 0. Fails if already initialized. */
     GenesisInitResult InitializeGenesis(const CybouState& genesis_state, bool sync = true);
@@ -144,7 +141,7 @@ public:
 
     /** 32-byte NetworkBinding of the definition's Network Public Key (NetworkID). */
     const uint256& GetNetworkBinding() const { return m_network_binding; }
-    const CybouNetworkDefinition& GetNetworkDefinition() const { return m_network_definition; }
+    const VerifiedNetworkGenesis& GetNetworkGenesis() const { return m_network_genesis; }
     KVStore& GetDatabase() const { return m_db; }
     bool PoaSafetyHalted() const;
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
@@ -179,8 +176,7 @@ public:
 
 private:
     KVStore& m_db;
-    const CybouNetworkDefinition m_network_definition;
-    const NetworkDefinitionError m_network_definition_error;
+    const VerifiedNetworkGenesis m_network_genesis;
     const uint256 m_network_binding;
     std::unique_ptr<PoaConflictDetector> m_poa_conflict_detector;
 };

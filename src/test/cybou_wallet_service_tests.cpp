@@ -22,7 +22,7 @@ BOOST_AUTO_TEST_CASE(wallet_reads_finalized_balances_and_rejects_invalid_payment
     cybou::CybouWalletService wallet{*fixture.runtime, alice->GetKeyStore()};
     const auto [balance, system_balance] = wallet.GetBalances();
     BOOST_CHECK_EQUAL(balance, 0);
-    BOOST_CHECK_EQUAL(system_balance, fixture.definition.protocol_parameters.onboarding_bonus);
+    BOOST_CHECK_EQUAL(system_balance, fixture.definition.GetProtocolParameters().onboarding_bonus);
     const auto alice_id = alice->GetAccountId();
     const auto bob_id = bob->GetAccountId();
     BOOST_REQUIRE(alice_id && bob_id);

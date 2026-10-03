@@ -36,8 +36,8 @@ using EncryptedTreeSource = std::function<std::optional<std::size_t>(std::span<u
 using EncryptedTreeStage = std::function<bool(std::uint32_t leaf_index, const EncryptedChunk& chunk)>;
 using EncryptedChunkLookup = std::function<std::optional<std::vector<unsigned char>>(const ChunkId&)>;
 using EncryptedTreeSink = std::function<bool(std::span<const unsigned char> plaintext)>;
-// Receives opaque canonical-CBOR application metadata from ROOT after decryption.
-using EncryptedTreeRootMetadataSink = std::function<bool(std::span<const unsigned char> canonical_cbor)>;
+// Receives opaque bounded application metadata from ROOT after decryption.
+using EncryptedTreeRootMetadataSink = std::function<bool(std::span<const unsigned char> metadata)>;
 // Must atomically persist-and-accept each new ID (for example, a local SQLite unique key).
 using EncryptedTreeVisit = std::function<bool(const ChunkId& chunk_id)>;
 

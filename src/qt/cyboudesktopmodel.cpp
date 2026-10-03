@@ -832,7 +832,7 @@ QString CybouDesktopModel::supportName()
 std::optional<quint64> CybouDesktopModel::supportMailFee() const
 {
     if (!m_identity_service) return std::nullopt;
-    return cybou::SupportMailMinimumFee(m_identity_service->GetNodeRuntime().GetNetworkDefinition().protocol_parameters);
+    return cybou::SupportMailMinimumFee(m_identity_service->GetNodeRuntime().GetNetworkGenesis().GetProtocolParameters());
 }
 
 void CybouDesktopModel::rebuildContacts()

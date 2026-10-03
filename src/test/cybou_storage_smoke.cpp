@@ -16,7 +16,7 @@
 #include <cybou/identity_service.h>
 #include <test/cybou_service_test_fixture.h>
 #include <cybou/kv_store.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_service.h>
 #include <cybou/private_application_store.h>
 #include <cybou/publication_service.h>
@@ -70,7 +70,7 @@ int main(int argc, char* argv[])
         const auto finalizer_port = static_cast<std::uint16_t>(std::stoul(argv[4]));
 
         cybou::CybouNodeService node{{
-            .runtime = cybou::NodeRuntimeConfig{.network_definition = network->network_definition,
+            .runtime = cybou::NodeRuntimeConfig{.network_genesis = network->genesis,
                 .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
             .genesis = network->genesis_state,
         }};

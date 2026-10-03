@@ -25,7 +25,7 @@
 #include <qt/pages/networkauthoritypage.h>
 #include <QTableWidget>
 
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
 #include <cybou/official_networks.h>
 #include <cybou/p2p/session.h>
@@ -69,7 +69,7 @@ bool WriteForeignNetworkState(const QString& directory)
 {
     const auto genesis = cybou::CreateDevGenesisState();
     cybou::CybouNodeRuntime runtime{{
-        .network_definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(0x33), cybou::TestNetworkPublicKey(0x33)),
+        .network_genesis = cybou::CreateTestNetworkGenesis(genesis, cybou::TestPoaFinalizerPublicKey(0x33), cybou::TestNetworkPublicKey(0x33)),
         .data_dir = std::filesystem::path{directory.toStdU16String()} / "cybou_state",
     }};
     return runtime.InitializeGenesis(genesis);

@@ -3,6 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/network_genesis.h>
+#include <cybou/signing.h>
+#include <cybou/root_publication.h>
+#include <limits>
 #include <cybou/official_networks.h>
 #include <cybou/crypto/sha256.h>
 #include <cybou/root_publication.h>
@@ -12,6 +15,61 @@
 #include <limits>
 
 namespace cybou {
+
+bool ValidateProtocolParameters(const CybouProtocolParameters& params)
+{
+    if (params.account_creation_work_bits > uint256::size() * 8) {
+        return false;
+    }
+    if (params.max_account_creates_per_block == 0) {
+        return false;
+    }
+    if (params.epoch_blocks == 0) {
+        return false;
+    }
+    const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
+    const auto per_kib = params.root_publication_fee_per_started_kib;
+    const auto per_chunk = params.root_publication_fee_per_chunk;
+    if ((per_kib != 0 && max_fee_kib > std::numeric_limits<uint64_t>::max() / per_kib) ||
+        (per_chunk != 0 && MAX_PUBLICATION_CHUNKS > std::numeric_limits<uint64_t>::max() / per_chunk)) {
+        return false;
+    }
+    const auto max_byte_fee = static_cast<uint64_t>(max_fee_kib) * per_kib;
+    const auto max_chunk_fee = static_cast<uint64_t>(MAX_PUBLICATION_CHUNKS) * per_chunk;
+    if (max_chunk_fee > std::numeric_limits<uint64_t>::max() - max_byte_fee) {
+        return false;
+    }
+    if (params.name_claim_work_bits > uint256::size() * 8 ||
+        params.name_commit_min_depth == 0 ||
+        params.name_commit_max_lifetime < params.name_commit_min_depth ||
+        params.max_pending_name_commits == 0 ||
+        params.max_pending_name_commits > DEFAULT_MAX_PENDING_NAME_COMMITS) {
+        return false;
+    }
+    return true;
+}
+
+uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
+{
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V6"};
+    const auto key = CanonicalSerializeNetworkPublicKey(network_public_key);
+    uint256 result;
+    ::cybou::crypto::Sha256 hasher;
+    hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
+    hasher.Write(key.data(), key.size());
+    hasher.Finalize(result.begin());
+    return result;
+}
+
+CybouState CreateDevGenesisState()
+{
+    return CybouState{
+        .onboarding_pool = DEV_ONBOARDING_POOL,
+        .accounts = {},
+        .identities = {},
+        .names = {},
+    };
+}
 
 namespace {
 
@@ -312,25 +370,5 @@ std::optional<VerifiedNetworkGenesis> VerifiedNetworkGenesis::Create(NetworkGene
     return VerifiedNetworkGenesis(std::move(genesis), std::move(id_bytes), digest);
 }
 
-VerifiedNetworkGenesis CreateTestVerifiedGenesis(
-    const CybouNetworkDefinition& definition)
-{
-    std::array<unsigned char, 32> net_secret{};
-    net_secret.fill(0x33);
-    auto net_pub = DeriveIdentityPublicKey(net_secret, IdentityKeyPurpose::NETWORK_ROOT);
-    NetworkGenesis spec;
-    spec.version = CYBOU_NETWORK_GENESIS_VERSION;
-    spec.network_public_key = *net_pub;
-    spec.genesis_state_root = definition.genesis_state_root;
-    spec.poa_finalizer_public_key = definition.poa_finalizer_public_key;
-    spec.protocol_parameters = definition.protocol_parameters;
-
-    const auto digest = ComputeNetworkGenesisDigest(spec);
-    auto sig = SignIdentityMessage(net_secret, IdentityKeyPurpose::NETWORK_ROOT,
-        std::span<const unsigned char>{digest.begin(), digest.size()});
-    spec.signature = *sig;
-    auto verified = VerifiedNetworkGenesis::Create(spec);
-    return *verified;
-}
 
 } // namespace cybou

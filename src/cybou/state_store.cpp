@@ -44,16 +44,13 @@ inline std::string StateHeightKey(const uint64_t height)
 
 CybouStateStore::CybouStateStore(
     KVStore& db,
-    CybouNetworkDefinition network_definition)
+    VerifiedNetworkGenesis network_genesis)
     : m_db{db},
-      m_network_definition{std::move(network_definition)},
-      m_network_definition_error{ValidateNetworkDefinition(m_network_definition)},
-      m_network_binding{ComputeNetworkBinding(m_network_definition.network_public_key)}
+      m_network_genesis{std::move(network_genesis)},
+      m_network_binding{ComputeNetworkBinding(m_network_genesis.GetNetworkPublicKey())}
 {
-    if (m_network_definition_error == NetworkDefinitionError::NONE) {
-        m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_binding,
-            m_network_definition.poa_finalizer_public_key);
-    }
+    m_poa_conflict_detector = std::make_unique<PoaConflictDetector>(m_db, m_network_binding,
+            m_network_genesis.GetPoaPublicKey());
 }
 
 bool CybouStateStore::PoaSafetyHalted() const
@@ -74,10 +71,10 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
     const auto loaded = LoadState();
     const auto head = GetFinalizedHead();
     if (!loaded || !head || height != head->height + 1 ||
-        height == 0 || m_network_definition_error != NetworkDefinitionError::NONE) {
+        height == 0) {
         return std::nullopt;
     }
-    const auto& params = m_network_definition.protocol_parameters;
+    const auto& params = m_network_genesis.GetProtocolParameters();
     const bool expires_name = std::any_of(loaded.state->names.pending_commits.begin(),
         loaded.state->names.pending_commits.end(), [&](const auto& item) {
             return params.name_commit_max_lifetime > 0 && height > item.second.commit_height &&
@@ -87,7 +84,7 @@ std::optional<uint256> CybouStateStore::ComputeCandidateStateRoot(
         return GetStateRoot();
     }
     const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_binding, height,
-        m_network_definition.protocol_parameters, &m_network_definition.poa_finalizer_public_key);
+        m_network_genesis.GetProtocolParameters(), &m_network_genesis.GetPoaPublicKey());
     return execution ? execution.state_root : std::nullopt;
 }
 
@@ -95,15 +92,12 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     const CybouState& genesis_state,
     const bool sync)
 {
-    if (m_network_definition_error != NetworkDefinitionError::NONE) {
-        return {GenesisInitError::INVALID_NETWORK_DEFINITION};
-    }
     if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(HEAD_KEY) ||
         m_db.Exists(NETWORK_ID_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
     }
     const auto state_hash = CybouStateHash(genesis_state);
-    if (!state_hash || *state_hash != m_network_definition.genesis_state_root) {
+    if (!state_hash || *state_hash != m_network_genesis.GetGenesisStateRoot()) {
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
     const auto serialized_state = SerializeCybouState(genesis_state);
@@ -111,7 +105,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
         return {GenesisInitError::GENESIS_STATE_MISMATCH};
     }
     const FinalizedHead initial_head{
-        .block_id = m_network_definition.genesis_block_id,
+        .block_id = m_network_genesis.GetGenesisAnchor(),
         .height = 0,
     };
     KVStore::Batch batch;
@@ -126,9 +120,6 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
 
 StateLoadResult CybouStateStore::LoadState() const
 {
-    if (m_network_definition_error != NetworkDefinitionError::NONE) {
-        return {StateLoadError::INVALID_NETWORK_DEFINITION, std::nullopt};
-    }
     std::vector<unsigned char> bytes;
     uint256 stored_hash;
     const bool state_exists{m_db.Exists(STATE_KEY)};
@@ -203,9 +194,6 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
 {
     const auto loaded{LoadState()};
     if (!loaded) {
-        if (loaded.error == StateLoadError::INVALID_NETWORK_DEFINITION) {
-            return {BlockTransitionError::INVALID_NETWORK_DEFINITION};
-        }
         if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
             return {BlockTransitionError::NETWORK_MISMATCH};
         }
@@ -231,7 +219,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
 
-    if (!VerifyPoaCertificateForBlock(cert, m_network_definition.poa_finalizer_public_key,
+    if (!VerifyPoaCertificateForBlock(cert, m_network_genesis.GetPoaPublicKey(),
         m_network_binding, block)) {
         return {.error = BlockTransitionError::INVALID_CERTIFICATE};
     }
@@ -268,9 +256,9 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
             return {BlockTransitionError::CORRUPT_STATE};
         }
 
-        const auto& params = m_network_definition.protocol_parameters;
+        const auto& params = m_network_genesis.GetProtocolParameters();
         auto execution = ExecuteBlockOperations(*parent_state, block.operations, m_network_binding,
-            block.height, params, &m_network_definition.poa_finalizer_public_key);
+            block.height, params, &m_network_genesis.GetPoaPublicKey());
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
@@ -317,7 +305,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         return {BlockTransitionError::INVALID_HEIGHT};
     }
 
-    const auto& params = m_network_definition.protocol_parameters;
+    const auto& params = m_network_genesis.GetProtocolParameters();
     const bool expires_name = std::any_of(loaded.state->names.pending_commits.begin(),
         loaded.state->names.pending_commits.end(), [&](const auto& item) {
             return params.name_commit_max_lifetime > 0 && block.height > item.second.commit_height &&
@@ -333,7 +321,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         candidate_root = *current_root;
     } else {
         auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_binding, block.height, params,
-            &m_network_definition.poa_finalizer_public_key);
+            &m_network_genesis.GetPoaPublicKey());
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};

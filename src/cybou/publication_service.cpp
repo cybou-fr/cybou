@@ -283,7 +283,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     if (const auto support = SupportAccount(*loaded.state); recipient && support && *recipient == *support &&
         *recipient != *account) {
         // Support mail pays the support rate; the network still sees no recipient.
-        const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+        const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
         if (!PadPublicationToFee(params, publication, SupportMailMinimumFee(params))) {
             return Failure("Cannot pay the support rate for this message");
         }

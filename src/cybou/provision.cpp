@@ -4,7 +4,7 @@
 
 #include <cybou/provision.h>
 #include <cybou/crypto/cleanse.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/secret_file.h>
 #include <crypto/hex_base.h>
 

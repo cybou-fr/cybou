@@ -9,7 +9,7 @@
 
 #include <cybou/official_networks.h>
 #include <cybou/identity_service.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>

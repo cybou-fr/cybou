@@ -23,7 +23,7 @@ BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
     CybouServiceTestFixture local;
     cybou::CybouNodeService service{{
         .runtime = cybou::NodeRuntimeConfig{
-            .network_definition = local.definition,
+            .network_genesis = local.definition,
             .data_dir = local.directory / "desktop-finalizer-service",
             .poa_finalizer_recovery_entropy = local.validator_seed,
             .memory_only = true,
@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_service_starts_without_an_initial_peer)
     CybouServiceTestFixture local;
     cybou::CybouNodeService service{{
         .runtime = cybou::NodeRuntimeConfig{
-            .network_definition = local.definition,
+            .network_genesis = local.definition,
             .data_dir = local.directory / "peerless-observer-service",
             .memory_only = true,
             .wipe_data = true,
@@ -98,14 +98,14 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
         tcp::socket socket{io}; first.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         if (session.Handshake({.network_binding=primary.runtime->GetNetworkBinding(),
-                .finalized_height=0,.finalized_tip=primary.definition.genesis_block_id,
+                .finalized_height=0,.finalized_tip=primary.definition.GetGenesisAnchor(),
                 .nonce=30001})) {
             while (session.ServeNext(*configured_source.runtime)) {}
         }
     }};
     std::optional<std::jthread> second_server;
     auto observer=std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
-        .network_definition=primary.definition,.data_dir=primary.directory/"route-observer",
+        .network_genesis=primary.definition,.data_dir=primary.directory/"route-observer",
         .configured_peers={{std::make_pair(loopback.to_string(),first.local_endpoint().port())}},
         .memory_only=true,.wipe_data=true,
         .peer_admission_policy = TestLabAdmissionPolicy()});
@@ -200,7 +200,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error
 
     cybou::CybouNodeService service{{
         .runtime = cybou::NodeRuntimeConfig{
-            .network_definition = local.definition,
+            .network_genesis = local.definition,
             .data_dir = local.directory / "service-observer",
             .configured_peers = {{std::make_pair(loopback.to_string(), acceptor.local_endpoint().port())}},
             .memory_only = true,

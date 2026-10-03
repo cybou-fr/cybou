@@ -6,7 +6,6 @@
 #define CYBOU_NETWORK_GENESIS_H
 
 #include <cybou/identity_crypto.h>
-#include <cybou/network_definition.h>
 #include <cybou/protocol_params.h>
 #include <cybou/state.h>
 #include <uint256.h>
@@ -18,6 +17,11 @@
 #include <vector>
 
 namespace cybou {
+
+bool ValidateProtocolParameters(const CybouProtocolParameters& params);
+/** SHA-256("CYBOU/NETWORK-ID/V6" || canonical Network Public Key), unchanged. */
+uint256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
+CybouState CreateDevGenesisState();
 
 inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{2};
 inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS/V2"};
@@ -75,6 +79,7 @@ public:
     static std::optional<VerifiedNetworkGenesis> Create(NetworkGenesis genesis);
 
     const NetworkGenesis& GetGenesis() const noexcept { return m_genesis; }
+    const uint256& GetGenesisAnchor() const noexcept { return m_genesis_digest; }
     const uint256& GetGenesisDigest() const noexcept { return m_genesis_digest; }
     const IdentityHybridPublicKey& GetNetworkPublicKey() const noexcept { return m_genesis.network_public_key; }
     const uint256& GetGenesisStateRoot() const noexcept { return m_genesis.genesis_state_root; }
@@ -91,10 +96,6 @@ private:
     std::vector<unsigned char> m_network_id_bytes;
     uint256 m_genesis_digest{uint256::ZERO};
 };
-
-/** Helper to create a validly signed VerifiedNetworkGenesis for testing from a definition. */
-VerifiedNetworkGenesis CreateTestVerifiedGenesis(
-    const CybouNetworkDefinition& definition);
 
 /** Canonical byte serialization of any IdentityHybridPublicKey. */
 std::vector<unsigned char> CanonicalSerializeHybridPublicKey(const IdentityHybridPublicKey& key);

@@ -88,7 +88,7 @@ bool CybouIdentityService::IsNetworkAuthority() const
 {
     std::lock_guard lock(m_mutex);
     return m_keystore.DerivesPublicKey(IdentityKeyPurpose::POA_FINALIZER,
-        m_runtime.GetNetworkDefinition().poa_finalizer_public_key);
+        m_runtime.GetNetworkGenesis().GetPoaPublicKey());
 }
 
 bool CybouIdentityService::LoadVault(std::string_view password)
@@ -245,7 +245,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     if (on_phase) on_phase(IdentityCreationPhase::PERFORMING_WORK, "Computing anti-Sybil proof-of-work...");
 
     const uint64_t height = m_runtime.GetFinalizedHeight().value_or(0);
-    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
     const uint64_t current_epoch = EpochForHeight(height, params);
 
     const uint256 network_binding = m_runtime.GetNetworkBinding();

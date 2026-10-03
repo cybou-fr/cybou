@@ -9,7 +9,7 @@
 #include <cybou/hex.h>
 #include <cybou/identity_service.h>
 #include <cybou/keystore.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
 #include <cybou/node_service.h>
@@ -255,8 +255,8 @@ int NetworkInfo(const Options& opts)
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     std::cout << "network=" << network.name
               << "\nnetwork_id=" << HexStr(network.genesis.GetNetworkId())
-              << "\nnetwork_binding=" << ComputeNetworkBinding(network.network_definition.network_public_key).GetHex()
-              << "\ngenesis=" << network.network_definition.genesis_block_id.GetHex() << '\n';
+              << "\nnetwork_binding=" << ComputeNetworkBinding(network.genesis.GetNetworkPublicKey()).GetHex()
+              << "\ngenesis=" << network.genesis.GetGenesisAnchor().GetHex() << '\n';
     for (const auto& locator : network.rendezvous_locators) {
         std::cout << "bootstrap=" << locator.host << ':' << locator.port
                   << " spki_sha256=" << HexStr(locator.tls_spki_sha256) << '\n';
@@ -490,7 +490,7 @@ int Doctor(const Options& opts)
     Allow(opts, {"network", "data-dir", "listen", "peers", "key-file"});
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     std::cout << "Network OK " << network.name << "\nNetwork binding "
-              << ComputeNetworkBinding(network.network_definition.network_public_key).GetHex() << '\n';
+              << ComputeNetworkBinding(network.genesis.GetNetworkPublicKey()).GetHex() << '\n';
     auto dir = std::filesystem::absolute(opts.Require("data-dir"));
     auto parent = dir;
     while (!std::filesystem::exists(parent)) parent = parent.parent_path();
@@ -524,7 +524,7 @@ int Doctor(const Options& opts)
         crypto::CleanseMemory(bytes.data(), bytes.size());
         auto key = DeriveIdentityPublicKey(seed, IdentityKeyPurpose::POA_FINALIZER);
         crypto::CleanseMemory(seed.data(), seed.size());
-        if (!key || *key != network.network_definition.poa_finalizer_public_key) throw std::runtime_error("doctor: wrong PoA key");
+        if (!key || *key != network.genesis.GetPoaPublicKey()) throw std::runtime_error("doctor: wrong PoA key");
         std::cout << "PoA key OK\n";
     }
     // LevelDB has no read-only open. Inspect a stable private COPY, never recover
@@ -550,7 +550,7 @@ int Doctor(const Options& opts)
                 throw std::runtime_error("doctor: DB changed during read-only snapshot; retry while stopped");
             }
         }
-        CybouNodeRuntime copy{{.network_definition = network.network_definition, .data_dir = temp}};
+        CybouNodeRuntime copy{{.network_genesis = network.genesis, .data_dir = temp}};
         const auto status = copy.GetStatus();
         if (!status.is_initialized || status.poa_safety_halted) throw std::runtime_error("doctor: foreign/corrupt/halted DB");
         std::cout << "State OK height=" << status.finalized_height << '\n';

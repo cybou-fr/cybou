@@ -31,9 +31,9 @@ struct PoaSigningResult {
 class PoaFinalizer final {
 public:
     PoaFinalizer(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key);
+        const uint256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key);
     PoaFinalizer(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
+        const uint256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
         const IdentityHybridPublicKey& genesis_finalizer_key);
     ~PoaFinalizer() = default;
     PoaFinalizer(const PoaFinalizer&) = delete;

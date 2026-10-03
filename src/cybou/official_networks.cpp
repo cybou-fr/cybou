@@ -46,23 +46,11 @@ OfficialNetwork VerifyCompiledDevnet()
     if (!state_hash || *state_hash != verified->GetGenesisStateRoot()) {
         throw std::runtime_error("compiled DEVNET genesis state root mismatch");
     }
-    CybouNetworkDefinition definition{
-        .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
-        .network_public_key = verified->GetNetworkPublicKey(),
-        .genesis_block_id = ComputeGenesisBlockId(verified->GetGenesisStateRoot(), verified->GetPoaPublicKey()),
-        .genesis_state_root = verified->GetGenesisStateRoot(),
-        .poa_finalizer_public_key = verified->GetPoaPublicKey(),
-        .protocol_parameters = verified->GetProtocolParameters(),
-    };
-    if (ValidateNetworkDefinition(definition) != NetworkDefinitionError::NONE) {
-        throw std::runtime_error("compiled DEVNET definition is invalid");
-    }
     return OfficialNetwork{
         .kind = NetworkKind::DEVNET,
         .name = "DEVNET",
         .genesis = std::move(*verified),
         .genesis_state = std::move(*state),
-        .network_definition = std::move(definition),
         .rendezvous_locators = DEVNET_BOOTSTRAP_LOCATORS,
     };
 }
@@ -102,20 +90,11 @@ OfficialNetwork BuildLabNetwork()
     spec.signature = *signature;
     auto verified = VerifiedNetworkGenesis::Create(spec);
     if (!verified) throw std::runtime_error("LAB genesis failed verification");
-    CybouNetworkDefinition definition{
-        .protocol_version = CYBOU_NETWORK_DEFINITION_VERSION,
-        .network_public_key = *network_key,
-        .genesis_block_id = ComputeGenesisBlockId(*state_root, *poa_key),
-        .genesis_state_root = *state_root,
-        .poa_finalizer_public_key = *poa_key,
-        .protocol_parameters = spec.protocol_parameters,
-    };
     return OfficialNetwork{
         .kind = NetworkKind::LAB,
         .name = "LAB",
         .genesis = std::move(*verified),
         .genesis_state = std::move(state),
-        .network_definition = std::move(definition),
         .rendezvous_locators = {},
     };
 }

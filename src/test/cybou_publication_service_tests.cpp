@@ -4,7 +4,6 @@
 
 #include <cybou/publication_service.h>
 #include <test/cybou_publication_builder.h>
-#include <cybou/canonical_cbor.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/node_runtime.h>
 #include <test/cybou_service_test_fixture.h>
@@ -29,9 +28,7 @@ cybou::PreparedPublicationBundle Prepare(cybou::CybouNodeRuntime& runtime,
 {
     cybou::test::PublicationBuilder stager{runtime.GetChunkBlobStore(),
         std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}};
-    const auto metadata = cybou::EncodeCanonicalCbor(cybou::CborValue::ArrayValue({
-        cybou::CborValue::Unsigned(2), cybou::CborValue::Unsigned(1)
-    }));
+    const std::vector<unsigned char> metadata{2, 3, 0, 0};
     auto main = stager.StageTree([](std::span<unsigned char>) -> std::optional<std::size_t> { return 0; }, metadata);
     if (!main) throw std::runtime_error{"cannot stage test publication"};
     auto prepared = stager.Finish(*main);

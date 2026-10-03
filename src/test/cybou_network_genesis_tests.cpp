@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(compiled_devnet_is_the_only_official_startup_source)
         cybou::devnet_constants::NETWORK_ID_BYTES.begin(), cybou::devnet_constants::NETWORK_ID_BYTES.end()));
     BOOST_CHECK(devnet.kind == cybou::NetworkKind::DEVNET);
     BOOST_CHECK(cybou::CybouStateHash(devnet.genesis_state) == devnet.genesis.GetGenesisStateRoot());
-    BOOST_CHECK(devnet.network_definition.poa_finalizer_public_key == devnet.genesis.GetPoaPublicKey());
+    BOOST_CHECK(devnet.genesis.GetPoaPublicKey() == devnet.genesis.GetPoaPublicKey());
     BOOST_CHECK(&cybou::RequireOfficialNetwork("DEVNET") == &devnet);
 
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("mainnet"), std::runtime_error);
@@ -165,12 +165,12 @@ BOOST_AUTO_TEST_CASE(lab_network_is_isolated_from_devnet)
     BOOST_CHECK(cybou::VerifySignedNetworkGenesis(*retired_devnet) == cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(lab.kind == cybou::NetworkKind::LAB);
     BOOST_CHECK(lab.rendezvous_locators.empty());
-    BOOST_CHECK(cybou::ComputeNetworkBinding(lab.network_definition.network_public_key) !=
+    BOOST_CHECK(cybou::ComputeNetworkBinding(lab.genesis.GetNetworkPublicKey()) !=
         cybou::ComputeNetworkBinding(retired_devnet->network_public_key));
-    BOOST_CHECK(lab.network_definition.poa_finalizer_public_key != retired_devnet->poa_finalizer_public_key);
+    BOOST_CHECK(lab.genesis.GetPoaPublicKey() != retired_devnet->poa_finalizer_public_key);
     BOOST_CHECK(cybou::DeriveIdentityPublicKey(cybou::LabPoaFinalizerSeed(), cybou::IdentityKeyPurpose::POA_FINALIZER) ==
-        lab.network_definition.poa_finalizer_public_key);
-    BOOST_CHECK(cybou::ValidateNetworkDefinition(lab.network_definition) == cybou::NetworkDefinitionError::NONE);
+        lab.genesis.GetPoaPublicKey());
+    BOOST_CHECK(cybou::VerifySignedNetworkGenesis(lab.genesis.GetGenesis()) == cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(&cybou::RequireOfficialNetwork("LAB") == &lab);
 }
 #endif

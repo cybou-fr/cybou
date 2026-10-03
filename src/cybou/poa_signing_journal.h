@@ -40,7 +40,7 @@ enum class PoaJournalStatus : uint8_t {
 class PoaSigningJournal final {
 public:
     PoaSigningJournal(KVStore& db, const uint256& network_binding,
-        const uint256& genesis_block_id, const IdentityHybridPublicKey& finalizer_key);
+        const uint256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key);
 
     /** Check the canonical head before the finalizer session may sign. */
     PoaJournalStatus CheckCanonicalTip(uint64_t finalized_height, const uint256& finalized_tip);
@@ -57,7 +57,7 @@ private:
 
     KVStore& m_db;
     const uint256 m_network_binding;
-    const uint256 m_genesis_block_id;
+    const uint256 m_genesis_anchor;
     const std::array<unsigned char, 32> m_finalizer_key_id;
     const std::string m_prefix;
     mutable std::mutex m_mutex;

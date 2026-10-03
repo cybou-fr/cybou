@@ -4,7 +4,7 @@
 
 #include <cybou/encrypted_chunk_tree.h>
 
-#include <cybou/canonical_cbor.h>
+#include <cybou/binary_codec.h>
 
 #include <openssl/crypto.h>
 #include <openssl/rand.h>
@@ -19,7 +19,7 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint64_t TREE_SCHEMA{2};
+constexpr std::uint8_t TREE_SCHEMA{3};
 constexpr std::uint64_t ROOT_KIND{0};
 constexpr std::uint64_t INDEX_KIND{1};
 constexpr std::uint64_t DATA_KIND{2};
@@ -50,87 +50,40 @@ struct ChunkIdHash {
     }
 };
 
-std::optional<std::uint64_t> AsUnsigned(const CborValue& value)
+std::vector<unsigned char> MakeMetadata(const std::uint8_t kind, std::span<const ChildRef> children,
+    std::span<const unsigned char> private_metadata = {})
 {
-    if (const auto* number = std::get_if<std::uint64_t>(&value.value)) return *number;
-    return std::nullopt;
+    if (children.size() > ENCRYPTED_TREE_MAX_CHILDREN || (kind == INDEX_KIND && children.empty()))
+        throw std::invalid_argument{"invalid encrypted tree children"};
+    BinaryWriter writer{ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES};
+    writer.U8(TREE_SCHEMA); writer.U8(kind);
+    writer.U8(children.empty() ? DATA_KIND : children.front().kind);
+    writer.U16(static_cast<std::uint16_t>(children.size()));
+    for (const auto& child : children) writer.Fixed(child.id);
+    if (kind == ROOT_KIND) writer.Bytes(private_metadata, ENCRYPTED_TREE_ROOT_PRIVATE_METADATA_MAX_BYTES);
+    return writer.Take();
 }
-
-CborValue EncodeChildren(const std::span<const ChildRef> children)
-{
-    CborValue::Array entries;
-    entries.reserve(children.size());
-    for (const auto& child : children) {
-        entries.push_back(CborValue::Bytes(CborValue::ByteString{child.id.begin(), child.id.end()}));
-    }
-    return CborValue::ArrayValue(std::move(entries));
-}
-
-CborValue MakeTreeMetadata(const std::uint64_t kind, const std::span<const ChildRef> children)
-{
-    return CborValue::MapValue({
-        {CborValue::Unsigned(0), CborValue::Unsigned(TREE_SCHEMA)},
-        {CborValue::Unsigned(1), CborValue::Unsigned(kind)},
-        {CborValue::Unsigned(2), CborValue::Unsigned(children.empty() ? DATA_KIND : children.front().kind)},
-        {CborValue::Unsigned(3), EncodeChildren(children)},
-    });
-}
-
-CborValue MakeRootMetadata(
-    const std::span<const ChildRef> children,
-    const std::span<const unsigned char> private_metadata)
-{
-    auto root = MakeTreeMetadata(ROOT_KIND, children);
-    auto fields = std::get<CborValue::Map>(std::move(root.value));
-    fields.emplace_back(CborValue::Unsigned(4),
-        CborValue::Bytes(CborValue::ByteString{private_metadata.begin(), private_metadata.end()}));
-    return CborValue::MapValue(std::move(fields));
-}
-
-std::optional<std::vector<ChildRef>> ParseMetadata(
-    const std::span<const unsigned char> bytes,
-    const std::uint64_t expected_kind,
-    std::uint64_t& child_kind,
+std::optional<std::vector<ChildRef>> ParseMetadata(std::span<const unsigned char> bytes,
+    const std::uint64_t expected_kind, std::uint64_t& child_kind,
     std::vector<unsigned char>* root_private_metadata = nullptr)
 {
     try {
-        const auto value = DecodeCanonicalCbor(bytes);
-        const auto* fields = std::get_if<CborValue::Map>(&value.value);
-        const auto expected_fields = expected_kind == ROOT_KIND ? std::size_t{5} : std::size_t{4};
-        if (fields == nullptr || fields->size() != expected_fields) return std::nullopt;
-        for (std::size_t i = 0; i < fields->size(); ++i) {
-            const auto key = AsUnsigned((*fields)[i].first);
-            if (!key || *key != i) return std::nullopt;
-        }
-        if (expected_kind == ROOT_KIND) {
-            const auto* metadata = std::get_if<CborValue::ByteString>(&(*fields)[4].second.value);
-            if (metadata == nullptr || root_private_metadata == nullptr) return std::nullopt;
-            *root_private_metadata = *metadata;
-        }
-        const auto schema = AsUnsigned((*fields)[0].second);
-        const auto kind = AsUnsigned((*fields)[1].second);
-        const auto parsed_child_kind = AsUnsigned((*fields)[2].second);
-        const auto* entries = std::get_if<CborValue::Array>(&(*fields)[3].second.value);
-        if (!schema || *schema != TREE_SCHEMA || !kind || *kind != expected_kind || !parsed_child_kind ||
-            (*parsed_child_kind != INDEX_KIND && *parsed_child_kind != DATA_KIND) ||
-            entries == nullptr || (expected_kind == INDEX_KIND && entries->empty()) ||
-            entries->size() > ENCRYPTED_TREE_MAX_CHILDREN) return std::nullopt;
-
+        BinaryReader reader{bytes, ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES};
+        if (reader.U8() != TREE_SCHEMA || reader.U8() != expected_kind) return std::nullopt;
+        const auto kind = reader.U8();
+        const auto count = reader.U16();
+        if ((kind != INDEX_KIND && kind != DATA_KIND) || count > ENCRYPTED_TREE_MAX_CHILDREN ||
+            (expected_kind == INDEX_KIND && count == 0)) return std::nullopt;
         std::vector<ChildRef> children;
-        children.reserve(entries->size());
-        for (const auto& entry : *entries) {
-            const auto* id_bytes = std::get_if<CborValue::ByteString>(&entry.value);
-            if (id_bytes == nullptr || id_bytes->size() != ChunkId{}.size()) return std::nullopt;
-            ChildRef child;
-            child.kind = *parsed_child_kind;
-            std::copy(id_bytes->begin(), id_bytes->end(), child.id.begin());
-            children.push_back(child);
+        children.reserve(count);
+        for (std::uint16_t i = 0; i < count; ++i) children.push_back({reader.Fixed<ChunkId>(), kind});
+        if (expected_kind == ROOT_KIND) {
+            if (!root_private_metadata) return std::nullopt;
+            const auto metadata = reader.Bytes(ENCRYPTED_TREE_ROOT_PRIVATE_METADATA_MAX_BYTES);
+            root_private_metadata->assign(metadata.begin(), metadata.end());
         }
-        child_kind = *parsed_child_kind;
-        return children;
-    } catch (...) {
-        return std::nullopt;
-    }
+        reader.Finish(); child_kind = kind; return children;
+    } catch (...) { return std::nullopt; }
 }
 
 std::optional<std::size_t> RandomDataTarget()
@@ -179,7 +132,7 @@ public:
         const bool has_children = std::any_of(m_levels.begin(), m_levels.end(),
             [](const auto& children) { return !children.empty(); });
         if (!has_children) {
-            const auto root_bytes = EncodeCanonicalCbor(MakeRootMetadata({}, m_private_root_metadata));
+            const auto root_bytes = MakeMetadata(ROOT_KIND, {}, m_private_root_metadata);
             const auto root = EncryptChunk(m_network, m_key, root_bytes);
             if (!root || !Store(*root)) return false;
             root_id = root->id;
@@ -194,7 +147,7 @@ public:
             const bool higher_pending = std::any_of(m_levels.begin() + level + 1, m_levels.end(),
                 [](const auto& children) { return !children.empty(); });
             if (!higher_pending) {
-                auto root_bytes = EncodeCanonicalCbor(MakeRootMetadata(pending, m_private_root_metadata));
+                auto root_bytes = MakeMetadata(ROOT_KIND, pending, m_private_root_metadata);
                 if (root_bytes.size() > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES) {
                     if (!root_bytes.empty()) OPENSSL_cleanse(root_bytes.data(), root_bytes.size());
                     return false;
@@ -235,7 +188,7 @@ private:
     bool Flush(const std::size_t level)
     {
         if (level + 1 >= m_levels.size() || m_levels[level].empty()) return false;
-        const auto metadata = EncodeCanonicalCbor(MakeTreeMetadata(INDEX_KIND, m_levels[level]));
+        const auto metadata = MakeMetadata(INDEX_KIND, m_levels[level]);
         if (metadata.size() > ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES) return false;
         const auto encrypted = EncryptChunk(m_network, m_key, metadata);
         if (!encrypted || !Store(*encrypted)) return false;
@@ -324,10 +277,6 @@ std::optional<EncryptedTreeSummary> BuildEncryptedChunkTree(
     const std::span<const unsigned char> private_root_metadata)
 {
     if (!source || !stage || private_root_metadata.size() > ENCRYPTED_TREE_ROOT_PRIVATE_METADATA_MAX_BYTES) return std::nullopt;
-    if (!private_root_metadata.empty()) {
-        try { (void)DecodeCanonicalCbor(private_root_metadata); }
-        catch (...) { return std::nullopt; }
-    }
     auto key = GenerateContentKey();
     if (!key) return std::nullopt;
     CleanseOnExit cleanse_generated_key{*key};
@@ -383,10 +332,6 @@ std::optional<std::uint64_t> FetchEncryptedChunkTree(
         const auto children = ParseMetadata(*root_plaintext, ROOT_KIND, child_kind, &app_metadata);
         if (!root_plaintext->empty()) OPENSSL_cleanse(root_plaintext->data(), root_plaintext->size());
         if (!children) return std::nullopt;
-        if (!app_metadata.empty()) {
-            try { (void)DecodeCanonicalCbor(app_metadata); }
-            catch (...) { return std::nullopt; }
-        }
         bool root_metadata_accepted{false};
         try { root_metadata_accepted = root_metadata_sink(app_metadata); }
         catch (...) {

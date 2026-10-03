@@ -5,7 +5,6 @@
 #ifndef CYBOU_OFFICIAL_NETWORKS_H
 #define CYBOU_OFFICIAL_NETWORKS_H
 
-#include <cybou/network_definition.h>
 #include <cybou/network_genesis.h>
 #include <cybou/state.h>
 
@@ -35,15 +34,13 @@ struct RendezvousLocator {
 /**
  * One official network, built only from compiled public constants and verified
  * once: Network Public Key (NetworkID) -> signed immutable NetworkGenesis ->
- * initial state root. `network_definition` is the runtime consensus view
- * derived from the verified genesis.
+ * initial state root. The verified signed genesis is the runtime consensus input.
  */
 struct OfficialNetwork {
     NetworkKind kind{NetworkKind::DEVNET};
     std::string_view name;
     VerifiedNetworkGenesis genesis;
     CybouState genesis_state;
-    CybouNetworkDefinition network_definition;
     std::span<const RendezvousLocator> rendezvous_locators;
 };
 

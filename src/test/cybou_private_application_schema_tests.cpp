@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/private_application_schema.h>
-#include <cybou/canonical_cbor.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -90,21 +89,20 @@ BOOST_AUTO_TEST_CASE(all_three_schemas_round_trip_deterministically)
     }
 }
 
-BOOST_AUTO_TEST_CASE(rejects_noncanonical_version_type_and_unknown_fields)
+BOOST_AUTO_TEST_CASE(rejects_unknown_version_type_truncation_and_trailing_bytes)
 {
     BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(std::vector<unsigned char>{0x82, 0x18, 0x01, 0x01}));
     const auto encoded = cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{SampleMail()});
     BOOST_REQUIRE(encoded);
-    auto root = cybou::DecodeCanonicalCbor(*encoded);
-    auto& fields = std::get<cybou::CborValue::Array>(root.value);
-    fields[1] = cybou::CborValue::Unsigned(2);
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(cybou::EncodeCanonicalCbor(root)));
-    fields[1] = cybou::CborValue::Unsigned(1);
-    fields[0] = cybou::CborValue::Unsigned(99);
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(cybou::EncodeCanonicalCbor(root)));
-    fields[0] = cybou::CborValue::Unsigned(1);
-    fields.push_back(cybou::CborValue::Null());
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(cybou::EncodeCanonicalCbor(root)));
+    auto damaged = *encoded;
+    damaged[1] = 99;
+    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
+    damaged = *encoded; damaged[0] = 99;
+    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
+    damaged = *encoded; damaged.push_back(0);
+    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
+    for (std::size_t i = 0; i < encoded->size(); ++i)
+        BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(std::span{*encoded}.first(i)));
 }
 
 BOOST_AUTO_TEST_CASE(rejects_invalid_identifiers_keys_names_and_sizes)
@@ -178,12 +176,9 @@ BOOST_AUTO_TEST_CASE(rejects_invalid_identifiers_keys_names_and_sizes)
     const auto valid = cybou::EncodePrivateApplicationDocument(
         cybou::PrivateApplicationDocument{SampleMail()});
     BOOST_REQUIRE(valid);
-    auto decoded_cbor = cybou::DecodeCanonicalCbor(*valid);
-    auto& fields = std::get<cybou::CborValue::Array>(decoded_cbor.value);
-    auto& attachments = std::get<cybou::CborValue::Array>(fields[8].value);
-    auto& attachment = std::get<cybou::CborValue::Array>(attachments[0].value);
-    attachment[5] = cybou::CborValue::Bytes(std::vector<std::uint8_t>(32, 0));
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(cybou::EncodeCanonicalCbor(decoded_cbor)));
+    auto zero_key = *valid;
+    std::fill(zero_key.end() - 32, zero_key.end(), 0);
+    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(zero_key));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

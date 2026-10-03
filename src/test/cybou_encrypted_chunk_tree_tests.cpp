@@ -3,7 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/encrypted_chunk_tree.h>
-#include <cybou/canonical_cbor.h>
+#include <cybou/binary_codec.h>
 
 
 #include <boost/test/unit_test.hpp>
@@ -55,9 +55,7 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_streams_empty_and_multichunk_payloads)
 
         std::unordered_map<cybou::ChunkId, std::vector<unsigned char>, ChunkIdHash> stored;
         cybou::ChunkAuthorizationAccumulator authorization;
-        const auto app_metadata = cybou::EncodeCanonicalCbor(cybou::CborValue::MapValue({
-            {cybou::CborValue::Text("private_schema"), cybou::CborValue::Text("files-v1")},
-        }));
+        const std::vector<unsigned char> app_metadata{2, 3, 0, 0xff};
         const auto tree = cybou::BuildEncryptedChunkTree(network, Source(plaintext),
             [&stored, &authorization](const auto leaf_index, const auto& chunk) {
                 if (leaf_index != stored.size() || !stored.emplace(chunk.id, chunk.stored_bytes).second) return false;
@@ -77,20 +75,16 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_streams_empty_and_multichunk_payloads)
         const auto root_bytes = cybou::DecryptChunk(network, tree->content_key,
             tree->root_chunk_id, root_stored->second);
         BOOST_REQUIRE(root_bytes.has_value());
-        const auto root_value = cybou::DecodeCanonicalCbor(*root_bytes);
-        const auto* root_fields = std::get_if<cybou::CborValue::Map>(&root_value.value);
-        BOOST_REQUIRE(root_fields != nullptr);
-        const auto* root_children = std::get_if<cybou::CborValue::Array>(&(*root_fields)[3].second.value);
-        BOOST_REQUIRE(root_children != nullptr);
-        if (size == 0) {
-            BOOST_CHECK(root_children->empty());
-        } else {
-            BOOST_REQUIRE(!root_children->empty());
-            const auto* first_child = std::get_if<cybou::CborValue::ByteString>(&root_children->front().value);
-            BOOST_REQUIRE(first_child != nullptr && first_child->size() == cybou::ChunkId{}.size());
-            const auto* root_child_kind = std::get_if<std::uint64_t>(&(*root_fields)[2].second.value);
-            BOOST_REQUIRE(root_child_kind != nullptr);
-            BOOST_CHECK(*root_child_kind == 2); // small object: ROOT points directly to DATA
+        cybou::BinaryReader root_reader{*root_bytes};
+        BOOST_CHECK_EQUAL(root_reader.U8(), 3);
+        BOOST_CHECK_EQUAL(root_reader.U8(), 0);
+        BOOST_CHECK_EQUAL(root_reader.U8(), 2);
+        const auto count = root_reader.U16();
+        if (size == 0) BOOST_CHECK_EQUAL(count, 0);
+        else {
+            BOOST_REQUIRE(count > 0);
+            const auto first_child = root_reader.Fixed<cybou::ChunkId>();
+            BOOST_CHECK(stored.contains(first_child));
         }
 
         std::vector<unsigned char> recovered;
@@ -154,16 +148,12 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_adds_index_after_root_fanout_is_exceed
     BOOST_REQUIRE(root != stored.end());
     const auto root_bytes = cybou::DecryptChunk(network, tree->content_key, tree->root_chunk_id, root->second);
     BOOST_REQUIRE(root_bytes.has_value());
-    const auto root_value = cybou::DecodeCanonicalCbor(*root_bytes);
-    const auto* fields = std::get_if<cybou::CborValue::Map>(&root_value.value);
-    BOOST_REQUIRE(fields != nullptr);
-    const auto* children = std::get_if<cybou::CborValue::Array>(&(*fields)[3].second.value);
-    BOOST_REQUIRE(children != nullptr && !children->empty());
-    const auto* child = std::get_if<cybou::CborValue::ByteString>(&children->front().value);
-    BOOST_REQUIRE(child != nullptr && child->size() == cybou::ChunkId{}.size());
-    const auto* kind = std::get_if<std::uint64_t>(&(*fields)[2].second.value);
-    BOOST_REQUIRE(kind != nullptr);
-    BOOST_CHECK(*kind == 1); // ROOT now points to INDEX; DATA remains beneath it.
+    cybou::BinaryReader root_reader{*root_bytes};
+    BOOST_CHECK_EQUAL(root_reader.U8(), 3);
+    BOOST_CHECK_EQUAL(root_reader.U8(), 0);
+    BOOST_CHECK_EQUAL(root_reader.U8(), 1); // ROOT points to INDEX, DATA remains beneath it.
+    BOOST_REQUIRE(root_reader.U16() > 0);
+    BOOST_CHECK(stored.contains(root_reader.Fixed<cybou::ChunkId>()));
     BOOST_CHECK(tree->chunk_count > cybou::ENCRYPTED_TREE_MAX_CHILDREN);
 }
 

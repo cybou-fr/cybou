@@ -413,7 +413,7 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
     const auto status = runtime.GetStatus();
     if (!status.is_initialized) return false;
     if (peer.finalized_height == 0) {
-        return peer.finalized_tip == runtime.GetNetworkDefinition().genesis_block_id;
+        return peer.finalized_tip == runtime.GetNetworkGenesis().GetGenesisAnchor();
     }
     if (peer.finalized_height > status.finalized_height) return true;
     const auto known = runtime.GetBlockAtHeight(peer.finalized_height);

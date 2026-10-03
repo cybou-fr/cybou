@@ -28,7 +28,7 @@
 #include <cybou/identity_service.h>
 #include <test/cybou_service_test_fixture.h>
 #include <cybou/kv_store.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_service.h>
 #include <cybou/private_application_store.h>
 #include <cybou/publication_service.h>
@@ -230,7 +230,7 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
     const std::filesystem::path& data_dir, const std::string& ip, std::uint16_t port)
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-        .runtime = cybou::NodeRuntimeConfig{.network_definition = network.network_definition,
+        .runtime = cybou::NodeRuntimeConfig{.network_genesis = network.genesis,
             .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
         .genesis = network.genesis_state,
     });

@@ -169,7 +169,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
         return Fail("NameCommit is not finalized yet; retry with the same label and password");
     }
     const auto commit_height = pending->second.commit_height;
-    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline &&
         m_runtime.GetFinalizedHeight().value_or(0) + 1 < commit_height + params.name_commit_min_depth) {
         if (m_runtime.GetStatus().poa_signer_active) m_runtime.ProduceBlock();

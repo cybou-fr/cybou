@@ -67,8 +67,8 @@ std::optional<PoaJournalHead> DecodeHead(const std::span<const unsigned char> by
 } // namespace
 
 PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_block_id, const IdentityHybridPublicKey& finalizer_key)
-    : m_db{db}, m_network_binding{network_binding}, m_genesis_block_id{genesis_block_id},
+    const uint256& genesis_anchor, const IdentityHybridPublicKey& finalizer_key)
+    : m_db{db}, m_network_binding{network_binding}, m_genesis_anchor{genesis_anchor},
       m_finalizer_key_id{[&finalizer_key] {
           const auto id = ComputePoaFinalizerKeyId(finalizer_key);
           if (!id) throw std::invalid_argument{"invalid PoA finalizer public key"};
@@ -76,7 +76,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding
       }()},
       m_prefix{"poa-finalizer-journal/" + Hex(network_binding) + "/"}
 {
-    if (network_binding.IsNull() || genesis_block_id.IsNull()) {
+    if (network_binding.IsNull() || genesis_anchor.IsNull()) {
         throw std::invalid_argument{"invalid PoA signing journal identity"};
     }
     const auto metadata_key = m_prefix + "metadata";
@@ -88,7 +88,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding
     expected_metadata.push_back(JOURNAL_FORMAT_VERSION);
     expected_metadata.insert(expected_metadata.end(), network_binding.begin(), network_binding.end());
     expected_metadata.insert(expected_metadata.end(), key_id.begin(), key_id.end());
-    expected_metadata.insert(expected_metadata.end(), genesis_block_id.begin(), genesis_block_id.end());
+    expected_metadata.insert(expected_metadata.end(), genesis_anchor.begin(), genesis_anchor.end());
     if (expected_metadata.size() != JOURNAL_METADATA_SIZE) {
         throw std::logic_error{"invalid PoA signing journal metadata encoding"};
     }
@@ -99,7 +99,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding
         std::vector<unsigned char> encoded_head;
         if (!m_db.Read(head_key, encoded_head)) throw std::runtime_error{"missing PoA signing journal head"};
         const auto head = DecodeHead(encoded_head);
-        if (!head || (head->height == 0 && head->block_id != genesis_block_id)) {
+        if (!head || (head->height == 0 && head->block_id != genesis_anchor)) {
             throw std::runtime_error{"corrupt PoA signing journal head"};
         }
         m_head = *head;
@@ -120,7 +120,7 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const uint256& network_binding
         if (m_db.Exists(metadata_key) || m_db.Exists(head_key) || m_db.Exists(halt_key)) {
             throw std::runtime_error{"incomplete PoA signing journal"};
         }
-        m_head = PoaJournalHead{.height = 0, .parent_block_id = {}, .block_id = genesis_block_id};
+        m_head = PoaJournalHead{.height = 0, .parent_block_id = {}, .block_id = genesis_anchor};
         KVStore::Batch batch;
         batch.Write(metadata_key, expected_metadata);
         batch.Write(head_key, EncodeHead(m_head));
@@ -136,7 +136,7 @@ PoaJournalStatus PoaSigningJournal::CheckCanonicalTip(
 
     bool matches{false};
     if (m_head.height == 0) {
-        matches = finalized_height == 0 && finalized_tip == m_genesis_block_id;
+        matches = finalized_height == 0 && finalized_tip == m_genesis_anchor;
     } else if (finalized_height == m_head.height) {
         matches = finalized_tip == m_head.block_id;
     } else if (finalized_height != std::numeric_limits<uint64_t>::max() &&

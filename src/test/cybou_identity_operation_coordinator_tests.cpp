@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
     BOOST_REQUIRE(account_block);
 
     cybou::CybouNodeRuntime relay{{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "ordinary-relay",
         .memory_only = true,
         .wipe_data = true,
@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
     }};
 
     cybou::CybouNodeRuntime client{{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "retry-origin",
         .configured_peers = {{std::pair<std::string, uint16_t>{loopback.to_string(), port}}},
         .memory_only = true,
@@ -131,12 +131,12 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     std::array<unsigned char, 32> validator_seed{};
     validator_seed[0] = 0xA7;
     const auto genesis = cybou::CreateTestGenesisState();
-    auto definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey());
-    definition.protocol_parameters.account_creation_work_bits = 0;
-    const auto network_binding = cybou::ComputeNetworkBinding(definition.network_public_key);
+    auto definition = cybou::CreateTestNetworkGenesis(genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey());
+    definition = cybou::WithTestGenesisParameters(definition, [](auto& params) { params.account_creation_work_bits = 0; });
+    const auto network_binding = cybou::ComputeNetworkBinding(definition.GetNetworkPublicKey());
 
     cybou::NodeRuntimeConfig producer_config{
-        .network_definition = definition,
+        .network_genesis = definition,
         .data_dir = root / "producer",
         .poa_finalizer_recovery_entropy = validator_seed,
         .memory_only = true,
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     const auto client_data = root / "client";
     const auto make_client_config = [&](const bool wipe_data) {
         return cybou::NodeRuntimeConfig{
-            .network_definition = definition,
+            .network_genesis = definition,
             .data_dir = client_data,
             .configured_peers = {{std::pair<std::string, uint16_t>{"127.0.0.1", port}}},
             .memory_only = false,
@@ -302,8 +302,8 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     std::array<unsigned char, 32> foreign_validator_seed{};
     foreign_validator_seed[0] = 0x6a;
     const auto foreign_genesis = cybou::CreateTestGenesisState();
-    auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
-    foreign_definition.protocol_parameters.account_creation_work_bits = 0;
+    auto foreign_definition = cybou::CreateTestNetworkGenesis(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
+    foreign_definition = cybou::WithTestGenesisParameters(foreign_definition, [](auto& params) { params.account_creation_work_bits = 0; });
     const auto foreign_data = root / "foreign-client";
     std::filesystem::create_directories(foreign_data);
     {
@@ -313,7 +313,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
     }
     {
         cybou::NodeRuntimeConfig foreign_config{
-            .network_definition = foreign_definition,
+            .network_genesis = foreign_definition,
             .data_dir = foreign_data,
             .memory_only = false,
             .wipe_data = false,

@@ -4,7 +4,7 @@
 
 #include <cybou/chunk_blob_store.h>
 #include <cybou/finalized_chunk_store.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_test_setup.h>
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(runtime_exposes_local_blobs_without_provider_admission)
 {
     const auto genesis = cybou::CreateTestGenesisState();
     cybou::NodeRuntimeConfig config{
-        .network_definition = cybou::CreateDevNetworkDefinition(
+        .network_genesis = cybou::CreateTestNetworkGenesis(
             genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey()),
         .data_dir = m_data_dir / "runtime",
         .memory_only = true,

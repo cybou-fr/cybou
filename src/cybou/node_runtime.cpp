@@ -24,7 +24,7 @@ namespace cybou {
 
 NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir)
 {
-    NodeRuntimeConfig config{.network_definition = network.network_definition, .data_dir = data_dir};
+    NodeRuntimeConfig config{.network_genesis = network.genesis, .data_dir = data_dir};
     for (const auto& locator : network.rendezvous_locators)
         config.configured_peers.push_back({{std::string{locator.host}, locator.port}, locator.tls_spki_sha256});
     return config;
@@ -126,14 +126,14 @@ std::optional<std::array<unsigned char, 32>> LoadOrCreateProviderSecret(const st
 
 CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     : m_config{std::move(config)},
-      m_network_binding{ComputeNetworkBinding(m_config.network_definition.network_public_key)},
+      m_network_binding{ComputeNetworkBinding(m_config.network_genesis.GetNetworkPublicKey())},
       m_db{std::make_unique<KVStore>(KVStoreOptions{
           .path = m_config.data_dir,
           .cache_bytes = m_config.db_cache_bytes,
           .memory_only = m_config.memory_only,
           .wipe_data = m_config.wipe_data,
       })},
-      m_store{*m_db, m_config.network_definition}
+      m_store{*m_db, m_config.network_genesis}
 {
     std::filesystem::path storage_path;
     if (!m_config.memory_only) {
@@ -163,8 +163,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     if (!m_provider_id) throw std::runtime_error("storage provider key is invalid");
     if (m_config.poa_finalizer_recovery_entropy.has_value()) {
         m_poa_finalizer = std::make_unique<PoaFinalizer>(
-            m_store.GetDatabase(), m_store.GetNetworkBinding(), m_store.GetNetworkDefinition().genesis_block_id,
-            m_config.poa_finalizer_recovery_entropy->Get(), m_store.GetNetworkDefinition().poa_finalizer_public_key);
+            m_store.GetDatabase(), m_store.GetNetworkBinding(), m_store.GetNetworkGenesis().GetGenesisAnchor(),
+            m_config.poa_finalizer_recovery_entropy->Get(), m_store.GetNetworkGenesis().GetPoaPublicKey());
         m_config.poa_finalizer_recovery_entropy.reset();
     }
     // Keep the local full node usable before it has learned or connected to a
@@ -305,7 +305,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     const auto loaded = m_store.LoadState();
     if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
         status.runtime_state = NodeRuntimeState::NETWORK_MISMATCH;
-    } else if (loaded.error == StateLoadError::CORRUPT || loaded.error == StateLoadError::INVALID_NETWORK_DEFINITION) {
+    } else if (loaded.error == StateLoadError::CORRUPT) {
         status.runtime_state = NodeRuntimeState::CORRUPT;
     } else if (loaded.error == StateLoadError::NOT_FOUND) {
         status.runtime_state = NodeRuntimeState::UNINITIALIZED;
@@ -763,7 +763,7 @@ bool CybouNodeRuntime::EnablePoaSigner(std::shared_ptr<PoaSigner> signer)
     {
         std::lock_guard lock(m_mutex);
         if (!m_poa_finalizer) m_poa_finalizer = std::make_unique<PoaFinalizer>(m_store.GetDatabase(), m_store.GetNetworkBinding(),
-            m_store.GetNetworkDefinition().genesis_block_id, m_store.GetNetworkDefinition().poa_finalizer_public_key);
+            m_store.GetNetworkGenesis().GetGenesisAnchor(), m_store.GetNetworkGenesis().GetPoaPublicKey());
         enabled = m_poa_finalizer->EnableSigner(std::move(signer));
     }
     return enabled;
@@ -815,7 +815,7 @@ FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const ui
     const auto status = GetStatus();
     if (!status.is_initialized || op_id.IsNull()) return result;
     result.status = FinalizedOperationLookupStatus::NOT_FOUND;
-    uint256 previous_id = m_config.network_definition.genesis_block_id;
+    uint256 previous_id = m_config.network_genesis.GetGenesisAnchor();
     for (uint64_t height = 1; height <= status.finalized_height; ++height) {
         const auto finalized = GetBlockAtHeight(height);
         if (!finalized) {
@@ -888,7 +888,7 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
     }
 
     bool found{false};
-    uint256 previous_id = m_config.network_definition.genesis_block_id;
+    uint256 previous_id = m_config.network_genesis.GetGenesisAnchor();
     for (uint64_t height = 1; height <= *finalized_height; ++height) {
         const auto finalized = m_store.GetBlockAtHeight(height);
         if (!finalized) return result;

@@ -5,7 +5,7 @@
 #define CYBOU_SERVICE_TEST_FIXTURE_H
 
 #include <cybou/identity_service.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
@@ -25,7 +25,8 @@ inline std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> TestLabAdmissionPo
 struct CybouServiceTestFixture {
     std::array<unsigned char, 32> validator_seed{};
     cybou::CybouState genesis;
-    cybou::CybouNetworkDefinition definition;
+    cybou::VerifiedNetworkGenesis definition{cybou::CreateTestNetworkGenesis(cybou::CreateTestGenesisState(),
+        cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey())};
     std::unique_ptr<cybou::CybouNodeRuntime> runtime;
     std::filesystem::path directory;
     std::vector<std::filesystem::path> vaults;
@@ -39,11 +40,11 @@ struct CybouServiceTestFixture {
         std::filesystem::create_directories(directory);
         validator_seed[0] = seed_byte;
         genesis = cybou::CreateTestGenesisState();
-        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte), cybou::TestNetworkPublicKey(seed_byte));
-        definition.protocol_parameters.account_creation_work_bits = 0;
-        definition.protocol_parameters.name_claim_work_bits = 0;
+        definition = cybou::CreateTestNetworkGenesis(genesis, cybou::TestPoaFinalizerPublicKey(seed_byte), cybou::TestNetworkPublicKey(seed_byte));
+        definition = cybou::WithTestGenesisParameters(definition, [](auto& params) { params.account_creation_work_bits = 0; });
+        definition = cybou::WithTestGenesisParameters(definition, [](auto& params) { params.name_claim_work_bits = 0; });
         cybou::NodeRuntimeConfig config{
-            .network_definition = definition,
+            .network_genesis = definition,
             .data_dir = directory / "runtime",
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,

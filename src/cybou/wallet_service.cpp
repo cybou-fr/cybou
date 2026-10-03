@@ -96,7 +96,7 @@ WalletOperationResult CybouWalletService::SendPayment(const AccountId& recipient
         return {.error = WalletOperationError::INSUFFICIENT_BALANCE, .error_message = "Insufficient balance"};
     }
 
-    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
     if (sender_state->system_balance < params.payment_fee) {
         return {.error = WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE, .error_message = "Insufficient system balance for fee"};
     }
@@ -252,7 +252,7 @@ size_t CybouWalletService::SyncLedger()
     }
 
     auto working_entries = original_entries;
-    const auto& params = m_runtime.GetNetworkDefinition().protocol_parameters;
+    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
 
     uint64_t scanned_height = original_height;
     for (uint64_t h = original_height + 1; h <= *tip_height; ++h) {

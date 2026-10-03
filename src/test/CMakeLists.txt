@@ -14,7 +14,6 @@ add_executable(cybou-core-test
   cybou_identity_registry_tests.cpp
   cybou_identity_material_tests.cpp
   cybou_identity_service_tests.cpp
-  cybou_network_definition_tests.cpp
   cybou_network_genesis_tests.cpp
   cybou_poa_tests.cpp
   cybou_p2p_peer_manager_tests.cpp
@@ -29,7 +28,7 @@ add_executable(cybou-core-test
   cybou_protocol_operation_tests.cpp
   cybou_signing_tests.cpp
   cybou_state_tests.cpp
-  cybou_canonical_cbor_tests.cpp
+  cybou_binary_codec_tests.cpp
   cybou_chunk_id_tests.cpp
   cybou_chunk_authorization_tests.cpp
   cybou_encrypted_chunk_tests.cpp

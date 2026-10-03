@@ -71,9 +71,9 @@ std::optional<PoaFinalityCertificate> CreateCertificate(
 } // namespace
 
 PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key)
+    const uint256& genesis_anchor, const IdentityHybridPublicKey& genesis_finalizer_key)
     : m_network_binding{network_binding}, m_public_key{genesis_finalizer_key},
-      m_journal{db, network_binding, genesis_block_id, m_public_key}
+      m_journal{db, network_binding, genesis_anchor, m_public_key}
 {
     if (genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
         genesis_finalizer_key.ml_dsa.size() != 1952) {
@@ -82,9 +82,9 @@ PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
 }
 
 PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
+    const uint256& genesis_anchor, const RecoveryEntropy& operator_recovery_entropy,
     const IdentityHybridPublicKey& genesis_finalizer_key)
-    : PoaFinalizer{db, network_binding, genesis_block_id,
+    : PoaFinalizer{db, network_binding, genesis_anchor,
           ValidateRecoveryPoaKey(operator_recovery_entropy, genesis_finalizer_key)}
 {
     auto signer = std::make_shared<RecoveryEntropyPoaSigner>(operator_recovery_entropy);

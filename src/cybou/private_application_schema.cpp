@@ -1,26 +1,13 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
-
+// Distributed under the MIT software license, see COPYING.
 #include <cybou/private_application_schema.h>
-
-#include <cybou/canonical_cbor.h>
-#include <cybou/crypto/cleanse.h>
-
+#include <cybou/binary_codec.h>
 #include <algorithm>
-#include <stdexcept>
-#include <string_view>
 #include <type_traits>
-
 namespace cybou {
 namespace {
-
-constexpr std::uint64_t SCHEMA_VERSION{1};
-/** v2 adds modified_ms and requires content for every FILE. */
-constexpr std::uint64_t FILES_SCHEMA_VERSION{2};
-constexpr std::uint64_t MAIL_TYPE{1};
-constexpr std::uint64_t FILES_TYPE{2};
-constexpr std::uint64_t BRIDGE_TYPE{3};
+constexpr std::uint8_t SCHEMA_VERSION{3};
+constexpr std::uint8_t MAIL_TYPE{1}, FILES_TYPE{2}, BRIDGE_TYPE{3};
 constexpr std::size_t MAX_ATTACHMENTS{32};
 constexpr std::size_t MAX_MUTATIONS{512};
 constexpr std::size_t MAX_HISTORICAL_SEEDS{64};
@@ -38,78 +25,6 @@ bool Nonzero(const T& value)
 void Require(const bool condition)
 {
     if (!condition) throw std::invalid_argument{"invalid private application schema"};
-}
-
-void CleanseCbor(CborValue& value)
-{
-    if (auto* bytes = std::get_if<CborValue::ByteString>(&value.value)) {
-        crypto::CleanseMemory(bytes->data(), bytes->size());
-    } else if (auto* text = std::get_if<std::string>(&value.value)) {
-        crypto::CleanseMemory(text->data(), text->size());
-    } else if (auto* array = std::get_if<CborValue::Array>(&value.value)) {
-        for (auto& entry : *array) CleanseCbor(entry);
-    } else if (auto* map = std::get_if<CborValue::Map>(&value.value)) {
-        for (auto& [key, entry] : *map) {
-            CleanseCbor(key);
-            CleanseCbor(entry);
-        }
-    }
-}
-
-struct CborCleaner {
-    CborValue& value;
-    ~CborCleaner() { CleanseCbor(value); }
-};
-
-const CborValue::Array& Array(const CborValue& value, const std::size_t expected)
-{
-    const auto* array = std::get_if<CborValue::Array>(&value.value);
-    Require(array && array->size() == expected);
-    return *array;
-}
-
-std::uint64_t Unsigned(const CborValue& value)
-{
-    const auto* number = std::get_if<std::uint64_t>(&value.value);
-    Require(number != nullptr);
-    return *number;
-}
-
-std::string Text(const CborValue& value, const std::size_t max, const bool nonempty = false)
-{
-    const auto* text = std::get_if<std::string>(&value.value);
-    Require(text && text->size() <= max && (!nonempty || !text->empty()));
-    return *text;
-}
-
-template <typename T>
-T FixedBytes(const CborValue& value, const bool nonzero = true)
-{
-    const auto* bytes = std::get_if<CborValue::ByteString>(&value.value);
-    Require(bytes && bytes->size() == T{}.size());
-    T result{};
-    std::copy(bytes->begin(), bytes->end(), result.begin());
-    Require(!nonzero || Nonzero(result));
-    return result;
-}
-
-template <typename T>
-CborValue Bytes(const T& value)
-{
-    return CborValue::Bytes({value.begin(), value.end()});
-}
-
-template <typename T>
-CborValue OptionalBytes(const std::optional<T>& value)
-{
-    return value ? Bytes(*value) : CborValue::Null();
-}
-
-template <typename T>
-std::optional<T> ParseOptionalBytes(const CborValue& value)
-{
-    if (std::holds_alternative<std::monostate>(value.value)) return std::nullopt;
-    return FixedBytes<T>(value);
 }
 
 bool ValidName(const std::string_view name)
@@ -178,190 +93,98 @@ bool ValidBridge(const IdentityRecoveryBridge& bridge)
     return true;
 }
 
-CborValue EncodeMail(const MailMessage& mail)
-{
-    Require(ValidMail(mail));
-    CborValue::Array attachments;
-    attachments.reserve(mail.attachments.size());
+
+template<typename T> void WriteOptional(BinaryWriter& writer, const std::optional<T>& value) {
+    writer.U8(value.has_value()); if (value) writer.Fixed(*value);
+}
+template<typename T> std::optional<T> ReadOptional(BinaryReader& reader) {
+    if (!reader.Flag()) return std::nullopt; return reader.Fixed<T>();
+}
+void Encode(BinaryWriter& writer, const MailMessage& mail) {
+    Require(ValidMail(mail)); writer.U8(MAIL_TYPE); writer.U8(SCHEMA_VERSION);
+    writer.Fixed(mail.message_id); WriteOptional(writer, mail.reply_to_message_id);
+    writer.Fixed(std::span{mail.recipient_account_id.Value().begin(), mail.recipient_account_id.Value().size()});
+    writer.U64(mail.client_timestamp_ms); writer.Text(mail.subject, MAX_SUBJECT_BYTES); writer.Text(mail.body, MAX_BODY_BYTES);
+    writer.U16(static_cast<std::uint16_t>(mail.attachments.size()));
     for (const auto& attachment : mail.attachments) {
-        attachments.push_back(CborValue::ArrayValue({
-            Bytes(attachment.attachment_id), CborValue::Text(attachment.filename),
-            CborValue::Unsigned(attachment.logical_size),
-            attachment.media_type ? CborValue::Text(*attachment.media_type) : CborValue::Null(),
-            Bytes(attachment.root_chunk_id), Bytes(attachment.content_key),
-        }));
+        writer.Fixed(attachment.attachment_id); writer.Text(attachment.filename, MAX_FILENAME_BYTES);
+        writer.U64(attachment.logical_size); writer.U8(attachment.media_type.has_value());
+        if (attachment.media_type) writer.Text(*attachment.media_type, MAX_MEDIA_TYPE_BYTES);
+        writer.Fixed(attachment.root_chunk_id); writer.Fixed(attachment.content_key);
     }
-    return CborValue::ArrayValue({
-        CborValue::Unsigned(MAIL_TYPE), CborValue::Unsigned(SCHEMA_VERSION),
-        Bytes(mail.message_id), OptionalBytes(mail.reply_to_message_id),
-        Bytes(mail.recipient_account_id.Value()), CborValue::Unsigned(mail.client_timestamp_ms),
-        CborValue::Text(mail.subject), CborValue::Text(mail.body),
-        CborValue::ArrayValue(std::move(attachments)),
-    });
 }
-
-CborValue EncodeFiles(const FilesMutationBatch& batch)
-{
-    Require(ValidFiles(batch));
-    CborValue::Array mutations;
-    mutations.reserve(batch.mutations.size());
+void Encode(BinaryWriter& writer, const FilesMutationBatch& batch) {
+    Require(ValidFiles(batch)); writer.U8(FILES_TYPE); writer.U8(SCHEMA_VERSION);
+    writer.U16(static_cast<std::uint16_t>(batch.mutations.size()));
     for (const auto& mutation : batch.mutations) {
-        if (mutation.kind == FileMutationKind::DELETE_ITEM) {
-            mutations.push_back(CborValue::ArrayValue({
-                CborValue::Unsigned(2), Bytes(mutation.item_id),
-            }));
-        } else {
-            const auto& item = *mutation.item;
-            mutations.push_back(CborValue::ArrayValue({
-                CborValue::Unsigned(1), Bytes(item.item_id), OptionalBytes(item.parent_id),
-                CborValue::Unsigned(static_cast<std::uint8_t>(item.kind)), CborValue::Text(item.name),
-                CborValue::Unsigned(item.logical_size), OptionalBytes(item.root_chunk_id),
-                OptionalBytes(item.content_key), CborValue::Unsigned(item.modified_ms),
-            }));
-        }
+        writer.U8(static_cast<std::uint8_t>(mutation.kind)); writer.Fixed(mutation.item_id);
+        if (mutation.kind == FileMutationKind::DELETE_ITEM) continue;
+        const auto& item = *mutation.item;
+        WriteOptional(writer, item.parent_id); writer.U8(static_cast<std::uint8_t>(item.kind));
+        writer.Text(item.name, MAX_FILENAME_BYTES); writer.U64(item.logical_size);
+        WriteOptional(writer, item.root_chunk_id); WriteOptional(writer, item.content_key); writer.U64(item.modified_ms);
     }
-    return CborValue::ArrayValue({
-        CborValue::Unsigned(FILES_TYPE), CborValue::Unsigned(FILES_SCHEMA_VERSION),
-        CborValue::ArrayValue(std::move(mutations)),
-    });
 }
-
-CborValue EncodeBridge(const IdentityRecoveryBridge& bridge)
-{
-    Require(ValidBridge(bridge));
-    CborValue::Array seeds;
-    seeds.reserve(bridge.historical_seeds.size());
-    for (const auto& entry : bridge.historical_seeds) {
-        seeds.push_back(CborValue::ArrayValue({CborValue::Unsigned(entry.key_epoch), Bytes(entry.seed)}));
-    }
-    return CborValue::ArrayValue({
-        CborValue::Unsigned(BRIDGE_TYPE), CborValue::Unsigned(SCHEMA_VERSION),
-        Bytes(bridge.account_id.Value()), CborValue::Unsigned(bridge.next_key_epoch),
-        CborValue::ArrayValue(std::move(seeds)),
-    });
+void Encode(BinaryWriter& writer, const IdentityRecoveryBridge& bridge) {
+    Require(ValidBridge(bridge)); writer.U8(BRIDGE_TYPE); writer.U8(SCHEMA_VERSION);
+    writer.Fixed(std::span{bridge.account_id.Value().begin(), bridge.account_id.Value().size()});
+    writer.U64(bridge.next_key_epoch); writer.U16(static_cast<std::uint16_t>(bridge.historical_seeds.size()));
+    for (const auto& seed : bridge.historical_seeds) { writer.U64(seed.key_epoch); writer.Fixed(seed.seed); }
 }
-
-MailMessage DecodeMail(const CborValue& root)
-{
-    const auto& fields = Array(root, 9);
+MailMessage DecodeMail(BinaryReader& reader) {
     MailMessage mail;
-    mail.message_id = FixedBytes<PrivateItemId>(fields[2]);
-    mail.reply_to_message_id = ParseOptionalBytes<PrivateItemId>(fields[3]);
-    const auto account_bytes = FixedBytes<PrivateItemId>(fields[4]);
-    mail.recipient_account_id = *AccountId::FromBytes(account_bytes);
-    mail.client_timestamp_ms = Unsigned(fields[5]);
-    mail.subject = Text(fields[6], MAX_SUBJECT_BYTES);
-    mail.body = Text(fields[7], MAX_BODY_BYTES);
-    const auto* attachments = std::get_if<CborValue::Array>(&fields[8].value);
-    Require(attachments && attachments->size() <= MAX_ATTACHMENTS);
-    for (const auto& encoded : *attachments) {
-        const auto& entry = Array(encoded, 6);
+    mail.message_id = reader.Fixed<PrivateItemId>(); mail.reply_to_message_id = ReadOptional<PrivateItemId>(reader);
+    const auto account = AccountId::FromBytes(reader.Fixed(32)); Require(account.has_value()); mail.recipient_account_id = *account;
+    mail.client_timestamp_ms = reader.U64(); mail.subject = reader.Text(MAX_SUBJECT_BYTES); mail.body = reader.Text(MAX_BODY_BYTES);
+    const auto count = reader.U16(); Require(count <= MAX_ATTACHMENTS);
+    for (std::uint16_t i = 0; i < count; ++i) {
         MailAttachment attachment;
-        attachment.attachment_id = FixedBytes<PrivateItemId>(entry[0]);
-        attachment.filename = Text(entry[1], MAX_FILENAME_BYTES, true);
-        attachment.logical_size = Unsigned(entry[2]);
-        if (!std::holds_alternative<std::monostate>(entry[3].value)) {
-            attachment.media_type = Text(entry[3], MAX_MEDIA_TYPE_BYTES, true);
-        }
-        attachment.root_chunk_id = FixedBytes<ChunkId>(entry[4]);
-        attachment.content_key = FixedBytes<ContentKey>(entry[5]);
+        attachment.attachment_id = reader.Fixed<PrivateItemId>(); attachment.filename = reader.Text(MAX_FILENAME_BYTES);
+        attachment.logical_size = reader.U64(); if (reader.Flag()) attachment.media_type = reader.Text(MAX_MEDIA_TYPE_BYTES);
+        attachment.root_chunk_id = reader.Fixed<ChunkId>(); attachment.content_key = reader.Fixed<ContentKey>();
         mail.attachments.push_back(std::move(attachment));
     }
-    Require(ValidMail(mail));
-    return mail;
+    Require(ValidMail(mail)); return mail;
 }
-
-FilesMutationBatch DecodeFiles(const CborValue& root)
-{
-    const auto& fields = Array(root, 3);
-    const auto* entries = std::get_if<CborValue::Array>(&fields[2].value);
-    Require(entries && entries->size() <= MAX_MUTATIONS);
+FilesMutationBatch DecodeFiles(BinaryReader& reader) {
     FilesMutationBatch batch;
-    for (const auto& encoded : *entries) {
-        const auto* array = std::get_if<CborValue::Array>(&encoded.value);
-        Require(array && !array->empty());
+    const auto count = reader.U16(); Require(count > 0 && count <= MAX_MUTATIONS);
+    for (std::uint16_t i = 0; i < count; ++i) {
         FileMutation mutation;
-        const auto kind = Unsigned((*array)[0]);
-        if (kind == 2) {
-            const auto& values = Array(encoded, 2);
-            mutation.kind = FileMutationKind::DELETE_ITEM;
-            mutation.item_id = FixedBytes<PrivateItemId>(values[1]);
-        } else {
-            Require(kind == 1);
-            const auto& values = Array(encoded, 9);
-            mutation.item_id = FixedBytes<PrivateItemId>(values[1]);
-            FileItem item;
-            item.item_id = mutation.item_id;
-            item.parent_id = ParseOptionalBytes<PrivateItemId>(values[2]);
-            item.kind = static_cast<FileItemKind>(Unsigned(values[3]));
-            item.name = Text(values[4], MAX_FILENAME_BYTES, true);
-            item.logical_size = Unsigned(values[5]);
-            item.root_chunk_id = ParseOptionalBytes<ChunkId>(values[6]);
-            item.content_key = ParseOptionalBytes<ContentKey>(values[7]);
-            item.modified_ms = Unsigned(values[8]);
-            mutation.item = std::move(item);
-        }
+        mutation.kind = static_cast<FileMutationKind>(reader.U8()); mutation.item_id = reader.Fixed<PrivateItemId>();
+        if (mutation.kind == FileMutationKind::UPSERT_ITEM) {
+            FileItem item; item.item_id = mutation.item_id; item.parent_id = ReadOptional<PrivateItemId>(reader);
+            item.kind = static_cast<FileItemKind>(reader.U8()); item.name = reader.Text(MAX_FILENAME_BYTES);
+            item.logical_size = reader.U64(); item.root_chunk_id = ReadOptional<ChunkId>(reader);
+            item.content_key = ReadOptional<ContentKey>(reader); item.modified_ms = reader.U64(); mutation.item = std::move(item);
+        } else Require(mutation.kind == FileMutationKind::DELETE_ITEM);
         batch.mutations.push_back(std::move(mutation));
     }
-    Require(ValidFiles(batch));
-    return batch;
+    Require(ValidFiles(batch)); return batch;
 }
-
-IdentityRecoveryBridge DecodeBridge(const CborValue& root)
-{
-    const auto& fields = Array(root, 5);
+IdentityRecoveryBridge DecodeBridge(BinaryReader& reader) {
     IdentityRecoveryBridge bridge;
-    const auto account_bytes = FixedBytes<PrivateItemId>(fields[2]);
-    bridge.account_id = *AccountId::FromBytes(account_bytes);
-    bridge.next_key_epoch = Unsigned(fields[3]);
-    const auto* seeds = std::get_if<CborValue::Array>(&fields[4].value);
-    Require(seeds && seeds->size() <= MAX_HISTORICAL_SEEDS);
-    for (const auto& encoded : *seeds) {
-        const auto& values = Array(encoded, 2);
-        bridge.historical_seeds.push_back({Unsigned(values[0]), FixedBytes<XWingSeed>(values[1])});
-    }
-    Require(ValidBridge(bridge));
-    return bridge;
+    const auto account = AccountId::FromBytes(reader.Fixed(32)); Require(account.has_value()); bridge.account_id = *account;
+    bridge.next_key_epoch = reader.U64(); const auto count = reader.U16(); Require(count > 0 && count <= MAX_HISTORICAL_SEEDS);
+    for (std::uint16_t i = 0; i < count; ++i) { const auto epoch = reader.U64(); bridge.historical_seeds.push_back({epoch, reader.Fixed<XWingSeed>()}); }
+    Require(ValidBridge(bridge)); return bridge;
 }
-
-} // namespace
-
-std::optional<std::vector<unsigned char>> EncodePrivateApplicationDocument(
-    const PrivateApplicationDocument& document)
-{
-    try {
-        auto value = std::visit([](const auto& item) -> CborValue {
-            using T = std::decay_t<decltype(item)>;
-            if constexpr (std::is_same_v<T, MailMessage>) return EncodeMail(item);
-            else if constexpr (std::is_same_v<T, FilesMutationBatch>) return EncodeFiles(item);
-            else return EncodeBridge(item);
-        }, document);
-        CborCleaner cleanse{value};
-        return EncodeCanonicalCbor(value);
-    } catch (...) {
-        return std::nullopt;
-    }
 }
-
-std::optional<PrivateApplicationDocument> DecodePrivateApplicationDocument(
-    const std::span<const unsigned char> encoded)
-{
+std::optional<std::vector<unsigned char>> EncodePrivateApplicationDocument(const PrivateApplicationDocument& document) {
+    try { BinaryWriter writer; std::visit([&](const auto& item) { Encode(writer, item); }, document); return writer.Take(); }
+    catch (...) { return std::nullopt; }
+}
+std::optional<PrivateApplicationDocument> DecodePrivateApplicationDocument(std::span<const unsigned char> encoded) {
     try {
-        auto value = DecodeCanonicalCbor(encoded);
-        CborCleaner cleanse{value};
-        const auto* fields = std::get_if<CborValue::Array>(&value.value);
-        Require(fields && fields->size() >= 2);
-        const auto type = Unsigned((*fields)[0]);
-        Require(Unsigned((*fields)[1]) == (type == FILES_TYPE ? FILES_SCHEMA_VERSION : SCHEMA_VERSION));
+        BinaryReader reader{encoded}; const auto type = reader.U8(); Require(reader.U8() == SCHEMA_VERSION);
+        PrivateApplicationDocument document;
         switch (type) {
-        case MAIL_TYPE: return PrivateApplicationDocument{DecodeMail(value)};
-        case FILES_TYPE: return PrivateApplicationDocument{DecodeFiles(value)};
-        case BRIDGE_TYPE: return PrivateApplicationDocument{DecodeBridge(value)};
+        case MAIL_TYPE: document = DecodeMail(reader); break;
+        case FILES_TYPE: document = DecodeFiles(reader); break;
+        case BRIDGE_TYPE: document = DecodeBridge(reader); break;
         default: return std::nullopt;
         }
-    } catch (...) {
-        return std::nullopt;
-    }
+        reader.Finish(); return document;
+    } catch (...) { return std::nullopt; }
 }
-
-} // namespace cybou
+}

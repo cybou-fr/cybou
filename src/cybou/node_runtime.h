@@ -12,7 +12,7 @@
 #include <cybou/event_record.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/sync_result.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/official_networks.h>
 #include <cybou/p2p/ingress_budget.h>
 #include <cybou/state_store.h>
@@ -56,7 +56,7 @@ struct ConfiguredPeer {
 };
 
 struct NodeRuntimeConfig {
-    CybouNetworkDefinition network_definition;
+    VerifiedNetworkGenesis network_genesis;
     /**
      * Compiled rendezvous peers of the official network: dialed first like any
      * ordinary peer, with the session TLS SPKI checked against the compiled pin.
@@ -182,7 +182,7 @@ public:
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
     /** Network definition and identifier */
-    const CybouNetworkDefinition& GetNetworkDefinition() const { return m_config.network_definition; }
+    const VerifiedNetworkGenesis& GetNetworkGenesis() const { return m_config.network_genesis; }
     const uint256& GetNetworkBinding() const { return m_network_binding; }
 
     /** Finalized height and head */

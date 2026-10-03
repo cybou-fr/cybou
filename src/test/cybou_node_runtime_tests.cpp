@@ -104,7 +104,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_REQUIRE(block);
 
     cybou::NodeRuntimeConfig observer_config{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "observer",
         .memory_only = true,
         .wipe_data = true,
@@ -145,7 +145,7 @@ BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
     BOOST_CHECK_EQUAL(fixture.runtime->GetAccountState(*account)->authority, 900'000U);
 
     cybou::CybouNodeRuntime observer{{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "auth-observer",
         .memory_only = true,
         .wipe_data = true,
@@ -170,9 +170,9 @@ BOOST_AUTO_TEST_CASE(poa_auth_adjustment_grants_and_burns_with_floor)
     const auto signed_op = pending->block.operations.front();
     const auto loaded = fixture.runtime->GetStore().LoadState();
     BOOST_REQUIRE(loaded.state);
-    const auto& params = fixture.definition.protocol_parameters;
+    const auto& params = fixture.definition.GetProtocolParameters();
     const auto& network_binding = fixture.runtime->GetNetworkBinding();
-    const auto& poa_key = fixture.definition.poa_finalizer_public_key;
+    const auto& poa_key = fixture.definition.GetPoaPublicKey();
     BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_binding, head + 2, params, &poa_key).error ==
         cybou::BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
     BOOST_CHECK(cybou::ExecuteBlockOperations(*loaded.state, {signed_op}, network_binding, head + 1, params).error ==
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_REQUIRE(commit && reveal);
 
     cybou::CybouNodeRuntime ordinary{{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "ordinary-candidates",
         .memory_only = true,
         .wipe_data = true,
@@ -344,7 +344,7 @@ BOOST_AUTO_TEST_CASE(eligible_node_attests_its_own_executed_candidates)
 
     const auto make_node = [&](const std::string& name) {
         auto node = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
-            .network_definition = fixture.definition,
+            .network_genesis = fixture.definition,
             .data_dir = fixture.directory / name,
             .memory_only = true,
             .wipe_data = true,
@@ -400,7 +400,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
 {
     CybouServiceTestFixture fixture;
     cybou::CybouNodeRuntime runtime{cybou::NodeRuntimeConfig{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "vault-finalizer-runtime",
         .memory_only = true,
         .wipe_data = true,
@@ -438,21 +438,14 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     const auto canonical = fixture.runtime->ProduceBlock();
     BOOST_REQUIRE(canonical);
 
-    auto conflicting_block = canonical->block;
-    conflicting_block.resulting_state_root.begin()[0] ^= 0x80;
-    cybou::KVStore alternate_signer_db{cybou::KVStoreOptions{.memory_only = true}};
-    cybou::RecoveryEntropy operator_entropy{};
-    operator_entropy[0] = fixture.validator_seed[0];
-    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
-        fixture.definition.genesis_block_id, operator_entropy,
-        fixture.definition.poa_finalizer_public_key};
-    const auto alternate_signature = alternate_signer.SignFinality(0,
-        fixture.definition.genesis_block_id, conflicting_block);
-    BOOST_REQUIRE(alternate_signature.certificate);
-
-    cybou::FinalizedBlock conflicting{.block = conflicting_block,
-        .certificate = *alternate_signature.certificate};
-    const auto result = fixture.runtime->CommitBlock(conflicting);
+    // Both competing certificates must cover independently executable blocks.
+    // Merely changing state_root produces an invalid block, regardless of its ID.
+    CybouServiceTestFixture alternate{fixture.validator_seed[0]};
+    auto identity = alternate.CreateIdentity("equivocation.cybou");
+    const auto conflicting = alternate.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(conflicting);
+    const auto& conflicting_block = conflicting->block;
+    const auto result = fixture.runtime->CommitBlock(*conflicting);
     const bool conflicting_wins = cybou::ComputeBlockId(conflicting_block) < cybou::ComputeBlockId(canonical->block);
     if (conflicting_wins) {
         BOOST_CHECK(result.error == cybou::BlockTransitionError::NONE);
@@ -464,7 +457,8 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     const auto status = fixture.runtime->GetStatus();
     BOOST_CHECK(!status.poa_safety_halted);
     BOOST_CHECK(status.runtime_state != cybou::NodeRuntimeState::SAFETY_HALTED);
-    BOOST_CHECK(fixture.runtime->ProduceBlock().has_value());
+    // A signer whose durable journal belongs to the losing history must fail closed.
+    BOOST_CHECK(fixture.runtime->ProduceBlock().has_value() == !conflicting_wins);
     const auto evidence = fixture.runtime->ReadPoaSafetyEvidence();
     BOOST_CHECK(evidence.status == cybou::PoaEvidenceReadStatus::EQUIVOCATION);
     BOOST_REQUIRE(evidence.equivocation);
@@ -573,7 +567,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     auto foreign_genesis = cybou::CreateTestGenesisState();
     ++foreign_genesis.onboarding_pool;
     cybou::NodeRuntimeConfig config{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "foreign-observer",
         .memory_only = true,
         .wipe_data = true,
@@ -581,9 +575,9 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     cybou::CybouNodeRuntime observer{std::move(config)};
     BOOST_CHECK(!observer.InitializeGenesis(foreign_genesis));
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    const auto foreign_definition = cybou::CreateDevNetworkDefinition(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
+    const auto foreign_definition = cybou::CreateTestNetworkGenesis(foreign_genesis, cybou::TestPoaFinalizerPublicKey(0xBC), cybou::TestNetworkPublicKey(0xBC));
     cybou::NodeRuntimeConfig foreign_config{
-        .network_definition = foreign_definition,
+        .network_genesis = foreign_definition,
         .data_dir = fixture.directory / "foreign-producer",
         .poa_finalizer_recovery_entropy = foreign_seed,
         .memory_only = true,
@@ -601,7 +595,7 @@ BOOST_AUTO_TEST_CASE(runtime_explicit_peers_take_priority_over_discovered)
 {
     CybouServiceTestFixture fixture;
     cybou::NodeRuntimeConfig config{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "peer-priority",
         .advertised_endpoint = std::make_pair("127.0.0.1", uint16_t{29001}),
         .memory_only = true,
@@ -644,7 +638,7 @@ BOOST_AUTO_TEST_CASE(runtime_discovery_filters_self_and_out_of_scope_addresses)
 {
     CybouServiceTestFixture fixture;
     cybou::NodeRuntimeConfig config{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "peer-policy",
         .advertised_endpoint = std::make_pair("203.0.113.5", uint16_t{29001}),
         .memory_only = true,
@@ -686,7 +680,7 @@ BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
 {
     CybouServiceTestFixture fixture;
     cybou::NodeRuntimeConfig config{
-        .network_definition = fixture.definition,
+        .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "private-peer-policy",
         .advertised_endpoint = std::make_pair("10.1.1.1", uint16_t{29001}),
         .memory_only = true,
@@ -734,7 +728,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
         for (int i = 0; i < 5 && finalizer_served; ++i) finalizer_served = session.ServeNext(*fixture.runtime);
     }};
 
-    cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
+    cybou::NodeRuntimeConfig observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "finalizer-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), finalizer_port)}},
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
@@ -760,7 +754,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
         for (int i = 0; i < 5 && provider_served; ++i) provider_served = session.ServeNext(*fixture.runtime);
     }};
 
-    cybou::NodeRuntimeConfig provider_observer_config{.network_definition = fixture.definition,
+    cybou::NodeRuntimeConfig provider_observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), provider_port)}},
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};

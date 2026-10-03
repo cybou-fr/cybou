@@ -27,7 +27,7 @@ public:
     {
         for (int i{0}; i < count; ++i) {
             cybou::NodeRuntimeConfig config{
-                .network_definition = fixture.definition,
+                .network_genesis = fixture.definition,
                 .data_dir = fixture.directory / ("provider-" + std::to_string(i)),
                 .memory_only = true,
                 .wipe_data = true,

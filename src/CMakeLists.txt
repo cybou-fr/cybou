@@ -34,7 +34,6 @@ add_library(cybou_base STATIC
 add_library(cybou_core STATIC
   cybou/account_creation.cpp
   cybou/block.cpp
-  cybou/canonical_cbor.cpp
   cybou/chunk_id.cpp
   cybou/chunk_authorization.cpp
   cybou/encrypted_chunk.cpp
@@ -100,7 +99,6 @@ add_library(cybou_node STATIC
   cybou/block_executor.cpp
   cybou/poa_finalizer.cpp
   cybou/operation_pool.cpp
-  cybou/network_definition.cpp
   cybou/protocol_operation.cpp
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp

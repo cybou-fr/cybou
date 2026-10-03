@@ -3,7 +3,6 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/root_publication.h>
-#include <cybou/canonical_cbor.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -31,15 +30,12 @@ cybou::RootPublication ValidPublication()
 
 BOOST_AUTO_TEST_SUITE(cybou_root_publication_tests)
 
-BOOST_AUTO_TEST_CASE(root_publication_round_trips_canonical_cbor)
+BOOST_AUTO_TEST_CASE(root_publication_round_trips_fixed_binary_schema)
 {
     const auto publication = ValidPublication();
     const auto encoded = cybou::SerializeRootPublication(publication);
     BOOST_REQUIRE(encoded.has_value());
-    const auto decoded_cbor = cybou::DecodeCanonicalCbor(*encoded);
-    const auto* public_fields = std::get_if<cybou::CborValue::Map>(&decoded_cbor.value);
-    BOOST_REQUIRE(public_fields != nullptr);
-    BOOST_CHECK(public_fields->size() == 5); // version + four frozen public fields
+    BOOST_CHECK_EQUAL(encoded->front(), 4);
     const auto decoded = cybou::DeserializeRootPublication(*encoded);
     BOOST_REQUIRE(decoded.has_value());
     BOOST_CHECK(*decoded == publication);
@@ -52,7 +48,7 @@ BOOST_AUTO_TEST_CASE(root_publication_rejects_unknown_version_and_invalid_fields
     BOOST_REQUIRE(encoded.has_value());
     auto unknown_version = *encoded;
     BOOST_REQUIRE(unknown_version.size() > 2);
-    unknown_version[2] = 2;
+    unknown_version[0] = 2;
     BOOST_CHECK(!cybou::DeserializeRootPublication(unknown_version));
 
     auto bad_accounting = ValidPublication();

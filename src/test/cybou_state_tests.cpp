@@ -3,7 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/block_executor.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/state_store.h>
 #include <cybou/kv_store.h>
 #include <cybou/support_mail.h>

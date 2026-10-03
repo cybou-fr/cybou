@@ -4,7 +4,6 @@
 
 #include <cybou/storage_service.h>
 
-#include <cybou/canonical_cbor.h>
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/session.h>
@@ -44,8 +43,7 @@ PublishedContent Publish(CybouServiceTestFixture& fixture, cybou::CybouIdentityS
         remaining -= n;
         return n;
     };
-    const auto metadata = cybou::EncodeCanonicalCbor(cybou::CborValue::ArrayValue({
-        cybou::CborValue::Unsigned(2), cybou::CborValue::Unsigned(1)}));
+    const std::vector<unsigned char> metadata{2, 3, 0, 0};
     const auto main = stager.StageTree(source, metadata);
     BOOST_REQUIRE(main);
     const auto prepared = stager.Finish(*main);
@@ -89,7 +87,7 @@ BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_syn
     const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
     BOOST_REQUIRE(publication);
     BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->Proof(0)));
-    cybou::CybouNodeRuntime node{{.network_definition = fixture.definition,
+    cybou::CybouNodeRuntime node{{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "quota-node", .memory_only = true,
         .wipe_data = true, .storage_capacity_bytes = 0,
         .peer_admission_policy = TestLabAdmissionPolicy()}};
@@ -303,7 +301,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     } stop_listeners{stopping, listeners};
     std::vector<std::pair<std::string, uint16_t>> endpoints;
     for (int i{0}; i < 2; ++i) {
-        cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+        cybou::NodeRuntimeConfig config{.network_genesis = fixture.definition,
             .data_dir = fixture.directory / ("socket-provider-" + std::to_string(i)),
             .memory_only = true, .wipe_data = true, .storage_capacity_bytes = 64ULL << 20,
             .peer_admission_policy = TestLabAdmissionPolicy()};
@@ -318,7 +316,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     for (auto& server : servers) listeners.emplace_back([&stopping, s = server.get()] { s->Run(stopping); });
     {
         // A Full Node whose runtime reaches providers only through CYP2.
-        cybou::NodeRuntimeConfig client_config{.network_definition = fixture.definition,
+        cybou::NodeRuntimeConfig client_config{.network_genesis = fixture.definition,
             .data_dir = fixture.directory / "socket-client", .configured_peers = {{endpoints.front()}},
             .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
         cybou::CybouNodeRuntime client{std::move(client_config)};
@@ -409,7 +407,7 @@ BOOST_AUTO_TEST_CASE(one_provider_key_is_one_replica_whatever_its_endpoints)
 BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
 {
     CybouServiceTestFixture fixture;
-    cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
+    cybou::NodeRuntimeConfig config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "proof-provider", .memory_only = true, .wipe_data = true,
         .storage_capacity_bytes = 1ULL << 20};
     cybou::CybouNodeRuntime provider{std::move(config)};

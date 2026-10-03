@@ -6,7 +6,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/identity_service.h>
 #include <cybou/identity_material.h>
-#include <cybou/network_definition.h>
+#include <cybou/network_genesis.h>
 #include <cybou/name_service.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_test_setup.h>
@@ -26,7 +26,8 @@ namespace {
 struct RuntimeFixture {
     std::array<unsigned char, 32> validator_seed{};
     cybou::CybouState genesis;
-    cybou::CybouNetworkDefinition definition;
+    cybou::VerifiedNetworkGenesis definition{cybou::CreateTestNetworkGenesis(cybou::CreateTestGenesisState(),
+        cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey())};
     std::filesystem::path data_dir;
 
     RuntimeFixture()
@@ -36,8 +37,8 @@ struct RuntimeFixture {
         std::filesystem::remove_all(data_dir);
         validator_seed[0] = 0x73;
         genesis = cybou::CreateTestGenesisState();
-        definition = cybou::CreateDevNetworkDefinition(genesis, cybou::TestPoaFinalizerPublicKey(validator_seed[0]), cybou::TestNetworkPublicKey(validator_seed[0]));
-        definition.protocol_parameters.account_creation_work_bits = 0;
+        definition = cybou::CreateTestNetworkGenesis(genesis, cybou::TestPoaFinalizerPublicKey(validator_seed[0]), cybou::TestNetworkPublicKey(validator_seed[0]));
+        definition = cybou::WithTestGenesisParameters(definition, [](auto& params) { params.account_creation_work_bits = 0; });
     }
 
     ~RuntimeFixture()
@@ -49,7 +50,7 @@ struct RuntimeFixture {
     cybou::NodeRuntimeConfig Config() const
     {
         return {
-            .network_definition = definition,
+            .network_genesis = definition,
             .data_dir = data_dir,
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
@@ -79,7 +80,7 @@ BOOST_AUTO_TEST_CASE(account_creation_requires_prepared_durable_vault)
     const auto result = service.CreateIdentitySync("correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(result.success, result.error_message);
     BOOST_CHECK_EQUAL(result.creation_height, 1);
-    BOOST_CHECK_EQUAL(result.system_balance, fixture.definition.protocol_parameters.onboarding_bonus);
+    BOOST_CHECK_EQUAL(result.system_balance, fixture.definition.GetProtocolParameters().onboarding_bonus);
     BOOST_CHECK(std::filesystem::exists(path));
 
     const auto material = cybou::LoadIdentityMaterial(path, "correct horse battery staple");
@@ -269,7 +270,7 @@ BOOST_AUTO_TEST_CASE(recovery_rotation_promotes_candidate_only_after_finality)
 BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-service-test";
@@ -321,7 +322,7 @@ BOOST_AUTO_TEST_CASE(name_claim_saves_secret_before_commit_and_finalizes_owner)
 BOOST_AUTO_TEST_CASE(name_commit_requires_durable_encrypted_claim)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-save-failure-test";
@@ -349,7 +350,7 @@ BOOST_AUTO_TEST_CASE(name_commit_requires_durable_encrypted_claim)
 BOOST_AUTO_TEST_CASE(name_claim_resumes_after_commit_with_correct_password)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-resume-test";
@@ -382,7 +383,7 @@ BOOST_AUTO_TEST_CASE(name_claim_resumes_after_commit_with_correct_password)
 BOOST_AUTO_TEST_CASE(name_claim_rejects_stale_local_label_without_new_commit)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-stale-test";
@@ -411,7 +412,7 @@ BOOST_AUTO_TEST_CASE(name_claim_rejects_stale_local_label_without_new_commit)
 BOOST_AUTO_TEST_CASE(name_work_cancellation_keeps_commit_but_not_name)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 255;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 255; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-work-cancel-test";
@@ -440,8 +441,8 @@ BOOST_AUTO_TEST_CASE(name_work_cancellation_keeps_commit_but_not_name)
 BOOST_AUTO_TEST_CASE(expired_name_commit_can_restart_with_saved_claim)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
-    fixture.definition.protocol_parameters.name_commit_max_lifetime = 1;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_commit_max_lifetime = 1; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-expiry-test";
@@ -464,7 +465,7 @@ BOOST_AUTO_TEST_CASE(expired_name_commit_can_restart_with_saved_claim)
     BOOST_REQUIRE_EQUAL(committed.state->names.pending_commits.size(), 1U);
     const uint64_t commit_height = committed.state->names.pending_commits.begin()->second.commit_height;
     while (runtime.GetFinalizedHeight().value_or(0) <= commit_height +
-        fixture.definition.protocol_parameters.name_commit_max_lifetime) {
+        fixture.definition.GetProtocolParameters().name_commit_max_lifetime) {
         BOOST_REQUIRE(runtime.ProduceBlock());
     }
     const auto pruned = runtime.GetStore().LoadState();
@@ -481,7 +482,7 @@ BOOST_AUTO_TEST_CASE(expired_name_commit_can_restart_with_saved_claim)
 BOOST_AUTO_TEST_CASE(competing_claim_loser_never_gains_ownership)
 {
     RuntimeFixture fixture;
-    fixture.definition.protocol_parameters.name_claim_work_bits = 0;
+    fixture.definition = cybou::WithTestGenesisParameters(fixture.definition, [](auto& params) { params.name_claim_work_bits = 0; });
     cybou::CybouNodeRuntime runtime{fixture.Config()};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     const auto dir = std::filesystem::temp_directory_path() / "cybou-name-race-test";

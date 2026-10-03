@@ -4,7 +4,7 @@
 
 #include <cybou/root_publication.h>
 
-#include <cybou/canonical_cbor.h>
+#include <cybou/binary_codec.h>
 #include <cybou/crypto/sha256.h>
 #include <algorithm>
 #include <limits>
@@ -13,54 +13,10 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint64_t ROOT_PUBLICATION_WIRE_VERSION{3};
-
+constexpr std::uint8_t ROOT_PUBLICATION_WIRE_VERSION{4};
 bool IsZero(const std::span<const unsigned char> bytes)
 {
     return std::all_of(bytes.begin(), bytes.end(), [](const auto byte) { return byte == 0; });
-}
-
-CborValue ByteString(const std::span<const unsigned char> bytes)
-{
-    return CborValue::Bytes(CborValue::ByteString{bytes.begin(), bytes.end()});
-}
-
-CborValue ToCbor(const RootRecipientCapsule& capsule)
-{
-    return CborValue::ArrayValue({
-        CborValue::Unsigned(capsule.kem_profile),
-        CborValue::Unsigned(capsule.key_epoch),
-        ByteString(capsule.encapsulation),
-        ByteString(capsule.wrapped_content_key),
-    });
-}
-
-CborValue ToCbor(const RootPublication& publication)
-{
-    CborValue::Array capsules;
-    capsules.reserve(publication.recipient_capsules.size());
-    for (const auto& capsule : publication.recipient_capsules) capsules.push_back(ToCbor(capsule));
-    return CborValue::MapValue({
-        {CborValue::Unsigned(0), CborValue::Unsigned(ROOT_PUBLICATION_WIRE_VERSION)},
-        {CborValue::Unsigned(1), ByteString(publication.root_chunk_id)},
-        {CborValue::Unsigned(2), ByteString(publication.chunk_authorization_root)},
-        {CborValue::Unsigned(3), CborValue::Unsigned(publication.chunk_count)},
-        {CborValue::Unsigned(4), CborValue::ArrayValue(std::move(capsules))},
-    });
-}
-
-std::optional<std::uint64_t> GetUnsigned(const CborValue& value)
-{
-    if (const auto* number = std::get_if<std::uint64_t>(&value.value)) return *number;
-    return std::nullopt;
-}
-
-bool ReadFixedBytes(const CborValue& value, std::span<unsigned char> destination)
-{
-    const auto* bytes = std::get_if<CborValue::ByteString>(&value.value);
-    if (bytes == nullptr || bytes->size() != destination.size()) return false;
-    std::copy(bytes->begin(), bytes->end(), destination.begin());
-    return true;
 }
 
 bool IsValid(const RootPublication& publication)
@@ -82,57 +38,45 @@ std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPub
 {
     if (!IsValid(publication)) return std::nullopt;
     try {
-        const auto encoded = EncodeCanonicalCbor(ToCbor(publication));
-        if (encoded.empty() || encoded.size() > ROOT_PUBLICATION_MAX_BYTES) return std::nullopt;
-        return std::vector<unsigned char>{encoded.begin(), encoded.end()};
-    } catch (...) {
-        return std::nullopt;
-    }
+        BinaryWriter writer{ROOT_PUBLICATION_MAX_BYTES};
+        writer.U8(ROOT_PUBLICATION_WIRE_VERSION);
+        writer.Fixed(publication.root_chunk_id);
+        writer.Fixed(publication.chunk_authorization_root);
+        writer.U32(publication.chunk_count);
+        writer.U16(static_cast<std::uint16_t>(publication.recipient_capsules.size()));
+        for (const auto& capsule : publication.recipient_capsules) {
+            writer.U16(capsule.kem_profile);
+            writer.U64(capsule.key_epoch);
+            writer.Fixed(capsule.encapsulation);
+            writer.Fixed(capsule.wrapped_content_key);
+        }
+        return writer.Take();
+    } catch (...) { return std::nullopt; }
 }
 
-std::optional<RootPublication> DeserializeRootPublication(const std::span<const unsigned char> bytes)
+std::optional<RootPublication> DeserializeRootPublication(std::span<const unsigned char> bytes)
 {
-    if (bytes.empty() || bytes.size() > ROOT_PUBLICATION_MAX_BYTES) return std::nullopt;
     try {
-        const auto decoded = DecodeCanonicalCbor(bytes);
-        const auto* fields = std::get_if<CborValue::Map>(&decoded.value);
-        if (fields == nullptr || fields->size() != 5) return std::nullopt;
-        for (std::size_t index = 0; index < fields->size(); ++index) {
-            const auto key = GetUnsigned((*fields)[index].first);
-            if (!key || *key != index) return std::nullopt;
-        }
-        const auto version = GetUnsigned((*fields)[0].second);
-        const auto chunk_count = GetUnsigned((*fields)[3].second);
-        const auto* capsules = std::get_if<CborValue::Array>(&(*fields)[4].second.value);
-        if (!version || *version != ROOT_PUBLICATION_WIRE_VERSION || !chunk_count ||
-            *chunk_count > std::numeric_limits<std::uint32_t>::max() ||
-            capsules == nullptr || capsules->size() > ROOT_PUBLICATION_MAX_CAPSULES) return std::nullopt;
-
+        BinaryReader reader{bytes, ROOT_PUBLICATION_MAX_BYTES};
+        if (reader.U8() != ROOT_PUBLICATION_WIRE_VERSION) return std::nullopt;
         RootPublication publication;
-        if (!ReadFixedBytes((*fields)[1].second, publication.root_chunk_id) ||
-            !ReadFixedBytes((*fields)[2].second, publication.chunk_authorization_root)) return std::nullopt;
-        publication.chunk_count = static_cast<std::uint32_t>(*chunk_count);
-        publication.recipient_capsules.reserve(capsules->size());
-        for (const auto& capsule_value : *capsules) {
-            const auto* capsule_fields = std::get_if<CborValue::Array>(&capsule_value.value);
-            if (capsule_fields == nullptr || capsule_fields->size() != 4) return std::nullopt;
-            const auto profile = GetUnsigned((*capsule_fields)[0]);
-            const auto key_epoch = GetUnsigned((*capsule_fields)[1]);
-            if (!profile || *profile > std::numeric_limits<std::uint16_t>::max() || !key_epoch) return std::nullopt;
+        publication.root_chunk_id = reader.Fixed<ChunkId>();
+        publication.chunk_authorization_root = reader.Fixed<ChunkId>();
+        publication.chunk_count = reader.U32();
+        const auto count = reader.U16();
+        if (count == 0 || count > ROOT_PUBLICATION_MAX_CAPSULES) return std::nullopt;
+        publication.recipient_capsules.reserve(count);
+        for (std::uint16_t i = 0; i < count; ++i) {
             RootRecipientCapsule capsule;
-            capsule.kem_profile = static_cast<std::uint16_t>(*profile);
-            capsule.key_epoch = *key_epoch;
-            if (!ReadFixedBytes((*capsule_fields)[2], capsule.encapsulation) ||
-                !ReadFixedBytes((*capsule_fields)[3], capsule.wrapped_content_key)) return std::nullopt;
+            capsule.kem_profile = reader.U16();
+            capsule.key_epoch = reader.U64();
+            capsule.encapsulation = reader.Fixed<decltype(capsule.encapsulation)>();
+            capsule.wrapped_content_key = reader.Fixed<decltype(capsule.wrapped_content_key)>();
             publication.recipient_capsules.push_back(std::move(capsule));
         }
-        if (!IsValid(publication)) return std::nullopt;
-        const auto canonical = SerializeRootPublication(publication);
-        if (!canonical || !std::equal(canonical->begin(), canonical->end(), bytes.begin(), bytes.end())) return std::nullopt;
-        return publication;
-    } catch (...) {
-        return std::nullopt;
-    }
+        reader.Finish();
+        return IsValid(publication) ? std::optional{std::move(publication)} : std::nullopt;
+    } catch (...) { return std::nullopt; }
 }
 
 std::optional<std::uint64_t> ComputeRootPublicationFee(
@@ -158,7 +102,7 @@ std::optional<std::uint64_t> ComputeRootPublicationFee(
 
 std::optional<IdentityKeyId> ComputeRootPublicationPayloadCommitment(const RootPublication& publication)
 {
-    constexpr std::string_view domain{"CYBOU/ROOT-PUBLICATION/P3"};
+    constexpr std::string_view domain{"CYBOU/ROOT-PUBLICATION/P4"};
     const auto encoded = SerializeRootPublication(publication);
     if (!encoded) return std::nullopt;
     IdentityKeyId digest{};

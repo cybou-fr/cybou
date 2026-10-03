@@ -364,7 +364,7 @@ struct CybouCoreApplicationAdapter::Session {
                 item.root_chunk_id = ChunkHex(publication_record->root_chunk_id);
                 // The support Identity checks each incoming message paid the support rate.
                 if (!record.outgoing && state && cybou::SupportAccount(*state) == keystore.GetAccountId()) {
-                    const auto& params = runtime.GetNetworkDefinition().protocol_parameters;
+                    const auto& params = runtime.GetNetworkGenesis().GetProtocolParameters();
                     const auto fee = cybou::RootPublicationOperationFee(params, *publication_record);
                     item.below_support_rate = !fee || *fee < cybou::SupportMailMinimumFee(params);
                 }

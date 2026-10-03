@@ -46,7 +46,7 @@ struct Client {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime={.network_definition=net.network_definition,.data_dir=dir/"node",.configured_peers={{peer}},.event_writer=events},.genesis=net.genesis_state});
+            .runtime={.network_genesis=net.genesis,.data_dir=dir/"node",.configured_peers={{peer}},.event_writer=events},.genesis=net.genesis_state});
         node->Start();
         node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;
