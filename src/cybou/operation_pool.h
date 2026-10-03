@@ -7,11 +7,13 @@
 /// \file
 /// \brief Волатильный пул локально проверенных операций до PoA-финализации.
 
+#include <cybou/block_executor.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/state_store.h>
 
 #include <cstddef>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string>
@@ -109,9 +111,41 @@ private:
         size_t bytes{0};
     };
 
+    struct WorkingContext {
+        FinalizedHead head;
+        CybouState finalized_state;
+        std::unique_ptr<BlockExecutor> executor;
+
+        WorkingContext(FinalizedHead h, CybouState s, std::unique_ptr<BlockExecutor> e)
+            : head{std::move(h)}, finalized_state{std::move(s)}, executor{std::move(e)}
+        {
+            if (executor) executor->SetParent(finalized_state);
+        }
+        WorkingContext(WorkingContext&& other) noexcept
+            : head{std::move(other.head)},
+              finalized_state{std::move(other.finalized_state)},
+              executor{std::move(other.executor)}
+        {
+            if (executor) executor->SetParent(finalized_state);
+        }
+        WorkingContext& operator=(WorkingContext&& other) noexcept
+        {
+            if (this != &other) {
+                head = std::move(other.head);
+                finalized_state = std::move(other.finalized_state);
+                executor = std::move(other.executor);
+                if (executor) executor->SetParent(finalized_state);
+            }
+            return *this;
+        }
+        WorkingContext(const WorkingContext&) = delete;
+        WorkingContext& operator=(const WorkingContext&) = delete;
+    };
+
     bool FitsGlobalLimits(size_t bytes) const;
     bool FitsPeerLimits(const std::string& peer, size_t bytes) const;
     void RecordPeerUsage(const std::optional<std::string>& peer, size_t bytes);
+    void EnsureWorkingContext(const FinalizedHead& head);
 
     CybouStateStore& m_store;
     const OperationPoolLimits m_limits;
@@ -119,6 +153,7 @@ private:
     std::set<cybou::Hash256> m_ids;
     std::map<std::string, PeerUsage> m_peer_usage;
     size_t m_bytes{0};
+    std::optional<WorkingContext> m_working;
 };
 
 } // namespace cybou

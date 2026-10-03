@@ -283,7 +283,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
                 batch.Erase(OperationKey(*op_id));
             }
         }
-        const auto state_bytes = SerializeCybouState(*execution.state);
+        const auto state_bytes = SerializeCybouState(*execution.state, /*validate=*/false);
         if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};
         batch.Write(STATE_KEY, *state_bytes);
         batch.Write(HASH_KEY, *execution.state_root);
@@ -353,13 +353,13 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
 
     KVStore::Batch batch;
     if (!is_empty_noop_block) {
-        const auto state_bytes = SerializeCybouState(*next_state);
+        const auto state_bytes = SerializeCybouState(*next_state, /*validate=*/false);
         if (!state_bytes) return {BlockTransitionError::CORRUPT_STATE};
         batch.Write(STATE_KEY, *state_bytes);
         batch.Write(HASH_KEY, candidate_root);
         batch.Write(StateHeightKey(block.height), *state_bytes);
     } else {
-        const auto parent_state_bytes = SerializeCybouState(*loaded.state);
+        const auto parent_state_bytes = SerializeCybouState(*loaded.state, /*validate=*/false);
         if (!parent_state_bytes) return {BlockTransitionError::CORRUPT_STATE};
         batch.Write(StateHeightKey(block.height), *parent_state_bytes);
     }

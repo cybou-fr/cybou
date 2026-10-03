@@ -399,14 +399,20 @@ std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operat
     }, operation);
 }
 
-std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operation)
+std::optional<cybou::Hash256> ComputeOperationId(std::span<const unsigned char> serialized_operation)
 {
     constexpr std::string_view domain{"CYBOU/OP-ID"};
+    if (serialized_operation.empty()) return std::nullopt;
+    cybou::Hash256 id;
+    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), serialized_operation}, id.begin())) return std::nullopt;
+    return id;
+}
+
+std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operation)
+{
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
-    cybou::Hash256 id;
-    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, id.begin())) return std::nullopt;
-    return id;
+    return ComputeOperationId(*bytes);
 }
 
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,

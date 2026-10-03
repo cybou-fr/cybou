@@ -90,6 +90,11 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
 /// \post Возвращаемое значение находится в каноническом внутреннем представлении без legacy-вариантов.
 /// \note Потокобезопасно; функция детерминирована и fail-closed.
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes);
+/// \brief Вычисляет domain-separated OperationID из сериализованных байтов операции.
+/// \param serialized_operation Канонические сериализованные байты операции.
+/// \return `OperationID`, либо `std::nullopt`, если вход пуст.
+/// \note Потокобезопасно и детерминировано.
+std::optional<cybou::Hash256> ComputeOperationId(std::span<const unsigned char> serialized_operation);
 /// \brief Вычисляет domain-separated OperationID из канонической сериализации.
 /// \param operation Операция в каноническом представлении.
 /// \return `OperationID`, либо `std::nullopt`, если операция не сериализуется канонически.

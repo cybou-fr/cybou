@@ -639,17 +639,16 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
-    std::vector<unsigned char> bytes{header.begin(), header.end()};
-    bytes.resize(HEADER_SIZE + size);
-    if (size && !ReadExact(bytes.data() + HEADER_SIZE, size, deadline)) {
+    Frame frame{static_cast<MessageType>(header[4]), {}};
+    frame.payload.resize(size);
+    if (size && !ReadExact(frame.payload.data(), size, deadline)) {
         // После чтения заголовка границы фрейма уже сдвинуты: безопаснее
         // оборвать сокет, чем пытаться ресинхронизироваться по оставшемуся потоку.
         boost::system::error_code ignored;
         m_socket.close(ignored); // A consumed header cannot be reused after an incomplete body.
         return std::nullopt;
     }
-    auto frame = DecodeFrame(bytes);
-    m_last_read_status = frame ? ReadStatus::OK : ReadStatus::INVALID_FRAME;
+    m_last_read_status = ReadStatus::OK;
     return frame;
 }
 

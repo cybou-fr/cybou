@@ -368,7 +368,7 @@ RevokePublicationError ApplyRevokePublication(const AuthorizedRevokePublication&
     return RevokePublicationError::NONE;
 }
 
-StateValidationError ValidateCybouState(const CybouState& state)
+StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_supply)
 {
     // Проверка состояния намеренно избыточна: state root может считаться только
     // после подтверждения всех взаимных индексов (`accounts`, `identities`, names,
@@ -423,6 +423,7 @@ StateValidationError ValidateCybouState(const CybouState& state)
     if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationError::INVALID_NAME_REGISTRY;
     constexpr uint64_t MAX_SUPPLY{100'000'000'000};
     const uint64_t total = TotalSupply(state);
+    if (out_total_supply) *out_total_supply = total;
     if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
     // Учёт ресурсов: только ненулевые записи существующих аккаунтов, и квота каждого
     // автора точно равна сумме chunk-ов его действующих публикаций.
@@ -471,9 +472,9 @@ uint64_t TotalSupply(const CybouState& state)
     return total;
 }
 
-std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state)
+std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state, bool validate)
 {
-    if (ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
+    if (validate && ValidateCybouState(state) != StateValidationError::NONE) return std::nullopt;
     const auto identities = SerializeIdentityRegistry(state.identities);
     if (!identities || identities->size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     const auto names = SerializeNameRegistry(state.names);
@@ -648,10 +649,10 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     return state;
 }
 
-std::optional<cybou::Hash256> CybouStateHash(const CybouState& state)
+std::optional<cybou::Hash256> CybouStateHash(const CybouState& state, bool validate)
 {
     constexpr std::string_view domain{"CYBOU/STATE"};
-    const auto bytes = SerializeCybouState(state);
+    const auto bytes = SerializeCybouState(state, validate);
     if (!bytes) return std::nullopt;
     cybou::Hash256 hash;
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), std::span<const unsigned char>{*bytes}}, hash.begin())) return std::nullopt;

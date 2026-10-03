@@ -193,7 +193,7 @@ enum class StateValidationError : uint8_t {
 /// \return Детализированный код ошибки; `NONE` только для канонически допустимого состояния.
 /// \post Состояние не изменяется.
 /// \note Потокобезопасно при неизменяемом доступе; детерминировано и fail-closed.
-StateValidationError ValidateCybouState(const CybouState& state);
+StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_supply = nullptr);
 /// \brief Считает канонический total supply, исключая AUTH и обнаруживая переполнения.
 /// \param state Полный снимок состояния.
 /// \return Сумма OnboardingPool + незаявленных genesis allocation + `Balance` + `System Balance`;
@@ -203,11 +203,12 @@ uint64_t TotalSupply(const CybouState& state);
 
 /// \brief Сериализует каноническое состояние в детерминированный бинарный формат.
 /// \param state Валидное каноническое состояние.
+/// \param validate Если true, предварительно выполняет ValidateCybouState.
 /// \return Байты единственного поддерживаемого wire/storage-формата либо `std::nullopt`, если
 ///         состояние нарушает инварианты или не сериализуется без неоднозначности.
 /// \pre `ValidateCybouState(state) == StateValidationError::NONE`.
 /// \post При успехе порядок байтов полностью каноничен: все map уже отсортированы по ключу.
-std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state);
+std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& state, bool validate = true);
 /// \brief Десериализует и валидирует каноническое состояние.
 /// \param bytes Полный сериализованный state snapshot.
 /// \return `CybouState`, если вход точен, все поля каноничны и итоговый снимок проходит `ValidateCybouState`;
@@ -216,10 +217,11 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes);
 /// \brief Вычисляет domain-separated hash канонического состояния.
 /// \param state Валидное состояние.
+/// \param validate Если true, сериализация выполняет предварительную ValidateCybouState.
 /// \return `state root` либо `std::nullopt`, если состояние не сериализуется канонически.
 /// \post При успехе hash зависит только от канонических байтов состояния.
 /// \note Потокобезопасно и детерминировано.
-std::optional<cybou::Hash256> CybouStateHash(const CybouState& state);
+std::optional<cybou::Hash256> CybouStateHash(const CybouState& state, bool validate = true);
 
 } // namespace cybou
 #endif // CYBOU_STATE_H
