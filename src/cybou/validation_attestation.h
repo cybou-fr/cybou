@@ -16,11 +16,10 @@
 
 namespace cybou {
 
-inline constexpr uint8_t VALIDATION_ATTESTATION_VERSION{1};
 /** Finalized AUTH must exceed this value; 1,000,000 itself is not eligible. */
 inline constexpr uint64_t VALIDATION_AUTHORITY_THRESHOLD{1'000'000};
-/** version || NetworkID || OperationID || base BlockID || AccountID || Ed25519 || ML-DSA-44 */
-inline constexpr size_t VALIDATION_ATTESTATION_SIZE{1 + 32 + 32 + 32 + 32 + 64 + 2420};
+/** NetworkID || OperationID || base BlockID || AccountID || Ed25519 || ML-DSA-44 */
+inline constexpr size_t VALIDATION_ATTESTATION_SIZE{ 32 + 32 + 32 + 32 + 64 + 2420};
 
 /**
  * "This Identity's node independently executed OperationID on the finalized
@@ -28,7 +27,6 @@ inline constexpr size_t VALIDATION_ATTESTATION_SIZE{1 + 32 + 32 + 32 + 32 + 64 +
  * it never changes the OperationID and never changes state.
  */
 struct ValidationAttestation {
-    uint8_t version{VALIDATION_ATTESTATION_VERSION};
     cybou::Hash256 network_binding;
     cybou::Hash256 operation_id;
     cybou::Hash256 finalized_base_block_id;

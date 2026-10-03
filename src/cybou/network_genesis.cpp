@@ -51,7 +51,7 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
 
 cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID/V6"};
+    static constexpr std::string_view DOMAIN{"CYBOU/NETWORK-ID"};
     const auto key = CanonicalSerializeNetworkPublicKey(network_public_key);
     cybou::Hash256 result;
     ::cybou::crypto::Sha256 hasher;
@@ -158,7 +158,6 @@ std::optional<IdentityHybridPublicKey> CanonicalDeserializeNetworkPublicKey(std:
 std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& genesis)
 {
     std::vector<unsigned char> out;
-    WriteU8(out, genesis.version);
 
     const auto net_key_bytes = CanonicalSerializeNetworkPublicKey(genesis.network_public_key);
     WriteU32LE(out, static_cast<uint32_t>(net_key_bytes.size()));
@@ -247,8 +246,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
         return val;
     };
 
-    const auto version = read_u8();
-    if (!version || *version != CYBOU_NETWORK_GENESIS_VERSION) return std::nullopt;
 
     const auto net_key_len = read_u32le();
     if (!net_key_len || pos + *net_key_len > bytes.size()) return std::nullopt;
@@ -312,7 +309,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     sig.ml_dsa.assign(bytes.begin() + pos, bytes.end());
 
     NetworkGenesis result;
-    result.version = *version;
     result.network_public_key = *net_key;
     result.genesis_state_root = *state_root;
     result.poa_finalizer_public_key = poa_key;
@@ -324,9 +320,6 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
 
 NetworkGenesisError VerifySignedNetworkGenesis(const NetworkGenesis& genesis)
 {
-    if (genesis.version != CYBOU_NETWORK_GENESIS_VERSION) {
-        return NetworkGenesisError::UNSUPPORTED_VERSION;
-    }
     if (genesis.network_public_key.purpose != IdentityKeyPurpose::NETWORK_ROOT ||
         genesis.network_public_key.ml_dsa.size() != MLDSA65_PUBLIC_KEY_SIZE ||
         std::all_of(genesis.network_public_key.ed25519.begin(), genesis.network_public_key.ed25519.end(), [](unsigned char b){ return b == 0; })) {

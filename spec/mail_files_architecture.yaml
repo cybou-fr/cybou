@@ -1,4 +1,3 @@
-version: '0.1'
 status: architecture_target
 scope: mail_files_private_application_layer
 
@@ -96,7 +95,7 @@ storage:
   erasure_coding_beta: false
   placement_granularity: chunk_id
   local_retention: pin_and_lru_cache_registry  # opaque holder/reference tags
-  replica_identity: storage_id  # BLAKE3 of the CYP2-proven provider key
+  replica_identity: storage_id  # BLAKE3 of the CYBOU P2P-proven provider key
   deterministic_storage_ranking_frozen: false
   storage_discovery_initial: peer_fanout_by_chunk_id
   repair_required: true

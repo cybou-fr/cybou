@@ -17,7 +17,7 @@ remain cryptographically separate:
 - **PoA finalizer**: The genesis-authorized operational key on the Central Authority desktop. It is never sent to bootstrap or peers. Blocks require both Ed25519 and ML-DSA-65 signatures. Compromising P does not confer power to forge a new genesis or change the Network Key; it triggers equivocation safety halt requiring network cutover.
 - **Release Signing**: Kept on isolated build/release signing infrastructure.
 - **Treasury**: Stored in a distinct, dedicated vault holding company assets.
-- **User Identity**: Managed exclusively by each end-user in their local CVID5 vault. `cybou.cybou` is an ordinary Identity with mnemonic, AccountID, Recovery, Authorization, KEM and Mail/support; its distinct PoA key role is authorized only by genesis. There is no separate PoA Identity entity.
+- **User Identity**: Managed exclusively by each end-user in their local CYID vault. `cybou.cybou` is an ordinary Identity with mnemonic, AccountID, Recovery, Authorization, KEM and Mail/support; its distinct PoA key role is authorized only by genesis. There is no separate PoA Identity entity.
 
 Provisioning keeps Network and `cybou.cybou` private material only under
 gitignored `/private/`; Git contains public keys, public Identity data and

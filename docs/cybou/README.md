@@ -29,8 +29,8 @@ from or conflicting with higher levels:
 | [`02_ARCHITECTURE.md`](02_ARCHITECTURE.md) | High-level system architecture and data plane | Level 1 | Frozen |
 | [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md) | Official network profiles, bootstrap lifecycle, wipe semantics, and key rotation | Level 2 | Active |
 | [`05_CHAIN_STATE.md`](05_CHAIN_STATE.md) | Deterministic state execution, accounts, and names | Level 2 | Active |
-| [`06_BOOTSTRAP_STATE_SYNC.md`](06_BOOTSTRAP_STATE_SYNC.md) | Verified state synchronization over CYP2 | Level 2 | Active |
-| [`08_P2P.md`](08_P2P.md) | CYP2 transport and peer management | Level 2 | Active |
+| [`06_BOOTSTRAP_STATE_SYNC.md`](06_BOOTSTRAP_STATE_SYNC.md) | Verified state synchronization over CYBOU P2P | Level 2 | Active |
+| [`08_P2P.md`](08_P2P.md) | CYBOU P2P transport and peer management | Level 2 | Active |
 | [`09_CRYPTO_PQ.md`](09_CRYPTO_PQ.md) | Post-quantum cryptography profile and key roles | Level 2 | Active |
 | [`10_IDENTITY_NAMES.md`](10_IDENTITY_NAMES.md) | Protocol Identity, key derivation, and `.cybou` names | Level 2 | Active |
 | [`18_ECONOMICS_FEES.md`](18_ECONOMICS_FEES.md) | Native asset, Balance, System Balance, and direct Central Authority fees | Level 2 | Active |
@@ -58,7 +58,7 @@ from or conflicting with higher levels:
 | [`71_WINDOWS_MINGW_BUILD.md`](71_WINDOWS_MINGW_BUILD.md) | Local Windows MinGW + vcpkg build procedure | — | Active |
 | [`72_DESKTOP_WALLET_UI.md`](72_DESKTOP_WALLET_UI.md) | Desktop wallet presentation contract | Level 5 | Product target |
 | [`73_CORE_DESKTOP_CONTRACT.md`](73_CORE_DESKTOP_CONTRACT.md) | Contract between native NodeRuntime and desktop client | Level 5 | Active |
-| [`76_IDENTITY_VAULT_RECOVERY.md`](76_IDENTITY_VAULT_RECOVERY.md) | Encrypted CVID5/CYBV2 vault structure and phrase recovery | Level 2 | Active |
+| [`76_IDENTITY_VAULT_RECOVERY.md`](76_IDENTITY_VAULT_RECOVERY.md) | Encrypted CYID/CYBV vault structure and phrase recovery | Level 2 | Active |
 | [`77_CYBOU_NAME_REGISTRY.md`](77_CYBOU_NAME_REGISTRY.md) | Commit/work/reveal `.cybou` name registry rules | Level 2 | Active |
 | [`78_IDENTITY_DESKTOP_UX.md`](78_IDENTITY_DESKTOP_UX.md) | Identity creation and restore desktop UI/UX | Level 5 | Product target |
 | [`80_CRYPTO_SOVEREIGNTY_AUDIT.md`](80_CRYPTO_SOVEREIGNTY_AUDIT.md) | Cryptography and sovereignty compliance audit | Level 6 | Active |
@@ -71,10 +71,10 @@ from or conflicting with higher levels:
 | [`87_IDENTITY_OPERATION_COORDINATOR.md`](87_IDENTITY_OPERATION_COORDINATOR.md) | In-flight identity operation serialization and retry | Level 2 | Active |
 | [`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md) | Public KEM package commitment and epoch publication | Level 2 | Active |
 | [`APPLICATION_DATA_PLANE.md`](APPLICATION_DATA_PLANE.md) | Application services, chunk retention, and local views | Level 5 | Active |
-| [`CYP2_TRANSPORT_V5.md`](CYP2_TRANSPORT_V5.md) | CYP2 transport protocol v5 specification | Level 2 | Active |
+| [`P2P_TRANSPORT.md`](P2P_TRANSPORT.md) | CYBOU P2P transport protocol specification | Level 2 | Active |
 | [`ENCRYPTED_CHUNK_TREE.md`](ENCRYPTED_CHUNK_TREE.md) | Encrypted ROOT/INDEX/DATA chunk tree structure | Level 2 | Active |
 | [`IDENTITY_DISCOVERY_AND_RECOVERY.md`](IDENTITY_DISCOVERY_AND_RECOVERY.md) | Clean-machine identity restore and publication scanning | Level 2 | Active |
-| [`OPERATOR_LAB.md`](OPERATOR_LAB.md) | Operator commands, multi-node lab, and stress tools | — | LAB only |
+| [`DEVNET_DEVELOPMENT.md`](DEVNET_DEVELOPMENT.md) | Existing DEVNET, operator commands and development checks | — | Active |
 | [`POA_FINALITY.md`](POA_FINALITY.md) | Genesis-authorized single-operator PoA, anti-equivocation journal | Level 2 | Active |
 | [`POA_FINALITY_VECTORS.md`](POA_FINALITY_VECTORS.md) | PoA block and certificate test vectors | Level 2 | Active |
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |

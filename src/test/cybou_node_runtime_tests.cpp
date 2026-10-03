@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(event_log_privacy_modes_filter_sensitive_identifiers)
 {
     CybouServiceTestFixture fixture;
     const auto minimal_path = fixture.directory / "minimal-events.jsonl";
-    const auto lab_path = fixture.directory / "lab-events.jsonl";
+    const auto detailed_path = fixture.directory / "detailed-events.jsonl";
     const cybou::EventFields fields{{"operation_id", std::string{"operation-secret"}},
         {"account_id", std::string{"account-secret"}}, {"peer", std::string{"peer-secret"}},
         {"network_binding", std::string{"public-network"}}};
@@ -59,20 +59,20 @@ BOOST_AUTO_TEST_CASE(event_log_privacy_modes_filter_sensitive_identifiers)
         writer.Write(cybou::NodeEvent::operation_accepted, fields);
     }
     {
-        cybou::EventWriter writer{lab_path, cybou::EventLogMode::LAB};
+        cybou::EventWriter writer{detailed_path, cybou::EventLogMode::DETAILED};
         writer.Write(cybou::NodeEvent::operation_accepted, fields);
     }
     std::ifstream minimal_file{minimal_path};
-    std::ifstream lab_file{lab_path};
+    std::ifstream detailed_file{detailed_path};
     const std::string minimal{std::istreambuf_iterator<char>{minimal_file}, {}};
-    const std::string lab{std::istreambuf_iterator<char>{lab_file}, {}};
+    const std::string detailed{std::istreambuf_iterator<char>{detailed_file}, {}};
     BOOST_CHECK(minimal.find("operation-secret") == std::string::npos);
     BOOST_CHECK(minimal.find("account-secret") == std::string::npos);
     BOOST_CHECK(minimal.find("peer-secret") == std::string::npos);
     BOOST_CHECK(minimal.find("public-network") != std::string::npos);
-    BOOST_CHECK(lab.find("operation-secret") != std::string::npos);
-    BOOST_CHECK(lab.find("account-secret") != std::string::npos);
-    BOOST_CHECK(lab.find("peer-secret") != std::string::npos);
+    BOOST_CHECK(detailed.find("operation-secret") != std::string::npos);
+    BOOST_CHECK(detailed.find("account-secret") != std::string::npos);
+    BOOST_CHECK(detailed.find("peer-secret") != std::string::npos);
 }
 
 BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
@@ -404,7 +404,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
         .data_dir = fixture.directory / "vault-finalizer-runtime",
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestLabAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(),
     }};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     BOOST_CHECK(!runtime.GetStatus().poa_signer_active);
@@ -731,7 +731,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     cybou::NodeRuntimeConfig observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "finalizer-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), finalizer_port)}},
-        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     const auto finalizer_sync = observer.SyncFromConfiguredPeer(10);
@@ -757,7 +757,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     cybou::NodeRuntimeConfig storage_observer_config{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
         .configured_peers = {{std::make_pair(loopback.to_string(), storage_port)}},
-        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
+        .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy()};
     cybou::CybouNodeRuntime storage_observer{std::move(storage_observer_config)};
     BOOST_REQUIRE(storage_observer.InitializeGenesis(fixture.genesis));
     const auto storage_sync = storage_observer.SyncFromConfiguredPeer(10);

@@ -19,19 +19,17 @@
 namespace cybou {
 
 bool ValidateProtocolParameters(const CybouProtocolParameters& params);
-/** SHA-256("CYBOU/NETWORK-ID/V6" || canonical Network Public Key), unchanged. */
+/** SHA-256("CYBOU/NETWORK-ID" || canonical Network Public Key), unchanged. */
 cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_public_key);
 CybouState CreateDevGenesisState();
 
-inline constexpr uint8_t CYBOU_NETWORK_GENESIS_VERSION{2};
-inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS/V2"};
+inline constexpr std::string_view CYBOU_GENESIS_SIGNING_DOMAIN{"CYBOU/GENESIS"};
 
 /**
  * Canonical signed network genesis specification.
  * NetworkID is the exact canonical bytes of network_public_key.
  */
 struct NetworkGenesis {
-    uint8_t version{CYBOU_NETWORK_GENESIS_VERSION};
 
     /** Network Public Key (Root authority of this official network). */
     IdentityHybridPublicKey network_public_key{IdentityKeyPurpose::NETWORK_ROOT, {}, {}};
@@ -48,7 +46,6 @@ struct NetworkGenesis {
 
 enum class NetworkGenesisError : uint8_t {
     NONE,
-    UNSUPPORTED_VERSION,
     INVALID_NETWORK_KEY,
     NULL_GENESIS_STATE_ROOT,
     INVALID_POA_KEY,

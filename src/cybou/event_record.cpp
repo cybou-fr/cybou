@@ -54,7 +54,7 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
         if (!peer.storage_id.empty()) Write(NodeEvent::storage_disconnected,{{"storage_id",peer.storage_id}});
     }
     m_peers = std::move(peers);
-    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"node_type",d.node_type},{"cyp2_version",std::uint64_t{d.cyp2_version}},
+    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"node_type",d.node_type},
         {"poa_signer_active",d.poa_signer_active},{"validation_eligible",d.validation_eligible},{"height",d.height},
         {"tip",d.tip},{"state_root",d.state_root},{"peers",std::uint64_t{d.peers.size()}},
         {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}});
@@ -64,7 +64,7 @@ EventWriter::~EventWriter() { if(m_file)std::fclose(m_file); }
 bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file && std::ferror(m_file)==0; }
 void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     static const std::set<std::string> ALLOWED{
-        "network_binding","node_type","cyp2_version","poa_signer_active","validation_eligible","height","tip","state_root","peers","storage_used",
+        "network_binding","node_type","poa_signer_active","validation_eligible","height","tip","state_root","peers","storage_used",
         "storage_capacity","safety_halted","operation_id","block_id","storage_id",
         "chunk_id","peer","bytes","duration_ms","error_code","replicas","target","account_id","nonce",
         "nonce","account_id","base_height","advertised_height"};
@@ -77,7 +77,7 @@ void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     const auto time = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     std::ostringstream record;
-    record << "{\"v\":1,\"run_id\":" << Escape(m_run) << ",\"seq\":" << ++m_sequence
+    record << "{\"run_id\":" << Escape(m_run) << ",\"seq\":" << ++m_sequence
            << ",\"time_ms\":" << time << ",\"event\":" << Escape(NAMES[static_cast<size_t>(event)]);
     for (const auto& [key,value] : fields) {
         if(m_mode==EventLogMode::MINIMAL && (key=="account_id"||key=="nonce"||key=="peer"||key=="storage_id"||key=="chunk_id"||key=="operation_id"))continue;

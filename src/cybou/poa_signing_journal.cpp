@@ -13,9 +13,8 @@
 namespace cybou {
 namespace {
 
-constexpr unsigned char JOURNAL_FORMAT_VERSION{1};
-constexpr size_t JOURNAL_METADATA_SIZE{1 + 32 + 32 + 32};
-constexpr size_t JOURNAL_HEAD_SIZE{1 + 8 + 32 + 32};
+constexpr size_t JOURNAL_METADATA_SIZE{ 32 + 32 + 32};
+constexpr size_t JOURNAL_HEAD_SIZE{ 8 + 32 + 32};
 
 std::string Hex(const cybou::Hash256& value)
 {
@@ -45,7 +44,6 @@ std::vector<unsigned char> EncodeHead(const PoaJournalHead& head)
 {
     std::vector<unsigned char> bytes;
     bytes.reserve(JOURNAL_HEAD_SIZE);
-    bytes.push_back(JOURNAL_FORMAT_VERSION);
     AppendUint64LE(bytes, head.height);
     bytes.insert(bytes.end(), head.parent_block_id.begin(), head.parent_block_id.end());
     bytes.insert(bytes.end(), head.block_id.begin(), head.block_id.end());
@@ -54,11 +52,11 @@ std::vector<unsigned char> EncodeHead(const PoaJournalHead& head)
 
 std::optional<PoaJournalHead> DecodeHead(const std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != JOURNAL_HEAD_SIZE || bytes[0] != JOURNAL_FORMAT_VERSION) return std::nullopt;
+    if (bytes.size() != JOURNAL_HEAD_SIZE) return std::nullopt;
     PoaJournalHead head;
-    head.height = ReadUint64LE(bytes, 1);
-    std::copy_n(bytes.begin() + 9, 32, head.parent_block_id.begin());
-    std::copy_n(bytes.begin() + 41, 32, head.block_id.begin());
+    head.height = ReadUint64LE(bytes, 0);
+    std::copy_n(bytes.begin() + 8, 32, head.parent_block_id.begin());
+    std::copy_n(bytes.begin() + 40, 32, head.block_id.begin());
     if (head.block_id.IsNull() || (head.height == 0 && !head.parent_block_id.IsNull()) ||
         (head.height != 0 && head.parent_block_id.IsNull())) return std::nullopt;
     return head;
@@ -85,7 +83,6 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const cybou::Hash256& network_
     const auto key_id = m_finalizer_key_id;
     std::vector<unsigned char> expected_metadata;
     expected_metadata.reserve(JOURNAL_METADATA_SIZE);
-    expected_metadata.push_back(JOURNAL_FORMAT_VERSION);
     expected_metadata.insert(expected_metadata.end(), network_binding.begin(), network_binding.end());
     expected_metadata.insert(expected_metadata.end(), key_id.begin(), key_id.end());
     expected_metadata.insert(expected_metadata.end(), genesis_anchor.begin(), genesis_anchor.end());
@@ -105,9 +102,9 @@ PoaSigningJournal::PoaSigningJournal(KVStore& db, const cybou::Hash256& network_
         m_head = *head;
         std::vector<unsigned char> halt;
         if (m_db.Read(halt_key, halt)) {
-            const auto reason = halt.size() == 2 ? static_cast<PoaJournalStatus>(halt[1]) :
+            const auto reason = halt.size() == 1 ? static_cast<PoaJournalStatus>(halt[0]) :
                 PoaJournalStatus::NONE;
-            if (halt.size() != 2 || halt[0] != JOURNAL_FORMAT_VERSION ||
+            if (halt.size() != 1 ||
                 (reason != PoaJournalStatus::HISTORY_MISMATCH &&
                     reason != PoaJournalStatus::EQUIVOCATION)) {
                 throw std::runtime_error{"corrupt PoA signing journal halt record"};
@@ -210,7 +207,7 @@ bool PoaSigningJournal::PersistHalt(const PoaJournalStatus reason) noexcept
     m_history_verified = false;
     try {
         m_db.Write(m_prefix + "halt", std::vector<unsigned char>{
-            JOURNAL_FORMAT_VERSION, static_cast<unsigned char>(reason)}, true);
+            static_cast<unsigned char>(reason)}, true);
         return true;
     } catch (...) {
         return false;

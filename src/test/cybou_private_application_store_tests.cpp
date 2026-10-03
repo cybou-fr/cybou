@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(lock_and_identity_switch_deny_access)
     BOOST_REQUIRE(identity.GenerateNew());
     const auto original_account = identity.GetAccountId();
     BOOST_REQUIRE(original_account);
-    const auto vault = temporary.path / "identity.cybv2";
+    const auto vault = temporary.path / "identity.vault";
     BOOST_REQUIRE(identity.SaveToFile(vault, "test-password"));
     cybou::PrivateApplicationStore store{identity, temporary.path};
     BOOST_CHECK(store.Put("mail/sent/1", Bytes("private")));

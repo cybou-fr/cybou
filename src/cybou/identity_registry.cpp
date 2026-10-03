@@ -42,7 +42,7 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const cybou::Hash256& n
     if (!recovery_id || !authorization_id || !package_id) return std::nullopt;
 
     std::vector<unsigned char> preimage;
-    constexpr std::string_view domain{"CYBOU/IDENTITY-ROTATE/V1"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-ROTATE"};
     preimage.insert(preimage.end(), domain.begin(), domain.end());
     preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     preimage.insert(preimage.end(), account.begin(), account.end());
@@ -51,7 +51,7 @@ std::optional<IdentityKeyId> ComputeIdentityRotateDigest(const cybou::Hash256& n
     preimage.insert(preimage.end(), recovery_id->begin(), recovery_id->end());
     preimage.insert(preimage.end(), authorization_id->begin(), authorization_id->end());
     preimage.insert(preimage.end(), package_id->begin(), package_id->end());
-    return Hash("CYBOU/IDENTITY-ROTATE-DIGEST/V1", preimage);
+    return Hash("CYBOU/IDENTITY-ROTATE-DIGEST", preimage);
 }
 
 std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
@@ -61,7 +61,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     if (kind < 1 || kind > 5 || !Nonzero(request.payload_commitment) ||
         network_binding.IsNull() || request.account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> preimage;
-    constexpr std::string_view domain{"CYBOU/IDENTITY-OP/V2"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-OP"};
     preimage.insert(preimage.end(), domain.begin(), domain.end());
     preimage.insert(preimage.end(), network_binding.begin(), network_binding.end());
     const auto account = request.account_id.Value();
@@ -70,7 +70,7 @@ std::optional<IdentityKeyId> ComputeIdentityOperationDigest(
     Append64(preimage, request.key_epoch);
     preimage.push_back(kind);
     preimage.insert(preimage.end(), request.payload_commitment.begin(), request.payload_commitment.end());
-    return Hash("CYBOU/IDENTITY-OP-DIGEST/V2", preimage);
+    return Hash("CYBOU/IDENTITY-OP-DIGEST", preimage);
 }
 
 IdentityRegistryError IdentityRegistry::Register(const AccountCreateOp& create,

@@ -893,7 +893,6 @@ Stan</translation>
     <name>DiagnosticsPage</name>
     <message><source>Node type</source><translation>Type de nœud</translation></message>
     <message><source>Full Node</source><translation>Nœud complet</translation></message>
-    <message><source>CYP2 version</source><translation>Version CYP2</translation></message>
     <message><source>Storage used / capacity</source><translation>Stockage utilisé / capacité</translation></message>
     <message><source>PoA signer active</source><translation>Signataire PoA actif</translation></message>
     <message>
@@ -903,10 +902,6 @@ Stan</translation>
     <message>
         <source>Ready</source>
         <translation>Prête</translation>
-    </message>
-    <message>
-        <source>Not required by Lab policy</source>
-        <translation>Non requise par la politique Lab</translation>
     </message>
     <message>
         <source>Waiting for a valid Geo database</source>
@@ -3347,8 +3342,8 @@ Mail, Files, Names and Wallet.</source>
     </message>
     <message>
         <location filename="../cybouapplication.cpp" line="63" />
-        <source>Connect to this CYP2 IP:port endpoint.</source>
-        <translation>Se connecter à ce point de terminaison CYP2 IP:port.</translation>
+        <source>Connect to this CYBOU P2P IP:port endpoint.</source>
+        <translation>Se connecter à ce point de terminaison CYBOU P2P IP:port.</translation>
     </message>
     <message>
         <location filename="../cybouapplication.cpp" line="63" />

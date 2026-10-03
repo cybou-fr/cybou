@@ -57,11 +57,11 @@ void Stop(int) { stopping.store(true); }
 
 const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
                 [--block-interval 1000ms] [--peers FILE] [--capacity 20GiB] [--advertise IP:PORT]
-                [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|lab]
+                [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|detailed]
   node run --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
            [--capacity 20GiB] [--poa-key-file FILE] [--block-interval 1000ms]
            [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
-           [--event-log FILE] [--event-log-mode minimal|lab]
+           [--event-log FILE] [--event-log-mode minimal|detailed]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
   network probe --network devnet --data-dir DIR --peer IP:PORT
   network sync --network devnet --data-dir DIR --peer IP:PORT [--count 100]
@@ -75,8 +75,7 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
                     --operation-id HEX [--replicas 1|2]
 MAINNET is not provisioned and cannot start. Secrets are file inputs.
 Network commands require --peer-admission france (automatic DB-IP Lite country data; offline
-override --geo-country-csv FILE --geo-sha256 HEX --geo-issued-month YYYY-MM) or --peer-admission lab
-for loopback/private LAB peers only. The bootstrap locator serves --tls-certificate/--tls-key matching
+override --geo-country-csv FILE --geo-sha256 HEX --geo-issued-month YYYY-MM). The bootstrap locator serves --tls-certificate/--tls-key matching
 its compiled SPKI pin.
 )";
 
@@ -150,14 +149,7 @@ const std::initializer_list<std::string> ADMISSION_OPTIONS{"peer-admission", "ge
 void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& data_directory)
 {
     const auto mode = opts.Require("peer-admission");
-    if (mode == "lab") {
-        if (opts.Has("geo-country-csv") || opts.Has("geo-sha256") || opts.Has("geo-issued-month")) {
-            throw std::invalid_argument("LAB admission cannot be combined with Geo data pins");
-        }
-        peer_admission_policy = std::make_shared<const p2p::PeerAdmissionPolicy>(p2p::PeerAdmissionPolicy::Lab());
-        return;
-    }
-    if (mode != "france") throw std::invalid_argument("peer admission must be france or lab");
+    if (mode != "france") throw std::invalid_argument("peer admission must be france");
     const bool has_csv = opts.Has("geo-country-csv");
     const bool has_sha256 = opts.Has("geo-sha256");
     const bool has_month = opts.Has("geo-issued-month");
@@ -207,10 +199,10 @@ std::unique_ptr<CybouNodeService> StartNode(const OfficialNetwork& network, Node
 void StartEvents(const Options& opts, const std::string& node_type)
 {
     const auto mode = opts.Get("event-log-mode", "minimal");
-    if (mode != "minimal" && mode != "lab") throw std::invalid_argument("event log mode must be minimal or lab");
+    if (mode != "minimal" && mode != "detailed") throw std::invalid_argument("event log mode must be minimal or detailed");
     if (opts.Has("event-log")) {
         events = std::make_shared<EventWriter>(opts.Get("event-log"),
-            mode == "lab" ? EventLogMode::LAB : EventLogMode::MINIMAL);
+            mode == "detailed" ? EventLogMode::DETAILED : EventLogMode::MINIMAL);
         events->Write(NodeEvent::node_started, {{"node_type", node_type}});
     }
 }
@@ -366,14 +358,6 @@ int NetworkCommand(const std::string& action, const Options& opts)
     if (action == "probe") return NetworkProbe(opts);
     if (action == "sync") return NetworkSync(opts);
     if (action == "follow") return NetworkFollow(opts);
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-    if (action == "lab-poa-seed") {
-        // Test builds only: the LAB PoA seed is public and fixed.
-        Allow(opts, {"out"});
-        if (!CreateSecretFile(opts.Require("out"), LabPoaFinalizerSeed())) throw std::runtime_error("cannot write LAB PoA seed file");
-        return 0;
-    }
-#endif
     throw std::invalid_argument("unknown network command; use --help");
 }
 
@@ -455,12 +439,13 @@ int RunNode(const Options& opts)
     node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval, .listen_endpoint = listen},
         [&last_height, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
             if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH ||
-                status.runtime_state == NodeRuntimeState::CORRUPT ||
-                status.runtime_state == NodeRuntimeState::SAFETY_HALTED) {
+                status.runtime_state == NodeRuntimeState::CORRUPT) {
                 std::cerr << "node state unavailable" << std::endl;
                 stopping = true;
                 return false;
             }
+            // Signing safety disables the local signer in the production worker.
+            // The ordinary Full Node and its network worker remain available.
             if (status.finalized_height != last_height.exchange(status.finalized_height)) {
                 std::cout << "height=" << status.finalized_height << " peers=" << peers << std::endl;
             }

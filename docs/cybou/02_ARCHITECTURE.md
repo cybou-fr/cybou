@@ -3,7 +3,7 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, announcements,
+implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
@@ -51,7 +51,7 @@ Compiled OfficialNetwork public constants:
   initial genesis state
   bootstrap IP:port and TLS SPKI pin
   -> Verify compiled genesis signature and initial state root
-  -> Ordinary bootstrap peer seeds initial CYP2 discovery
+  -> Ordinary bootstrap peer seeds initial CYBOU P2P discovery
   -> Direct P2P mesh
   -> Every node executes candidates; eligible Identities add Validation signatures
   -> Central Authority P signs finalized blocks (absolute canonical truth)
@@ -101,7 +101,7 @@ for memory-only unit tests. Possession of the genesis-authorized
 PoA private key activates the independent block-production worker.
 
 **Bootstrap** is an ordinary CYBOU full peer whose IP:port is known in advance
-for initial peer discovery. It runs the same executable and CYP2 protocol.
+for initial peer discovery. It runs the same executable and CYBOU P2P protocol.
 It has no network-role announcement, no consensus role, and no special node class.
 
 Public P2P admission is France-only for inbound and outbound connections for
@@ -168,7 +168,7 @@ uses its signed specification digest as the height-zero chain anchor.
 
 PublicationService stages directly into pinned local encrypted chunks, stores
 one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
-RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+RootPublication wire and encrypted/private schema are bounded binary
 layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
 No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
 network cutover require the previously established operator authorization.

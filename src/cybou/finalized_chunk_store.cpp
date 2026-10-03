@@ -87,7 +87,7 @@ std::optional<ChunkAuthorizationProof> DecodeProofMetadata(const std::span<const
 FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::filesystem::path& path,
     const std::span<const unsigned char, 32> network_binding, const std::uint64_t capacity_bytes,
     const bool wipe_data)
-    : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}, m_path{path}
+    : m_blobs{blobs}, m_namespace{"chunk-store/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}, m_path{path}
 {
     if (std::all_of(network_binding.begin(), network_binding.end(), [](const auto byte) { return byte == 0; }) ||
         (!m_blobs.MemoryOnly() && path.empty())) {
@@ -102,7 +102,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
 
     // Provider metadata is network-bound even though the common blob store is
     // keyed only by the hash of exact encrypted bytes.
-    const std::string network_key{"chunk-store/v4/network-id"};
+    const std::string network_key{"chunk-store/network-id"};
     std::vector<unsigned char> saved_network_binding;
     if (m_db->Read(network_key, saved_network_binding)) {
         if (!std::equal(saved_network_binding.begin(), saved_network_binding.end(), network_binding.begin(), network_binding.end())) {
@@ -138,7 +138,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
             total += size;
         });
         // A reduced quota retains existing replicas but rejects new admission.
-        m_db->Write(m_namespace + "/provider-bytes", total, true);
+        m_db->Write(m_namespace + "/storage-bytes", total, true);
     }
 }
 
@@ -171,7 +171,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         const auto proof_metadata = EncodeProofMetadata(proof);
         const auto chunk_key = ChunkKey(m_namespace, chunk_id);
         const auto publication_chunk_key = PublicationChunkKey(m_namespace, publication_operation_id, chunk_id);
-        const auto storage_bytes_key = m_namespace + "/provider-bytes";
+        const auto storage_bytes_key = m_namespace + "/storage-bytes";
 
         std::lock_guard lock{m_mutex};
         std::uint64_t existing_size{0};
@@ -281,7 +281,7 @@ bool FinalizedChunkStore::RemoveUnlessAdmitted(const ChunkId& chunk_id)
 
 std::uint64_t FinalizedChunkStore::UsedBytes() const
 {
-    const auto bytes = ReadCounter(m_namespace + "/provider-bytes");
+    const auto bytes = ReadCounter(m_namespace + "/storage-bytes");
     return bytes.value_or(std::numeric_limits<std::uint64_t>::max());
 }
 

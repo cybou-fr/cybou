@@ -25,7 +25,7 @@ BOOST_AUTO_TEST_CASE(random_account_id_and_mnemonic_entropy_survive_encrypted_sa
     BOOST_REQUIRE(authorization_before && recovery_before && kem_seed_before);
     BOOST_CHECK(cybou::ValidateXWingKeyPair(*kem_seed_before));
 
-    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_material_v5_test.cybv2";
+    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_material_test.vault";
     std::filesystem::remove(path);
     BOOST_REQUIRE(cybou::SaveNewIdentityMaterial(path, "correct horse battery", *first));
     auto loaded = cybou::LoadIdentityMaterial(path, "correct horse battery");

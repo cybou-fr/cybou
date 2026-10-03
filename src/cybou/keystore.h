@@ -28,7 +28,7 @@ namespace cybou {
 struct RootRecipientCapsule;
 
 /**
- * Local identity secrets backed by a portable password-protected CYBV2 vault.
+ * Local identity secrets backed by a portable password-protected CYBV vault.
  * AccountID is random and independent of mnemonic-derived Identity keys.
  */
 class CybouKeyStore {

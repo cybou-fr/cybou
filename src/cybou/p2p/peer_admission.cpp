@@ -45,28 +45,6 @@ std::optional<std::pair<std::array<unsigned char, 16>, bool>> AddressBytes(std::
     return std::pair{bytes, address.is_v6()};
 }
 
-bool IsLabAddress(const boost::asio::ip::address& address)
-{
-    auto normalized = address;
-    if (normalized.is_v6() && normalized.to_v6().is_v4_mapped()) {
-        const auto mapped = normalized.to_v6().to_bytes();
-        boost::asio::ip::address_v4::bytes_type v4{};
-        std::copy_n(mapped.end() - static_cast<std::ptrdiff_t>(v4.size()), v4.size(), v4.begin());
-        normalized = boost::asio::ip::address_v4{v4};
-    }
-    if (normalized.is_v4()) {
-        const auto bytes = normalized.to_v4().to_bytes();
-        return bytes[0] == 10 || bytes[0] == 127 ||
-            (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
-            (bytes[0] == 192 && bytes[1] == 168) ||
-            (bytes[0] == 169 && bytes[1] == 254);
-    }
-    const auto v6 = normalized.to_v6();
-    if (v6.is_loopback() || v6.is_link_local()) return true;
-    const auto bytes = v6.to_bytes();
-    return (bytes[0] & 0xfeU) == 0xfcU; // IPv6 unique-local fc00::/7
-}
-
 } // namespace
 
 std::optional<std::chrono::year_month> FrenchIpDataset::ParseIssuedMonth(const std::string_view text)
@@ -154,19 +132,14 @@ bool FrenchIpDataset::IsFrench(const std::string_view numeric_address) const
 
 PeerAdmissionPolicy PeerAdmissionPolicy::Public(std::shared_ptr<const FrenchIpDataset> dataset)
 {
-    return PeerAdmissionPolicy{std::move(dataset), false};
+    return PeerAdmissionPolicy{std::move(dataset)};
 }
 
 PeerAdmissionPolicy PeerAdmissionPolicy::PublicWithUpdater(std::shared_ptr<GeoDatabaseUpdater> updater)
 {
-    PeerAdmissionPolicy policy{nullptr, false};
+    PeerAdmissionPolicy policy{nullptr};
     policy.m_updater = std::move(updater);
     return policy;
-}
-
-PeerAdmissionPolicy PeerAdmissionPolicy::Lab()
-{
-    return PeerAdmissionPolicy{nullptr, true};
 }
 
 bool PeerAdmissionPolicy::Allows(const std::string_view numeric_address) const
@@ -174,14 +147,13 @@ bool PeerAdmissionPolicy::Allows(const std::string_view numeric_address) const
     boost::system::error_code ec;
     const auto address = boost::asio::ip::make_address(std::string{numeric_address}, ec);
     if (ec) return false;
-    if (m_lab) return IsLabAddress(address);
     const auto dataset = m_dataset ? m_dataset : (m_updater ? m_updater->CurrentDataset() : nullptr);
     return dataset && dataset->IsFrench(numeric_address);
 }
 
 bool PeerAdmissionPolicy::Ready() const
 {
-    return m_lab || static_cast<bool>(m_dataset) || (m_updater && m_updater->Ready());
+    return static_cast<bool>(m_dataset) || (m_updater && m_updater->Ready());
 }
 
 } // namespace cybou::p2p

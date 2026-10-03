@@ -13,7 +13,7 @@
 
 namespace cybou {
 
-// Portable CYBV2 cryptographic envelope. File persistence and payload schema
+// Portable CYBV cryptographic envelope. File persistence and payload schema
 // are separate; callers must not broadcast before durable save/reopen.
 std::optional<std::vector<unsigned char>> SealIdentityVault(
     std::string_view password, std::span<const unsigned char> payload);

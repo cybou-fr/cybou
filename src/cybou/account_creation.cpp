@@ -12,7 +12,6 @@
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{4};
 constexpr size_t ROOT_SIG_SIZE{3309};
 constexpr size_t AUTHORIZATION_SIG_SIZE{2420};
 
@@ -60,12 +59,11 @@ std::optional<std::array<unsigned char, ACCOUNT_CREATE_WORK_SIZE>> SerializeAcco
 {
     if (work.network_binding.IsNull() || work.account_id.IsNull()) return std::nullopt;
     std::array<unsigned char, ACCOUNT_CREATE_WORK_SIZE> bytes{};
-    bytes[0] = VERSION;
-    std::copy_n(work.network_binding.begin(), 32, bytes.begin() + 1);
-    std::copy_n(work.account_id.Value().begin(), 32, bytes.begin() + 33);
-    std::copy(work.authorization_commitment.begin(), work.authorization_commitment.end(), bytes.begin() + 65);
-    Write64(bytes.data() + 97, work.work_epoch);
-    Write64(bytes.data() + 105, work.nonce);
+    std::copy_n(work.network_binding.begin(), 32, bytes.begin() + 0);
+    std::copy_n(work.account_id.Value().begin(), 32, bytes.begin() + 32);
+    std::copy(work.authorization_commitment.begin(), work.authorization_commitment.end(), bytes.begin() + 64);
+    Write64(bytes.data() + 96, work.work_epoch);
+    Write64(bytes.data() + 104, work.nonce);
     return bytes;
 }
 
@@ -73,7 +71,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreateWorkHash(const 
 {
     const auto bytes = SerializeAccountCreationWork(work);
     if (!bytes) return std::nullopt;
-    return HashWithDomain("CYBOU/ACCOUNT-CREATE-WORK/V3", *bytes);
+    return HashWithDomain("CYBOU/ACCOUNT-CREATE-WORK", *bytes);
 }
 
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
@@ -88,7 +86,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreatePopDigest(
     std::copy_n(network_binding.begin(), 32, body.begin());
     std::copy_n(account_id.Value().begin(), 32, body.begin() + 32);
     std::copy(commitment->begin(), commitment->end(), body.begin() + 64);
-    return HashWithDomain("CYBOU/ACCOUNT-POP/V3", body);
+    return HashWithDomain("CYBOU/ACCOUNT-POP", body);
 }
 
 std::optional<std::array<unsigned char, 32>> ComputeAccountCreateAuthorizationCommitment(
@@ -98,7 +96,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAccountCreateAuthorizationCo
     const auto auth_commitment = ComputeIdentityAuthorizationCommitment(authorization);
     if (!auth_commitment || std::all_of(kem_package_id.begin(), kem_package_id.end(),
             [](unsigned char byte) { return byte == 0; })) return std::nullopt;
-    constexpr std::string_view domain{"CYBOU/ACCOUNT-AUTHORIZATION/V3"};
+    constexpr std::string_view domain{"CYBOU/ACCOUNT-AUTHORIZATION"};
     std::array<unsigned char, 32> digest{};
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), *auth_commitment, kem_package_id}, digest.data())) {
         return std::nullopt;
@@ -114,44 +112,43 @@ std::optional<std::array<unsigned char, ACCOUNT_CREATE_SIZE>> SerializeAccountCr
     if (op.account_id.IsNull() || !auth || !work || !DecodeIdentityKemPackage(op.kem_package) ||
         !ValidSignatures(op)) return std::nullopt;
     std::array<unsigned char, ACCOUNT_CREATE_SIZE> bytes{};
-    bytes[0] = VERSION;
-    std::copy_n(op.account_id.Value().begin(), 32, bytes.begin() + 1);
-    std::copy(auth->begin(), auth->end(), bytes.begin() + 33);
-    std::copy(op.kem_package.begin(), op.kem_package.end(), bytes.begin() + 3364);
-    std::copy(work->begin(), work->end(), bytes.begin() + 4583);
-    std::copy(op.recovery_pop.ed25519.begin(), op.recovery_pop.ed25519.end(), bytes.begin() + 4696);
-    std::copy(op.recovery_pop.ml_dsa.begin(), op.recovery_pop.ml_dsa.end(), bytes.begin() + 4760);
-    std::copy(op.authorization_pop.ed25519.begin(), op.authorization_pop.ed25519.end(), bytes.begin() + 8069);
-    std::copy(op.authorization_pop.ml_dsa.begin(), op.authorization_pop.ml_dsa.end(), bytes.begin() + 8133);
+    std::copy_n(op.account_id.Value().begin(), 32, bytes.begin() + 0);
+    std::copy(auth->begin(), auth->end(), bytes.begin() + 32);
+    std::copy(op.kem_package.begin(), op.kem_package.end(), bytes.begin() + 3362);
+    std::copy(work->begin(), work->end(), bytes.begin() + 4580);
+    std::copy(op.recovery_pop.ed25519.begin(), op.recovery_pop.ed25519.end(), bytes.begin() + 4692);
+    std::copy(op.recovery_pop.ml_dsa.begin(), op.recovery_pop.ml_dsa.end(), bytes.begin() + 4756);
+    std::copy(op.authorization_pop.ed25519.begin(), op.authorization_pop.ed25519.end(), bytes.begin() + 8065);
+    std::copy(op.authorization_pop.ml_dsa.begin(), op.authorization_pop.ml_dsa.end(), bytes.begin() + 8129);
     return bytes;
 }
 
 std::optional<AccountCreateOp> DeserializeAccountCreateOp(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != ACCOUNT_CREATE_SIZE || bytes[0] != VERSION) return std::nullopt;
+    if (bytes.size() != ACCOUNT_CREATE_SIZE) return std::nullopt;
     std::array<unsigned char, 32> id_bytes{};
-    std::copy_n(bytes.begin() + 1, 32, id_bytes.begin());
+    std::copy_n(bytes.begin() + 0, 32, id_bytes.begin());
     const auto account_id = AccountId::FromBytes(id_bytes);
-    const auto auth = DeserializeIdentityAuthorization(bytes.subspan(33, IDENTITY_AUTHORIZATION_SIZE));
-    if (!account_id || !auth || bytes[4583] != VERSION) return std::nullopt;
+    const auto auth = DeserializeIdentityAuthorization(bytes.subspan(32, IDENTITY_AUTHORIZATION_SIZE));
+    if (!account_id || !auth) return std::nullopt;
     IdentityKemPackage kem_package{};
-    std::copy_n(bytes.begin() + 3364, kem_package.size(), kem_package.begin());
+    std::copy_n(bytes.begin() + 3362, kem_package.size(), kem_package.begin());
     if (!DecodeIdentityKemPackage(kem_package)) return std::nullopt;
     AccountCreateOp op{.account_id = *account_id, .authorization = *auth,
         .kem_package = kem_package, .work = {}, .recovery_pop = {}, .authorization_pop = {}};
-    std::copy_n(bytes.begin() + 4584, 32, op.work.network_binding.begin());
+    std::copy_n(bytes.begin() + 4580, 32, op.work.network_binding.begin());
     std::array<unsigned char, 32> work_account{};
-    std::copy_n(bytes.begin() + 4616, 32, work_account.begin());
+    std::copy_n(bytes.begin() + 4612, 32, work_account.begin());
     const auto work_id = AccountId::FromBytes(work_account);
     if (!work_id) return std::nullopt;
     op.work.account_id = *work_id;
-    std::copy_n(bytes.begin() + 4648, 32, op.work.authorization_commitment.begin());
-    op.work.work_epoch = Read64(bytes.data() + 4680);
-    op.work.nonce = Read64(bytes.data() + 4688);
-    std::copy_n(bytes.begin() + 4696, 64, op.recovery_pop.ed25519.begin());
-    op.recovery_pop.ml_dsa.assign(bytes.begin() + 4760, bytes.begin() + 8069);
-    std::copy_n(bytes.begin() + 8069, 64, op.authorization_pop.ed25519.begin());
-    op.authorization_pop.ml_dsa.assign(bytes.begin() + 8133, bytes.end());
+    std::copy_n(bytes.begin() + 4644, 32, op.work.authorization_commitment.begin());
+    op.work.work_epoch = Read64(bytes.data() + 4676);
+    op.work.nonce = Read64(bytes.data() + 4684);
+    std::copy_n(bytes.begin() + 4692, 64, op.recovery_pop.ed25519.begin());
+    op.recovery_pop.ml_dsa.assign(bytes.begin() + 4756, bytes.begin() + 8065);
+    std::copy_n(bytes.begin() + 8065, 64, op.authorization_pop.ed25519.begin());
+    op.authorization_pop.ml_dsa.assign(bytes.begin() + 8129, bytes.end());
     return op;
 }
 

@@ -9,7 +9,7 @@ AccountID remains stable across Identity rotation.
 
 ## Portable vault
 
-CYBV2/CVID5 stores stable AccountID plus recovery entropy inside the protected
+CYBOU Identity Vault stores stable AccountID plus recovery entropy inside the protected
 portable vault format.
 
 The vault must be durably saved and reopened before AccountCreate broadcast.

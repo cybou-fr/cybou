@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_rejects_wrong_network_key_and_address)
     BOOST_CHECK(!cybou::DecryptChunk(network, *key, wrong_id, encrypted->stored_bytes));
 }
 
-BOOST_AUTO_TEST_CASE(encrypted_chunk_rejects_tampering_unknown_version_and_oversize)
+BOOST_AUTO_TEST_CASE(encrypted_chunk_rejects_tampering_magic_and_oversize)
 {
     const auto network = Network(0x41);
     const auto key = cybou::GenerateContentKey();
@@ -93,9 +93,9 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_rejects_tampering_unknown_version_and_overs
     auto tampered = encrypted->stored_bytes;
     tampered[cybou::ENCRYPTED_CHUNK_HEADER_SIZE + 2] ^= 0x40;
     BOOST_CHECK(!cybou::DecryptChunk(network, *key, cybou::ComputeChunkId(tampered), tampered));
-    auto unknown_version = encrypted->stored_bytes;
-    unknown_version[4] = 2;
-    BOOST_CHECK(!cybou::DecryptChunk(network, *key, cybou::ComputeChunkId(unknown_version), unknown_version));
+    auto bad_magic = encrypted->stored_bytes;
+    bad_magic[0] = 2;
+    BOOST_CHECK(!cybou::DecryptChunk(network, *key, cybou::ComputeChunkId(bad_magic), bad_magic));
     std::vector<unsigned char> too_large(cybou::ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES + 1);
     BOOST_CHECK(!cybou::EncryptChunk(network, *key, too_large));
 }

@@ -20,12 +20,11 @@ namespace cybou {
 namespace {
 
 constexpr std::string_view CHECK_NAME{"__application_store_check__"};
-constexpr std::string_view CHECK_VALUE{"CYBOU local application store v1"};
-constexpr std::string_view RECORD_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/v1/record/"};
-constexpr std::string_view KEY_CHECK_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/v1/key-check"};
+constexpr std::string_view CHECK_VALUE{"CYBOU local application store"};
+constexpr std::string_view RECORD_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/record/"};
+constexpr std::string_view KEY_CHECK_DOMAIN{"CYBOU/LOCAL-APPLICATION-STORE/key-check"};
 constexpr std::size_t MAX_NAME_BYTES{512};
 constexpr std::size_t MAX_VALUE_BYTES{4 * 1024 * 1024};
-constexpr unsigned char FORMAT_VERSION{1};
 constexpr char HEX[] = "0123456789abcdef";
 
 struct KeyCleaner {
@@ -88,23 +87,23 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
     m_db = std::make_unique<KVStore>(KVStoreOptions{.path = m_path, .cache_bytes = 4 << 20});
 
     std::vector<unsigned char> check;
-    if (m_db->Read(std::string{"app/v1/check"}, check)) {
+    if (m_db->Read(std::string{"app/check"}, check)) {
         auto decoded = Decrypt(*key, CHECK_NAME, check);
         if (!decoded || !std::equal(decoded->begin(), decoded->end(), CHECK_VALUE.begin(), CHECK_VALUE.end())) {
             throw PrivateApplicationStoreKeyMismatch{"private application store belongs to other Identity keys"};
         }
         crypto::CleanseMemory(decoded->data(), decoded->size());
     } else {
-        if (m_db->Exists(std::string{"app/v1/check"})) {
+        if (m_db->Exists(std::string{"app/check"})) {
             throw std::runtime_error{"corrupt private application store key check"};
         }
         bool has_rows{false};
-        m_db->ForEachStringPrefix("app/v1/row/", std::string{"app/v1/row/"}.size() + 64,
+        m_db->ForEachStringPrefix("app/row/", std::string{"app/row/"}.size() + 64,
             [&](const std::string&, const std::string&) { has_rows = true; });
         if (has_rows) throw std::runtime_error{"private application store key check is missing"};
         auto encoded = Encrypt(*key, CHECK_NAME, Bytes(CHECK_VALUE));
         if (!encoded) throw std::runtime_error{"cannot encrypt private application store key check"};
-        m_db->Write(std::string{"app/v1/check"}, *encoded, true);
+        m_db->Write(std::string{"app/check"}, *encoded, true);
     }
 }
 
@@ -133,7 +132,7 @@ std::optional<std::string> PrivateApplicationStore::RecordKey(
     const auto aad = AssociatedData(m_account, name);
     std::array<unsigned char, 32> digest{};
     if (!Mac(key, aad, digest)) return std::nullopt;
-    const auto result = std::string{"app/v1/row/"} + Hex(digest);
+    const auto result = std::string{"app/row/"} + Hex(digest);
     crypto::CleanseMemory(digest.data(), digest.size());
     return result;
 }
@@ -145,13 +144,12 @@ std::optional<std::vector<unsigned char>> PrivateApplicationStore::Encrypt(
     if (plaintext.size() > MAX_VALUE_BYTES) return std::nullopt;
     constexpr auto NONCE_SIZE = crypto::CHACHA20_POLY1305_NONCE_SIZE;
     constexpr auto TAG_SIZE = crypto::CHACHA20_POLY1305_TAG_SIZE;
-    std::vector<unsigned char> encoded(1 + NONCE_SIZE + plaintext.size() + TAG_SIZE);
-    encoded[0] = FORMAT_VERSION;
-    if (RAND_bytes(encoded.data() + 1, NONCE_SIZE) != 1) return std::nullopt;
+    std::vector<unsigned char> encoded(NONCE_SIZE + plaintext.size() + TAG_SIZE);
+    if (RAND_bytes(encoded.data(), NONCE_SIZE) != 1) return std::nullopt;
     const auto aad = AssociatedData(m_account, name);
     if (!crypto::ChaCha20Poly1305Encrypt(key,
-            std::span<const unsigned char, NONCE_SIZE>{encoded.data() + 1, NONCE_SIZE},
-            aad, plaintext, std::span<unsigned char>{encoded}.subspan(1 + NONCE_SIZE))) return std::nullopt;
+            std::span<const unsigned char, NONCE_SIZE>{encoded.data(), NONCE_SIZE},
+            aad, plaintext, std::span<unsigned char>{encoded}.subspan(NONCE_SIZE))) return std::nullopt;
     return encoded;
 }
 
@@ -161,13 +159,13 @@ std::optional<std::vector<unsigned char>> PrivateApplicationStore::Decrypt(
 {
     constexpr auto NONCE_SIZE = crypto::CHACHA20_POLY1305_NONCE_SIZE;
     constexpr auto TAG_SIZE = crypto::CHACHA20_POLY1305_TAG_SIZE;
-    if (encoded.size() < 1 + NONCE_SIZE + TAG_SIZE || encoded[0] != FORMAT_VERSION ||
-        encoded.size() > 1 + NONCE_SIZE + MAX_VALUE_BYTES + TAG_SIZE) return std::nullopt;
-    std::vector<unsigned char> plaintext(encoded.size() - 1 - NONCE_SIZE - TAG_SIZE);
+    if (encoded.size() < NONCE_SIZE + TAG_SIZE ||
+        encoded.size() > NONCE_SIZE + MAX_VALUE_BYTES + TAG_SIZE) return std::nullopt;
+    std::vector<unsigned char> plaintext(encoded.size() - NONCE_SIZE - TAG_SIZE);
     const auto aad = AssociatedData(m_account, name);
     if (!crypto::ChaCha20Poly1305Decrypt(key,
-            std::span<const unsigned char, NONCE_SIZE>{encoded.data() + 1, NONCE_SIZE},
-            aad, encoded.subspan(1 + NONCE_SIZE), plaintext)) return std::nullopt;
+            std::span<const unsigned char, NONCE_SIZE>{encoded.data(), NONCE_SIZE},
+            aad, encoded.subspan(NONCE_SIZE), plaintext)) return std::nullopt;
     return plaintext;
 }
 

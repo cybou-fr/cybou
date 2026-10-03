@@ -97,7 +97,7 @@ void Verify(const std::filesystem::path& dir)
     Require(allocation->second.label == CENTRAL_AUTHORITY_NAME && allocation->second.balance == 100'000'000 &&
         allocation->second.authority == 1'000'001);
     Require(CybouStateHash(network.genesis_state) == std::optional<Hash256>{network.genesis.GetGenesisStateRoot()});
-    std::cout << "DEVNET verified: compiled signed genesis, state v12, Network Root, PoA, Recovery, AccountID and allocation match.\n";
+    std::cout << "DEVNET verified: compiled signed genesis, state, Network Root, PoA, Recovery, AccountID and allocation match.\n";
 }
 }
 int main(int argc, char** argv)

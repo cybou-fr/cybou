@@ -34,7 +34,7 @@ inline constexpr std::uint8_t BETA_REMOTE_REPLICA_TARGET{2};
 
 /**
  * A storage provider: its stable StorageId (BLAKE3 of the provider key it
- * proved in the CYP2 handshake) plus the last endpoint it was reached at.
+ * proved in the CYBOU P2P handshake) plus the last endpoint it was reached at.
  * Replicas are counted per StorageId, never per address:port.
  */
 struct StorageEndpoint {
@@ -61,7 +61,7 @@ public:
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) = 0;
 };
 
-/** CYP2 PUT_AUTHORIZED_CHUNK / GET_CHUNK_BY_ID over the runtime's connected peers. */
+/** CYBOU P2P PUT_AUTHORIZED_CHUNK / GET_CHUNK_BY_ID over the runtime's connected peers. */
 class RuntimeStorageTransport final : public StorageTransport {
 public:
     explicit RuntimeStorageTransport(CybouNodeRuntime& runtime) : m_runtime{runtime} {}

@@ -27,9 +27,9 @@
 
 namespace cybou {
 namespace {
-constexpr std::array<unsigned char, 5> JOURNAL_MAGIC{'C', 'Y', 'I', 'O', 1};
-constexpr std::string_view JOURNAL_DOMAIN{"CYBOU/IDENTITY-OPERATION-JOURNAL/V1"};
-constexpr size_t JOURNAL_FIXED_SIZE{5 + 32 + 32 + 8 + 8 + 1 + 32 + 32 + 4 + 32};
+constexpr std::array<unsigned char, 4> JOURNAL_MAGIC{'C', 'Y', 'I', 'O'};
+constexpr std::string_view JOURNAL_DOMAIN{"CYBOU/IDENTITY-OPERATION-JOURNAL"};
+constexpr size_t JOURNAL_FIXED_SIZE{4 + 32 + 32 + 8 + 8 + 1 + 32 + 32 + 4 + 32};
 constexpr size_t MAX_JOURNALED_OPERATION_BYTES{8U * 1024U * 1024U};
 constexpr size_t MAX_JOURNAL_BYTES{JOURNAL_FIXED_SIZE + MAX_JOURNALED_OPERATION_BYTES};
 
@@ -176,7 +176,7 @@ bool IdentityOperationCoordinator::LoadJournal()
     if (!checksum || !std::equal(checksum->begin(), checksum->end(), bytes.begin() + checksum_offset)) {
         m_load_error = "Identity operation journal checksum failed"; return false;
     }
-    size_t offset{5};
+    size_t offset{JOURNAL_MAGIC.size()};
     auto entry = std::make_unique<JournalEntry>();
     std::copy_n(bytes.begin() + offset, 32, entry->network_binding.begin()); offset += 32;
     const auto account = AccountId::FromBytes(std::span<const unsigned char>{bytes}.subspan(offset, 32)); offset += 32;

@@ -78,9 +78,6 @@ endif()
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
-if(CYBOU_ENABLE_LAB_NETWORK)
-  target_compile_definitions(cybou_core PUBLIC CYBOU_ENABLE_LAB_NETWORK=1)
-endif()
 
 include(InstallBinaryComponent)
 

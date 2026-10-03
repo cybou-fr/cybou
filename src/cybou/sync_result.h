@@ -17,7 +17,7 @@ enum class SyncPeerStatus : uint8_t {
     PROTOCOL_ERROR,
 };
 
-/** Outcome of one verified CYP2 sync pass. */
+/** Outcome of one verified CYBOU P2P sync pass. */
 struct SyncPeerResult {
     SyncPeerStatus status{SyncPeerStatus::CONNECTION_FAILED};
     uint64_t blocks_applied{0};

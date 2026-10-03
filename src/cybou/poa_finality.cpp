@@ -32,8 +32,7 @@ bool Nonzero(const std::span<const unsigned char> bytes)
 
 bool ValidFields(const PoaFinalityCertificate& certificate)
 {
-    return certificate.version == POA_FINALITY_CERTIFICATE_VERSION &&
-        !certificate.network_binding.IsNull() && !certificate.block_id.IsNull() &&
+    return !certificate.network_binding.IsNull() && !certificate.block_id.IsNull() &&
         certificate.height != 0 && !certificate.parent_block_id.IsNull() &&
         certificate.signature.ml_dsa.size() == 3309 &&
         Nonzero(certificate.signature.ed25519) && Nonzero(certificate.signature.ml_dsa);
@@ -44,7 +43,7 @@ bool ValidFields(const PoaFinalityCertificate& certificate)
 cybou::Hash256 ComputePoaFinalityDigest(const cybou::Hash256& network_binding, const cybou::Hash256& block_id,
     const uint64_t height, const cybou::Hash256& parent_block_id)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/POA_FINALITY/V1"};
+    static constexpr std::string_view DOMAIN{"CYBOU/POA-FINALITY"};
     unsigned char height_bytes[8];
     for (int i = 0; i < 8; ++i) height_bytes[i] = static_cast<unsigned char>(height >> (8 * i));
 
@@ -94,7 +93,6 @@ std::optional<std::vector<unsigned char>> SerializePoaFinalityCertificate(
     if (!ValidFields(certificate)) return std::nullopt;
     std::vector<unsigned char> bytes;
     bytes.reserve(POA_FINALITY_CERTIFICATE_SIZE);
-    bytes.push_back(certificate.version);
     bytes.insert(bytes.end(), certificate.network_binding.begin(), certificate.network_binding.end());
     bytes.insert(bytes.end(), certificate.block_id.begin(), certificate.block_id.end());
     AppendUint64LE(bytes, certificate.height);
@@ -107,12 +105,11 @@ std::optional<std::vector<unsigned char>> SerializePoaFinalityCertificate(
 std::optional<PoaFinalityCertificate> DeserializePoaFinalityCertificate(
     const std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != POA_FINALITY_CERTIFICATE_SIZE || bytes[0] != POA_FINALITY_CERTIFICATE_VERSION) {
+    if (bytes.size() != POA_FINALITY_CERTIFICATE_SIZE) {
         return std::nullopt;
     }
     PoaFinalityCertificate certificate;
-    certificate.version = bytes[0];
-    size_t offset{1};
+    size_t offset{0};
     std::copy_n(bytes.begin() + offset, 32, certificate.network_binding.begin());
     offset += 32;
     std::copy_n(bytes.begin() + offset, 32, certificate.block_id.begin());

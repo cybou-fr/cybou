@@ -3,7 +3,7 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, announcements,
+implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
@@ -25,10 +25,10 @@ simultaneously or temporary migration between them is required. Once a migration
 window concludes and only one form remains supported, the older form and the
 version discriminator are removed. Code and architecture do not record development
 history in type names, wire headers, schema discriminators, or conceptual models
-(`CYP2`, `state v12`, `schema v3`, `wire v4`, `CVID5`, `CYBV2`). Git records
+(`CYBOU P2P`, `state`, `schema`, `wire`, `CYID`, `CYBV`). Git records
 history; code embodies only the active truth.
 
-Cryptographic domain separation strings (`CYBOU/NETWORK-ID/V6`, `CYBOU/OP-ID/V5`, etc.)
+Cryptographic domain separation strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`, etc.)
 are exact bytes of cryptographic hash functions and key derivation. They are never
 renamed mechanically in source; instead, they transition to eternal unversioned
 domain strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`, `CYBOU/STORAGE-ID`, etc.)
@@ -46,7 +46,7 @@ Official networks:
 
 Network identity:
     NetworkID = Network Public Key
-    NetworkBinding = SHA-256("CYBOU/NETWORK-ID/V6" || NetworkID), the 32-byte
+    NetworkBinding = SHA-256("CYBOU/NETWORK-ID" || NetworkID), the 32-byte
       form used in HELLO, signatures, certificates, operations and DB keys
     Exactly one signed genesis per NetworkID forever
 
@@ -82,7 +82,7 @@ Bootstrap:
     - ordinary CYBOU full peer
     - same executable (`cybou`)
     - nodes dial the compiled locators first, checking the compiled TLS SPKI pin
-    - same CYP2 protocol
+    - same CYBOU P2P protocol
     - no node-role announcement
     - no BootstrapNode class
     - no special consensus role
@@ -164,10 +164,11 @@ No:
 There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
-  `cybou node run` on the immutable v12 DEVNET, with state under
+  `cybou node run` on the immutable current DEVNET, with state under
   `/var/lib/cybou/node/state` and intrinsic automatic storage allocation.
-  The old network domain is retired under `/var/lib/cybou/node-retired-20261003-hardening`;
-  it must never be reused by the new network. The prototype service is inactive.
+  The preceding network domain is retired under `/var/lib/cybou/node-retired-20261003-de-version`;
+  the earlier hardening retirement is preserved separately. Neither state may
+  be reused by the current network. The prototype service is inactive.
   TLS files remain under `/etc/cybou-bootstrap/tls/` for transport identity only.
 - Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
   its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.cpp` for initial transport
@@ -195,9 +196,14 @@ There is no production network.
   new admission without changing node type, consensus authority, or mesh participation.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
   `BUILD_TESTS=ON`.
-- Multi-process LAB/CI networks use `--network lab`, compiled only with
-  `-DCYBOU_ENABLE_LAB_NETWORK=ON` test builds: its own fixed public Network and
-  PoA keys, never the DEVNET PoA key (one active signer per official key).
+- Development and integration run on DEVNET with its existing compiled genesis
+  and locally stored pre-generated keys. No alternate development network, runtime
+  genesis generator, automatic key export or Geo bypass exists. Keep one active
+  signer and one durable signing history per official PoA key.
+- Component tests may use in-memory fixtures and synthetic inputs; these are not
+  selectable networks and never enter the production executable.
+- Cleanup does not authorize new keys, a new NetworkID or replacement genesis.
+  Preserve the accepted network material and its derivation domains.
 
 ## Network and node architecture
 
@@ -238,8 +244,7 @@ There is no production network.
   until they are finalized into blocks. A PoA node produces blocks from that same pool.
 - Public P2P admission is France-only in production/DEV, for inbound and
   outbound peers for every Full Node. Classification uses local Geo data;
-  unavailable/corrupt data fails closed. LAB loopback/private test traffic
-  requires an explicit LAB bypass. Optional VPN/proxy/Tor filtering is local
+  unavailable/corrupt data fails closed. Development uses the same admission rule. Optional VPN/proxy/Tor filtering is local
   policy and never changes consensus or Identity.
 - Bootstrap nodes do not vote, form a quorum, or finalize. PoA remains
   single-operator finality under the active Authority key.
@@ -250,7 +255,7 @@ There is no production network.
 - Stable random AccountID is independent from mnemonic and keys.
 - Recovery: Ed25519 + ML-DSA-65. Authorization: Ed25519 + ML-DSA-44.
 - Identity KEM uses its own mnemonic-derived role; do not reuse signing keys.
-- Portable CYBV2/CVID5 vault stores stable AccountID plus recovery entropy.
+- Portable CYBOU Identity Vault vault stores stable AccountID plus recovery entropy.
 - IdentityRotate atomically replaces Recovery, Authorization, and KEM roles.
 - No device registry, primary-device concept, session authorization, identity
   transfer, DeviceAdd, or DeviceRevoke.
@@ -384,7 +389,7 @@ uses its signed specification digest as the height-zero chain anchor.
 
 PublicationService stages directly into pinned local encrypted chunks, stores
 one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
-RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+RootPublication wire and encrypted/private schema are bounded binary
 layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
 No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
 network cutover require the previously established operator authorization.

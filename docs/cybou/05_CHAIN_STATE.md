@@ -55,7 +55,7 @@ Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENT
 
 ## Canonical encoding
 
-State v12 is the sole encoding; v11 is rejected without migration. Allocations
+State is the sole canonical encoding. Allocations
 are immutable except for their one-time claimed_by and the pre-claim Balance
 of the unique Central Authority allocation. After claim its allocation Balance
 stays fixed; new fees credit the claimant account Balance. TotalSupply counts

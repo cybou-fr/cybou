@@ -95,7 +95,7 @@ struct IdentityRecoveryBridge {
 
 using PrivateApplicationDocument = std::variant<MailMessage, FilesMutationBatch, IdentityRecoveryBridge>;
 
-/** Strict v1 canonical-CBOR codecs for encrypted application ROOT metadata. */
+/** Strict canonical binary codecs for encrypted application ROOT metadata. */
 std::optional<std::vector<unsigned char>> EncodePrivateApplicationDocument(
     const PrivateApplicationDocument& document);
 std::optional<PrivateApplicationDocument> DecodePrivateApplicationDocument(

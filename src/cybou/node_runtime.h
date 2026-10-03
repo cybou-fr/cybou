@@ -64,7 +64,7 @@ struct NodeRuntimeConfig {
     std::filesystem::path data_dir;
     std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
     std::vector<ConfiguredPeer> configured_peers;
-    /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
+    /** This node's own CYBOU P2P listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> advertised_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
@@ -248,7 +248,7 @@ public:
     IdentityKemPackageLookupResult FindIdentityKemPackage(
         const AccountId& account_id, uint64_t key_epoch) const;
 
-    /** Maintain discovered CYP2 sessions, fail over across peers, and sync verified blocks. */
+    /** Maintain discovered CYBOU P2P sessions, fail over across peers, and sync verified blocks. */
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
     /** Local encrypted staging/cache, available on every Full Node. */
@@ -269,7 +269,7 @@ public:
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** A connected CYP2 storage peer and the StorageId it proved on demand. */
+    /** A connected CYBOU P2P storage peer and the StorageId it proved on demand. */
     struct StorageEndpoint {
         std::string address;
         uint16_t port{0};

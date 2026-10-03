@@ -18,8 +18,8 @@
 namespace cybou {
 namespace {
 
-constexpr std::string_view CAPSULE_KEY_DOMAIN{"CYBOU/ROOT-CAPSULE-KEY/v1"};
-constexpr std::string_view CAPSULE_AAD_DOMAIN{"CYBOU/ROOT-CAPSULE-AAD/v1"};
+constexpr std::string_view CAPSULE_KEY_DOMAIN{"CYBOU/ROOT-CAPSULE-KEY"};
+constexpr std::string_view CAPSULE_AAD_DOMAIN{"CYBOU/ROOT-CAPSULE-AAD"};
 
 class CleanseOnExit final
 {

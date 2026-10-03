@@ -5,6 +5,7 @@
 #define CYBOU_SERVICE_TEST_FIXTURE_H
 
 #include <cybou/identity_service.h>
+#include <cybou/crypto/sha256.h>
 #include <cybou/network_genesis.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/session.h>
@@ -13,13 +14,32 @@
 #include <array>
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <stdexcept>
 #include <vector>
 
-inline std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> TestLabAdmissionPolicy()
+inline std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> TestPeerAdmissionPolicy()
 {
-    return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(cybou::p2p::PeerAdmissionPolicy::Lab());
+    // Synthetic Geo input for component tests, through the real verified policy.
+    // No alternate network profile or runtime admission bypass is involved.
+    static const auto policy = [] {
+        const std::string csv{"10.0.0.0,10.255.255.255,FR\n127.0.0.0,127.255.255.255,FR\n"
+            "172.16.0.0,172.31.255.255,FR\n192.168.0.0,192.168.255.255,FR\n::1,::1,FR\n"};
+        std::array<unsigned char, 32> hash{};
+        if (!cybou::crypto::ComputeSha256({cybou::crypto::Sha256Bytes(csv)}, hash.data()))
+            throw std::runtime_error("test Geo hash failed");
+        const auto path = std::filesystem::temp_directory_path() /
+            ("cybou-unit-geo-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".csv");
+        { std::ofstream output{path, std::ios::binary}; output << csv; }
+        const auto today = std::chrono::floor<std::chrono::days>(std::chrono::system_clock::now());
+        const std::chrono::year_month_day date{today};
+        const auto dataset = cybou::p2p::FrenchIpDataset::LoadDbIpCountryCsv(path, hash, date.year()/date.month(), today);
+        std::filesystem::remove(path);
+        if (!dataset) throw std::runtime_error("test Geo dataset failed validation");
+        return std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(cybou::p2p::PeerAdmissionPolicy::Public(dataset));
+    }();
+    return policy;
 }
 
 struct CybouServiceTestFixture {
@@ -49,7 +69,7 @@ struct CybouServiceTestFixture {
             .poa_finalizer_recovery_entropy = validator_seed,
             .memory_only = true,
             .wipe_data = true,
-            .peer_admission_policy = TestLabAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(),
         };
         runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         if (!runtime->InitializeGenesis(genesis)) throw std::runtime_error("genesis initialization failed");

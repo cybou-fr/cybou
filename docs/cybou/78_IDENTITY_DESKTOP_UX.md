@@ -8,7 +8,7 @@ The first screen gives equal prominence to **Create identity** and **Restore ide
 
 1. Set a vault password, generate 24 words locally, and confirm selected words without placing them in logs or clipboard by default.
 2. Generate a random AccountID and derive Recovery, Authorization, and X-Wing key roles from the entropy using separate domains.
-3. Atomically save and reopen the CVID5 vault before AccountCreate broadcast.
+3. Atomically save and reopen the CYID vault before AccountCreate broadcast.
 4. Perform AccountCreationWork, submit, and show pending until verified PoA finality. Keep the vault after network failure so the same identity can retry.
 5. Offer a `.cybou` name. Persist claim salt in the encrypted local claim file before NameCommit; show commit, work, reveal, and finality as separate phases.
 

@@ -187,9 +187,8 @@ BOOST_AUTO_TEST_CASE(account_create_canonical_typed_roundtrip)
 
     const auto encoded = cybou::SerializeProtocolOperation(op);
     BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::ACCOUNT_CREATE));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::ACCOUNT_CREATE_SIZE);
+    BOOST_CHECK_EQUAL((*encoded)[0], static_cast<uint8_t>(cybou::ProtocolOperationKind::ACCOUNT_CREATE));
+    BOOST_CHECK_EQUAL(encoded->size(), 1 + cybou::ACCOUNT_CREATE_SIZE);
 
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded.has_value());
@@ -211,9 +210,8 @@ BOOST_AUTO_TEST_CASE(payment_canonical_typed_roundtrip)
 
     const auto encoded = cybou::SerializeProtocolOperation(op);
     BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::PAYMENT));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::AUTHORIZED_PAYMENT_SIZE);
+    BOOST_CHECK_EQUAL((*encoded)[0], static_cast<uint8_t>(cybou::ProtocolOperationKind::PAYMENT));
+    BOOST_CHECK_EQUAL(encoded->size(), 1 + cybou::AUTHORIZED_PAYMENT_SIZE);
 
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded.has_value());
@@ -254,9 +252,8 @@ BOOST_AUTO_TEST_CASE(system_lock_canonical_typed_roundtrip)
 
     const auto encoded = cybou::SerializeProtocolOperation(op);
     BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::SYSTEM_LOCK));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::AUTHORIZED_SYSTEM_LOCK_SIZE);
+    BOOST_CHECK_EQUAL((*encoded)[0], static_cast<uint8_t>(cybou::ProtocolOperationKind::SYSTEM_LOCK));
+    BOOST_CHECK_EQUAL(encoded->size(), 1 + cybou::AUTHORIZED_SYSTEM_LOCK_SIZE);
 
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded.has_value());
@@ -293,7 +290,7 @@ BOOST_AUTO_TEST_CASE(root_publication_is_a_typed_identity_authorized_operation)
 
     const auto encoded = cybou::SerializeProtocolOperation(operation);
     BOOST_REQUIRE(encoded);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::ROOT_PUBLICATION));
+    BOOST_CHECK_EQUAL((*encoded)[0], static_cast<uint8_t>(cybou::ProtocolOperationKind::ROOT_PUBLICATION));
     BOOST_CHECK(encoded->size() <= cybou::ROOT_PUBLICATION_MAX_OPERATION_BYTES);
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded);
@@ -331,9 +328,8 @@ BOOST_AUTO_TEST_CASE(identity_rotate_canonical_typed_roundtrip)
     const cybou::ProtocolOperation operation{rotate};
     const auto encoded = cybou::SerializeProtocolOperation(operation);
     BOOST_REQUIRE(encoded);
-    BOOST_CHECK_EQUAL((*encoded)[0], cybou::PROTOCOL_OPERATION_VERSION);
-    BOOST_CHECK_EQUAL((*encoded)[1], static_cast<uint8_t>(cybou::ProtocolOperationKind::IDENTITY_ROTATE));
-    BOOST_CHECK_EQUAL(encoded->size(), 2 + cybou::IDENTITY_ROTATE_SIZE);
+    BOOST_CHECK_EQUAL((*encoded)[0], static_cast<uint8_t>(cybou::ProtocolOperationKind::IDENTITY_ROTATE));
+    BOOST_CHECK_EQUAL(encoded->size(), 1 + cybou::IDENTITY_ROTATE_SIZE);
     const auto decoded = cybou::DeserializeProtocolOperation(*encoded);
     BOOST_REQUIRE(decoded);
     BOOST_CHECK(std::holds_alternative<cybou::IdentityRotate>(*decoded));
@@ -347,13 +343,8 @@ BOOST_AUTO_TEST_CASE(unknown_or_malformed_operation_is_rejected)
     const auto payment_op = MakeTestPayment(alice, alice.account_id, 100);
     auto encoded = *cybou::SerializeProtocolOperation(cybou::ProtocolOperation{payment_op});
 
-    // Invalid version
-    encoded[0] = 0xff;
-    BOOST_CHECK(!cybou::DeserializeProtocolOperation(encoded).has_value());
-    encoded[0] = cybou::PROTOCOL_OPERATION_VERSION;
-
     // Unknown operation kind
-    encoded[1] = 0xff;
+    encoded[0] = 0xff;
     BOOST_CHECK(!cybou::DeserializeProtocolOperation(encoded).has_value());
 
     // Truncated payload

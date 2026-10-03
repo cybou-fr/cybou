@@ -16,8 +16,8 @@
 
 namespace cybou {
 namespace {
-constexpr size_t CLAIM_SIZE{5 + 32 + 32 + 1 + 32 + 32};
-constexpr char MAGIC[]{"CYNC2"};
+constexpr size_t CLAIM_SIZE{4 + 32 + 32 + 1 + 32 + 32};
+constexpr char MAGIC[]{"CYNC"};
 
 struct ClaimSecret {
     std::string label;
@@ -53,17 +53,17 @@ std::optional<ClaimSecret> LoadClaim(const std::filesystem::path& path, std::str
     auto bytes = LoadIdentityVault(path, password);
     if (!bytes) return std::nullopt;
     const bool valid = bytes->size() == CLAIM_SIZE &&
-        std::equal(bytes->begin(), bytes->begin() + 5, MAGIC) &&
-        std::equal(network.begin(), network.end(), bytes->begin() + 5) &&
-        std::equal(account.Value().begin(), account.Value().end(), bytes->begin() + 37) &&
-        (*bytes)[69] >= NAME_MIN_LABEL_LENGTH && (*bytes)[69] <= NAME_MAX_LABEL_LENGTH;
+        std::equal(bytes->begin(), bytes->begin() + 4, MAGIC) &&
+        std::equal(network.begin(), network.end(), bytes->begin() + 4) &&
+        std::equal(account.Value().begin(), account.Value().end(), bytes->begin() + 36) &&
+        (*bytes)[68] >= NAME_MIN_LABEL_LENGTH && (*bytes)[68] <= NAME_MAX_LABEL_LENGTH;
     std::optional<ClaimSecret> claim;
     if (valid) {
         ClaimSecret value;
-        value.label.assign(reinterpret_cast<const char*>(bytes->data() + 70), (*bytes)[69]);
-        std::copy_n(bytes->begin() + 102, 32, value.salt.begin());
+        value.label.assign(reinterpret_cast<const char*>(bytes->data() + 69), (*bytes)[68]);
+        std::copy_n(bytes->begin() + 101, 32, value.salt.begin());
         if (ValidateNameLabel(value.label) == NameValidationError::NONE &&
-            std::all_of(bytes->begin() + 70 + value.label.size(), bytes->begin() + 102,
+            std::all_of(bytes->begin() + 69 + value.label.size(), bytes->begin() + 101,
                 [](unsigned char b) { return b == 0; }) &&
             std::any_of(value.salt.begin(), value.salt.end(), [](unsigned char b) { return b != 0; })) {
             claim.emplace(std::move(value));
@@ -77,12 +77,12 @@ bool SaveClaim(const std::filesystem::path& path, std::string_view password,
     const cybou::Hash256& network, const AccountId& account, const ClaimSecret& claim)
 {
     std::array<unsigned char, CLAIM_SIZE> payload{};
-    std::copy_n(MAGIC, 5, payload.begin());
-    std::copy_n(network.begin(), 32, payload.begin() + 5);
-    std::copy_n(account.Value().begin(), 32, payload.begin() + 37);
-    payload[69] = static_cast<unsigned char>(claim.label.size());
-    std::copy(claim.label.begin(), claim.label.end(), payload.begin() + 70);
-    std::copy(claim.salt.begin(), claim.salt.end(), payload.begin() + 102);
+    std::copy_n(MAGIC, 4, payload.begin());
+    std::copy_n(network.begin(), 32, payload.begin() + 4);
+    std::copy_n(account.Value().begin(), 32, payload.begin() + 36);
+    payload[68] = static_cast<unsigned char>(claim.label.size());
+    std::copy(claim.label.begin(), claim.label.end(), payload.begin() + 69);
+    std::copy(claim.salt.begin(), claim.salt.end(), payload.begin() + 101);
     const bool saved = SaveNewIdentityVault(path, password, payload);
     crypto::CleanseMemory(payload.data(), payload.size());
     if (!saved) return false;

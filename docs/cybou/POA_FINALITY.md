@@ -21,7 +21,7 @@ PoA requires both Ed25519 and ML-DSA-65. There is no classical-only fallback.
 The certificate binds:
 
 ```text
-version_u8 || NetworkID || BlockID || height_u64le || parent_block_id ||
+NetworkBinding || BlockID || height_u64le || parent_block_id ||
 Ed25519_sig || ML-DSA-65_sig
 ```
 

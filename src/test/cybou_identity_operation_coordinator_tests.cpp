@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
         .data_dir = fixture.directory / "ordinary-relay",
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestLabAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(),
     }};
     BOOST_REQUIRE(relay.InitializeGenesis(fixture.genesis));
     BOOST_REQUIRE(relay.CommitBlock(*account_block));
@@ -73,7 +73,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
         .configured_peers = {{std::pair<std::string, uint16_t>{loopback.to_string(), port}}},
         .memory_only = true,
         .wipe_data = true,
-        .peer_admission_policy = TestLabAdmissionPolicy(),
+        .peer_admission_policy = TestPeerAdmissionPolicy(),
     }};
     BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
     BOOST_REQUIRE(client.CommitBlock(*account_block));
@@ -178,7 +178,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
             .configured_peers = {{std::pair<std::string, uint16_t>{"127.0.0.1", port}}},
             .memory_only = false,
             .wipe_data = wipe_data,
-            .peer_admission_policy = TestLabAdmissionPolicy(),
+            .peer_admission_policy = TestPeerAdmissionPolicy(),
         };
     };
     cybou::Hash256 operation_id;

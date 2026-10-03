@@ -1,12 +1,10 @@
-version: '0.0.1'
 full_node:
   type: Full_Node
-  cyp2_version: 5
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce]
   capability_bitmap: absent
   network_role_announcement: absent
   baseline: [block_sync, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
-  storage: intrinsic_local_quota_may_be_zero
+  storage: intrinsic_positive_production_allocation
   storage_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
   poa_authority: genesis_key_possession_proved_by_block_certificates
   signer_activation_reconnects_peers: false
@@ -45,7 +43,7 @@ consensus:
   bootstrap:
     role: ordinary_cybou_full_peer
     same_executable: true
-    same_protocol: CYP2
+    same_protocol: CYBOU P2P
     auth_from_role: false
     special_consensus_role: absent
   unfinalized_operations: local_origin_bounded_volatile_peer_relay
@@ -85,36 +83,35 @@ chunks:
     optional_presence: strict_u8_0_or_1
     text_encoding: strict_UTF8
     exact_input_consumption: true
-    unknown_versions: rejected
+    unknown_types: rejected
     generic_recursive_parser: absent
   encrypted_chunk:
     envelope_magic: CYCH
-    envelope_version: 1
-    header_fields: [magic_4, version_1, node_key_salt_32, nonce_12]
-    header_bytes: 49
+    header_fields: [magic_4, node_key_salt_32, nonce_12]
+    header_bytes: 48
     aead: ChaCha20-Poly1305
     content_key_bytes: 32
-    content_key_scope: one_immutable_tree_version
+    content_key_scope: one_immutable_tree
     content_key_generation: OpenSSL_CSPRNG
     node_key_kdf: HKDF-SHA256
     node_key_kdf_salt: random_32_bytes_per_node
-    node_key_kdf_info: "CYBOU/CHUNK-KEY/v1 || NetworkID"
+    node_key_kdf_info: "CYBOU/CHUNK-KEY || NetworkID"
     nonce: random_12_bytes_per_node
-    associated_data: "CYBOU/CHUNK-AAD/v1 || header || NetworkID"
+    associated_data: "CYBOU/CHUNK-AAD || header || NetworkID"
     plaintext_frame: uint32_be_plaintext_length || plaintext_bytes || random_padding
     padding_bucket_bytes: [1024, 4096, 16384, 65536, 262144, 524288]
     plaintext_max_bytes: 524284
     random_extra_padding_max_bytes: 262144
     padding_bucket_selection: random_smallest_or_next_if_extra_within_limit
     aead_tag_bytes: 16
-    max_stored_bytes: 524353
+    max_stored_bytes: 524352
     chunk_id_covers: entire_stored_envelope
   encrypted_tree:
-    metadata_encoding: fixed_order_binary_schema_3_ROOT_INDEX
+    metadata_encoding: fixed_order_binary_schema_ROOT_INDEX
     data_encoding: raw_application_bytes
     structure: ROOT_to_DATA_or_zero_or_more_INDEX_levels_to_DATA
     root_uses_index_only_when_child_list_exceeds_root_fanout: true
-    metadata_fields: [schema_version, kind, child_kind, ordered_ChunkIDs, root_private_metadata_for_ROOT]
+    metadata_fields: [kind, child_kind, ordered_ChunkIDs, root_private_metadata_for_ROOT]
     child_fields: [ChunkID]
     kind_values: {root: 0, index: 1, data: 2}
     data_chunk_plaintext_bytes: {actual_min: 0, target_random_range: [163840, 327680], max: 524284}
@@ -152,7 +149,7 @@ chunks:
 publication:
   wire_profile: 4
   canonical_encoding: fixed_order_binary_LE_strict_exact_consumption
-  fields: [wire_version, root_chunk_id, chunk_authorization_root, chunk_count, recipient_capsules]
+  fields: [root_chunk_id, chunk_authorization_root, chunk_count, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
   authorized_chunk_set_public: false
@@ -169,9 +166,9 @@ publication:
   capsule_kdf: HKDF-SHA256
   capsule_kdf_input: XWing_shared_secret
   capsule_kdf_salt: NetworkID
-  capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY/v1 || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
+  capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   capsule_aead: ChaCha20-Poly1305
-  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD/v1 || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
+  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count"
   priority_fee: disabled
   fee_split: {security: 3, onboarding: 1}
@@ -223,6 +220,5 @@ local_publication:
   proof_generation: per_chunk_O_log_N
   persisted_proof_index: absent
 private_application_schema:
-  version: 3
   encoding: typed_fixed_order_binary
   types: {Mail: 1, Files: 2, RecoveryBridge: 3}

@@ -14,7 +14,7 @@ experimental software, not a public mail or cloud-storage service.
   **not BFT**, and the network makes no Byzantine fault tolerance claim.
 - The protocol substrate includes account Identity, `.cybou` names,
   `RootPublication`, an encrypted ROOT/INDEX/DATA chunk tree, finalized chunk
-  admission proofs, and CYP2 block/chunk transport.
+  admission proofs, and CYBOU P2P block/chunk transport.
 - Mail and Files are not complete public services. Publication construction,
   discovery/indexing, retrieval, clean-machine restore, provider selection,
   measured replication, audit and repair are integrated. Sustained soak and
@@ -62,7 +62,7 @@ experimental software, not a public mail or cloud-storage service.
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- CYP2 v5 uses TLS 1.3; on-demand storage key proofs bind both HELLOs, a fresh challenge and the TLS
+- CYBOU P2P uses TLS 1.3; on-demand storage key proofs bind both HELLOs, a fresh challenge and the TLS
   session. PoA authority is proved only by finalized block certificates. Ordinary peers do not have global authenticated identities.
 
 ## Documentation hierarchy

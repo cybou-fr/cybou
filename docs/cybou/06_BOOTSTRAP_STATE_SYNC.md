@@ -24,7 +24,7 @@ select compiled Network Public Key (NetworkID), signed NetworkGenesis,
 -> verify offline Network Key signature over the compiled genesis object
 -> verify hash(compiled genesis state) == genesis_state_root
 -> initialize local consensus state and genesis block ID
--> connect to ordinary bootstrap peer (or known peers) via standard CYP2 protocol
+-> connect to ordinary bootstrap peer (or known peers) via standard CYBOU P2P protocol
 -> synchronize PoA-finalized blocks in height order
 -> independently execute operations for each block
 -> recompute state root and verify against block commitment

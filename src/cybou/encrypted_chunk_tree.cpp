@@ -19,7 +19,6 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint8_t TREE_SCHEMA{3};
 constexpr std::uint64_t ROOT_KIND{0};
 constexpr std::uint64_t INDEX_KIND{1};
 constexpr std::uint64_t DATA_KIND{2};
@@ -56,7 +55,7 @@ std::vector<unsigned char> MakeMetadata(const std::uint8_t kind, std::span<const
     if (children.size() > ENCRYPTED_TREE_MAX_CHILDREN || (kind == INDEX_KIND && children.empty()))
         throw std::invalid_argument{"invalid encrypted tree children"};
     BinaryWriter writer{ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES};
-    writer.U8(TREE_SCHEMA); writer.U8(kind);
+    writer.U8(kind);
     writer.U8(children.empty() ? DATA_KIND : children.front().kind);
     writer.U16(static_cast<std::uint16_t>(children.size()));
     for (const auto& child : children) writer.Fixed(child.id);
@@ -69,7 +68,7 @@ std::optional<std::vector<ChildRef>> ParseMetadata(std::span<const unsigned char
 {
     try {
         BinaryReader reader{bytes, ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES};
-        if (reader.U8() != TREE_SCHEMA || reader.U8() != expected_kind) return std::nullopt;
+        if (reader.U8() != expected_kind) return std::nullopt;
         const auto kind = reader.U8();
         const auto count = reader.U16();
         if ((kind != INDEX_KIND && kind != DATA_KIND) || count > ENCRYPTED_TREE_MAX_CHILDREN ||

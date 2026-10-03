@@ -23,7 +23,7 @@ enum class NodeEvent {
 };
 using EventValue = std::variant<std::string, std::uint64_t, bool>;
 using EventFields = std::map<std::string, EventValue>;
-enum class EventLogMode { MINIMAL, LAB };
+enum class EventLogMode { MINIMAL, DETAILED };
 /** Output only; bounded records and allowlisted public fields, no free-form errors. */
 class EventWriter final {
     mutable std::mutex m_mutex;

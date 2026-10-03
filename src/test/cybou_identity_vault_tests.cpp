@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(password_and_payload_bounds)
 
 BOOST_AUTO_TEST_CASE(new_file_is_durable_authenticated_and_never_overwritten)
 {
-    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_vault_file_test.cybv2";
+    const auto path = std::filesystem::temp_directory_path() / "cybou_identity_vault_file_test.vault";
     std::filesystem::remove(path);
     const std::vector<unsigned char> secret{11, 22, 33, 44};
     BOOST_REQUIRE(cybou::SaveNewIdentityVault(path, "correct horse battery", secret));
@@ -71,8 +71,8 @@ BOOST_AUTO_TEST_CASE(candidate_vault_promotion_is_authenticated_atomic_and_retry
 {
     const auto dir = std::filesystem::temp_directory_path() / "cybou_identity_vault_promotion_test";
     std::filesystem::create_directories(dir);
-    const auto active = dir / "identity.cybv2";
-    const auto candidate = dir / "identity.rotation-pending.cybv2";
+    const auto active = dir / "identity.vault";
+    const auto candidate = dir / "identity.rotation-pending.vault";
     std::filesystem::remove(active);
     std::filesystem::remove(candidate);
     const std::vector<unsigned char> old_payload{1, 2, 3, 4};

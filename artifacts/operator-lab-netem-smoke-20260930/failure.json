@@ -1,1 +1,0 @@
-["Command '['ip', 'netns', 'exec', 'cybou-lab-netem-smoke-20260930', 'tc', 'filter', 'add', 'dev', 'lo', 'parent', '1:', 'protocol', 'ipv6', 'prio', '1', 'flower', 'ip_proto', 'tcp', 'dst_port', '33471', 'flowid', '1:3']' returned non-zero exit status 2."]

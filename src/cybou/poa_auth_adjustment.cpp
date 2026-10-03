@@ -49,7 +49,7 @@ std::optional<std::vector<unsigned char>> SerializeBody(const PoaAuthAdjustment&
 std::optional<std::array<unsigned char, 32>> ComputePoaAuthAdjustmentDigest(
     const cybou::Hash256& network_binding, const PoaAuthAdjustment& adjustment)
 {
-    constexpr std::string_view domain{"CYBOU/POA-AUTH-ADJUSTMENT/V1"};
+    constexpr std::string_view domain{"CYBOU/POA-AUTH-ADJUSTMENT"};
     const auto body = SerializeBody(adjustment);
     if (network_binding.IsNull() || !body) return std::nullopt;
     std::array<unsigned char, 32> digest{};

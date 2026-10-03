@@ -128,7 +128,7 @@ struct Client {
         for (const auto& id : expected_incoming_mail) {
             const auto mail = application->GetMail(id);
             if (!mail) { done=false; continue; }
-            if (mail->outgoing || mail->message.subject!="Synthetic LAB mail" || mail->message.body!="Synthetic LAB payload")
+            if (mail->outgoing || mail->message.subject!="Synthetic DEVNET mail" || mail->message.body!="Synthetic DEVNET payload")
                 throw std::runtime_error("synthetic recipient mail differs");
         }
         if (!events->Good()) throw std::runtime_error("event output failed");
@@ -186,7 +186,7 @@ int main(int argc,char* argv[]) {
         if (stop) return 1;
         if (profile=="payments" || profile=="system-locks" || profile=="mixed")
             for (const auto& client : clients) if (client->wallet->GetBalances().first==0)
-                throw std::runtime_error("financial profile requires pre-funded LAB identities; no test funding bypass exists");
+                throw std::runtime_error("financial profile requires pre-funded DEVNET identities; no test funding bypass exists");
         auto start=std::chrono::steady_clock::now(); uint64_t submitted{0};
         auto next=start;
         while (!stop && std::chrono::steady_clock::now()-start < std::chrono::milliseconds{duration}) {
@@ -219,7 +219,7 @@ int main(int argc,char* argv[]) {
                     message.message_id=*cybou::NewPrivateItemId();
                     message.recipient_account_id=*clients[(submitted+1)%count]->identity->GetAccountId();
                     message.client_timestamp_ms=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-                    message.subject="Synthetic LAB mail"; message.body="Synthetic LAB payload";
+                    message.subject="Synthetic DEVNET mail"; message.body="Synthetic DEVNET payload";
                     result=client.publication->PublishMail(job,message);
                     clients[(submitted+1)%count]->expected_incoming_mail.push_back(message.message_id);
                 } else {

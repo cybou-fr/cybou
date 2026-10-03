@@ -744,9 +744,9 @@ void CybouShellTests::filesNavigationAndViews()
 
 void CybouShellTests::networkMonitorUsesCoreSnapshot()
 {
-    CybouDesktopModel model{QStringLiteral("LAB")};
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
     cybou::NodeDiagnosticsSnapshot snapshot;
-    snapshot.network_binding="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
+    snapshot.network_binding="devnet-fixture"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
     snapshot.peers.push_back({"127.0.0.1:30471",9,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
@@ -822,8 +822,6 @@ void CybouShellTests::networkPageReflectsModel()
     QVERIFY(has_text(QStringLiteral("Waiting for a valid Geo database")));
     model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::Ready);
     QVERIFY(has_text(QStringLiteral("Ready")));
-    model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::NotRequired);
-    QVERIFY(has_text(QStringLiteral("Not required by Lab policy")));
 }
 
 void CybouShellTests::adapterSettersDrivePages()

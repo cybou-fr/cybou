@@ -49,7 +49,7 @@ inline uint32_t ReadUint32LE(const std::span<const unsigned char>& bytes, size_t
 
 cybou::Hash256 ComputeOperationsRootFromHashes(std::span<const cybou::Hash256> hashes)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/OPS_ROOT/V3"};
+    static constexpr std::string_view DOMAIN{"CYBOU/OPS-ROOT"};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
 
@@ -84,10 +84,9 @@ cybou::Hash256 ComputeOperationsRoot(const std::vector<ProtocolOperation>& opera
 
 cybou::Hash256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 {
-    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK/V3"};
+    static constexpr std::string_view DOMAIN{"CYBOU/BLOCK"};
     ::cybou::crypto::Sha256 hasher;
     hasher.Write(reinterpret_cast<const unsigned char*>(DOMAIN.data()), DOMAIN.size());
-    hasher.Write(&header.version, 1);
     hasher.Write(header.parent_block_id.begin(), header.parent_block_id.size());
 
     unsigned char height_bytes[8];
@@ -106,7 +105,6 @@ cybou::Hash256 ComputeBlockHeaderId(const CybouBlockHeader& header)
 CybouBlockHeader ExtractBlockHeader(const CybouBlock& block)
 {
     return CybouBlockHeader{
-        .version = block.version,
         .parent_block_id = block.parent_block_id,
         .height = block.height,
         .operations_root = ComputeOperationsRoot(block.operations),
@@ -122,9 +120,8 @@ cybou::Hash256 ComputeBlockId(const CybouBlock& block)
 std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block)
 {
     std::vector<unsigned char> out;
-    out.reserve(77); // base header size
+    out.reserve(76); // base header size
 
-    out.push_back(block.version);
     out.insert(out.end(), block.parent_block_id.begin(), block.parent_block_id.end());
     AppendUint64LE(out, block.height);
     out.insert(out.end(), block.resulting_state_root.begin(), block.resulting_state_root.end());
@@ -143,18 +140,14 @@ std::optional<std::vector<unsigned char>> SerializeBlock(const CybouBlock& block
 
 std::optional<CybouBlock> DeserializeBlock(std::span<const unsigned char> bytes)
 {
-    static constexpr size_t HEADER_SIZE{1 + 32 + 8 + 32 + 4}; // 77 bytes
+    static constexpr size_t HEADER_SIZE{32 + 8 + 32 + 4}; // 76 bytes
     if (bytes.size() < HEADER_SIZE) {
-        return std::nullopt;
-    }
-    if (bytes[0] != CYBOU_BLOCK_VERSION) {
         return std::nullopt;
     }
 
     CybouBlock block;
-    block.version = bytes[0];
 
-    size_t offset{1};
+    size_t offset{0};
     std::copy_n(bytes.begin() + offset, 32, block.parent_block_id.begin());
     offset += 32;
 

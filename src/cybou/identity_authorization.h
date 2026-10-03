@@ -13,7 +13,7 @@
 
 namespace cybou {
 
-inline constexpr size_t IDENTITY_AUTHORIZATION_SIZE{3331};
+inline constexpr size_t IDENTITY_AUTHORIZATION_SIZE{3330};
 using IdentityAuthorizationBytes = std::array<unsigned char, IDENTITY_AUTHORIZATION_SIZE>;
 
 struct IdentityAuthorization {

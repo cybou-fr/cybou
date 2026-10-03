@@ -12,7 +12,7 @@
 
 namespace cybou {
 
-inline constexpr size_t PAYMENT_PAYLOAD_SIZE{41};
+inline constexpr size_t PAYMENT_PAYLOAD_SIZE{40};
 
 struct PaymentPayload {
     AccountId recipient;
@@ -28,7 +28,7 @@ struct AuthorizedPayment {
     friend bool operator==(const AuthorizedPayment&, const AuthorizedPayment&) = default;
 };
 
-inline constexpr size_t SYSTEM_LOCK_PAYLOAD_SIZE{9};
+inline constexpr size_t SYSTEM_LOCK_PAYLOAD_SIZE{8};
 
 struct SystemLockPayload {
     uint64_t amount{0};

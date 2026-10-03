@@ -210,12 +210,10 @@ void DiagnosticsPage::refresh()
     QWidget* parent = m_rows->parentWidget();
     const auto& diagnostics = m_model->networkDiagnostics();
     Row(m_rows, tr("Node type"), tr("Full Node"), parent);
-    Row(m_rows, tr("CYP2 version"), QString::number(diagnostics.cyp2_version), parent);
     Row(m_rows, tr("Storage used / capacity"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.storage_used).arg(diagnostics.storage_capacity), parent);
     Row(m_rows, tr("PoA signer active"), diagnostics.poa_signer_active ? tr("Yes") : tr("No"), parent);
     Row(m_rows, tr("Connection"), cybouConnectionText(status), parent);
     const QString geo_status = status.geo_admission == CybouGeoAdmissionStatus::Ready ? tr("Ready")
-        : status.geo_admission == CybouGeoAdmissionStatus::NotRequired ? tr("Not required by Lab policy")
         : tr("Waiting for a valid Geo database");
     Row(m_rows, tr("Peer admission Geo database"), geo_status, parent);
     Row(m_rows, tr("Last sync"), m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("Not yet"), parent);

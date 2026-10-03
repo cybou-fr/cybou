@@ -43,7 +43,7 @@ std::string ChunkIdHex(const ChunkId& id)
 }
 
 // Discovered routing hints are untrusted. Reject address scopes this node has
-// no business dialing: unspecified, multicast, and (unless the local CYP2
+// no business dialing: unspecified, multicast, and (unless the local CYBOU P2P
 // listener lives in the same scope) loopback and link-local targets. Without a
 // known local listener the policy stays permissive for DEV tooling.
 bool IsPrivateAddress(const boost::asio::ip::address& addr)
@@ -164,11 +164,11 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
         *m_config.storage_capacity_bytes, m_config.wipe_data);
     // The provider key is this node's stable storage identity across restarts.
     m_storage_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
-        storage_path / "provider.key");
+        storage_path / "storage.key");
     if (!m_storage_secret) throw std::runtime_error("cannot load or create the storage provider key");
     const auto storage_key = DeriveIdentityPublicKey(*m_storage_secret, IdentityKeyPurpose::STORAGE);
     if (storage_key) {
-        constexpr std::string_view storage_id_domain{"CYBOU/PROVIDER-ID/v1"};
+        constexpr std::string_view storage_id_domain{"CYBOU/STORAGE-ID"};
         std::vector<unsigned char> storage_id_input(storage_id_domain.begin(), storage_id_domain.end());
         storage_id_input.insert(storage_id_input.end(), storage_key->ed25519.begin(), storage_key->ed25519.end());
         storage_id_input.insert(storage_id_input.end(), storage_key->ml_dsa.begin(), storage_key->ml_dsa.end());
@@ -339,7 +339,7 @@ NodeRuntimeStatus CybouNodeRuntime::GetStatus() const
     }
     status.poa_safety_halted = m_production_status == BlockProductionStatus::SAFETY_HALT || m_store.PoaSafetyHalted() ||
         (m_poa_finalizer && m_poa_finalizer->SafetyHalted());
-    if (status.poa_safety_halted) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
+    if (status.poa_safety_halted && status.is_initialized) status.runtime_state = NodeRuntimeState::SAFETY_HALTED;
     return status;
 }
 
@@ -1155,7 +1155,6 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     NodeDiagnosticsSnapshot snapshot;
     snapshot.network_binding = status.network_binding.GetHex();
     snapshot.node_type = "Full Node";
-    snapshot.cyp2_version = p2p::WIRE_VERSION;
     snapshot.poa_signer_active = status.poa_signer_active;
     snapshot.validation_eligible = IsLocalValidationEligible();
     snapshot.height = status.finalized_height;

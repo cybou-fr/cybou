@@ -76,9 +76,9 @@ BOOST_AUTO_TEST_CASE(hybrid_pop_and_work_bind_random_account_and_authorization)
     BOOST_CHECK(cybou::ValidateAccountCreateOp(damaged, network_binding, 0, params) == cybou::AccountCreateError::FUTURE_WORK_EPOCH);
     auto truncated = std::span{*bytes}.first(bytes->size() - 1);
     BOOST_CHECK(!cybou::DeserializeAccountCreateOp(truncated));
-    auto legacy_version = *bytes;
-    legacy_version[0] = 1;
-    BOOST_CHECK(!cybou::DeserializeAccountCreateOp(legacy_version));
+    std::vector<unsigned char> trailing(bytes->begin(), bytes->end());
+    trailing.push_back(0);
+    BOOST_CHECK(!cybou::DeserializeAccountCreateOp(trailing));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

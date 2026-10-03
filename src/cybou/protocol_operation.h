@@ -19,10 +19,10 @@
 
 namespace cybou {
 
-inline constexpr uint8_t PROTOCOL_OPERATION_VERSION{5};
-inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 41};
-inline constexpr size_t IDENTITY_ROTATE_SIZE{13825};
-inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + 9};
+inline constexpr size_t AUTHORIZED_PAYMENT_SIZE{IDENTITY_OPERATION_AUTH_SIZE + PAYMENT_PAYLOAD_SIZE};
+inline constexpr size_t IDENTITY_ROTATE_SIZE{32 + 32 + 1952 + 32 + 1312 + IDENTITY_KEM_PACKAGE_SIZE +
+    8 + 8 + 2 * (64 + 3309) + 64 + 2420};
+inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE + SYSTEM_LOCK_PAYLOAD_SIZE};
 
 enum class ProtocolOperationKind : uint8_t {
     ACCOUNT_CREATE = 1,

@@ -169,7 +169,7 @@ private:
     PrivateApplicationStore& m_application_db;
     StorageService& m_storage;
     std::mutex m_mutex;
-    /** Set during the one-time repair pass after an index-version upgrade. */
+    /** Set during the one-time repair pass when the recovery index is absent. */
     bool m_repairing{false};
 };
 

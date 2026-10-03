@@ -236,7 +236,7 @@ std::optional<IdentityRotate> DeserializeIdentityRotate(std::span<const unsigned
 
 std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const ProtocolOperation& operation)
 {
-    std::vector<unsigned char> out{PROTOCOL_OPERATION_VERSION};
+    std::vector<unsigned char> out;
     if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
         const auto body = SerializeAccountCreateOp(*create);
         if (!body) return std::nullopt;
@@ -269,7 +269,7 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         out.insert(out.end(), body->begin(), body->end());
     } else if (const auto* publication = std::get_if<AuthorizedRootPublication>(&operation)) {
         const auto body = SerializeRootPublicationOperation(*publication);
-        if (!body || body->size() + 2 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
+        if (!body || body->size() + 1 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
         out.push_back(static_cast<unsigned char>(ProtocolOperationKind::ROOT_PUBLICATION));
         out.insert(out.end(), body->begin(), body->end());
     } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operation)) {
@@ -285,47 +285,47 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
 
 std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() < 2 || bytes[0] != PROTOCOL_OPERATION_VERSION) return std::nullopt;
-    const auto kind = static_cast<ProtocolOperationKind>(bytes[1]);
+    if (bytes.empty()) return std::nullopt;
+    const auto kind = static_cast<ProtocolOperationKind>(bytes[0]);
     switch (kind) {
     case ProtocolOperationKind::ACCOUNT_CREATE: {
-        if (bytes.size() != 2 + ACCOUNT_CREATE_SIZE) return std::nullopt;
-        const auto op = DeserializeAccountCreateOp(bytes.subspan(2));
+        if (bytes.size() != 1 + ACCOUNT_CREATE_SIZE) return std::nullopt;
+        const auto op = DeserializeAccountCreateOp(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::PAYMENT: {
-        if (bytes.size() != 2 + AUTHORIZED_PAYMENT_SIZE) return std::nullopt;
-        const auto op = DeserializePayment(bytes.subspan(2));
+        if (bytes.size() != 1 + AUTHORIZED_PAYMENT_SIZE) return std::nullopt;
+        const auto op = DeserializePayment(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::IDENTITY_ROTATE: {
-        if (bytes.size() != 2 + IDENTITY_ROTATE_SIZE) return std::nullopt;
-        const auto op = DeserializeIdentityRotate(bytes.subspan(2));
+        if (bytes.size() != 1 + IDENTITY_ROTATE_SIZE) return std::nullopt;
+        const auto op = DeserializeIdentityRotate(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::SYSTEM_LOCK: {
-        if (bytes.size() != 2 + AUTHORIZED_SYSTEM_LOCK_SIZE) return std::nullopt;
-        const auto op = DeserializeSystemLock(bytes.subspan(2));
+        if (bytes.size() != 1 + AUTHORIZED_SYSTEM_LOCK_SIZE) return std::nullopt;
+        const auto op = DeserializeSystemLock(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::NAME_COMMIT: {
-        if (bytes.size() < 2 + AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
-        const auto op = DeserializeNameCommit(bytes.subspan(2));
+        if (bytes.size() < 1 + AUTHORIZED_NAME_COMMIT_SIZE) return std::nullopt;
+        const auto op = DeserializeNameCommit(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::NAME_REVEAL: {
-        if (bytes.size() < 2 + AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
-        const auto op = DeserializeNameReveal(bytes.subspan(2));
+        if (bytes.size() < 1 + AUTHORIZED_NAME_REVEAL_SIZE) return std::nullopt;
+        const auto op = DeserializeNameReveal(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::ROOT_PUBLICATION: {
         if (bytes.size() > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
-        const auto op = DeserializeRootPublicationOperation(bytes.subspan(2));
+        const auto op = DeserializeRootPublicationOperation(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     case ProtocolOperationKind::POA_AUTH_ADJUSTMENT: {
-        if (bytes.size() != 2 + POA_AUTH_ADJUSTMENT_SIZE) return std::nullopt;
-        const auto op = DeserializePoaAuthAdjustment(bytes.subspan(2));
+        if (bytes.size() != 1 + POA_AUTH_ADJUSTMENT_SIZE) return std::nullopt;
+        const auto op = DeserializePoaAuthAdjustment(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
     default: return std::nullopt;
@@ -360,7 +360,7 @@ std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operat
 
 std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operation)
 {
-    constexpr std::string_view domain{"CYBOU/OP-ID/V5"};
+    constexpr std::string_view domain{"CYBOU/OP-ID"};
     const auto bytes = SerializeProtocolOperation(operation);
     if (!bytes) return std::nullopt;
     cybou::Hash256 id;

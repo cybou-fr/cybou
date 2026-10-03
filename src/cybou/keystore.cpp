@@ -166,7 +166,7 @@ std::optional<IdentityHybridSignature> CybouKeyStore::SignRecovery(std::span<con
 std::optional<std::array<unsigned char, 32>> CybouKeyStore::DeriveApplicationStoreKey() const
 {
     if (!m_impl->material) return std::nullopt;
-    constexpr std::string_view salt{"CYBOU/LOCAL-APPLICATION-STORE/v1"};
+    constexpr std::string_view salt{"CYBOU/LOCAL-APPLICATION-STORE"};
     const auto salt_bytes = std::span{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
     // Bind the derived key to the stable AccountID, while keeping the recovery
     // entropy within the key store.

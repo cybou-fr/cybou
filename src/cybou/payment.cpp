@@ -15,26 +15,25 @@ std::optional<std::array<unsigned char, PAYMENT_PAYLOAD_SIZE>> SerializePaymentP
 {
     if (payment.recipient.IsNull() || payment.amount == 0) return std::nullopt;
     std::array<unsigned char, PAYMENT_PAYLOAD_SIZE> out{};
-    out[0] = 2;
-    std::copy(payment.recipient.Value().begin(), payment.recipient.Value().end(), out.begin() + 1);
-    for (unsigned i{0}; i < 8; ++i) out[33 + i] = static_cast<unsigned char>(payment.amount >> (8 * i));
+    std::copy(payment.recipient.Value().begin(), payment.recipient.Value().end(), out.begin());
+    for (unsigned i{0}; i < 8; ++i) out[32 + i] = static_cast<unsigned char>(payment.amount >> (8 * i));
     return out;
 }
 
 std::optional<PaymentPayload> DeserializePaymentPayload(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != PAYMENT_PAYLOAD_SIZE || bytes[0] != 2) return std::nullopt;
-    const auto recipient = AccountId::FromBytes(bytes.subspan(1, AccountId::SIZE));
+    if (bytes.size() != PAYMENT_PAYLOAD_SIZE) return std::nullopt;
+    const auto recipient = AccountId::FromBytes(bytes.subspan(0, AccountId::SIZE));
     if (!recipient) return std::nullopt;
     uint64_t amount{0};
-    for (unsigned i{0}; i < 8; ++i) amount |= uint64_t{bytes[33 + i]} << (8 * i);
+    for (unsigned i{0}; i < 8; ++i) amount |= uint64_t{bytes[32 + i]} << (8 * i);
     if (!amount) return std::nullopt;
     return PaymentPayload{*recipient, amount};
 }
 
 std::optional<IdentityKeyId> ComputePaymentPayloadCommitment(const PaymentPayload& payment)
 {
-    constexpr std::string_view domain{"CYBOU/PAYMENT-PAYLOAD/V2"};
+    constexpr std::string_view domain{"CYBOU/PAYMENT-PAYLOAD"};
     const auto bytes = SerializePaymentPayload(payment);
     if (!bytes) return std::nullopt;
     IdentityKeyId digest{};
@@ -80,23 +79,22 @@ std::optional<std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE>> SerializeSyst
 {
     if (lock.amount == 0) return std::nullopt;
     std::array<unsigned char, SYSTEM_LOCK_PAYLOAD_SIZE> out{};
-    out[0] = 2;
-    for (unsigned i{0}; i < 8; ++i) out[1 + i] = static_cast<unsigned char>(lock.amount >> (8 * i));
+    for (unsigned i{0}; i < 8; ++i) out[i] = static_cast<unsigned char>(lock.amount >> (8 * i));
     return out;
 }
 
 std::optional<SystemLockPayload> DeserializeSystemLockPayload(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() != SYSTEM_LOCK_PAYLOAD_SIZE || bytes[0] != 2) return std::nullopt;
+    if (bytes.size() != SYSTEM_LOCK_PAYLOAD_SIZE) return std::nullopt;
     uint64_t amount{0};
-    for (unsigned i{0}; i < 8; ++i) amount |= uint64_t{bytes[1 + i]} << (8 * i);
+    for (unsigned i{0}; i < 8; ++i) amount |= uint64_t{bytes[i]} << (8 * i);
     if (!amount) return std::nullopt;
     return SystemLockPayload{amount};
 }
 
 std::optional<IdentityKeyId> ComputeSystemLockPayloadCommitment(const SystemLockPayload& lock)
 {
-    constexpr std::string_view domain{"CYBOU/SYSTEM-LOCK-PAYLOAD/V2"};
+    constexpr std::string_view domain{"CYBOU/SYSTEM-LOCK-PAYLOAD"};
     const auto bytes = SerializeSystemLockPayload(lock);
     if (!bytes) return std::nullopt;
     IdentityKeyId digest{};

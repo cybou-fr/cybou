@@ -18,12 +18,10 @@ namespace cybou {
 
 struct CybouBlock;
 
-inline constexpr uint8_t POA_FINALITY_CERTIFICATE_VERSION{1};
-inline constexpr size_t POA_FINALITY_CERTIFICATE_SIZE{1 + 32 + 32 + 8 + 32 + 64 + 3309};
+inline constexpr size_t POA_FINALITY_CERTIFICATE_SIZE{ 32 + 32 + 8 + 32 + 64 + 3309};
 
 /** Single-operator hybrid signature authorizing one canonical block as final. */
 struct PoaFinalityCertificate {
-    uint8_t version{POA_FINALITY_CERTIFICATE_VERSION};
     cybou::Hash256 network_binding;
     cybou::Hash256 block_id;
     uint64_t height{0};

@@ -20,7 +20,6 @@ struct OperationDiagnostics {
 struct NodeDiagnosticsSnapshot {
     std::string network_binding, node_type, tip, state_root;
     std::uint64_t height{0}, storage_used{0}, storage_capacity{0};
-    std::uint8_t cyp2_version{5};
     bool initialized{false}, safety_halted{false}, poa_signer_active{false}, validation_eligible{false};
     std::vector<PeerDiagnostics> peers;
     std::vector<OperationDiagnostics> operations;

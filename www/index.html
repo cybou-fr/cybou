@@ -95,7 +95,7 @@
             "name": "En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Le protocole CYP2 encapsule chaque flux réseau dans un tunnel TLS 1.3 strict. Que vous soyez sur un Wi-Fi public (gare, aéroport, café) ou sur votre box internet, aucun tiers ni votre fournisseur d'accès ne peut espionner vos communications ni altérer un octet de données."
+              "text": "Le protocole CYBOU P2P encapsule chaque flux réseau dans un tunnel TLS 1.3 strict. Que vous soyez sur un Wi-Fi public (gare, aéroport, café) ou sur votre box internet, aucun tiers ni votre fournisseur d'accès ne peut espionner vos communications ni altérer un octet de données."
             }
           },
           {
@@ -223,7 +223,7 @@
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-        <span data-i18n="badgeTls">Transport TLS 1.3 Post-Quantique (CYP2)</span>
+        <span data-i18n="badgeTls">Transport TLS 1.3 Post-Quantique (CYBOU P2P)</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
@@ -467,7 +467,7 @@
                   <h5 data-i18n="mockupSecHeading2">Transport P2P TLS 1.3 Post-Quantique</h5>
                   <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc2">Tunnel TLS 1.3 avec groupe hybride X25519MLKEM768. Tout repli classique non-PQ est rejeté (fail-closed).</p>
                   <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary);">
-                    CYP2 Protocol • TLS 1.3 • SPKI Pinning
+                    CYBOU P2P Protocol • TLS 1.3 • SPKI Pinning
                   </div>
                 </div>
                 <div class="mockup-id-card">
@@ -608,7 +608,7 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         </div>
         <div class="security-card-tag" data-i18n="secTlsTag">Protection Réseau</div>
-        <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYP2)</h3>
+        <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYBOU P2P)</h3>
         <p data-i18n="secTlsDesc">Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.</p>
       </article>
 
@@ -858,7 +858,7 @@
       <dl class="tech-spec-grid">
         <div class="spec-item">
           <dt data-i18n="dtTransport">Transport P2P &amp; Chiffrement</dt>
-          <dd data-i18n="ddTransport">CYP2 encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Exportation de clé de session 32 octets liée aux preuves cryptographiques.</dd>
+          <dd data-i18n="ddTransport">CYBOU P2P encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Exportation de clé de session 32 octets liée aux preuves cryptographiques.</dd>
         </div>
 
         <div class="spec-item">
@@ -903,7 +903,7 @@
 
         <div class="spec-item">
           <dt data-i18n="dtStack">Socle technique</dt>
-          <dd data-i18n="ddStack">C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3 et transport CYP2 sur TLS 1.3.</dd>
+          <dd data-i18n="ddStack">C++20, CMake, Qt 6, LevelDB, OpenSSL, BLAKE3 et transport CYBOU P2P sur TLS 1.3.</dd>
         </div>
       </dl>
     </div>
@@ -931,7 +931,7 @@
           <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.</li>
           <li data-i18n="col1Item3"><strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.</li>
           <li data-i18n="col1Item4"><strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.</li>
-          <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYP2 sécurisé en TLS 1.3.</li>
+          <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYBOU P2P sécurisé en TLS 1.3.</li>
           <li data-i18n="col1Item6"><strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.</li>
         </ul>
       </article>
@@ -1000,7 +1000,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-2" aria-hidden="true">
-          <p data-i18n="faqATls">Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v5) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».</p>
+          <p data-i18n="faqATls">Toutes les communications entre pairs et nœuds CYBOU (protocole CYBOU P2P) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».</p>
         </div>
       </article>
 

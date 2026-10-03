@@ -19,15 +19,13 @@ namespace cybou {
 namespace {
 
 constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'C', 'H'};
-constexpr unsigned char VERSION{1};
 constexpr std::size_t MAGIC_OFFSET{0};
-constexpr std::size_t VERSION_OFFSET{4};
-constexpr std::size_t SALT_OFFSET{5};
+constexpr std::size_t SALT_OFFSET{4};
 constexpr std::size_t NONCE_OFFSET{SALT_OFFSET + 32};
 constexpr std::size_t CIPHERTEXT_OFFSET{NONCE_OFFSET + crypto::CHACHA20_POLY1305_NONCE_SIZE};
 constexpr std::array<std::size_t, 6> PAD_BUCKETS{1024, 4096, 16 * 1024, 64 * 1024, 256 * 1024, 512 * 1024};
-constexpr std::string_view KEY_INFO_DOMAIN{"CYBOU/CHUNK-KEY/v1"};
-constexpr std::string_view AAD_DOMAIN{"CYBOU/CHUNK-AAD/v1"};
+constexpr std::string_view KEY_INFO_DOMAIN{"CYBOU/CHUNK-KEY"};
+constexpr std::string_view AAD_DOMAIN{"CYBOU/CHUNK-AAD"};
 
 class CleanseOnExit final
 {
@@ -105,8 +103,7 @@ bool HasValidHeader(const std::span<const unsigned char> stored_bytes)
 {
     return stored_bytes.size() >= CIPHERTEXT_OFFSET + crypto::CHACHA20_POLY1305_TAG_SIZE &&
         stored_bytes.size() <= ENCRYPTED_CHUNK_MAX_STORED_BYTES &&
-        std::equal(MAGIC.begin(), MAGIC.end(), stored_bytes.begin() + MAGIC_OFFSET) &&
-        stored_bytes[VERSION_OFFSET] == VERSION;
+        std::equal(MAGIC.begin(), MAGIC.end(), stored_bytes.begin() + MAGIC_OFFSET);
 }
 
 std::vector<unsigned char> MakeFrame(const std::span<const unsigned char> encoded, const std::size_t bucket)
@@ -174,7 +171,6 @@ std::optional<EncryptedChunk> EncryptChunk(
 
     std::array<unsigned char, ENCRYPTED_CHUNK_HEADER_SIZE> header{};
     std::copy(MAGIC.begin(), MAGIC.end(), header.begin() + MAGIC_OFFSET);
-    header[VERSION_OFFSET] = VERSION;
     std::copy(salt.begin(), salt.end(), header.begin() + SALT_OFFSET);
     std::copy(nonce.begin(), nonce.end(), header.begin() + NONCE_OFFSET);
     const auto aad = MakeAad(header, network_binding);

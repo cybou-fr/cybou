@@ -49,7 +49,10 @@ std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t inde
             ss << ind;
         }
         ss << "0x" << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(bytes[i]);
-        if (i + 1 < bytes.size()) ss << ", ";
+        if (i + 1 < bytes.size()) {
+            ss << ',';
+            if ((i + 1) % 12 != 0) ss << ' ';
+        }
     }
     return ss.str();
 }
@@ -125,7 +128,6 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning()
     res.genesis_state_root = *state_root;
 
     // 4. Signed NetworkGenesis: the digest is only what the Network Key signs.
-    res.signed_genesis.version = CYBOU_NETWORK_GENESIS_VERSION;
     res.signed_genesis.network_public_key = res.network_public_key;
     res.signed_genesis.genesis_state_root = res.genesis_state_root;
     res.signed_genesis.poa_finalizer_public_key = res.cybou_poa_pub;

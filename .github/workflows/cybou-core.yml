@@ -79,7 +79,6 @@ jobs:
             -DBUILD_GUI=OFF \
             -DBUILD_TESTS=ON \
             -DCYBOU_ENABLE_TEST_HOOKS=ON \
-            -DCYBOU_ENABLE_LAB_NETWORK=ON \
             -DWITH_CCACHE=OFF
 
       - name: Build CYBOU core test, node and smoke binaries
@@ -89,47 +88,9 @@ jobs:
         run: |
           build-ci/bin/cybou-core-test --log_level=error
 
-      - name: Operator CLI and LAB controller acceptance
+      - name: Check official DEVNET CLI
         run: |
-          python3 test/cybou_operator_cli.py build-ci/bin/cybou
-          python3 test/stress/test_controller.py
-          sudo python3 test/stress/test_network_namespace.py
-
-      - name: Smoke test cybou (LAB network)
-        run: |
-          umask 077
-          build-ci/bin/cybou network lab-poa-seed --out /tmp/val.key
-          build-ci/bin/cybou finalizer run --network lab --data-dir /tmp/cybou-producer --key-file /tmp/val.key --listen 127.0.0.1:29461 --block-interval 100ms --peer-admission lab &
-          producer_pid=$!
-          trap 'kill "$producer_pid" 2>/dev/null || true' EXIT
-          python3 - <<'PY'
-          import subprocess
-          import sys
-          import time
-
-          command = ["build-ci/bin/cybou", "network", "probe", "--network", "lab",
-                     "--data-dir", "/tmp/cybou-observer", "--peer", "127.0.0.1:29461",
-                     "--peer-admission", "lab"]
-          deadline = time.monotonic() + 20
-          last = None
-          while time.monotonic() < deadline:
-              last = subprocess.run(command, text=True, capture_output=True)
-              if last.returncode == 0:
-                  break
-              time.sleep(0.1)
-          else:
-              print("finalizer CYP2 handshake did not become ready", file=sys.stderr)
-              if last is not None:
-                  print(last.stdout, end="", file=sys.stderr)
-                  print(last.stderr, end="", file=sys.stderr)
-              raise SystemExit(1)
-          PY
-          build-ci/bin/cybou network sync --network lab --data-dir /tmp/cybou-observer --peer 127.0.0.1:29461 --count 1 --peer-admission lab
-
-      - name: PoA finalizer + storage provider multi-process smoke
-        run: |
-          python3 test/cybou_storage_smoke.py build-ci/bin/cybou build-ci/bin/cybou-storage-smoke
-
-      - name: Multi-process storage failure soak (Beta target, 3 providers)
-        run: |
-          python3 test/cybou_storage_soak.py build-ci/bin/cybou build-ci/bin/cybou-storage-soak
+          build-ci/bin/cybou --help
+          build-ci/bin/cybou network info --network devnet
+          build-ci/bin/cybou doctor --network devnet --data-dir "$RUNNER_TEMP/cybou-devnet-check"
+          test ! -e "$RUNNER_TEMP/cybou-devnet-check"

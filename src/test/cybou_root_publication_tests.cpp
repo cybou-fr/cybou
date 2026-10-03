@@ -35,21 +35,19 @@ BOOST_AUTO_TEST_CASE(root_publication_round_trips_fixed_binary_schema)
     const auto publication = ValidPublication();
     const auto encoded = cybou::SerializeRootPublication(publication);
     BOOST_REQUIRE(encoded.has_value());
-    BOOST_CHECK_EQUAL(encoded->front(), 4);
     const auto decoded = cybou::DeserializeRootPublication(*encoded);
     BOOST_REQUIRE(decoded.has_value());
     BOOST_CHECK(*decoded == publication);
     BOOST_CHECK(cybou::SerializeRootPublication(*decoded) == encoded);
 }
 
-BOOST_AUTO_TEST_CASE(root_publication_rejects_unknown_version_and_invalid_fields)
+BOOST_AUTO_TEST_CASE(root_publication_rejects_trailing_bytes_and_invalid_fields)
 {
     const auto encoded = cybou::SerializeRootPublication(ValidPublication());
     BOOST_REQUIRE(encoded.has_value());
-    auto unknown_version = *encoded;
-    BOOST_REQUIRE(unknown_version.size() > 2);
-    unknown_version[0] = 2;
-    BOOST_CHECK(!cybou::DeserializeRootPublication(unknown_version));
+    auto trailing = *encoded;
+    trailing.push_back(0);
+    BOOST_CHECK(!cybou::DeserializeRootPublication(trailing));
 
     auto bad_accounting = ValidPublication();
     bad_accounting.chunk_count = 0;

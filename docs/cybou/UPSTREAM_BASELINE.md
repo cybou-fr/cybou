@@ -10,8 +10,8 @@ The imported source at CYBOU import commit `6de2974` identifies itself as
 - the CYBOU rename inventory independently names Bitcoin Core v31.1;
 - inherited copyright and MIT license notices are retained.
 
-The current root `CMakeLists.txt` describes the CYBOU product version and is no
-longer evidence for the imported upstream version.
+The current root `CMakeLists.txt` contains no CYBOU product version counters
+and is not evidence for the imported upstream version.
 
 ## Provenance limitation
 

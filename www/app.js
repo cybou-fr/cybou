@@ -39,7 +39,7 @@ const translations = {
 
     badgeOpenssl: "Moteur OpenSSL v3.5.2+ (Zéro crypto maison)",
     badgeFrance: "Souveraineté France (Hors Cloud Act US)",
-    badgeTls: "Transport TLS 1.3 Post-Quantique (CYP2)",
+    badgeTls: "Transport TLS 1.3 Post-Quantique (CYBOU P2P)",
     badgePhrase: "Zéro Mot de passe / Clé 24 mots",
     badgeNoAds: "Zéro Collecte & Zéro Publicité",
 
@@ -128,7 +128,7 @@ const translations = {
     secOpensslDesc: "La règle d'or en cybersécurité est formelle : ne jamais inventer sa propre cryptographie (« Don't roll your own crypto »). CYBOU n'utilise aucun algorithme expérimental fait maison. Tous les protocoles post-quantiques (ML-DSA-44, ML-DSA-65, ML-KEM-768) et symétriques sont fournis directement par la version officielle d'OpenSSL v3.5.2+, certifiée et conforme aux normes du NIST (FIPS 203 et FIPS 204).",
 
     secTlsTag: "Protection Réseau",
-    secTlsTitle: "Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYP2)",
+    secTlsTitle: "Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYBOU P2P)",
     secTlsDesc: "Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.",
 
     secE2eeTag: "Confidentialité Totale",
@@ -210,7 +210,7 @@ const translations = {
 
     factsheetHeading: "Paramètres canoniques de l'architecture CYBOU",
     dtTransport: "Transport P2P & Chiffrement",
-    ddTransport: "CYP2 encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Moteur OpenSSL v3.5.2+ avec export de clé de session 32 octets liée aux preuves cryptographiques.",
+    ddTransport: "CYBOU P2P encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Moteur OpenSSL v3.5.2+ avec export de clé de session 32 octets liée aux preuves cryptographiques.",
     dtConsensus: "Finalité actuelle sur DEV",
     ddConsensus: "PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.",
     dtBootstrap: "Pairs d'amorce (Bootstrap)",
@@ -228,7 +228,7 @@ const translations = {
     dtKeys: "Rôles cryptographiques",
     ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing et Treasury sont des rôles séparés ; moteur OpenSSL v3.5.2+ certifié.",
     dtStack: "Socle technique",
-    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3 et transport CYP2 sur TLS 1.3.",
+    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3 et transport CYBOU P2P sur TLS 1.3.",
 
     matrixLabel: "Transparence technique",
     matrixTitle: "Matrice d'implémentation.",
@@ -240,7 +240,7 @@ const translations = {
     col1Item2: "<strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.",
     col1Item3: "<strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.",
     col1Item4: "<strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.",
-    col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYP2 sécurisé en TLS 1.3 post-quantique.",
+    col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYBOU P2P sécurisé en TLS 1.3 post-quantique.",
     col1Item6: "<strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.",
 
     col2Title: "Durcissement et préparation Beta",
@@ -264,7 +264,7 @@ const translations = {
     faqA1: "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3 post-quantique.",
     faqTlsBadge: "Transport Post-Quantique",
     faqQTls: "En quoi le transport TLS 1.3 de CYBOU est-il post-quantique et que protège-t-il ?",
-    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v5) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».",
+    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYBOU P2P) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».",
     faqOpensslBadge: "Standard Audité",
     faqQOpenssl: "Les algorithmes de CYBOU sont-ils développés en interne (« crypto maison ») ?",
     faqAOpenssl: "Absolument pas. La règle d'or de la sécurité est formelle : « Don't roll your own crypto » (ne réinventez jamais la cryptographie). CYBOU s'appuie exclusivement sur la bibliothèque officielle OpenSSL v3.5.2+, internationalement auditée et éprouvée. Les primitives post-quantiques intégrées sont les standards officiels du NIST : ML-KEM-768 (FIPS 203) et ML-DSA-44/65 (FIPS 204). Vous bénéficiez ainsi d'une robustesse mathématique vérifiable, sans aucune boîte noire ni algorithme expérimental fait maison.",
@@ -806,7 +806,7 @@ const translations = {
 
     badgeOpenssl: "OpenSSL v3.5.2+ Engine (Zero Homemade Crypto)",
     badgeFrance: "France Sovereign Network (Immune to US Cloud Act)",
-    badgeTls: "Post-Quantum TLS 1.3 Transport (CYP2)",
+    badgeTls: "Post-Quantum TLS 1.3 Transport (CYBOU P2P)",
     badgePhrase: "Zero Passwords / 24-Word Master Key",
     badgeNoAds: "Zero Tracking & Zero Ads",
 
@@ -895,7 +895,7 @@ const translations = {
     secOpensslDesc: "The golden rule in cybersecurity is clear: never invent your own cryptography (\"Don't roll your own crypto\"). CYBOU uses zero experimental or homemade crypto code. All post-quantum algorithms (ML-DSA-44, ML-DSA-65, ML-KEM-768) and symmetric primitives are powered by official OpenSSL v3.5.2+, certified and strictly compliant with NIST FIPS 203 and FIPS 204.",
 
     secTlsTag: "Network Protection",
-    secTlsTitle: "100% Post-Quantum TLS 1.3 Encrypted Transport (CYP2)",
+    secTlsTitle: "100% Post-Quantum TLS 1.3 Encrypted Transport (CYBOU P2P)",
     secTlsDesc: "Every network connection enforces a post-quantum hybrid key exchange combining X25519 and NIST ML-KEM-768 (Kyber). Any classical fallback without ML-KEM is rejected. Neither your ISP, nor Wi-Fi eavesdroppers, nor future quantum supercomputers can decrypt your traffic.",
 
     secE2eeTag: "Zero-Knowledge Privacy",
@@ -977,7 +977,7 @@ const translations = {
 
     factsheetHeading: "Canonical CYBOU Architecture Parameters",
     dtTransport: "P2P Transport & Encryption",
-    ddTransport: "CYP2 encapsulated in strict post-quantum TLS 1.3 (mandatory X25519MLKEM768 group, fails closed). Powered by OpenSSL v3.5.2+ with 32-byte session key export bound to crypto proofs.",
+    ddTransport: "CYBOU P2P encapsulated in strict post-quantum TLS 1.3 (mandatory X25519MLKEM768 group, fails closed). Powered by OpenSSL v3.5.2+ with 32-byte session key export bound to crypto proofs.",
     dtConsensus: "Current DEV finality",
     ddConsensus: "Hybrid PoA with one signer operated by CYBOU on DEV. Full nodes independently verify; no BFT claim. Target: Central Authority desktop finalizer.",
     dtBootstrap: "Bootstrap peers",
@@ -995,7 +995,7 @@ const translations = {
     dtKeys: "Cryptographic key roles",
     ddKeys: "Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing, and Treasury are separate roles; official OpenSSL v3.5.2+ certified engine.",
     dtStack: "Technology stack",
-    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3, and CYP2 transport over TLS 1.3.",
+    ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3, and CYBOU P2P transport over TLS 1.3.",
 
     matrixLabel: "Technical Transparency",
     matrixTitle: "Implementation Matrix.",
@@ -1007,7 +1007,7 @@ const translations = {
     col1Item2: "<strong>PoA finality:</strong> dedicated DEV signer, durable anti-equivocation journal, conflict safety halt, and independent full-node validation.",
     col1Item3: "<strong>RootPublication:</strong> generic Identity-authorized operation; no permanent Mail or file objects in consensus state.",
     col1Item4: "<strong>Encrypted content tree:</strong> ordered ROOT/INDEX/DATA chunks addressed by full BLAKE3-256 and built for streaming.",
-    col1Item5: "<strong>Admission and transport:</strong> local chunk store, inclusion proofs tied to finalized publications, and CYP2 transport secured with TLS 1.3.",
+    col1Item5: "<strong>Admission and transport:</strong> local chunk store, inclusion proofs tied to finalized publications, and CYBOU P2P transport secured with TLS 1.3.",
     col1Item6: "<strong>Deterministic economics:</strong> fee and balance transitions validated by the state machine; DEV, Beta, and Mainnet use separate parameters.",
 
     col2Title: "Hardening and Beta preparation",
@@ -1031,7 +1031,7 @@ const translations = {
     faqA1: "CYBOU is a sovereign desktop privacy suite combining private messaging (Mail), encrypted cloud storage (Files), and an identity manager (Identity). Your data is encrypted on your machine before being sent, and all network transport is protected with post-quantum TLS 1.3.",
     faqTlsBadge: "Encrypted Transport",
     faqQTls: "How does post-quantum TLS 1.3 protect my connections on public Wi-Fi or with my ISP?",
-    faqATls: "All communications between CYBOU peers and nodes (CYP2 protocol v3) are sealed inside a strict post-quantum TLS 1.3 tunnel with X25519MLKEM768 key exchange. Whether you use public Wi-Fi at a train station or hotel, or your home fiber internet, no third party or ISP can intercept or read your messages or know what files you transfer. Deep Packet Inspection (DPI) and quantum recording are completely blocked.",
+    faqATls: "All communications between CYBOU peers and nodes (CYBOU P2P protocol) are sealed inside a strict post-quantum TLS 1.3 tunnel with X25519MLKEM768 key exchange. Whether you use public Wi-Fi at a train station or hotel, or your home fiber internet, no third party or ISP can intercept or read your messages or know what files you transfer. Deep Packet Inspection (DPI) and quantum recording are completely blocked.",
     faqOpensslBadge: "Audited Standard",
     faqQOpenssl: "Are CYBOU's cryptographic algorithms developed in-house (\"homemade crypto\")?",
     faqAOpenssl: "Absolutely not. The primary rule of cybersecurity is: \"Don't roll your own crypto\" (never reinvent cryptography). CYBOU relies exclusively on the official OpenSSL v3.5.2+ library, globally audited and battle-tested. The post-quantum primitives are official NIST standards: ML-KEM-768 (FIPS 203) and ML-DSA-44/65 (FIPS 204). You get proven mathematical robustness without black boxes or uncertified code.",
@@ -1379,7 +1379,7 @@ const translations = {
     eArt6Status: "Pilot & Deployment",
     eArt6Title: "Deploy your first CYBOU pilot network",
     eArt6Sub: "Our architecture is fully documented, open, and verifiable. Set up an internal proof-of-concept or connect with our engineering team.",
-    eContactP1: "Interested in evaluating CYBOU in your test lab or designing a hardened enclave for executive teams? Here are your next steps:",
+    eContactP1: "Interested in evaluating CYBOU on DEVNET or designing a hardened enclave for executive teams? Here are your next steps:",
     eCtaTitle: "Connect with the CYBOU engineering team for a private network",
     eCtaDesc: "Assistance with custom genesis generation, infrastructure sizing recommendations, and compliance audits.",
     eCtaBtn: "Contact the Engineering Team",

@@ -21,9 +21,9 @@
 namespace cybou {
 namespace {
 
-constexpr std::array<unsigned char, 5> ACCESSIBLE_MAGIC{'C', 'Y', 'A', 'P', 1};
-constexpr std::array<unsigned char, 5> MAIL_MAGIC{'C', 'Y', 'M', 'L', 1};
-constexpr std::array<unsigned char, 5> FILE_MAGIC{'C', 'Y', 'F', 'R', 1};
+constexpr std::array<unsigned char, 4> ACCESSIBLE_MAGIC{'C', 'Y', 'A', 'P'};
+constexpr std::array<unsigned char, 4> MAIL_MAGIC{'C', 'Y', 'M', 'L'};
+constexpr std::array<unsigned char, 4> FILE_MAGIC{'C', 'Y', 'F', 'R'};
 constexpr std::string_view SCAN_KEY{"app/scan-height"};
 constexpr std::string_view UNAVAILABLE_KEY{"app/unavailable"};
 constexpr std::string_view MAIL_INDEX_KEY{"mail/index"};
@@ -31,11 +31,10 @@ constexpr std::string_view FILES_INDEX_KEY{"files/index"};
 constexpr std::string_view BRIDGE_INDEX_KEY{"recovery/index"};
 constexpr std::string_view RECOVERED_EPOCHS_KEY{"recovery/recovered-epochs"};
 constexpr std::string_view OWN_PUBLICATIONS_KEY{"storage/owned-publications"};
-constexpr std::string_view STORAGE_RECOVERY_INDEX_VERSION_KEY{"storage/recovery-index-version"};
+constexpr std::string_view STORAGE_RECOVERY_INDEX_READY_KEY{"storage/recovery-index-ready"};
 /** 2: one full re-index repairs records written without atomic batches. */
-constexpr std::uint8_t STORAGE_RECOVERY_INDEX_VERSION{2};
 constexpr std::string_view DRAFT_INDEX_KEY{"mail/drafts"};
-constexpr std::array<unsigned char, 5> DRAFT_MAGIC{'C', 'Y', 'D', 'R', 1};
+constexpr std::array<unsigned char, 4> DRAFT_MAGIC{'C', 'Y', 'D', 'R'};
 constexpr std::size_t MAX_DRAFT_TEXT{1U << 20};
 constexpr std::size_t MAX_DRAFT_ATTACHMENTS{64};
 
@@ -364,17 +363,17 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     if (!m_application_db.IsUnlocked()) return progress;
     progress.finalized_height = m_runtime.GetFinalizedHeight().value_or(0);
     std::uint64_t height = Checkpoint();
-    const auto index_version = m_application_db.Get(STORAGE_RECOVERY_INDEX_VERSION_KEY);
-    if (!index_version || *index_version != std::vector<unsigned char>{STORAGE_RECOVERY_INDEX_VERSION}) {
+    const auto index_ready = m_application_db.Get(STORAGE_RECOVERY_INDEX_READY_KEY);
+    if (!index_ready || *index_ready != std::vector<unsigned char>{1}) {
         // Backfill the own-publication index and repair records whose index
         // entries were lost before writes became atomic. Idempotent.
-        Writer version;
-        version.U8(STORAGE_RECOVERY_INDEX_VERSION);
+        Writer ready;
+        ready.U8(1);
         Writer checkpoint;
         checkpoint.U64(0);
         PrivateApplicationStore::Batch batch{m_application_db};
         if (!m_application_db.Put(SCAN_KEY, checkpoint.Out()) ||
-            !m_application_db.Put(STORAGE_RECOVERY_INDEX_VERSION_KEY, version.Out()) || !batch.Commit()) return progress;
+            !m_application_db.Put(STORAGE_RECOVERY_INDEX_READY_KEY, ready.Out()) || !batch.Commit()) return progress;
         height = 0;
         m_repairing = true;
     }

@@ -18,7 +18,7 @@ recreating inherited Bitcoin facilities that the active protocol does not use.
 - `cybou_node` no longer links `bitcoin_crypto` directly. PoA seed cleansing
   uses the CYBOU OpenSSL wrapper.
 - `cybou_node` no longer contains the unused CYBOU GCS/compact-filter clone;
-  block filtering is not part of the active CYP2 protocol.
+  block filtering is not part of the active CYBOU P2P protocol.
 - `cybou-core-test` uses a CYBOU-owned temporary-directory fixture and does not
   link the inherited Bitcoin node, CLI, consensus, or test harness targets.
 - CYBOU crypto tests use published vectors and CYBOU-local test hex helpers;
@@ -32,7 +32,7 @@ The node's local LevelDB implementation now has a CYBOU-owned record codec.
 It preserves the existing CompactSize, little-endian integer, and fixed-byte
 encodings while removing inherited `DataStream`, `SpanReader`, and generic
 `Serialize`/`Unserialize` use from CYBOU storage. These bytes are local
-persistence, not CYP2 wire messages or consensus serialization.
+persistence, not CYBOU P2P wire messages or consensus serialization.
 
 Native Hash256 preserves protocol raw bytes and lexicographic ordering. Its
 hex display follows canonical byte order, without reversal or numeric padding.

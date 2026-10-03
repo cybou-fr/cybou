@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(identity_authorization_nonce_rotation_and_snapshot)
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeIdentityRegistry(*restored) == snapshot);
     auto invalid = *snapshot;
-    invalid[0] = 1;
+    invalid.push_back(0);
     BOOST_CHECK(!DeserializeIdentityRegistry(invalid));
 }
 

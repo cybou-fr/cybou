@@ -16,7 +16,6 @@
 
 namespace cybou {
 
-inline constexpr uint8_t CYBOU_BLOCK_VERSION{3};
 inline constexpr size_t MAX_FINALIZER_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U};
 
 /**
@@ -24,7 +23,6 @@ inline constexpr size_t MAX_FINALIZER_SERIALIZED_BLOCK_BYTES{32U * 1024U * 1024U
  * Cryptographically binds parent, height, operations commitment, and post-execution state root.
  */
 struct CybouBlock {
-    uint8_t version{CYBOU_BLOCK_VERSION};
     cybou::Hash256 parent_block_id;
     uint64_t height{0};
     std::vector<ProtocolOperation> operations;
@@ -37,7 +35,6 @@ struct CybouBlock {
  * Canonical block header extracting commitment roots without holding operations payload.
  */
 struct CybouBlockHeader {
-    uint8_t version{CYBOU_BLOCK_VERSION};
     cybou::Hash256 parent_block_id;
     uint64_t height{0};
     cybou::Hash256 operations_root;

@@ -62,7 +62,7 @@ public:
         const QString& file_id) override;
 
     void identityKeysChanged() override;
-    /** Test hook: remote chunk transport used by new sessions (default: CYP2 peers). */
+    /** Test hook: remote chunk transport used by new sessions (default: CYBOU P2P peers). */
     void setStorageTransport(cybou::StorageTransport* transport) { m_transport_override = transport; }
 
     void prepareIdentityRotation(const QStringList& new_words,

@@ -44,7 +44,6 @@ private:
     std::unique_ptr<cybou::CybouWalletService> m_wallet_service;
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> m_geo_database_updater;
-    bool m_geo_admission_required{true};
     std::mutex m_identity_access_mutex;
     bool m_validation_signer_enabled{false};
     /** Where data of an older DEV network was moved at startup, if it was. */

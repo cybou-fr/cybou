@@ -6,7 +6,6 @@
 #include <type_traits>
 namespace cybou {
 namespace {
-constexpr std::uint8_t SCHEMA_VERSION{3};
 constexpr std::uint8_t MAIL_TYPE{1}, FILES_TYPE{2}, BRIDGE_TYPE{3};
 constexpr std::size_t MAX_ATTACHMENTS{32};
 constexpr std::size_t MAX_MUTATIONS{512};
@@ -101,7 +100,7 @@ template<typename T> std::optional<T> ReadOptional(BinaryReader& reader) {
     if (!reader.Flag()) return std::nullopt; return reader.Fixed<T>();
 }
 void Encode(BinaryWriter& writer, const MailMessage& mail) {
-    Require(ValidMail(mail)); writer.U8(MAIL_TYPE); writer.U8(SCHEMA_VERSION);
+    Require(ValidMail(mail)); writer.U8(MAIL_TYPE);
     writer.Fixed(mail.message_id); WriteOptional(writer, mail.reply_to_message_id);
     writer.Fixed(std::span{mail.recipient_account_id.Value().begin(), mail.recipient_account_id.Value().size()});
     writer.U64(mail.client_timestamp_ms); writer.Text(mail.subject, MAX_SUBJECT_BYTES); writer.Text(mail.body, MAX_BODY_BYTES);
@@ -114,7 +113,7 @@ void Encode(BinaryWriter& writer, const MailMessage& mail) {
     }
 }
 void Encode(BinaryWriter& writer, const FilesMutationBatch& batch) {
-    Require(ValidFiles(batch)); writer.U8(FILES_TYPE); writer.U8(SCHEMA_VERSION);
+    Require(ValidFiles(batch)); writer.U8(FILES_TYPE);
     writer.U16(static_cast<std::uint16_t>(batch.mutations.size()));
     for (const auto& mutation : batch.mutations) {
         writer.U8(static_cast<std::uint8_t>(mutation.kind)); writer.Fixed(mutation.item_id);
@@ -126,7 +125,7 @@ void Encode(BinaryWriter& writer, const FilesMutationBatch& batch) {
     }
 }
 void Encode(BinaryWriter& writer, const IdentityRecoveryBridge& bridge) {
-    Require(ValidBridge(bridge)); writer.U8(BRIDGE_TYPE); writer.U8(SCHEMA_VERSION);
+    Require(ValidBridge(bridge)); writer.U8(BRIDGE_TYPE);
     writer.Fixed(std::span{bridge.account_id.Value().begin(), bridge.account_id.Value().size()});
     writer.U64(bridge.next_key_epoch); writer.U16(static_cast<std::uint16_t>(bridge.historical_seeds.size()));
     for (const auto& seed : bridge.historical_seeds) { writer.U64(seed.key_epoch); writer.Fixed(seed.seed); }
@@ -176,7 +175,7 @@ std::optional<std::vector<unsigned char>> EncodePrivateApplicationDocument(const
 }
 std::optional<PrivateApplicationDocument> DecodePrivateApplicationDocument(std::span<const unsigned char> encoded) {
     try {
-        BinaryReader reader{encoded}; const auto type = reader.U8(); Require(reader.U8() == SCHEMA_VERSION);
+        BinaryReader reader{encoded}; const auto type = reader.U8();
         PrivateApplicationDocument document;
         switch (type) {
         case MAIL_TYPE: document = DecodeMail(reader); break;

@@ -471,21 +471,20 @@ std::optional<IdentityKemPackage> EncodeIdentityKemPackage(
 {
     if (IsZero(public_key)) return std::nullopt;
     IdentityKemPackage package{};
-    package[0] = 1;
-    package[1] = static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING);
-    package[2] = static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING >> 8);
-    std::copy(public_key.begin(), public_key.end(), package.begin() + 3);
+    package[0] = static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING);
+    package[1] = static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING >> 8);
+    std::copy(public_key.begin(), public_key.end(), package.begin() + 2);
     if (!DecodeIdentityKemPackage(package)) return std::nullopt;
     return package;
 }
 
 std::optional<XWingPublicKey> DecodeIdentityKemPackage(std::span<const unsigned char> package)
 {
-    if (package.size() != IDENTITY_KEM_PACKAGE_SIZE || package[0] != 1 ||
-        package[1] != static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING) ||
-        package[2] != static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING >> 8)) return std::nullopt;
+    if (package.size() != IDENTITY_KEM_PACKAGE_SIZE ||
+        package[0] != static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING) ||
+        package[1] != static_cast<unsigned char>(IDENTITY_KEM_PROFILE_XWING >> 8)) return std::nullopt;
     XWingPublicKey public_key{};
-    std::copy_n(package.begin() + 3, public_key.size(), public_key.begin());
+    std::copy_n(package.begin() + 2, public_key.size(), public_key.begin());
     const auto pq_public = std::span<const unsigned char, ML_KEM_768_PUBLIC_KEY_SIZE>{public_key.data(), ML_KEM_768_PUBLIC_KEY_SIZE};
     const auto classical_public = std::span<const unsigned char, X25519_PUBLIC_KEY_SIZE>{
         public_key.data() + ML_KEM_768_PUBLIC_KEY_SIZE, X25519_PUBLIC_KEY_SIZE};
@@ -520,7 +519,7 @@ std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment
     const auto length = static_cast<uint16_t>(package.size());
     const std::array<unsigned char, 2> length_le{
         static_cast<unsigned char>(length), static_cast<unsigned char>(length >> 8)};
-    constexpr std::string_view domain{"CYBOU/IDENTITY-KEM-PACKAGE/V2"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-KEM-PACKAGE"};
     constexpr std::array<unsigned char, 1> separator{0};
     std::array<unsigned char, 32> digest{};
     if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain), separator, network_binding, account_id,
@@ -531,7 +530,7 @@ std::optional<std::array<unsigned char, 32>> ComputeIdentityKemPackageCommitment
 std::optional<XWingSeed> DeriveIdentityXWingSeed(std::span<const unsigned char, 32> identity_entropy)
 {
     if (IsZero(identity_entropy)) return std::nullopt;
-    constexpr std::string_view salt_label{"CYBOU/IDENTITY/KEM/V1"};
+    constexpr std::string_view salt_label{"CYBOU/IDENTITY/KEM"};
     constexpr std::string_view info_label{"X-Wing recipient key seed"};
     const auto salt = std::span<const unsigned char>{
         reinterpret_cast<const unsigned char*>(salt_label.data()), salt_label.size()};

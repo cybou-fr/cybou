@@ -31,11 +31,11 @@
 
 namespace cybou {
 namespace {
-constexpr size_t HEADER_SIZE{61};
-constexpr size_t SALT_OFFSET{17};
-constexpr size_t WRAP_NONCE_OFFSET{33};
-constexpr size_t PAYLOAD_NONCE_OFFSET{45};
-constexpr size_t LENGTH_OFFSET{57};
+constexpr size_t HEADER_SIZE{60};
+constexpr size_t SALT_OFFSET{16};
+constexpr size_t WRAP_NONCE_OFFSET{32};
+constexpr size_t PAYLOAD_NONCE_OFFSET{44};
+constexpr size_t LENGTH_OFFSET{56};
 constexpr size_t WRAPPED_DEK_SIZE{48};
 constexpr size_t TAG_SIZE{16};
 constexpr uint32_t MEMCOST{65536};
@@ -312,10 +312,10 @@ std::optional<std::vector<unsigned char>> SealIdentityVault(
 {
     if (payload.empty() || payload.size() > MAX_PAYLOAD) return std::nullopt;
     std::vector<unsigned char> result(HEADER_SIZE);
-    std::copy_n("CYBV2", 5, result.begin());
-    Store32(result.data() + 5, MEMCOST);
-    Store32(result.data() + 9, ITERATIONS);
-    Store32(result.data() + 13, LANES);
+    std::copy_n("CYBV", 4, result.begin());
+    Store32(result.data() + 4, MEMCOST);
+    Store32(result.data() + 8, ITERATIONS);
+    Store32(result.data() + 12, LANES);
     Store32(result.data() + LENGTH_OFFSET, static_cast<uint32_t>(payload.size()));
     if (RAND_bytes(result.data() + SALT_OFFSET, 16) != 1 ||
         RAND_bytes(result.data() + WRAP_NONCE_OFFSET, 12) != 1 ||
@@ -341,10 +341,10 @@ std::optional<std::vector<unsigned char>> OpenIdentityVault(
     std::string_view password, std::span<const unsigned char> envelope)
 {
     if (envelope.size() < HEADER_SIZE + WRAPPED_DEK_SIZE + TAG_SIZE ||
-        !std::equal(envelope.begin(), envelope.begin() + 5, "CYBV2")) return std::nullopt;
-    const uint32_t memcost{Load32(envelope.data() + 5)};
-    const uint32_t iterations{Load32(envelope.data() + 9)};
-    const uint32_t lanes{Load32(envelope.data() + 13)};
+        !std::equal(envelope.begin(), envelope.begin() + 4, "CYBV")) return std::nullopt;
+    const uint32_t memcost{Load32(envelope.data() + 4)};
+    const uint32_t iterations{Load32(envelope.data() + 8)};
+    const uint32_t lanes{Load32(envelope.data() + 12)};
     const uint32_t length{Load32(envelope.data() + LENGTH_OFFSET)};
     if (length == 0 || length > MAX_PAYLOAD ||
         envelope.size() != HEADER_SIZE + WRAPPED_DEK_SIZE + length + TAG_SIZE) return std::nullopt;

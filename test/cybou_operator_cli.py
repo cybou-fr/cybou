@@ -1,104 +1,71 @@
 #!/usr/bin/env python3
-"""Real CLI/CYP2 acceptance: strict args, read-only doctor, Full Node and JSONL."""
+"""DEVNET CLI acceptance against the existing network, without a local signer."""
+import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
-import socket
 import subprocess
-import sys
 import tempfile
 import time
 
-
 def main():
-    binary = str(Path(sys.argv[1]).resolve())
-    with tempfile.TemporaryDirectory(prefix="cybou-lab-cli-") as temp:
-        root = Path(temp)
-        key = root / "key"
-        network = "lab"
-        def run(*args, ok=True):
-            result = subprocess.run([binary, *map(str,args)], capture_output=True, text=True, timeout=90)
-            if ok and result.returncode:
-                raise AssertionError(result.stderr)
-            if not ok and not result.returncode:
-                raise AssertionError("invalid command accepted")
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('binary')
+    parser.add_argument('--geo-country-csv')
+    parser.add_argument('--geo-sha256')
+    parser.add_argument('--geo-issued-month')
+    opts=parser.parse_args()
+    binary=str(Path(opts.binary).resolve())
+    geo=[opts.geo_country_csv,opts.geo_sha256,opts.geo_issued_month]
+    if any(geo) and not all(geo): parser.error('set all three Geo override parameters together')
+    admission=['--peer-admission','france']
+    if all(geo):
+        for name,value in zip(['--geo-country-csv','--geo-sha256','--geo-issued-month'],geo):
+            admission.extend([name,value])
+    with tempfile.TemporaryDirectory(prefix='cybou-devnet-cli-') as temp:
+        root=Path(temp); data=root/'node'; events=root/'events.jsonl'
+        def run(*args,ok=True):
+            result=subprocess.run([binary,*map(str,args)],capture_output=True,text=True,timeout=90)
+            if ok and result.returncode: raise AssertionError(result.stderr)
+            if not ok and not result.returncode: raise AssertionError('invalid command accepted')
             return result
-        run("--help")
-        run("serve", ok=False)
-        # Only compiled networks start: DEVNET, the test-build LAB network, never a file or MAINNET.
-        dev_info = subprocess.run([binary, "network", "info", "--network", "devnet"], capture_output=True, text=True, timeout=30)
-        assert dev_info.returncode == 0, dev_info.stderr
-        assert "bootstrap=51.255.46.58:29461" in dev_info.stdout and "network_binding=" in dev_info.stdout
-        run("network", "provision-devnet", ok=False)
-        run("provider", "run", ok=False)
-        run("observer", "run", ok=False)
-        run("network", "info", "--network", "mainnet", ok=False)
-        run("network", "info", "--network", root / "network.bin", ok=False)
-        run("network", "lab-poa-seed", "--out", key)
-        run("network", "info", "--network", network)
-        run("node", "run", "--network", network, "--data-dir", root/"no-policy", "--peer", "127.0.0.1:31001", ok=False)
-        assert not (root/"no-policy").exists()
-        run("node", "run", "--network", network, "--data-dir", root/"bad-geo", "--peer", "127.0.0.1:31001",
-            "--peer-admission", "france", "--geo-country-csv", root/"missing.csv", "--geo-sha256", "0"*64,
-            "--geo-issued-month", "2026-10", ok=False)
-        assert not (root/"bad-geo").exists()
-        run("node", "run", "--network", network, "--data-dir", root/"bad", "--peer", "127.0.0.1:31001", "--unknown-setting", "1GiB", "--peer-admission", "lab", ok=False)
-        assert not (root/"bad").exists()
-        run("network", "info", "--network", network, "--network", network, ok=False)
-        with socket.socket() as port:
-            port.bind(("127.0.0.1",0))
-            number=port.getsockname()[1]
-        endpoint=f"127.0.0.1:{number}"
-        run("doctor", "--network", network, "--data-dir", root/"finalizer", "--key-file", key, "--listen", endpoint)
-        assert not (root/"finalizer").exists()
-        wrong=root/"wrong-key"; wrong.write_bytes(os.urandom(32)); wrong.chmod(0o600)
-        run("doctor", "--network", network, "--data-dir", root/"finalizer", "--key-file", wrong, ok=False)
-        processes=[]
-        def start(role, name, extra):
-            args=[binary,role,"run","--network",str(network),"--data-dir",str(root/name),"--event-log",str(root/(name+".jsonl")),"--peer-admission","lab",*extra]
-            process=subprocess.Popen(args,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-            processes.append(process); return process
-        def stop(process):
-            process.terminate()
-            try: process.wait(timeout=15)
-            except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
-        try:
-            finalizer=start("node","finalizer",["--poa-key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
-            observer=start("node","observer",["--peer",endpoint])
-            deadline=time.monotonic()+30
-            while time.monotonic()<deadline:
-                if observer.poll() is not None or finalizer.poll() is not None:
-                    raise AssertionError("daemon failed")
-                path=root/"observer.jsonl"
-                if path.exists():
-                    records=[json.loads(line) for line in path.read_text().splitlines() if line.endswith("}")]
-                    if any(e["event"]=="node_status" and e["height"]>=3 for e in records): break
-                time.sleep(.1)
-            else: raise AssertionError("observer never synced")
-            stop(observer); stop(finalizer)
-            def digest():
-                return {str(p.relative_to(root/"finalizer")):hashlib.sha256(p.read_bytes()).hexdigest()
-                        for p in (root/"finalizer").rglob("*") if p.is_file()}
-            before=digest()
-            run("doctor","--network",network,"--data-dir",root/"finalizer","--key-file",key)
-            assert digest()==before,"doctor modified original DB"
-            finalizer=start("node","finalizer",["--poa-key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
-            time.sleep(.5); stop(finalizer)
-            events=[json.loads(line) for line in (root/"finalizer.jsonl").read_text().splitlines()]
-            runs={}
-            for event in events:
-                assert event["v"]==1
-                seq=runs.get(event["run_id"],0)
-                assert event["seq"]==seq+1
-                runs[event["run_id"]]=event["seq"]
-                assert not {"mnemonic","password","filename","mail_body","private_key"}.intersection(event)
-            assert len(runs)==2,"restart needs a fresh run id"
-            print("operator CLI acceptance passed")
-        finally:
-            for process in processes:
-                if process.poll() is None: stop(process)
-    return 0
+        run('--help');run('serve',ok=False);run('provider','run',ok=False)
+        info=run('network','info','--network','devnet')
+        assert 'bootstrap=51.255.46.58:29461' in info.stdout
+        run('network','info','--network','mainnet',ok=False)
+        run('network','info','--network',root/'network.bin',ok=False)
+        run('network','provision-devnet',ok=False)
+        run('doctor','--network','devnet','--data-dir',data)
+        assert not data.exists(),'doctor created a DB'
+        for _ in range(2):
+            previous_runs={json.loads(line)['run_id'] for line in events.read_text().splitlines()} if events.exists() else set()
+            process=subprocess.Popen([binary,'node','run','--network','devnet','--data-dir',str(data),
+                '--event-log',str(events),*admission],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            try:
+                deadline=time.monotonic()+90
+                while time.monotonic()<deadline:
+                    assert process.poll() is None,'DEVNET node failed'
+                    records=[json.loads(line) for line in events.read_text().splitlines() if line.endswith('}')] if events.exists() else []
+                    if any(e['run_id'] not in previous_runs and e['event']=='node_status' and e['peers']>0 for e in records):break
+                    time.sleep(.1)
+                else:raise AssertionError('DEVNET peer was not reached')
+            finally:
+                process.terminate()
+                try:process.wait(timeout=15)
+                except subprocess.TimeoutExpired:process.kill();process.wait(timeout=5)
+        def digest():
+            return {str(p.relative_to(data)):hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in data.rglob('*') if p.is_file()}
+        before=digest();run('doctor','--network','devnet','--data-dir',data)
+        assert digest()==before,'doctor modified the DB'
+        runs={}
+        for event in map(json.loads,events.read_text().splitlines()):
+            assert 'v' not in event
+            assert event['seq']==runs.get(event['run_id'],0)+1
+            runs[event['run_id']]=event['seq']
+            assert not event.get('poa_signer_active',False),'acceptance must not activate PoA'
+            assert not {'mnemonic','password','private_key','mail_body','filename'}.intersection(event)
+        assert len(runs)==2,'restart needs a fresh event run id'
+        print('DEVNET operator CLI acceptance passed')
 
-
-if __name__=="__main__": sys.exit(main())
+if __name__=='__main__':main()

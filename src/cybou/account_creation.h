@@ -18,8 +18,9 @@
 
 namespace cybou {
 
-inline constexpr size_t ACCOUNT_CREATE_WORK_SIZE{113};
-inline constexpr size_t ACCOUNT_CREATE_SIZE{10553};
+inline constexpr size_t ACCOUNT_CREATE_WORK_SIZE{112};
+inline constexpr size_t ACCOUNT_CREATE_SIZE{32 + IDENTITY_AUTHORIZATION_SIZE + IDENTITY_KEM_PACKAGE_SIZE +
+    ACCOUNT_CREATE_WORK_SIZE + 64 + 3309 + 64 + 2420};
 
 struct AccountCreationWork {
     cybou::Hash256 network_binding;

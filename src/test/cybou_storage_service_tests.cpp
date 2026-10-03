@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_syn
     cybou::CybouNodeRuntime node{{.network_genesis = fixture.definition,
         .data_dir = fixture.directory / "quota-node", .memory_only = true,
         .wipe_data = true, .storage_capacity_bytes = 0,
-        .peer_admission_policy = TestLabAdmissionPolicy()}};
+        .peer_admission_policy = TestPeerAdmissionPolicy()}};
     BOOST_REQUIRE(node.InitializeGenesis(fixture.genesis));
     for (uint64_t h = 1; h <= fixture.runtime->GetFinalizedHeight().value(); ++h)
         BOOST_REQUIRE(node.CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(fetch_uses_local_cache_then_verified_remote_copy)
     BOOST_CHECK(!storage.Fetch(unknown));
 }
 
-BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
+BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_p2p)
 {
     CybouServiceTestFixture fixture;
     auto identity = fixture.CreateIdentity("storage-owner.cybou");
@@ -304,7 +304,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         cybou::NodeRuntimeConfig config{.network_genesis = fixture.definition,
             .data_dir = fixture.directory / ("socket-provider-" + std::to_string(i)),
             .memory_only = true, .wipe_data = true, .storage_capacity_bytes = 64ULL << 20,
-            .peer_admission_policy = TestLabAdmissionPolicy()};
+            .peer_admission_policy = TestPeerAdmissionPolicy()};
         auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         BOOST_REQUIRE(provider->InitializeGenesis(fixture.genesis));
         for (std::uint64_t h{1}; h <= height; ++h) BOOST_REQUIRE(provider->CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
@@ -315,10 +315,10 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     }
     for (auto& server : servers) listeners.emplace_back([&stopping, s = server.get()] { s->Run(stopping); });
     {
-        // A Full Node whose runtime reaches providers only through CYP2.
+        // A Full Node whose runtime reaches providers only through CYBOU P2P.
         cybou::NodeRuntimeConfig client_config{.network_genesis = fixture.definition,
             .data_dir = fixture.directory / "socket-client", .configured_peers = {{endpoints.front()}},
-            .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
+            .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy()};
         cybou::CybouNodeRuntime client{std::move(client_config)};
         BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
         client.SetConfiguredPeerEndpoints(endpoints);

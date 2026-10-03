@@ -16,7 +16,7 @@ root. No external official network/genesis file is loaded. Only then may it
 open network-bound Identity and application state or connect to peers in the direct mesh.
 DEVNET is the enabled profile; MAINNET has no provisioned data or bootstrap and
 remains disabled in the GUI until provisioning is complete.
-Bootstrap is an ordinary peer whose hints are untrusted until normal CYP2 and
+Bootstrap is an ordinary peer whose hints are untrusted until normal CYBOU P2P and
 France-only admission checks pass.
 
 On adopting a new official network definition (with a new Network Public Key, new

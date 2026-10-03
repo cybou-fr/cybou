@@ -8,7 +8,6 @@
 
 namespace cybou {
 namespace {
-constexpr unsigned char VERSION{4};
 constexpr size_t RECOVERY_PUBLIC_SIZE{32 + 1952};
 constexpr size_t AUTHORIZATION_PUBLIC_SIZE{32 + 1312};
 constexpr size_t ACCOUNT_SIZE{32 + RECOVERY_PUBLIC_SIZE + AUTHORIZATION_PUBLIC_SIZE + 32 + 8 + 8};
@@ -81,7 +80,6 @@ std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const Identi
     if (registry.m_accounts.size() > MAX_IDENTITY_REGISTRY_ACCOUNTS ||
         registry.m_accounts.size() != registry.m_recovery_index.size()) return std::nullopt;
     std::vector<unsigned char> out;
-    out.push_back(VERSION);
     const auto count = static_cast<uint32_t>(registry.m_accounts.size());
     for (unsigned i{0}; i < 4; ++i) out.push_back(static_cast<unsigned char>(count >> (8 * i)));
     for (const auto& [account_id, record] : registry.m_accounts) {
@@ -102,9 +100,8 @@ std::optional<std::vector<unsigned char>> SerializeIdentityRegistry(const Identi
 std::optional<IdentityRegistry> DeserializeIdentityRegistry(std::span<const unsigned char> bytes)
 {
     Reader reader{bytes};
-    const auto version = reader.U8();
     const auto count = reader.U32();
-    if (!version || *version != VERSION || !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS ||
+    if (!count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS ||
         *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     IdentityRegistry registry;
     std::optional<AccountId> prior_account;

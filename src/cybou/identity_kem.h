@@ -16,7 +16,7 @@ inline constexpr size_t XWING_SEED_SIZE{32};
 inline constexpr size_t XWING_PUBLIC_KEY_SIZE{1216};
 inline constexpr size_t XWING_CIPHERTEXT_SIZE{1120};
 inline constexpr uint16_t IDENTITY_KEM_PROFILE_XWING{0x647a};
-inline constexpr size_t IDENTITY_KEM_PACKAGE_SIZE{3 + XWING_PUBLIC_KEY_SIZE};
+inline constexpr size_t IDENTITY_KEM_PACKAGE_SIZE{2 + XWING_PUBLIC_KEY_SIZE};
 
 using XWingSeed = std::array<unsigned char, XWING_SEED_SIZE>;
 using XWingPublicKey = std::array<unsigned char, XWING_PUBLIC_KEY_SIZE>;

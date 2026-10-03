@@ -57,7 +57,6 @@ std::optional<PoaFinalityCertificate> CreateCertificate(
 {
     if (network_binding.IsNull() || block_id.IsNull() || height == 0 || parent_block_id.IsNull()) return std::nullopt;
     PoaFinalityCertificate certificate{
-        .version = POA_FINALITY_CERTIFICATE_VERSION,
         .network_binding = network_binding,
         .block_id = block_id,
         .height = height,

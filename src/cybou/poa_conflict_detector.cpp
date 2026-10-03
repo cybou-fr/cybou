@@ -14,11 +14,10 @@
 namespace cybou {
 namespace {
 
-constexpr unsigned char RECORD_VERSION{1};
 constexpr unsigned char HALT_CORRUPT_STORAGE{1};
 constexpr unsigned char HALT_EQUIVOCATION{2};
-constexpr size_t METADATA_SIZE{1 + 32 + 32};
-constexpr size_t EQUIVOCATION_RECORD_SIZE{2 + 2 * POA_FINALITY_CERTIFICATE_SIZE};
+constexpr size_t METADATA_SIZE{ 32 + 32};
+constexpr size_t EQUIVOCATION_RECORD_SIZE{1 + 2 * POA_FINALITY_CERTIFICATE_SIZE};
 
 std::string Hex(const std::span<const unsigned char> bytes)
 {
@@ -48,11 +47,11 @@ std::string ObservationKey(const std::string& prefix, const PoaFinalityCertifica
 bool ValidConflictRecord(const std::span<const unsigned char> record,
     const cybou::Hash256& network_binding, const IdentityHybridPublicKey& finalizer_key)
 {
-    if (record.size() != EQUIVOCATION_RECORD_SIZE || record[0] != RECORD_VERSION ||
-        record[1] != HALT_EQUIVOCATION) return false;
+    if (record.size() != EQUIVOCATION_RECORD_SIZE ||
+        record[0] != HALT_EQUIVOCATION) return false;
     const auto cert_size = POA_FINALITY_CERTIFICATE_SIZE;
-    const auto first = DeserializePoaFinalityCertificate(record.subspan(2, cert_size));
-    const auto second = DeserializePoaFinalityCertificate(record.subspan(2 + cert_size, cert_size));
+    const auto first = DeserializePoaFinalityCertificate(record.subspan(1, cert_size));
+    const auto second = DeserializePoaFinalityCertificate(record.subspan(1 + cert_size, cert_size));
     return first && second && first->network_binding == network_binding && second->network_binding == network_binding &&
         first->height == second->height && first->parent_block_id == second->parent_block_id &&
         first->block_id != second->block_id &&
@@ -79,7 +78,6 @@ PoaConflictDetector::PoaConflictDetector(KVStore& db, const cybou::Hash256& netw
     if (!key_id) throw std::invalid_argument{"invalid PoA finalizer public key"};
     std::vector<unsigned char> expected_metadata;
     expected_metadata.reserve(METADATA_SIZE);
-    expected_metadata.push_back(RECORD_VERSION);
     expected_metadata.insert(expected_metadata.end(), m_network_binding.begin(), m_network_binding.end());
     expected_metadata.insert(expected_metadata.end(), key_id->begin(), key_id->end());
 
@@ -90,8 +88,8 @@ PoaConflictDetector::PoaConflictDetector(KVStore& db, const cybou::Hash256& netw
         if (metadata != expected_metadata) throw std::runtime_error{"PoA conflict detector identity mismatch"};
         std::vector<unsigned char> halt;
         if (m_db.Read(halt_key, halt)) {
-            const bool valid_reason_only = halt.size() == 2 && halt[0] == RECORD_VERSION &&
-                halt[1] == HALT_CORRUPT_STORAGE;
+            const bool valid_reason_only = halt.size() == 1 &&
+                halt[0] == HALT_CORRUPT_STORAGE;
             if (!valid_reason_only && !ValidConflictRecord(halt, m_network_binding, m_genesis_finalizer_key)) {
                 throw std::runtime_error{"corrupt PoA conflict detector halt record"};
             }
@@ -124,7 +122,7 @@ PoaConflictStatus PoaConflictDetector::Observe(
     std::vector<unsigned char> previous_bytes;
     if (!m_db.Read(observation_key, previous_bytes)) {
         if (m_db.Exists(observation_key)) {
-            const std::vector<unsigned char> halt{RECORD_VERSION, HALT_CORRUPT_STORAGE};
+            const std::vector<unsigned char> halt{HALT_CORRUPT_STORAGE};
             return PersistHalt(halt) ? PoaConflictStatus::CORRUPT_STORAGE : PoaConflictStatus::STORAGE_ERROR;
         }
         try {
@@ -141,14 +139,13 @@ PoaConflictStatus PoaConflictDetector::Observe(
         previous->height != certificate.height || previous->parent_block_id != certificate.parent_block_id ||
         !VerifyPoaFinalityCertificate(*previous, m_genesis_finalizer_key, m_network_binding,
             previous->block_id, previous->height, previous->parent_block_id)) {
-        const std::vector<unsigned char> halt{RECORD_VERSION, HALT_CORRUPT_STORAGE};
+        const std::vector<unsigned char> halt{HALT_CORRUPT_STORAGE};
         return PersistHalt(halt) ? PoaConflictStatus::CORRUPT_STORAGE : PoaConflictStatus::STORAGE_ERROR;
     }
     if (previous->block_id == certificate.block_id) return PoaConflictStatus::ALREADY_OBSERVED;
 
     std::vector<unsigned char> evidence;
     evidence.reserve(EQUIVOCATION_RECORD_SIZE);
-    evidence.push_back(RECORD_VERSION);
     evidence.push_back(HALT_EQUIVOCATION);
     evidence.insert(evidence.end(), previous_bytes.begin(), previous_bytes.end());
     evidence.insert(evidence.end(), encoded->begin(), encoded->end());
@@ -193,7 +190,7 @@ PoaEvidenceReadResult PoaConflictDetector::ReadSafetyEvidence() const
         return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};
     }
 
-    if (record.size() == 2 && record[0] == RECORD_VERSION && record[1] == HALT_CORRUPT_STORAGE) {
+    if (record.size() == 1 && record[0] == HALT_CORRUPT_STORAGE) {
         m_halted = true;
         return {PoaEvidenceReadStatus::HALTED_CORRUPT_STORAGE, std::nullopt};
     }
@@ -203,9 +200,9 @@ PoaEvidenceReadResult PoaConflictDetector::ReadSafetyEvidence() const
     }
 
     const auto cert_size = POA_FINALITY_CERTIFICATE_SIZE;
-    const auto first = DeserializePoaFinalityCertificate(std::span<const unsigned char>{record}.subspan(2, cert_size));
+    const auto first = DeserializePoaFinalityCertificate(std::span<const unsigned char>{record}.subspan(1, cert_size));
     const auto second = DeserializePoaFinalityCertificate(
-        std::span<const unsigned char>{record}.subspan(2 + cert_size, cert_size));
+        std::span<const unsigned char>{record}.subspan(1 + cert_size, cert_size));
     if (!first || !second) {
         m_halted = true;
         return {PoaEvidenceReadStatus::UNAVAILABLE, std::nullopt};

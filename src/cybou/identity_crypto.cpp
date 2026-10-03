@@ -53,17 +53,16 @@ std::optional<std::array<unsigned char, 32>> DeriveSeed(
     std::string_view component)
 {
     if (!Algorithm(purpose)) return std::nullopt;
-    constexpr std::string_view salt{"CYBOU/IDENTITY-V2/HKDF-SHA256"};
+    constexpr std::string_view salt{"CYBOU/IDENTITY/HKDF-SHA256"};
     std::string_view purpose_label;
     switch (purpose) {
     case IdentityKeyPurpose::RECOVERY_ROOT: purpose_label = "ROOT"; break;
     case IdentityKeyPurpose::AUTHORIZATION: purpose_label = "AUTH"; break;
     case IdentityKeyPurpose::POA_FINALIZER: purpose_label = "POA_FINALIZER"; break;
-    // Keep the deployed HKDF domain bytes when renaming the purpose (numeric value 8).
-    case IdentityKeyPurpose::STORAGE: purpose_label = "STORAGE_PROVIDER"; break;
+    case IdentityKeyPurpose::STORAGE: purpose_label = "STORAGE"; break;
     case IdentityKeyPurpose::NETWORK_ROOT: purpose_label = "NETWORK_ROOT"; break;
     }
-    const std::string info = std::string{"CYBOU/IDENTITY-V2/"} + std::string{purpose_label} + "/" +
+    const std::string info = std::string{"CYBOU/IDENTITY/"} + std::string{purpose_label} + "/" +
         (component == "ED25519" ? "ED25519" : Algorithm(purpose));
     std::array<unsigned char, 32> seed{};
     const auto salt_bytes = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(salt.data()), salt.size()};
@@ -296,8 +295,8 @@ std::optional<std::array<unsigned char, 32>> ComputeRecoveryKeyId(
         std::all_of(recovery_key.ed25519.begin(), recovery_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(recovery_key.ml_dsa.begin(), recovery_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
 
-    constexpr std::string_view domain{"CYBOU/RECOVERY-KEY-ID/V2"};
-    constexpr std::array<unsigned char, 2> suite{2, 1}; // identifier version 2, hybrid root suite 1
+    constexpr std::string_view domain{"CYBOU/RECOVERY-KEY-ID"};
+    constexpr std::array<unsigned char, 1> suite{1}; // hybrid root suite
     std::array<unsigned char, 32> id{};
     if (!crypto::ComputeSha256({
         crypto::Sha256Bytes(domain), suite, recovery_key.ed25519, recovery_key.ml_dsa,
@@ -312,7 +311,7 @@ std::optional<std::array<unsigned char, 32>> ComputeAuthorizationKeyId(
         authorization_key.ml_dsa.size() != PublicSize(IdentityKeyPurpose::AUTHORIZATION) ||
         std::all_of(authorization_key.ed25519.begin(), authorization_key.ed25519.end(), [](unsigned char b) { return b == 0; }) ||
         std::all_of(authorization_key.ml_dsa.begin(), authorization_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) return std::nullopt;
-    constexpr std::string_view domain{"CYBOU/IDENTITY-AUTH-KEY-ID/V1"};
+    constexpr std::string_view domain{"CYBOU/IDENTITY-AUTH-KEY-ID"};
     constexpr std::array<unsigned char, 2> suite{2, 1};
     std::array<unsigned char, 32> id{};
     if (!crypto::ComputeSha256({
@@ -330,7 +329,7 @@ std::optional<std::array<unsigned char, 32>> ComputePoaFinalizerKeyId(
         std::all_of(poa_finalizer_key.ml_dsa.begin(), poa_finalizer_key.ml_dsa.end(), [](unsigned char b) { return b == 0; })) {
         return std::nullopt;
     }
-    constexpr std::string_view domain{"CYBOU/POA-FINALIZER-KEY-ID/V1"};
+    constexpr std::string_view domain{"CYBOU/POA-FINALIZER-KEY-ID"};
     std::array<unsigned char, 32> id{};
     if (!crypto::ComputeSha256({
         crypto::Sha256Bytes(domain), poa_finalizer_key.ed25519, poa_finalizer_key.ml_dsa,

@@ -45,19 +45,17 @@ int CybouQtMain(int argc, char* argv[])
     QApplication app{argc, argv};
     QCoreApplication::setOrganizationName(QStringLiteral("CYBOU"));
     QCoreApplication::setApplicationName(QStringLiteral("CYBOU"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.0.1"));
     app.setApplicationDisplayName(QStringLiteral("CYBOU"));
     app.setQuitOnLastWindowClosed(false);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QObject::tr("Protected communication infrastructure"));
     parser.addHelpOption();
-    parser.addVersionOption();
     QCommandLineOption data_dir_option(QStringList{QStringLiteral("datadir")},
         QObject::tr("Use the specified CYBOU data directory."), QObject::tr("directory"));
     parser.addOption(data_dir_option);
     QCommandLineOption peer_option(QStringList{QStringLiteral("peer")},
-        QObject::tr("Connect to this CYP2 IP:port endpoint."), QObject::tr("endpoint"));
+        QObject::tr("Connect to this CYBOU P2P IP:port endpoint."), QObject::tr("endpoint"));
     parser.addOption(peer_option);
     parser.process(app);
 

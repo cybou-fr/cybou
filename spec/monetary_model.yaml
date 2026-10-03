@@ -1,4 +1,3 @@
-version: '0.1'
 
 asset:
   symbol: CYBOU
@@ -17,8 +16,7 @@ dev_genesis:
     name: cybou
   issued_supply: 200000000
   unissued_supply: 99800000000
-  official_provisioning: compiled_devnet_v12
-  state_version: 12
+  official_provisioning: compiled_devnet
 
 onboarding_bonus:
   dev_onboarding_bonus: 6000

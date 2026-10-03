@@ -2,10 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-// Multi-process storage soak client, driven by test/cybou_storage_soak.py.
+// DEVNET storage soak client. Fault injection is controlled by the operator.
 //
 // A light full node that reaches a real PoA finalizer and three real storage
-// providers only over CYP2, under the Beta target (2 remote replicas). It
+// providers only over CYBOU P2P, under the Beta target (2 remote replicas). It
 // walks the failure sequence that must hold before any Authority
 // enforcement:
 //
@@ -26,7 +26,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_service.h>
-#include <test/cybou_service_test_fixture.h>
+#include <cybou/p2p/geo_database_updater.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_genesis.h>
 #include <cybou/node_service.h>
@@ -231,7 +231,9 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
         .runtime = cybou::NodeRuntimeConfig{.network_genesis = network.genesis,
-            .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
+            .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}},
+            .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+                cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(data_dir / "geo")))},
         .genesis = network.genesis_state,
     });
     node->Start();

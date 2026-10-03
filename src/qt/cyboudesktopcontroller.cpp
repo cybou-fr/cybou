@@ -52,18 +52,14 @@ std::array<unsigned char, 32> GeoSha256Pin(const QString& text)
 struct DesktopPeerAdmission {
     std::shared_ptr<const cybou::p2p::PeerAdmissionPolicy> policy;
     std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> updater;
-    bool geo_required{true};
 };
 
 DesktopPeerAdmission DesktopPeerAdmissionPolicy(
     const std::filesystem::path& data_directory)
 {
     const auto mode = qEnvironmentVariable("CYBOU_DEV_PEER_ADMISSION");
-    if (mode == QStringLiteral("lab")) {
-        return {std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(cybou::p2p::PeerAdmissionPolicy::Lab()), {}, false};
-    }
     if (!mode.isEmpty() && mode != QStringLiteral("france")) {
-        throw std::runtime_error("CYBOU_DEV_PEER_ADMISSION must be france or lab");
+        throw std::runtime_error("CYBOU_DEV_PEER_ADMISSION must be france");
     }
     const auto csv = qEnvironmentVariable("CYBOU_GEO_COUNTRY_CSV");
     const auto sha = qEnvironmentVariable("CYBOU_GEO_SHA256");
@@ -72,7 +68,7 @@ DesktopPeerAdmission DesktopPeerAdmissionPolicy(
         auto updater = cybou::p2p::GeoDatabaseUpdater::Start(data_directory / "geo");
         auto policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
             cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(updater));
-        return {std::move(policy), std::move(updater), true};
+        return {std::move(policy), std::move(updater)};
     }
     if (sha.isEmpty() || month.isEmpty()) {
         throw std::runtime_error("set CYBOU_GEO_SHA256 and CYBOU_GEO_ISSUED_MONTH together");
@@ -85,7 +81,7 @@ DesktopPeerAdmission DesktopPeerAdmissionPolicy(
         csv_path, GeoSha256Pin(sha), *issued);
     if (!dataset) throw std::runtime_error("France Geo CSV is missing, corrupt, expired, future-dated, or has the wrong SHA-256");
     return {std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
-        cybou::p2p::PeerAdmissionPolicy::Public(dataset)), {}, true};
+        cybou::p2p::PeerAdmissionPolicy::Public(dataset)), {}};
 }
 } // namespace
 
@@ -146,9 +142,8 @@ void CybouDesktopController::start()
         }
         auto peer_admission = DesktopPeerAdmissionPolicy(m_data_directory);
         m_geo_database_updater = peer_admission.updater;
-        m_geo_admission_required = peer_admission.geo_required;
-        m_model->setGeoAdmissionStatus(!m_geo_admission_required ? CybouGeoAdmissionStatus::NotRequired
-            : (peer_admission.policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting));
+        const auto geo_policy = peer_admission.policy;
+        m_model->setGeoAdmissionStatus(geo_policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting);
         auto config = cybou::MakeNodeRuntimeConfig(network, data_dir);
         if (configured_p2p) config.configured_peers.push_back({*configured_p2p, std::nullopt});
         config.advertised_endpoint = network_config.listen_endpoint;
@@ -182,7 +177,7 @@ void CybouDesktopController::start()
 
         m_node_service->StartNetwork(
             network_config,
-            [this, geo_updater = m_geo_database_updater, geo_required = m_geo_admission_required](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
+            [this, geo_policy](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {
                 const bool bootstrap_reachable = sync_result.IsConnected();
                 const bool local_state_unavailable =
@@ -272,8 +267,7 @@ void CybouDesktopController::start()
                 }
                 const auto diagnostics = m_node_service->Runtime().GetDiagnostics();
                 const bool syncing = !sync_result.caught_up_with_known_peers;
-                const auto geo_status = !geo_required ? CybouGeoAdmissionStatus::NotRequired
-                    : ((geo_updater && geo_updater->Ready()) ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting);
+                const auto geo_status = geo_policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting;
                 QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, syncing, geo_status] {
                     model->setNetworkDiagnostics(diagnostics);
                     model->setGeoAdmissionStatus(geo_status);

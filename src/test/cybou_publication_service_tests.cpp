@@ -18,8 +18,8 @@ namespace {
 cybou::RetentionKey JobKey(const cybou::AccountId& account, std::string_view id)
 {
     const auto& value = account.Value();
-    return {.holder = cybou::RetentionTag("CYBOU/RETENTION/IDENTITY/v1", std::span{value.begin(), value.size()}),
-        .reference = cybou::RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB/v1",
+    return {.holder = cybou::RetentionTag("CYBOU/RETENTION/IDENTITY", std::span{value.begin(), value.size()}),
+        .reference = cybou::RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB",
             std::span{reinterpret_cast<const unsigned char*>(id.data()), id.size()})};
 }
 

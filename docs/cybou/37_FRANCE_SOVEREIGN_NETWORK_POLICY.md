@@ -24,8 +24,7 @@ The region rule is node-local admission policy. It is not consensus, does not
 prove a machine's physical location, and cannot stop traffic routed through an
 allowed French endpoint. CYBOU makes no external GeoIP API calls. Production
 and DEV fail closed for public P2P when mandatory Geo data is absent, corrupt,
-or expired. LAB may explicitly bypass the rule for loopback and private test
-networks.
+or expired. Development follows the same France-only admission policy.
 
 Known VPN/proxy/Tor filtering is an optional local protection using local
 classification data. It can reject only addresses present in that data and

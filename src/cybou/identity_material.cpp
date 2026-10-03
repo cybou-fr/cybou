@@ -15,7 +15,7 @@
 
 namespace cybou {
 namespace {
-constexpr std::array<unsigned char, 5> MAGIC{'C', 'V', 'I', 'D', '5'};
+constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'I', 'D'};
 constexpr size_t PAYLOAD_SIZE{MAGIC.size() + 32 + 32};
 
 template <size_t N>

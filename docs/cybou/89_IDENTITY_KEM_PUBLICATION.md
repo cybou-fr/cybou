@@ -6,9 +6,9 @@ Status: DEV-only X-Wing draft-05 profile. Publication belongs to Identity; Mail 
 
 The current Identity record contains the Recovery public key, Authorization public key, one current KEM package commitment, one shared nonce, and key_epoch. It has no installation list, activation nonce, or per-installation KEM records.
 
-The canonical X-Wing public package is 1219 bytes: version `01`, KEM ID `0x647a` in the specified wire byte order, and the 1216-byte ML-KEM-768 || X25519 public key. The mnemonic-derived 32-byte KEM seed is independent from both signing roles. The local implementation validates key derivation by encapsulation/decapsulation self-test; it does not define a custom proof-of-possession primitive.
+The canonical X-Wing public package is 1218 bytes: KEM ID `0x647a` in little-endian byte order, and the 1216-byte ML-KEM-768 || X25519 public key. The mnemonic-derived 32-byte KEM seed is independent from both signing roles. The local implementation validates key derivation by encapsulation/decapsulation self-test; it does not define a custom proof-of-possession primitive.
 
-The commitment binds `CYBOU/IDENTITY-KEM-PACKAGE/V2`, NetworkID, AccountID, key_epoch, package length, and exact canonical package bytes. The package itself is carried by AccountCreate or IdentityRotate; state retains only the commitment. Runtime lookup resolves the package for the finalized current key_epoch from canonical verified operation history and checks its commitment and source block.
+The commitment binds `CYBOU/IDENTITY-KEM-PACKAGE`, NetworkID, AccountID, key_epoch, package length, and exact canonical package bytes. The package itself is carried by AccountCreate or IdentityRotate; state retains only the commitment. Runtime lookup resolves the package for the finalized current key_epoch from canonical verified operation history and checks its commitment and source block.
 
 ## Frozen DEV profile
 
@@ -29,6 +29,6 @@ No service keeps a parallel authoritative recipient-key registry. Historical ope
 ## Activation
 
 The Identity record, AccountCreate/IdentityRotate encodings, RootPublication
-capsules, and CVID5 vault are active on DEV. There is no legacy decoder, import
+capsules, and CYID vault are active on DEV. There is no legacy decoder, import
 path, or dual operation decoder. A later suite change requires a new explicit
 protocol decision and coordinated network cutover.

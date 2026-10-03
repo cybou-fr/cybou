@@ -10,7 +10,7 @@ The label before `.cybou` is exactly 5–32 ASCII lowercase bytes from
 normalization aliases, `--`, `xn--` prefix, and all-digit labels. Lengths 1–4
 are permanently reserved. Initial reserved labels include `cybou`, `admin`,
 `root`, `system`, `support`, `security`, `operator`, `validator`, `wallet`, and
-`mail`. Freeze the complete list and registry version in immutable network
+`mail`. Freeze the complete list and registry rules in immutable network
 parameters; never silently extend them on an existing network.
 
 One AccountID may own one primary name. Claiming is free in CYBOU but requires
@@ -20,7 +20,7 @@ Names are pseudonymous aliases, not civil identity proof.
 ## Commit → work → reveal
 
 1. Generate a secret random salt and commit to canonical label, AccountID,
-   NetworkID, and registry version with a domain-separated hash.
+   NetworkBinding with a domain-separated hash.
 2. Finalize NameCommit before accepting work or reveal. Save the salt in the
    encrypted claim vault beside the identity vault before broadcasting the commit. The file is bound to
    NetworkID and AccountID and must be retained until reveal finalizes.

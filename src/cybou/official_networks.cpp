@@ -4,9 +4,6 @@
 
 #include <cybou/official_networks.h>
 #include <cybou/official_devnet_constants.h>
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-#include <cybou/crypto/sha256.h>
-#endif
 
 #include <stdexcept>
 
@@ -40,7 +37,7 @@ OfficialNetwork VerifyCompiledDevnet()
     if (!verified) throw std::runtime_error("compiled DEVNET genesis failed cryptographic verification");
     auto state = DeserializeCybouState(devnet_constants::GENESIS_STATE_BYTES);
     if (!state || ValidateCybouState(*state) != StateValidationError::NONE) {
-        throw std::runtime_error("compiled DEVNET genesis state is invalid for state v12; provision a new NetworkID before DEVNET startup");
+        throw std::runtime_error("compiled DEVNET genesis state is invalid for state; provision a new NetworkID before DEVNET startup");
     }
     const auto state_hash = CybouStateHash(*state);
     if (!state_hash || *state_hash != verified->GetGenesisStateRoot()) {
@@ -55,59 +52,9 @@ OfficialNetwork VerifyCompiledDevnet()
     };
 }
 
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-std::array<unsigned char, 32> LabSeed(std::string_view domain)
-{
-    std::array<unsigned char, 32> seed{};
-    if (!crypto::ComputeSha256({crypto::Sha256Bytes(domain)}, seed.data())) {
-        throw std::runtime_error("cannot derive LAB seed");
-    }
-    return seed;
-}
-
-OfficialNetwork BuildLabNetwork()
-{
-    const auto network_seed = LabSeed("CYBOU/LAB/NETWORK-ROOT/V1");
-    const auto network_key = DeriveIdentityPublicKey(network_seed, IdentityKeyPurpose::NETWORK_ROOT);
-    const auto poa_key = DeriveIdentityPublicKey(LabPoaFinalizerSeed(), IdentityKeyPurpose::POA_FINALIZER);
-    auto state = CreateDevGenesisState();
-    const auto recovery_key = DeriveIdentityPublicKey(LabSeed("CYBOU/LAB/CENTRAL-AUTHORITY/V1"), IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto recovery_id = recovery_key ? ComputeRecoveryKeyId(*recovery_key) : std::nullopt;
-    if (!recovery_id) throw std::runtime_error("cannot derive LAB Central Authority");
-    state.genesis_allocations.emplace(*recovery_id, GenesisAllocation{
-        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
-    const auto state_root = CybouStateHash(state);
-    if (!network_key || !poa_key || !state_root) throw std::runtime_error("cannot build LAB network");
-    NetworkGenesis spec;
-    spec.network_public_key = *network_key;
-    spec.genesis_state_root = *state_root;
-    spec.poa_finalizer_public_key = *poa_key;
-    spec.protocol_parameters = DevProtocolParameters();
-    const auto digest = ComputeNetworkGenesisDigest(spec);
-    const auto signature = SignIdentityMessage(network_seed, IdentityKeyPurpose::NETWORK_ROOT,
-        std::span<const unsigned char>{digest.begin(), digest.size()});
-    if (!signature) throw std::runtime_error("cannot sign LAB genesis");
-    spec.signature = *signature;
-    auto verified = VerifiedNetworkGenesis::Create(spec);
-    if (!verified) throw std::runtime_error("LAB genesis failed verification");
-    return OfficialNetwork{
-        .kind = NetworkKind::LAB,
-        .name = "LAB",
-        .genesis = std::move(*verified),
-        .genesis_state = std::move(state),
-        .rendezvous_locators = {},
-    };
-}
-#endif
 
 } // namespace
 
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-std::array<unsigned char, 32> LabPoaFinalizerSeed()
-{
-    return LabSeed("CYBOU/LAB/POA-FINALIZER/V1");
-}
-#endif
 
 const OfficialNetwork& RequireOfficialNetwork(const NetworkKind kind)
 {
@@ -118,12 +65,6 @@ const OfficialNetwork& RequireOfficialNetwork(const NetworkKind kind)
     }
     case NetworkKind::MAINNET:
         break;
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-    case NetworkKind::LAB: {
-        static const OfficialNetwork s_lab = BuildLabNetwork();
-        return s_lab;
-    }
-#endif
     }
     throw std::runtime_error("MAINNET unavailable: not provisioned (no key, no genesis, no bootstrap)");
 }
@@ -132,9 +73,6 @@ const OfficialNetwork& RequireOfficialNetwork(const std::string_view name)
 {
     if (name == "devnet" || name == "DEVNET") return RequireOfficialNetwork(NetworkKind::DEVNET);
     if (name == "mainnet" || name == "MAINNET") return RequireOfficialNetwork(NetworkKind::MAINNET);
-#if defined(CYBOU_ENABLE_LAB_NETWORK)
-    if (name == "lab" || name == "LAB") return RequireOfficialNetwork(NetworkKind::LAB);
-#endif
     throw std::runtime_error("unknown network; use --network devnet");
 }
 

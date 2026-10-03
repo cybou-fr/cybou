@@ -3,7 +3,7 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, announcements,
+implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
@@ -70,7 +70,6 @@ validator registry, ValidatorSet, validator key or staking.
 
 ```text
 ValidationAttestation:
-    version                  1
     network_binding          NetworkBinding (32-byte binding of NetworkID)
     operation_id             OperationID
     finalized_base_block_id  BlockID of the finalized state the operation was executed on
@@ -78,7 +77,7 @@ ValidationAttestation:
     signature                Ed25519 + ML-DSA-44 (Identity Authorization key)
 ```
 
-The signature covers domain `CYBOU/VALIDATION/V1`, NetworkBinding, OperationID,
+The signature covers domain `CYBOU/VALIDATION`, NetworkBinding, OperationID,
 finalized base BlockID and validator AccountID. It is stored beside the
 operation and never changes its OperationID. Exact wire encoding is defined
 with the implementation.

@@ -40,7 +40,7 @@ struct CybouFeatureAvailability {
     bool version_history{false};
 };
 
-enum class CybouGeoAdmissionStatus : quint8 { NotRequired, Waiting, Ready };
+enum class CybouGeoAdmissionStatus : quint8 { Waiting, Ready };
 
 /**
  * Identity-centric desktop status. Pages render product state only;

@@ -31,7 +31,6 @@ namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{64U * 1024U};
-inline constexpr uint8_t WIRE_VERSION{5};
 inline constexpr uint8_t MAX_BLOCK_BATCH{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -181,7 +180,7 @@ public:
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
     bool ServeNext(CybouNodeRuntime& runtime);
     const std::optional<Hello>& Peer() const { return m_peer; }
-    /** One authenticated CYP2 frame for bounded peer extensions and protocol tests. */
+    /** One authenticated CYBOU P2P frame for bounded peer extensions and protocol tests. */
     bool SendFrame(const Frame& frame,
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
     std::optional<Frame> ReceiveFrame(

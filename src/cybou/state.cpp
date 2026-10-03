@@ -163,9 +163,6 @@ NameCommitError ApplyNameCommit(const AuthorizedNameCommit& op,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
-    if (op.commit.version != NAME_REGISTRY_VERSION) {
-        return NameCommitError::INVALID_PAYLOAD;
-    }
     if (op.authorization.kind != IdentityOperationKind::NAME_COMMIT) {
         return NameCommitError::INVALID_AUTHORIZATION;
     }
@@ -202,9 +199,6 @@ NameRevealError ApplyNameReveal(const AuthorizedNameReveal& op,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params, CybouState& state)
 {
-    if (op.reveal.version != NAME_REGISTRY_VERSION) {
-        return NameRevealError::INVALID_PAYLOAD;
-    }
     if (op.authorization.kind != IdentityOperationKind::NAME_REVEAL) {
         return NameRevealError::INVALID_AUTHORIZATION;
     }
@@ -376,7 +370,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     const auto names = SerializeNameRegistry(state.names);
     if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
-    out.push_back(CYBOU_STATE_VERSION);
     Write64(out, state.onboarding_pool);
     Write32(out, static_cast<uint32_t>(state.accounts.size()));
     for (const auto& [id, account] : state.accounts) {
@@ -410,11 +403,9 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes)
 {
     Reader reader{bytes};
-    const auto version = reader.U8();
     const auto onboarding = reader.U64();
     const auto count = reader.U32();
-    if (!version || *version != CYBOU_STATE_VERSION ||
-        !onboarding ||
+    if (!onboarding ||
         !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     CybouState state{};
     state.onboarding_pool = *onboarding;
@@ -482,7 +473,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
 
 std::optional<cybou::Hash256> CybouStateHash(const CybouState& state)
 {
-    constexpr std::string_view domain{"CYBOU/STATE/V6"};
+    constexpr std::string_view domain{"CYBOU/STATE"};
     const auto bytes = SerializeCybouState(state);
     if (!bytes) return std::nullopt;
     cybou::Hash256 hash;

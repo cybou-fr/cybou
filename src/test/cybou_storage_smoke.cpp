@@ -2,10 +2,10 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://opensource.org/license/mit/.
 
-// Multi-process storage smoke client, driven by test/cybou_storage_smoke.py.
+// DEVNET storage smoke client. Fault injection is controlled by the operator.
 //
 // A light full node that talks to a real PoA finalizer and real storage
-// providers only over CYP2. It creates an Identity, publishes an encrypted
+// providers only over CYBOU P2P. It creates an Identity, publishes an encrypted
 // file, waits for finality and remote durability, reports the provider that
 // holds the replica, waits until that provider is killed, detects the loss by
 // audit, repairs to another provider and verifies exact bytes from remote GET.
@@ -14,7 +14,7 @@
 #include <cybou/application_service.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_service.h>
-#include <test/cybou_service_test_fixture.h>
+#include <cybou/p2p/geo_database_updater.h>
 #include <cybou/kv_store.h>
 #include <cybou/network_genesis.h>
 #include <cybou/node_service.h>
@@ -71,7 +71,9 @@ int main(int argc, char* argv[])
 
         cybou::CybouNodeService node{{
             .runtime = cybou::NodeRuntimeConfig{.network_genesis = network->genesis,
-                .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
+                .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}},
+                .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+                    cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(work / "client-db" / "geo")))},
             .genesis = network->genesis_state,
         }};
         node.Start();

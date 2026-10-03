@@ -17,8 +17,8 @@ namespace cybou {
 
 using ContentKey = std::array<unsigned char, 32>;
 
-inline constexpr std::size_t ENCRYPTED_CHUNK_HEADER_SIZE{49};
-inline constexpr std::size_t ENCRYPTED_CHUNK_MIN_STORED_BYTES{49 + 1024 + 16};
+inline constexpr std::size_t ENCRYPTED_CHUNK_HEADER_SIZE{48};
+inline constexpr std::size_t ENCRYPTED_CHUNK_MIN_STORED_BYTES{ENCRYPTED_CHUNK_HEADER_SIZE + 1024 + 16};
 inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_PLAINTEXT_BYTES{512 * 1024 - 4};
 inline constexpr std::size_t ENCRYPTED_CHUNK_MAX_STORED_BYTES{
     ENCRYPTED_CHUNK_HEADER_SIZE + 512 * 1024 + 16};

@@ -13,7 +13,6 @@
 namespace cybou {
 namespace {
 
-constexpr std::uint8_t ROOT_PUBLICATION_WIRE_VERSION{4};
 bool IsZero(const std::span<const unsigned char> bytes)
 {
     return std::all_of(bytes.begin(), bytes.end(), [](const auto byte) { return byte == 0; });
@@ -39,7 +38,6 @@ std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPub
     if (!IsValid(publication)) return std::nullopt;
     try {
         BinaryWriter writer{ROOT_PUBLICATION_MAX_BYTES};
-        writer.U8(ROOT_PUBLICATION_WIRE_VERSION);
         writer.Fixed(publication.root_chunk_id);
         writer.Fixed(publication.chunk_authorization_root);
         writer.U32(publication.chunk_count);
@@ -58,7 +56,6 @@ std::optional<RootPublication> DeserializeRootPublication(std::span<const unsign
 {
     try {
         BinaryReader reader{bytes, ROOT_PUBLICATION_MAX_BYTES};
-        if (reader.U8() != ROOT_PUBLICATION_WIRE_VERSION) return std::nullopt;
         RootPublication publication;
         publication.root_chunk_id = reader.Fixed<ChunkId>();
         publication.chunk_authorization_root = reader.Fixed<ChunkId>();

@@ -44,18 +44,16 @@ class PeerAdmissionPolicy final {
 public:
     static PeerAdmissionPolicy Public(std::shared_ptr<const FrenchIpDataset> dataset);
     static PeerAdmissionPolicy PublicWithUpdater(std::shared_ptr<GeoDatabaseUpdater> updater);
-    static PeerAdmissionPolicy Lab();
 
     bool Allows(std::string_view numeric_address) const;
     bool Ready() const;
 
 private:
-    PeerAdmissionPolicy(std::shared_ptr<const FrenchIpDataset> dataset, bool lab)
-        : m_dataset{std::move(dataset)}, m_lab{lab} {}
+    PeerAdmissionPolicy(std::shared_ptr<const FrenchIpDataset> dataset)
+        : m_dataset{std::move(dataset)} {}
 
     std::shared_ptr<const FrenchIpDataset> m_dataset;
     std::shared_ptr<GeoDatabaseUpdater> m_updater;
-    bool m_lab{false};
 };
 
 } // namespace cybou::p2p

@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
 {
     std::array<unsigned char, 32> secret{};
     for (size_t i{0}; i < secret.size(); ++i) secret[i] = static_cast<unsigned char>(i);
-    constexpr std::string_view text{"CYBOU/IDENTITY-V2/TEST"};
+    constexpr std::string_view text{"CYBOU/IDENTITY/TEST"};
     const auto message = std::span<const unsigned char>{reinterpret_cast<const unsigned char*>(text.data()), text.size()};
     for (const auto purpose : {cybou::IdentityKeyPurpose::RECOVERY_ROOT, cybou::IdentityKeyPurpose::AUTHORIZATION}) {
         const auto key = cybou::DeriveIdentityPublicKey(secret, purpose);
@@ -28,8 +28,8 @@ BOOST_AUTO_TEST_CASE(hybrid_root_and_device_are_deterministic_and_both_required)
         std::array<unsigned char, SHA256_DIGEST_LENGTH> digest{};
         SHA256(key->ml_dsa.data(), key->ml_dsa.size(), digest.data());
         const std::string_view expected = purpose == cybou::IdentityKeyPurpose::RECOVERY_ROOT
-            ? "f06127c8c8fd51c9597f84d1a21751fa5fe616090d48af934b79f15a93bb7c60"
-            : "9823e088677e2c1a44d61a5aa6c456aa6ad4318f2cfef2f8602388275f82f9b2";
+            ? "38392ab56bfbefab3d23dbd1efadbc3e0bb40fa4471fb08c6694e217e553176f"
+            : "a7c047a7fa903f0b966158345ddc35805a306c940fcb51158c773f6db71f7847";
         BOOST_CHECK_EQUAL(cybou::test::Hex(digest), expected);
         const auto signature = cybou::SignIdentityMessage(secret, purpose, message);
         BOOST_REQUIRE(signature);
@@ -53,7 +53,7 @@ BOOST_AUTO_TEST_CASE(recovery_key_id_binds_both_public_keys_and_suite)
     BOOST_REQUIRE(root);
     const auto id = cybou::ComputeRecoveryKeyId(*root);
     BOOST_REQUIRE(id);
-    BOOST_CHECK_EQUAL(cybou::test::Hex(*id), "1ef6e05c9f58218d3bd21f3ae7aeb96ed028e92712d3b85af43d976fbf4a014c");
+    BOOST_CHECK_EQUAL(cybou::test::Hex(*id), "d53c6f025b430b911ad3e6256a08e30dd7336ee4921e85f9791923382b1caf2b");
     BOOST_CHECK(cybou::ComputeRecoveryKeyId(*root) == id);
 
     auto altered_ed = *root;

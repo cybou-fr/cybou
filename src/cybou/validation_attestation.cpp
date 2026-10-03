@@ -11,16 +11,15 @@
 namespace cybou {
 namespace {
 
-constexpr size_t BODY_SIZE{1 + 32 + 32 + 32 + 32};
+constexpr size_t BODY_SIZE{ 32 + 32 + 32 + 32};
 
 std::optional<std::vector<unsigned char>> SerializeBody(const ValidationAttestation& attestation)
 {
-    if (attestation.version != VALIDATION_ATTESTATION_VERSION || attestation.network_binding.IsNull() ||
+    if (attestation.network_binding.IsNull() ||
         attestation.operation_id.IsNull() || attestation.finalized_base_block_id.IsNull() ||
         attestation.validator_account_id.IsNull()) return std::nullopt;
     std::vector<unsigned char> out;
     out.reserve(VALIDATION_ATTESTATION_SIZE);
-    out.push_back(attestation.version);
     out.insert(out.end(), attestation.network_binding.begin(), attestation.network_binding.end());
     out.insert(out.end(), attestation.operation_id.begin(), attestation.operation_id.end());
     out.insert(out.end(), attestation.finalized_base_block_id.begin(), attestation.finalized_base_block_id.end());
@@ -40,7 +39,7 @@ cybou::Hash256 ReadUint256(std::span<const unsigned char> bytes)
 std::optional<std::array<unsigned char, 32>> ComputeValidationAttestationDigest(
     const ValidationAttestation& attestation)
 {
-    constexpr std::string_view domain{"CYBOU/VALIDATION/V1"};
+    constexpr std::string_view domain{"CYBOU/VALIDATION"};
     const auto body = SerializeBody(attestation);
     if (!body) return std::nullopt;
     std::array<unsigned char, 32> digest{};
@@ -61,13 +60,12 @@ std::optional<std::vector<unsigned char>> SerializeValidationAttestation(const V
 std::optional<ValidationAttestation> DeserializeValidationAttestation(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != VALIDATION_ATTESTATION_SIZE) return std::nullopt;
-    const auto account = AccountId::FromBytes(bytes.subspan(97, 32));
+    const auto account = AccountId::FromBytes(bytes.subspan(96, 32));
     if (!account) return std::nullopt;
     ValidationAttestation attestation{
-        .version = bytes[0],
-        .network_binding = ReadUint256(bytes.subspan(1, 32)),
-        .operation_id = ReadUint256(bytes.subspan(33, 32)),
-        .finalized_base_block_id = ReadUint256(bytes.subspan(65, 32)),
+        .network_binding = ReadUint256(bytes.subspan(0, 32)),
+        .operation_id = ReadUint256(bytes.subspan(32, 32)),
+        .finalized_base_block_id = ReadUint256(bytes.subspan(64, 32)),
         .validator_account_id = *account,
     };
     std::copy_n(bytes.begin() + BODY_SIZE, 64, attestation.signature.ed25519.begin());

@@ -38,8 +38,8 @@ reproduce. Do not include real user secrets or recovery phrases.
   production signature fallback is permitted.
 
 Public P2P admission is France-only for inbound and outbound DEV/production
-connections, failing closed on unavailable or corrupt local Geo data. LAB
-loopback/private bypass must be explicit. Optional VPN/proxy/Tor filtering is
+connections, failing closed on unavailable or corrupt local Geo data.
+Development follows the same admission rule. Optional VPN/proxy/Tor filtering is
 local policy and changes no canonical state.
 
 RootPublication exposes generic accounting and opaque chunk IDs. Application

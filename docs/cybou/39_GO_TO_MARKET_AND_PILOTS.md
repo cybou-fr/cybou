@@ -54,7 +54,7 @@ Do not lead with coin/staking/UTXO mechanics.
 ## Expectation management
 
 ```text
-CYBOU Email v1 is CYBOU-native.
+CYBOU Email is CYBOU-native.
 It is not an SMTP/IMAP replacement gateway yet.
 The initial DEV/Alpha profile is text-only. Beta Mail includes encrypted
 attachments backed by CYBOU Object Storage; do not pitch text-only mail as the

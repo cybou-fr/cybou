@@ -67,7 +67,7 @@ BOOST_AUTO_TEST_CASE(dataset_integrity_and_prefix_matching_are_fail_closed)
     std::filesystem::remove(path);
 }
 
-BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_routes)
+BOOST_AUTO_TEST_CASE(public_policy_fails_closed_for_unclassified_routes)
 {
     const auto path = UniquePath();
     std::filesystem::remove_all(path);
@@ -86,14 +86,8 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_and_lab_only_allows_private_rout
     BOOST_CHECK(!cybou::p2p::PeerAdmissionPolicy::Public(nullptr).Ready());
     BOOST_CHECK(!cybou::p2p::PeerAdmissionPolicy::Public(nullptr).Allows("198.51.100.42"));
 
-    const auto lab_policy = cybou::p2p::PeerAdmissionPolicy::Lab();
-    BOOST_CHECK(lab_policy.Ready());
-    BOOST_CHECK(lab_policy.Allows("127.0.0.1"));
-    BOOST_CHECK(lab_policy.Allows("::ffff:127.0.0.1"));
-    BOOST_CHECK(lab_policy.Allows("::ffff:192.168.1.2"));
-    BOOST_CHECK(lab_policy.Allows("10.0.0.1"));
-    BOOST_CHECK(lab_policy.Allows("fc00::1"));
-    BOOST_CHECK(!lab_policy.Allows("198.51.100.42"));
+    BOOST_CHECK(!public_policy.Allows("10.0.0.1"));
+    BOOST_CHECK(!public_policy.Allows("::1"));
     std::filesystem::remove(path);
 }
 

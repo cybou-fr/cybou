@@ -16,11 +16,11 @@ The active formats are defined by their protocol authorities:
 - provider admission proofs: `STORAGE_ADMISSION.md`;
 - Identity and names: `10_IDENTITY_NAMES.md` and `77_CYBOU_NAME_REGISTRY.md`.
 
-The RootPublication payload uses fixed-order binary wire version 4. Encrypted
+The RootPublication payload uses fixed-order binary wire layout. Encrypted
 ROOT/INDEX metadata and private Mail/Files/RecoveryBridge use typed binary
-schema version 3. Integers are little-endian; optional fields use a strict
+schema. Integers are little-endian; optional fields use a strict
 0/1 presence byte, followed by their typed value when present. Strings are
-length-prefixed UTF-8; invalid UTF-8, unknown versions and trailing bytes fail.
+length-prefixed UTF-8; invalid UTF-8, unknown types and trailing bytes fail.
 The encrypted-content schema remains opaque to consensus and is parsed only
 after successful local decryption.
 
@@ -44,11 +44,11 @@ the old format is retired, the discriminator and legacy decoder are eliminated.
 Code and protocol do not record development history. Type names, serialization
 layouts, and wire headers do not carry historical version tags.
 
-Cryptographic domain separation strings (`CYBOU/NETWORK-ID/V6`, `CYBOU/OP-ID/V5`,
-`CYBOU/BLOCK/V3`, etc.) are exact byte sequences of hash and key derivation
+Cryptographic domain separation strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`,
+`CYBOU/BLOCK`, etc.) are exact byte sequences of hash and key derivation
 functions. They are not renamed incrementally during development; rather, they
-transition to eternal unversioned domain strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`,
-`CYBOU/BLOCK`, etc.) as part of the scheduled pre-MAINNET de-versioning network reset.
+use stable unversioned domain strings (`CYBOU/NETWORK-ID`, `CYBOU/OP-ID`,
+`CYBOU/BLOCK`, etc.) after the coordinated DEVNET cutover.
 
 ## Native hash values
 

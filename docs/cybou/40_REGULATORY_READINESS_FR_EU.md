@@ -10,7 +10,7 @@ CYBOU is software with security-sensitive network functionality.
 
 As of 11 September 2026, CRA reporting obligations for manufacturers regarding actively exploited vulnerabilities and severe security incidents are already in application. Full CRA application is scheduled for 11 December 2027.
 
-Therefore security operations begin early, not at v1.
+Therefore security operations begin early, not at launch.
 
 Required project capabilities:
 
@@ -55,7 +55,7 @@ Private interpersonal messaging between a finite number of recipients is not tre
 
 However public groups/open channels can materially change the DSA analysis.
 
-Therefore Email v1 intentionally excludes:
+Therefore Email intentionally excludes:
 
 ```text
 public open channels

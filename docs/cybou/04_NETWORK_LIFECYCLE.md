@@ -3,7 +3,7 @@
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
-implements the complete CYP2 v5 baseline: blocks, announcements,
+implements the complete CYBOU P2P baseline: blocks, announcements,
 discovery, operation relay, Validation transport and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
@@ -47,11 +47,19 @@ Identity secret once. Private material stays only under gitignored `/private/`
 (`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
 public Identity data, and signed genesis constants enter Git.
 
+The current DEVNET was provisioned offline for the single-current-format
+cutover on 2026-10-03. Its NetworkBinding is
+`6efa3107b7c40e6c49e6644569810c7ba1a88384705da3b3601d570eb892fcd7`
+and its signed genesis anchor is
+`64e9bc4b0533f2753185428cfbd2f788dca023ed2899b22caee54a85971e9eea`.
+The preceding NetworkID is permanently retired. No prior genesis was re-signed
+or replaced, and no prior network-bound state is imported.
+
 ## Bootstrap peer
 
 Bootstrap is an **ordinary CYBOU full peer**:
 - runs the exact same executable as all other nodes;
-- communicates using the standard CYP2 protocol;
+- communicates using the standard CYBOU P2P protocol;
 - announces no network role;
 - has no `BootstrapNode` class or distinct role in consensus;
 - has an IP:port and TLS SPKI pin known in advance for initial discovery;
@@ -79,8 +87,8 @@ Offline:
 Online:
   Client selects compiled OfficialNetwork and verifies its signed genesis and initial state root
   Initializes local consensus state
-  Connects to known bootstrap locator as an ordinary CYP2 peer
-  Bootstrap seeds initial peers -> direct CYP2 mesh forms
+  Connects to known bootstrap locator as an ordinary CYBOU P2P peer
+  Bootstrap seeds initial peers -> direct CYBOU P2P mesh forms
 ```
 
 Every full node independently checks the compiled signed genesis, operational PoA
@@ -180,7 +188,7 @@ uses its signed specification digest as the height-zero chain anchor.
 
 PublicationService stages directly into pinned local encrypted chunks, stores
 one encrypted ordered leaf list and generates Merkle proofs on demand in RAM.
-RootPublication wire v4 and encrypted/private schema v3 are bounded binary
+RootPublication wire and encrypted/private schema are bounded binary
 layouts with exact consumption. Hash256 hex follows its raw 32-byte order.
 No legacy runtime, CBOR or reversed-hash decoder is retained. Provisioning and
 network cutover require the previously established operator authorization.
@@ -189,5 +197,5 @@ Provisioning is offline-only in the separately built `cybou-provision` tool.
 Production `cybou` has no provisioning command or Network Root derivation/signing
 path. `verify-devnet PRIVATE_DIR` checks existing private material against compiled
 public constants without signing. `create-devnet` accepts only fresh output paths;
-it never replaces existing constants or secrets. The current v12 DEVNET NetworkID
+it never replaces existing constants or secrets. The current current DEVNET NetworkID
 is retained; the prior DEVNET is retired.

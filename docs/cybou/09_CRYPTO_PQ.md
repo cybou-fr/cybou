@@ -15,7 +15,7 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | PoA Finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates |
 | Release Signing | Hybrid PQ / Minisign | Authenticate official software and releases |
 | Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |
-| Storage Provider | Provider service key | Prove provider identity per live CYP2 session |
+| Storage Provider | Provider service key | Prove provider identity per live CYBOU P2P session |
 
 Validation requires NO separate validator key role; eligible Identities sign ValidationAttestations using their standard Identity Authorization Key (Ed25519 + ML-DSA-44).
 

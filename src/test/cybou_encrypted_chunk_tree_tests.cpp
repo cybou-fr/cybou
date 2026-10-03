@@ -76,7 +76,6 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_streams_empty_and_multichunk_payloads)
             tree->root_chunk_id, root_stored->second);
         BOOST_REQUIRE(root_bytes.has_value());
         cybou::BinaryReader root_reader{*root_bytes};
-        BOOST_CHECK_EQUAL(root_reader.U8(), 3);
         BOOST_CHECK_EQUAL(root_reader.U8(), 0);
         BOOST_CHECK_EQUAL(root_reader.U8(), 2);
         const auto count = root_reader.U16();
@@ -149,7 +148,6 @@ BOOST_AUTO_TEST_CASE(encrypted_chunk_tree_adds_index_after_root_fanout_is_exceed
     const auto root_bytes = cybou::DecryptChunk(network, tree->content_key, tree->root_chunk_id, root->second);
     BOOST_REQUIRE(root_bytes.has_value());
     cybou::BinaryReader root_reader{*root_bytes};
-    BOOST_CHECK_EQUAL(root_reader.U8(), 3);
     BOOST_CHECK_EQUAL(root_reader.U8(), 0);
     BOOST_CHECK_EQUAL(root_reader.U8(), 1); // ROOT points to INDEX, DATA remains beneath it.
     BOOST_REQUIRE(root_reader.U16() > 0);

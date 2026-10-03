@@ -34,7 +34,7 @@
 
 namespace cybou::p2p {
 namespace {
-constexpr size_t HEADER_SIZE{10};
+constexpr size_t HEADER_SIZE{9};
 constexpr size_t HELLO_SIZE{80};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
 std::chrono::steady_clock::time_point StorageTransferDeadline(size_t bytes)
@@ -44,7 +44,7 @@ std::chrono::steady_clock::time_point StorageTransferDeadline(size_t bytes)
     return std::chrono::steady_clock::now() + std::chrono::seconds{seconds};
 }
 constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
-constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V5"};
+constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-P2P"};
 
 struct TlsContexts {
     SSL_CTX* client{nullptr};
@@ -304,7 +304,7 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
         !IsSupportedMessageType(static_cast<uint8_t>(frame.type))) return std::nullopt;
-    std::vector<unsigned char> bytes{'C', 'Y', 'P', '2', WIRE_VERSION, static_cast<unsigned char>(frame.type)};
+    std::vector<unsigned char> bytes{'C', 'Y', 'B', 'P', static_cast<unsigned char>(frame.type)};
     const auto size = static_cast<uint32_t>(frame.payload.size());
     for (int i = 0; i < 4; ++i) bytes.push_back(static_cast<unsigned char>(size >> (8 * i)));
     bytes.insert(bytes.end(), frame.payload.begin(), frame.payload.end());
@@ -313,13 +313,13 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 
 std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
 {
-    if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYP2") ||
-        bytes[4] != WIRE_VERSION || !IsSupportedMessageType(bytes[5])) return std::nullopt;
+    if (bytes.size() < HEADER_SIZE || !std::equal(bytes.begin(), bytes.begin() + 4, "CYBP") ||
+        !IsSupportedMessageType(bytes[4])) return std::nullopt;
     uint32_t size{0};
-    for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[6 + i]} << (8 * i);
-    const auto type = static_cast<MessageType>(bytes[5]);
+    for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[5 + i]} << (8 * i);
+    const auto type = static_cast<MessageType>(bytes[4]);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
-    return Frame{static_cast<MessageType>(bytes[5]),
+    return Frame{static_cast<MessageType>(bytes[4]),
         std::vector<unsigned char>{bytes.begin() + HEADER_SIZE, bytes.end()}};
 }
 
@@ -608,13 +608,13 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     m_last_read_status = ReadStatus::UNAVAILABLE;
     std::array<unsigned char, HEADER_SIZE> header{};
     if (!ReadExact(header.data(), header.size(), deadline)) return std::nullopt;
-    if (!std::equal(header.begin(), header.begin() + 4, "CYP2") ||
-        header[4] != WIRE_VERSION || !IsSupportedMessageType(header[5])) {
+    if (!std::equal(header.begin(), header.begin() + 4, "CYBP") ||
+        !IsSupportedMessageType(header[4])) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
     }
     uint32_t size{0};
-    for (int i = 0; i < 4; ++i) size |= uint32_t{header[6 + i]} << (8 * i);
+    for (int i = 0; i < 4; ++i) size |= uint32_t{header[5 + i]} << (8 * i);
     if (size > MAX_FRAME_PAYLOAD) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
         return std::nullopt;
@@ -650,7 +650,7 @@ std::vector<unsigned char> StorageProofMessage(const Hello& signer,const Hello& 
     const std::span<const unsigned char> tls_exporter)
 {
     if (tls_exporter.size() != 32) return {};
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v5"};
+    constexpr std::string_view DOMAIN{"CYBOU/STORAGE-PROOF"};
     std::vector<unsigned char> message(DOMAIN.begin(),DOMAIN.end());
     message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
     const auto signer_bytes=EncodeHello(signer),verifier_bytes=EncodeHello(verifier);
@@ -660,29 +660,29 @@ std::vector<unsigned char> StorageProofMessage(const Hello& signer,const Hello& 
 }
 
 namespace {
-constexpr std::size_t PROVIDER_ED25519_KEY{32};
-constexpr std::size_t PROVIDER_MLDSA_KEY{1312};
-constexpr std::size_t PROVIDER_ED25519_SIG{64};
-constexpr std::size_t PROVIDER_MLDSA_SIG{2420};
-constexpr std::size_t PROVIDER_PROOF_SIZE{PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY + PROVIDER_ED25519_SIG + PROVIDER_MLDSA_SIG};
+constexpr std::size_t STORAGE_ED25519_KEY{32};
+constexpr std::size_t STORAGE_MLDSA_KEY{1312};
+constexpr std::size_t STORAGE_ED25519_SIG{64};
+constexpr std::size_t STORAGE_MLDSA_SIG{2420};
+constexpr std::size_t STORAGE_PROOF_SIZE{STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY + STORAGE_ED25519_SIG + STORAGE_MLDSA_SIG};
 } // namespace
 
 std::optional<StorageId> VerifyStorageProof(const std::span<const unsigned char> payload,
     const std::span<const unsigned char> message)
 {
-    if (payload.size() != PROVIDER_PROOF_SIZE) return std::nullopt;
+    if (payload.size() != STORAGE_PROOF_SIZE) return std::nullopt;
     IdentityHybridPublicKey key{.purpose = IdentityKeyPurpose::STORAGE};
-    std::copy_n(payload.begin(), PROVIDER_ED25519_KEY, key.ed25519.begin());
-    key.ml_dsa.assign(payload.begin() + PROVIDER_ED25519_KEY, payload.begin() + PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
+    std::copy_n(payload.begin(), STORAGE_ED25519_KEY, key.ed25519.begin());
+    key.ml_dsa.assign(payload.begin() + STORAGE_ED25519_KEY, payload.begin() + STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
     IdentityHybridSignature signature;
-    const auto sig = payload.subspan(PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
-    std::copy_n(sig.begin(), PROVIDER_ED25519_SIG, signature.ed25519.begin());
-    signature.ml_dsa.assign(sig.begin() + PROVIDER_ED25519_SIG, sig.end());
+    const auto sig = payload.subspan(STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
+    std::copy_n(sig.begin(), STORAGE_ED25519_SIG, signature.ed25519.begin());
+    signature.ml_dsa.assign(sig.begin() + STORAGE_ED25519_SIG, sig.end());
     if (!VerifyIdentityMessage(key, signature, message)) return std::nullopt;
     // StorageId commits to both public keys under a provider domain.
-    constexpr std::string_view DOMAIN{"CYBOU/PROVIDER-ID/v1"};
+    constexpr std::string_view DOMAIN{"CYBOU/STORAGE-ID"};
     std::vector<unsigned char> id_input(DOMAIN.begin(), DOMAIN.end());
-    id_input.insert(id_input.end(), payload.begin(), payload.begin() + PROVIDER_ED25519_KEY + PROVIDER_MLDSA_KEY);
+    id_input.insert(id_input.end(), payload.begin(), payload.begin() + STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
     return ComputeBlake3Digest(id_input);
 }
 
@@ -1089,7 +1089,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (request->type == MessageType::STORAGE_PROOF_REQUEST) {
         boost::system::error_code ec;
         const auto remote = m_socket.remote_endpoint(ec);
-        if (ec || !runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::STORAGE_PROOF, request->payload.size() + PROVIDER_PROOF_SIZE)) return false;
+        if (ec || !runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::STORAGE_PROOF, request->payload.size() + STORAGE_PROOF_SIZE)) return false;
         if (!m_local || request->payload.size() != 32) return false;
         auto message = StorageProofMessage(*m_local, *m_peer, m_tls_exporter);
         message.insert(message.end(), request->payload.begin(), request->payload.end());

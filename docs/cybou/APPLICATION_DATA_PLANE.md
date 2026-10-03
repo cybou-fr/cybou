@@ -81,11 +81,11 @@ No separate user-visible provider layer exists.
 `StorageService` places only finalized publications: the ordered chunk list
 must reproduce the publication's chunk-authorization root, and per-chunk proofs
 are rebuilt from it. Validation never triggers placement.
-Each chunk goes to distinct CSPRNG-selected CYP2 storage providers until the remote
+Each chunk goes to distinct CSPRNG-selected CYBOU P2P storage providers until the remote
 target is met (1 in development, 2 in Beta; plus local copy = 3 physical copies total);
 STORED and ALREADY_STORED both count, the local copy never does.
 Providers are distinct by StorageId (the hash of the provider key proven in
-the CYP2 handshake), not by address:port, so one key answering on several
+the CYBOU P2P handshake), not by address:port, so one key answering on several
 endpoints is one replica.
 Placement records live in the Identity's encrypted Application DB as an
 operational cache. `Audit` re-reads every recorded replica, drops missing or
@@ -260,8 +260,7 @@ FILES_MUTATION_BATCH
 IDENTITY_RECOVERY_BRIDGE
 ```
 
-The implemented codecs use fixed-order bounded binary schema 3. The first two
-fields are the private schema type and version; unknown types, versions and
+The implemented codecs use fixed-order bounded binary schema. The first field are the private schema type; unknown types and
 trailing bytes are rejected. The three types are Mail (1), Files mutation batch
 (2), and Identity RecoveryBridge (3). They are placed only inside encrypted
 application content, never in a consensus operation or public chunk metadata.
@@ -462,9 +461,9 @@ imports it into the key store (memory only) and rescans once, so pre-rotation
 publications open. `PublishRecoveryBridge` refuses to omit a published epoch
 whose seed this device has not recovered.
 
-## Typed private binary layouts (schema 3)
+## Typed private binary layouts (schema)
 
-Every document begins `type:u8, version:u8=3`; types are Mail=1, Files=2,
+Every document begins `type:u8`; types are Mail=1, Files=2,
 RecoveryBridge=3. IDs and keys use their fixed 32-byte representation. All
 integers below are LE. `optional(T)` is a strict presence byte (0/1), then T
 when present. `text` is u32 byte length followed by valid UTF-8.

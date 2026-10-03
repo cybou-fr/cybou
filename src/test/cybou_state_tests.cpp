@@ -117,10 +117,9 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     ++more_genesis_auth.genesis_allocations.at(*recovery_id).authority;
     BOOST_CHECK_EQUAL(TotalSupply(more_genesis_auth), TotalSupply(state));
     BOOST_CHECK(CybouStateHash(more_genesis_auth) != CybouStateHash(state));
-    BOOST_CHECK(bytes->front() == CYBOU_STATE_VERSION);
-    auto old_version = *bytes;
-    old_version.front() = CYBOU_STATE_VERSION - 1;
-    BOOST_CHECK(!DeserializeCybouState(old_version));
+    auto trailing = *bytes;
+    trailing.push_back(0);
+    BOOST_CHECK(!DeserializeCybouState(trailing));
 
     // A second AccountCreate never claims the same genesis AUTH again.
     BOOST_CHECK(ApplyAccountCreate(create, network_binding, 2, params, state) != AccountCreateStateError::NONE);
@@ -180,7 +179,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(ApplyAccountCreate(create, network_binding, 1, params, state) == AccountCreateStateError::ACCOUNT_EXISTS);
     BOOST_CHECK(SerializeCybouState(state) == bytes);
     auto damaged = *bytes;
-    damaged[0] = 1;
+    damaged[8] = 0xff;
     BOOST_CHECK(!DeserializeCybouState(damaged));
     damaged = *bytes;
     damaged.push_back(0);
@@ -419,7 +418,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     const ProtocolOperation operation{rotate};
     const auto wire = SerializeProtocolOperation(operation);
     BOOST_REQUIRE(wire);
-    BOOST_CHECK_EQUAL(wire->size(), 2 + IDENTITY_ROTATE_SIZE);
+    BOOST_CHECK_EQUAL(wire->size(), 1 + IDENTITY_ROTATE_SIZE);
     const auto decoded = DeserializeProtocolOperation(*wire);
     BOOST_REQUIRE(decoded && std::holds_alternative<IdentityRotate>(*decoded));
     BOOST_CHECK(SerializeProtocolOperation(*decoded) == wire);
@@ -507,7 +506,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     const ProtocolOperation lock_op{lock};
     const auto lock_wire = SerializeProtocolOperation(lock_op);
     BOOST_REQUIRE(lock_wire);
-    BOOST_CHECK(lock_wire->size() == 2 + AUTHORIZED_SYSTEM_LOCK_SIZE);
+    BOOST_CHECK(lock_wire->size() == 1 + AUTHORIZED_SYSTEM_LOCK_SIZE);
     const auto decoded_wire = DeserializeProtocolOperation(*lock_wire);
     BOOST_REQUIRE(decoded_wire && std::holds_alternative<AuthorizedSystemLock>(*decoded_wire));
     BOOST_CHECK(SerializeProtocolOperation(*decoded_wire) == lock_wire);
@@ -646,7 +645,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     const ProtocolOperation commit_proto_op{commit_op};
     const auto commit_wire = SerializeProtocolOperation(commit_proto_op);
     BOOST_REQUIRE(commit_wire.has_value());
-    BOOST_CHECK_EQUAL(commit_wire->size(), 2 + AUTHORIZED_NAME_COMMIT_SIZE);
+    BOOST_CHECK_EQUAL(commit_wire->size(), 1 + AUTHORIZED_NAME_COMMIT_SIZE);
     const auto decoded_commit_wire = DeserializeProtocolOperation(*commit_wire);
     BOOST_REQUIRE(decoded_commit_wire.has_value());
     BOOST_CHECK(std::holds_alternative<AuthorizedNameCommit>(*decoded_commit_wire));
@@ -686,7 +685,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     const ProtocolOperation reveal_proto_op{reveal_op};
     const auto reveal_wire = SerializeProtocolOperation(reveal_proto_op);
     BOOST_REQUIRE(reveal_wire.has_value());
-    BOOST_CHECK_EQUAL(reveal_wire->size(), 2 + AUTHORIZED_NAME_REVEAL_SIZE);
+    BOOST_CHECK_EQUAL(reveal_wire->size(), 1 + AUTHORIZED_NAME_REVEAL_SIZE);
     const auto decoded_reveal_wire = DeserializeProtocolOperation(*reveal_wire);
     BOOST_REQUIRE(decoded_reveal_wire.has_value());
     BOOST_CHECK(std::holds_alternative<AuthorizedNameReveal>(*decoded_reveal_wire));
@@ -990,7 +989,6 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
     const auto bytes = SerializeCybouState(state);
     BOOST_REQUIRE(bytes);
-    BOOST_CHECK_EQUAL(bytes->front(), 12);
     const auto restored = DeserializeCybouState(*bytes);
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);

@@ -31,8 +31,8 @@ namespace {
 RetentionKey JobRetention(const AccountId& account, const std::string_view job_id)
 {
     const auto& value = account.Value();
-    return {.holder = RetentionTag("CYBOU/RETENTION/IDENTITY/v1", std::span{value.begin(), 32}),
-        .reference = RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB/v1",
+    return {.holder = RetentionTag("CYBOU/RETENTION/IDENTITY", std::span{value.begin(), 32}),
+        .reference = RetentionTag("CYBOU/RETENTION/PUBLICATION-JOB",
             std::span{reinterpret_cast<const unsigned char*>(job_id.data()), job_id.size()})};
 }
 
@@ -42,8 +42,8 @@ std::uint64_t NowMs()
         std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
-constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'P', 'J', 1};
-constexpr std::size_t FIXED_SIZE{5 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
+constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'P', 'J'};
+constexpr std::size_t FIXED_SIZE{4 + 32 + 32 + 1 + 8 + 8 + 32 + 4};
 constexpr std::string_view JOB_INDEX_KEY{"publication/jobs"};
 
 std::string LeavesKey(const std::string_view id)

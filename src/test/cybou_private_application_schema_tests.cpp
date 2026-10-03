@@ -89,15 +89,13 @@ BOOST_AUTO_TEST_CASE(all_three_schemas_round_trip_deterministically)
     }
 }
 
-BOOST_AUTO_TEST_CASE(rejects_unknown_version_type_truncation_and_trailing_bytes)
+BOOST_AUTO_TEST_CASE(rejects_unknown_type_truncation_and_trailing_bytes)
 {
     BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(std::vector<unsigned char>{0x82, 0x18, 0x01, 0x01}));
     const auto encoded = cybou::EncodePrivateApplicationDocument(cybou::PrivateApplicationDocument{SampleMail()});
     BOOST_REQUIRE(encoded);
     auto damaged = *encoded;
-    damaged[1] = 99;
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
-    damaged = *encoded; damaged[0] = 99;
+    damaged[0] = 99;
     BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
     damaged = *encoded; damaged.push_back(0);
     BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(damaged));
@@ -160,11 +158,7 @@ BOOST_AUTO_TEST_CASE(rejects_invalid_identifiers_keys_names_and_sizes)
     BOOST_REQUIRE(decoded_files);
     BOOST_CHECK_EQUAL(std::get<cybou::FilesMutationBatch>(*decoded_files).mutations[0].item->modified_ms,
         1'790'000'000'123ULL);
-    // v1 Files documents (without modified_ms) are rejected.
-    auto v1 = *encoded_files;
-    BOOST_REQUIRE(v1.size() > 2 && v1[2] == 0x02);
-    v1[2] = 0x01;
-    BOOST_CHECK(!cybou::DecodePrivateApplicationDocument(v1));
+
 
     auto bridge = SampleBridge();
     std::swap(bridge.historical_seeds[0], bridge.historical_seeds[1]);

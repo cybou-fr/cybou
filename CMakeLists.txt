@@ -27,11 +27,6 @@ get_directory_property(precious_variables CACHE_VARIABLES)
 # Project / Package metadata
 #=============================
 set(CLIENT_NAME "CYBOU")
-set(CLIENT_VERSION_MAJOR 0)
-set(CLIENT_VERSION_MINOR 0)
-set(CLIENT_VERSION_BUILD 1)
-set(CLIENT_VERSION_RC 0)
-set(CLIENT_VERSION_IS_RELEASE "true")
 set(COPYRIGHT_YEAR "2026")
 
 # During the enabling of the CXX and CXXOBJ languages, we modify
@@ -51,16 +46,11 @@ set(CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
 )
 
 project(CYBOU
-  VERSION ${CLIENT_VERSION_MAJOR}.${CLIENT_VERSION_MINOR}.${CLIENT_VERSION_BUILD}
   DESCRIPTION "CYBOU peer-to-peer network software"
   HOMEPAGE_URL "https://cybou.fr/"
   LANGUAGES NONE
 )
 
-set(CLIENT_VERSION_STRING ${PROJECT_VERSION})
-if(CLIENT_VERSION_RC GREATER 0)
-  string(APPEND CLIENT_VERSION_STRING "rc${CLIENT_VERSION_RC}")
-endif()
 
 set(COPYRIGHT_HOLDERS "The %s developers")
 set(COPYRIGHT_HOLDERS_FINAL "The ${CLIENT_NAME} developers")
@@ -110,10 +100,6 @@ option(BUILD_TESTS "Build test and other unit test executables." ON)
 option(CYBOU_ENABLE_TEST_HOOKS "Enable deterministic crash hooks in CYBOU test builds." OFF)
 if(CYBOU_ENABLE_TEST_HOOKS AND NOT BUILD_TESTS)
   message(FATAL_ERROR "CYBOU_ENABLE_TEST_HOOKS requires BUILD_TESTS=ON.")
-endif()
-option(CYBOU_ENABLE_LAB_NETWORK "Build the test-only in-memory LAB network into cybou; never in releases." OFF)
-if(CYBOU_ENABLE_LAB_NETWORK AND NOT BUILD_TESTS)
-  message(FATAL_ERROR "CYBOU_ENABLE_LAB_NETWORK requires BUILD_TESTS=ON.")
 endif()
 
 option(REDUCE_EXPORTS "Attempt to reduce exported symbols in the resulting executables." OFF)

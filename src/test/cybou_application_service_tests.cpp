@@ -549,7 +549,7 @@ BOOST_AUTO_TEST_CASE(interrupted_indexing_is_repaired_on_the_next_scan)
     // index entry and the retry bookkeeping were lost, and the scan restarts.
     BOOST_REQUIRE(bob.db->Erase("mail/index"));
     BOOST_REQUIRE(bob.db->Erase("app/scan-height"));
-    BOOST_REQUIRE(bob.db->Erase("storage/recovery-index-version")); // a pre-batch database
+    BOOST_REQUIRE(bob.db->Erase("storage/recovery-index-ready")); // a pre-batch database
     BOOST_CHECK(bob.application->ListMail().empty());
     BOOST_REQUIRE(bob.application->Scan().Complete());
     BOOST_REQUIRE_EQUAL(bob.application->ListMail().size(), 1U);

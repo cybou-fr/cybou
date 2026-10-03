@@ -21,10 +21,10 @@ d'accès par IP définis pour cette instance. Le client choisit l'infrastructure
 et la connectivité ; Internet ou intranet ne sont pas des produits différents.
 
 Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
-bout en bout. Le VPS DEV exécute désormais un Full Node ordinaire sur DEVNET v12
+bout en bout. Le VPS DEV exécute désormais un Full Node ordinaire sur DEVNET
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
-avec son pin TLS ; le VPS utilise le même protocole CYP2 v5.
+avec son pin TLS ; le VPS utilise le même protocole CYBOU P2P.
 L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
 interface, `node run` avec la clé PoA optionnelle, mais le
 client ne possède pas encore de parcours général de création et de mise en
@@ -43,7 +43,7 @@ service d'un réseau privé d'entreprise.
   une publication finalisée. `StorageService` gère les répliques distantes,
   l'audit d'intégrité et la réparation. La finalité seule ne signifie pas que
   le contenu est disponible ou durable.
-- **Transport P2P.** CYP2 v5 utilise TLS 1.3 avec l'échange hybride
+- **Transport P2P.** CYBOU P2P utilise TLS 1.3 avec l'échange hybride
   `X25519MLKEM768`. Chaque nœud complet implémente le même protocole. L’identité de stockage
   est prouvée à la demande ; les certificats de blocs prouvent seuls l’autorité PoA.
 - **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
@@ -62,7 +62,7 @@ service d'un réseau privé d'entreprise.
   ré-exécute tout et reste seul à finaliser.
 - **Admission réseau.** Les commandes réseau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
-  validée ; le mode `lab` est réservé aux pairs de test locaux ou privés.
+  validée ; le développement utilise DEVNET avec les mêmes règles d’admission.
 
 Les vues Mail et Files sont conservées dans une base applicative chiffrée
 propre à chaque identité et peuvent être reconstruites à partir des publications

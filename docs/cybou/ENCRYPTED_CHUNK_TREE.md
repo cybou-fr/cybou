@@ -20,10 +20,10 @@ ChaCha20-Poly1305, HKDF-SHA256, and X-Wing draft-05 profiles.
 
 ## Stored and decrypted forms
 
-Each encrypted chunk uses the `CYCH` version-1 envelope: a 32-byte random KDF
+Each encrypted chunk uses the `CYCH` envelope: four-byte magic, a 32-byte random KDF
 salt, 12-byte nonce, ciphertext, and 16-byte tag. HKDF-SHA256 derives a
 per-chunk key from the tree content key, salt, and NetworkID. ChaCha20-Poly1305
-authenticates `CYBOU/CHUNK-AAD/v1 || header || NetworkID`. ChunkID hashes the
+authenticates `CYBOU/CHUNK-AAD || header || NetworkID`. ChunkID hashes the
 entire stored envelope.
 
 The encrypted frame is `uint32_be plaintext_length || plaintext || random
@@ -80,11 +80,11 @@ ChunkID commits to the complete stored encrypted bytes. RootPublication does
 not publish the complete chunk-ID list. Each provider enforces its own physical
 capacity limit. Finality authorizes storage but does not prove durability.
 
-## Binary metadata schema 3
+## Binary metadata schema
 
-ROOT/INDEX metadata is `version:u8=3, kind:u8, child_kind:u8,
+ROOT/INDEX metadata is `kind:u8, child_kind:u8,
 child_count:u16 LE, child_ids:32*child_count`. Kind is ROOT=0 or INDEX=1;
 child kind is INDEX=1 or DATA=2. Fanout is at most 128 and INDEX is nonempty.
 ROOT appends `private_metadata_length:u32 LE, private_metadata:bytes`, bounded
-to 240 KiB. INDEX appends nothing. Parsers reject unknown versions, invalid
+to 240 KiB. INDEX appends nothing. Parsers reject unknown kinds, invalid
 kinds, truncated lengths and trailing bytes. DATA remains raw application bytes.

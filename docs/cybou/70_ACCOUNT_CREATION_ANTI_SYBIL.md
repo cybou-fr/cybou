@@ -1,6 +1,6 @@
 # 70 — Account creation and anti-Sybil work
 
-Status: consensus operation and current desktop CVID5 identity path are
+Status: consensus operation and current desktop CYID identity path are
 implemented. End-to-end clean-machine and operational recovery remain product
 readiness work.
 
@@ -28,7 +28,7 @@ Automatic onboarding credit earns no Authority. Authority policy does not change
 
 ## Local creation gate
 
-The portable CYBV2 vault contains the random AccountID and recovery entropy;
+The portable CYBV vault contains the random AccountID and recovery entropy;
 the current Identity roles derive from that entropy. It must be durably saved
 and authenticated by reopening before broadcast. Keep tests covering
 save-before-broadcast, phrase confirmation, and clean-machine restore. DEV

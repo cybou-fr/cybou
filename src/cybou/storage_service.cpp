@@ -18,7 +18,7 @@
 namespace cybou {
 namespace {
 
-constexpr std::array<unsigned char, 5> MAGIC{'C', 'Y', 'S', 'P', 2};
+constexpr std::array<unsigned char, 4> MAGIC{'C', 'Y', 'S', 'P'};
 
 bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoint& provider)
 {
