@@ -518,6 +518,12 @@ size_t CybouNodeRuntime::CandidateOperationCount() const
     return m_operation_pool.Size();
 }
 
+std::vector<cybou::Hash256> CybouNodeRuntime::CandidateOperationIds() const
+{
+    std::lock_guard lock{m_mutex};
+    return m_operation_pool.Ids();
+}
+
 bool CybouNodeRuntime::HasCandidateOperation(const cybou::Hash256& operation_id) const
 {
     std::lock_guard lock{m_mutex};

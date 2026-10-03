@@ -47,6 +47,7 @@ private:
     QLabel* m_validators{nullptr};
 
     QVBoxLayout* m_queue{nullptr};
+    QVBoxLayout* m_recent{nullptr};
     QLineEdit* m_auth_target{nullptr};
     QLineEdit* m_auth_amount{nullptr};
     QPushButton* m_grant{nullptr};

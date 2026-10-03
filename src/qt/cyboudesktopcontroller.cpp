@@ -368,7 +368,8 @@ void CybouDesktopController::publishNetworkAuthority()
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
         auto& runtime = m_node_service->Runtime();
         status.signer_enabled = runtime.IsPoaSignerActive();
-        status.candidates = runtime.CandidateOperationCount();
+        for (const auto& id : runtime.CandidateOperationIds()) status.candidate_ids << QString::fromStdString(id.GetHex());
+        status.candidates = static_cast<quint64>(status.candidate_ids.size());
         status.finalizer = runtime.LastBlockProductionStatus() == cybou::BlockProductionStatus::SAFETY_HALT
             ? CybouFinalizerState::SafetyHalt
             : !status.signer_enabled ? CybouFinalizerState::SignerUnavailable

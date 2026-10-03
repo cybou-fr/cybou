@@ -390,6 +390,8 @@ public:
     /// \brief Число локально исполненных, но ещё не finalized кандидатов.
     /// \return Размер candidate pool.
     size_t CandidateOperationCount() const;
+    /// \brief OperationID кандидатов в порядке пула (для операторской консоли).
+    std::vector<cybou::Hash256> CandidateOperationIds() const;
     /// \brief Проверяет наличие локально удерживаемого candidate operation.
     /// \param operation_id Искомый OperationID.
     bool HasCandidateOperation(const cybou::Hash256& operation_id) const;

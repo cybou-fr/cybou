@@ -7,6 +7,8 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cybouui.h>
 
+#include <cybou/node_runtime.h>
+
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -90,7 +92,7 @@ void Row(QVBoxLayout* layout, const QString& key, const QString& value, bool mon
     v->setObjectName(QStringLiteral("rowTitle"));
     v->setWordWrap(true);
     v->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    if (mono) v->setStyleSheet(QStringLiteral("font-family: Consolas, 'Cascadia Mono', monospace;"));
+    if (mono) k->setStyleSheet(QStringLiteral("font-family: Consolas, 'Cascadia Mono', monospace;"));
     row->addWidget(k, 0, Qt::AlignTop);
     row->addWidget(v, 1);
     layout->addLayout(row);
@@ -173,6 +175,8 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     auto* queue = Section(root, tr("Candidate operations"), this,
         tr("Operations this node executed against its finalized state. Each is executed again before signing."));
     m_queue = Rows(queue);
+    m_recent = Rows(Section(root, tr("Recently finalized"), this,
+        tr("Operations this node saw finalized recently, newest first.")));
 
     // AUTH adjustment.
     auto* auth = Section(root, tr("Adjust Authority"), this,
@@ -288,18 +292,27 @@ void NetworkAuthorityPage::refresh()
     m_validators->setText(locale.toString(a.validators));
 
     ClearLayout(m_queue);
-    if (d.operations.empty()) {
+    if (a.candidate_ids.isEmpty()) {
         m_queue->addWidget(MutedText(tr("No candidate operations. The pool is empty."), m_queue->parentWidget()));
     }
-    int shown = 0;
-    for (const auto& operation : d.operations) {
-        if (shown++ == kQueueRows) {
-            m_queue->addWidget(MutedText(tr("and %1 more").arg(d.operations.size() - kQueueRows), m_queue->parentWidget()));
+    for (int i = 0; i < a.candidate_ids.size(); ++i) {
+        if (i == kQueueRows) {
+            m_queue->addWidget(MutedText(tr("and %1 more").arg(a.candidate_ids.size() - kQueueRows), m_queue->parentWidget()));
             break;
         }
-        Row(m_queue, ShortHex(operation.operation_id),
-            tr("base height %1").arg(locale.toString(static_cast<qulonglong>(operation.finalized_height))), true);
+        Row(m_queue, ShortHex(a.candidate_ids.at(i).toStdString()), tr("waiting for the next block"), true);
     }
+
+    // The runtime's recent status history: finalized operations with their block.
+    ClearLayout(m_recent);
+    int recent = 0;
+    for (auto it = d.operations.rbegin(); it != d.operations.rend() && recent < kQueueRows; ++it) {
+        if (it->state != static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED)) continue;
+        Row(m_recent, ShortHex(it->operation_id),
+            tr("block %1").arg(locale.toString(static_cast<qulonglong>(it->finalized_height))), true);
+        ++recent;
+    }
+    if (recent == 0) m_recent->addWidget(MutedText(tr("Nothing finalized in this session yet."), m_recent->parentWidget()));
 
     ClearLayout(m_totals);
     Row(m_totals, tr("Spendable Balance"), cybouAmountText(a.total_balance));

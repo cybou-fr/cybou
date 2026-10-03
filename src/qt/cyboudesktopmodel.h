@@ -110,6 +110,8 @@ struct CybouNetworkAuthorityStatus {
     CybouFinalizerState finalizer{CybouFinalizerState::SignerUnavailable};
     /** Locally executed candidate operations waiting for the next block. */
     quint64 candidates{0};
+    /** Their OperationIDs (hex), in pool order. */
+    QStringList candidate_ids;
     quint64 finalized_height{0};
     quint64 identities{0};
     /** Identities whose finalized AUTH makes them eligible to sign Validation. */
