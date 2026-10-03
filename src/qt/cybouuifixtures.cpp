@@ -96,12 +96,12 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     model.setBalances(5820, 4621);
     model.setStorageUsage(13314398618ULL, 100ULL * 1024 * MB);
 
-    CybouCapabilities caps;
+    CybouFeatureAvailability caps;
     caps.account_creation = true;
     caps.payments = true;
     caps.mail = true;
     caps.files = true;
-    model.setCapabilities(caps);
+    model.setFeatureAvailability(caps);
 
     model.setAuthority(1'200'000);
 
@@ -290,9 +290,9 @@ bool apply(CybouDesktopModel& model, const QString& name)
     if (name == QLatin1String{"empty"}) {
         model.setNodeStatus(true, 3, true, QStringLiteral("C:/Users/stan/AppData/Local/CYBOU"));
         model.setFinalizedHeight(1242);
-        CybouCapabilities caps;
+        CybouFeatureAvailability caps;
         caps.account_creation = true;
-        model.setCapabilities(caps);
+        model.setFeatureAvailability(caps);
         return true;
     }
 

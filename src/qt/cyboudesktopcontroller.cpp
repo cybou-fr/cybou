@@ -95,7 +95,7 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
     if (m_model) {
         connect(m_model, &CybouDesktopModel::lockVaultRequested, this, [this] { lockIdentity(); });
         connect(m_model, &CybouDesktopModel::statusChanged, this, [this] {
-            updatePoaFinalizer();
+            updatePoaSigner();
             updateValidationSigner();
         });
     }
@@ -169,7 +169,7 @@ void CybouDesktopController::start()
         // Live Mail and Files run through the core application services.
         m_application = std::make_unique<CybouCoreApplicationAdapter>(runtime, *m_identity_service, m_data_directory);
         m_model->setApplicationBackend(m_application.get());
-        m_model->requestApplicationCapabilities(/*mail=*/true, /*files=*/true);
+        m_model->requestApplicationFeatureAvailability(/*mail=*/true, /*files=*/true);
 
         m_wallet_service = std::make_unique<cybou::CybouWalletService>(
             runtime, m_identity_service->GetKeyStore());
@@ -270,7 +270,7 @@ void CybouDesktopController::start()
                     qWarning() << "cybou network authority refresh error:" << e.what();
                 }
                 const auto diagnostics = m_node_service->Runtime().GetDiagnostics();
-                const bool syncing = !sync_result.reached_peer_tip;
+                const bool syncing = !sync_result.caught_up_with_known_peers;
                 const auto geo_status = !geo_required ? CybouGeoAdmissionStatus::NotRequired
                     : ((geo_updater && geo_updater->Ready()) ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting);
                 QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, syncing, geo_status] {
@@ -308,7 +308,7 @@ void CybouDesktopController::publishNetworkAuthority()
     CybouNetworkAuthorityStatus status;
     std::lock_guard identity_access{m_identity_access_mutex};
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
-        status.signer_enabled = m_node_service->Runtime().IsPoaFinalizerEnabled();
+        status.signer_enabled = m_node_service->Runtime().IsPoaSignerActive();
         const auto loaded = m_node_service->Runtime().GetStore().LoadState();
         if (loaded && loaded.state) {
             const auto& state = *loaded.state;
@@ -332,8 +332,8 @@ void CybouDesktopController::publishNetworkAuthority()
 void CybouDesktopController::lockIdentity()
 {
     if (!m_model || !m_identity_service) return;
-    if (m_node_service) m_node_service->Runtime().DisablePoaFinalizer();
-    if (m_node_service) m_node_service->StopDesktopFinalizer();
+    if (m_node_service) m_node_service->Runtime().DisablePoaSigner();
+    if (m_node_service) m_node_service->StopBlockProduction();
     if (!m_model->beginVaultLock()) return;
     {
         std::lock_guard identity_access{m_identity_access_mutex};
@@ -358,28 +358,28 @@ void CybouDesktopController::updateValidationSigner()
     m_validation_signer_enabled = active;
 }
 
-void CybouDesktopController::updatePoaFinalizer()
+void CybouDesktopController::updatePoaSigner()
 {
     if (!m_model || !m_node_service || !m_identity_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
     try {
         if (m_model->status().identity_state != CybouIdentityState::Active ||
             !m_identity_service->IsUnlocked() || !m_identity_service->IsNetworkAuthority()) {
-            m_node_service->Runtime().DisablePoaFinalizer();
-            m_node_service->StopDesktopFinalizer();
+            m_node_service->Runtime().DisablePoaSigner();
+            m_node_service->StopBlockProduction();
             return;
         }
         auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(m_identity_service->GetKeyStore());
-        if (!m_node_service->Runtime().EnablePoaFinalizer(std::move(signer))) {
-            m_node_service->StopDesktopFinalizer();
-            m_node_service->Runtime().DisablePoaFinalizer();
+        if (!m_node_service->Runtime().EnablePoaSigner(std::move(signer))) {
+            m_node_service->StopBlockProduction();
+            m_node_service->Runtime().DisablePoaSigner();
             qWarning() << "unlocked Identity does not match the genesis PoA key";
             return;
         }
-        m_node_service->StartDesktopFinalizer();
+        m_node_service->StartBlockProduction();
     } catch (const std::exception& e) {
-        m_node_service->StopDesktopFinalizer();
-        m_node_service->Runtime().DisablePoaFinalizer();
+        m_node_service->StopBlockProduction();
+        m_node_service->Runtime().DisablePoaSigner();
         qWarning() << "cannot enable the Central Authority finalizer:" << e.what();
     }
 }

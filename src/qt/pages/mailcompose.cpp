@@ -165,7 +165,7 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); });
     connect(m_send, &QPushButton::clicked, this, [this] { send(); });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { updateGates(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { updateGates(); });
     updateGates();
 }
 
@@ -339,7 +339,7 @@ void MailCompose::updateGates()
     QString reason;
     if (status.identity_state != CybouIdentityState::Active) {
         reason = tr("Mail needs your CYBOU Identity.");
-    } else if (!m_model->capabilities().mail) {
+    } else if (!m_model->featureAvailability().mail) {
         reason = tr("This feature is not connected yet.");
     } else if (!to_problem.isEmpty()) {
         reason = m_to->text().trimmed().isEmpty() ? QString{} : to_problem;
@@ -347,7 +347,7 @@ void MailCompose::updateGates()
         reason = tr("Write a message.");
     }
     m_send->setEnabled(to_problem.isEmpty() && !m_body->toPlainText().trimmed().isEmpty() &&
-        status.identity_state == CybouIdentityState::Active && m_model->capabilities().mail);
+        status.identity_state == CybouIdentityState::Active && m_model->featureAvailability().mail);
     m_send_hint->setText(reason);
 }
 

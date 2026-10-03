@@ -134,7 +134,7 @@ OnboardingView::OnboardingView(CybouDesktopModel* model, QWidget* parent)
     m_stack->addWidget(buildChooseName());
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::identityCreationFailed, this, [this](const QString& reason) {
         m_offer_name = false;
         m_name_password.fill(QChar{0});
@@ -205,18 +205,18 @@ QWidget* OnboardingView::buildWelcome()
     connect(restore, &QPushButton::clicked, this, [this] {
         beginRestore();
     });
-    // Buttons follow the account-creation capability from the model; while
+    // Buttons follow account-creation feature availability from the model; while
     // the node is still catching up, say so instead of leaving them dead.
     const auto sync_buttons = [this, create, restore, catching_up] {
-        const bool can = m_model->capabilities().account_creation;
+        const bool can = m_model->featureAvailability().account_creation;
         create->setEnabled(can);
         restore->setEnabled(can);
         const auto& status = m_model->status();
         catching_up->setVisible(status.syncing);
-        catching_up->setText(tr("CYBOU is catching up with the network (block %1). You can create or restore "
-                                "your Identity once it is up to date.").arg(QLocale{}.toString(status.finalized_height)));
+        catching_up->setText(tr("CYBOU is catching up with known peers (block %1). Identity creation uses "
+                                "the locally verified finalized state.").arg(QLocale{}.toString(status.finalized_height)));
     };
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, create, sync_buttons);
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, create, sync_buttons);
     connect(m_model, &CybouDesktopModel::statusChanged, create, sync_buttons);
     sync_buttons();
     return page;
@@ -790,7 +790,7 @@ void OnboardingView::updateRestoreState()
     }
     m_restore_hint->setText(hint);
     m_restore_button->setEnabled(filled == kPhraseWords && unknown == 0 && password.size() >= kMinPasswordLength &&
-        password == confirmation && m_model->capabilities().account_creation);
+        password == confirmation && m_model->featureAvailability().account_creation);
 }
 
 void OnboardingView::submitRestore()
@@ -807,9 +807,7 @@ void OnboardingView::submitRestore()
     phrase.fill(QChar{0});
     password.fill(QChar{0});
     if (!started) {
-        m_restore_hint->setText(m_model->status().syncing
-            ? tr("Wait for the network to finish syncing before restoring an Identity.")
-            : tr("Restore could not start. Check the phrase and try again."));
+        m_restore_hint->setText(tr("Restore could not start. Check the phrase and try again."));
         return;
     }
     clearPhrase();

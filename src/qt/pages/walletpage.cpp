@@ -236,12 +236,12 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_to, &QLineEdit::textChanged, this, [this] { updateSendState(); });
     connect(m_amount, &QLineEdit::textChanged, this, [this] { updateSendState(); });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::walletChanged, this, [this] {
         rebuildActivity();
         refresh();
     });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { rebuildActivity(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { rebuildActivity(); });
     connect(m_model, &CybouDesktopModel::paymentFinished, this, [this](bool ok, const QString& error) {
         if (ok) {
             // Submitted is not final: the activity row follows the operation to finality.
@@ -297,7 +297,7 @@ void WalletPage::refresh()
     const bool active = status.identity_state == CybouIdentityState::Active;
     m_available->setText(cybouAmountText(status.balance));
     m_system->setText(cybouAmountText(status.system_balance));
-    const bool payments = active && m_model->capabilities().payments;
+    const bool payments = active && m_model->featureAvailability().payments;
     const bool funded = status.balance > 0;
     m_send_button->setEnabled(payments && funded);
     m_send_button->setToolTip(payments && !funded ? tr("You have no spendable CYBOU yet.") : QString{});
@@ -356,7 +356,7 @@ void WalletPage::updateSendState()
     const bool enough = amount <= m_model->status().balance;
     if (amount > 0 && !enough) m_send_status->setText(tr("Not enough CYBOU available."));
     m_confirm->setEnabled(!m_model->paymentPending() && !to.isEmpty() && to_problem.isEmpty() && amount > 0 &&
-        enough && m_model->capabilities().payments);
+        enough && m_model->featureAvailability().payments);
     m_confirm->setText(m_model->paymentPending() ? tr("Sending…") : m_reviewing ? tr("Confirm and send") : tr("Review"));
 }
 

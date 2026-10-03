@@ -372,7 +372,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
         refreshEmptyHint();
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshBanner(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::contactsChanged, this, [this] { rebuildContacts(); });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
         if (m_current_id != old_id) return;
@@ -725,7 +725,7 @@ void EmailPage::rebuildList()
 void EmailPage::refreshBanner()
 {
     const bool identity = m_model->status().identity_state == CybouIdentityState::Active;
-    const bool connected = m_model->capabilities().mail;
+    const bool connected = m_model->featureAvailability().mail;
     m_banner->setVisible(!identity || !connected);
     m_banner_text->setText(!identity ? tr("Mail needs your CYBOU Identity. Create or restore it on Home.")
                                      : tr("Mail is not connected yet. Messages will appear here once it is."));

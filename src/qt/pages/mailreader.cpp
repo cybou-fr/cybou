@@ -396,7 +396,7 @@ void MailReader::refresh()
         auto* menu = new QMenu{more};
         auto* save = menu->addAction(saved ? tr("Saved to Files") : tr("Save to Files"));
         save->setObjectName(QStringLiteral("saveToFiles"));
-        save->setEnabled(available && !outgoing && !saved && m_model->capabilities().files);
+        save->setEnabled(available && !outgoing && !saved && m_model->featureAvailability().files);
         more->setMenu(menu);
         layout->addWidget(download);
         layout->addWidget(more);

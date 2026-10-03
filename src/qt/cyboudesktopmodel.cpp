@@ -143,31 +143,28 @@ void CybouDesktopModel::setNodeStatus(bool running, int peer_count, bool online,
     Q_EMIT statusChanged();
 }
 
-CybouCapabilities CybouDesktopModel::honest(CybouCapabilities capabilities) const
+CybouFeatureAvailability CybouDesktopModel::honest(CybouFeatureAvailability featureAvailability) const
 {
     // Never claim Mail or Files without a backend that can carry them out.
-    capabilities.mail = capabilities.mail && m_backend && m_backend->mailAvailable();
-    capabilities.files = capabilities.files && m_backend && m_backend->filesAvailable();
-    // Identity operations need the current network tip: an Identity created
-    // from a stale view carries expired work and the network rejects it.
-    capabilities.account_creation = capabilities.account_creation && !m_status.syncing;
-    return capabilities;
+    featureAvailability.mail = featureAvailability.mail && m_backend && m_backend->mailAvailable();
+    featureAvailability.files = featureAvailability.files && m_backend && m_backend->filesAvailable();
+    return featureAvailability;
 }
 
-void CybouDesktopModel::setCapabilities(const CybouCapabilities& requested)
+void CybouDesktopModel::setFeatureAvailability(const CybouFeatureAvailability& requested)
 {
-    m_requested_capabilities = requested;
-    const CybouCapabilities capabilities = honest(requested);
-    if (m_capabilities.account_creation == capabilities.account_creation &&
-        m_capabilities.payments == capabilities.payments &&
-        m_capabilities.mail == capabilities.mail &&
-        m_capabilities.files == capabilities.files &&
-        m_capabilities.sharing == capabilities.sharing &&
-        m_capabilities.version_history == capabilities.version_history) {
+    m_requested_availability = requested;
+    const CybouFeatureAvailability featureAvailability = honest(requested);
+    if (m_availability.account_creation == featureAvailability.account_creation &&
+        m_availability.payments == featureAvailability.payments &&
+        m_availability.mail == featureAvailability.mail &&
+        m_availability.files == featureAvailability.files &&
+        m_availability.sharing == featureAvailability.sharing &&
+        m_availability.version_history == featureAvailability.version_history) {
         return;
     }
-    m_capabilities = capabilities;
-    Q_EMIT capabilitiesChanged();
+    m_availability = featureAvailability;
+    Q_EMIT featureAvailabilityChanged();
 }
 
 void CybouDesktopModel::setNetworkInfo(const QString& network_name, const QString& network_binding)
@@ -206,7 +203,7 @@ void CybouDesktopModel::setSyncing(bool syncing)
     if (m_status.syncing == syncing) return;
     m_status.syncing = syncing;
     Q_EMIT statusChanged();
-    setCapabilities(m_requested_capabilities);
+    setFeatureAvailability(m_requested_availability);
 }
 
 void CybouDesktopModel::setSyncError(const QString& error)
@@ -236,10 +233,10 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     if (state != CybouIdentityState::Creating && state != CybouIdentityState::Restoring) {
         m_identity_request_pending = false;
     }
-    if (state == CybouIdentityState::Active && m_wallet_service && !m_capabilities.payments) {
-        m_capabilities.payments = true;
-        m_requested_capabilities.payments = true;
-        Q_EMIT capabilitiesChanged();
+    if (state == CybouIdentityState::Active && m_wallet_service && !m_availability.payments) {
+        m_availability.payments = true;
+        m_requested_availability.payments = true;
+        Q_EMIT featureAvailabilityChanged();
     }
     syncIdentitySession();
     Q_EMIT statusChanged();
@@ -267,12 +264,12 @@ void CybouDesktopModel::syncIdentitySession()
     else m_backend->closeIdentity();
 }
 
-void CybouDesktopModel::requestApplicationCapabilities(bool mail, bool files)
+void CybouDesktopModel::requestApplicationFeatureAvailability(bool mail, bool files)
 {
-    CybouCapabilities requested = m_requested_capabilities;
+    CybouFeatureAvailability requested = m_requested_availability;
     requested.mail = mail;
     requested.files = files;
-    setCapabilities(requested);
+    setFeatureAvailability(requested);
 }
 
 void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
@@ -285,7 +282,7 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
     m_backend = backend;
     if (m_backend) {
         using B = CybouApplicationBackend;
-        connect(m_backend, &B::availabilityChanged, this, [this] { setCapabilities(m_requested_capabilities); });
+        connect(m_backend, &B::availabilityChanged, this, [this] { setFeatureAvailability(m_requested_availability); });
         connect(m_backend, &B::mailSnapshot, this, [this](const QVector<CybouMailItem>& items) {
             if (m_session_open) setMailItems(items);
         });
@@ -316,7 +313,7 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
         connect(m_backend, &B::commandFailed, this, [this](const QString& text) { notify(text); });
         if (m_session_open) m_backend->openIdentity();
     }
-    setCapabilities(m_requested_capabilities);
+    setFeatureAvailability(m_requested_availability);
 }
 
 void CybouDesktopModel::setIdentityStep(CybouIdentityStep step)
@@ -392,12 +389,12 @@ void CybouDesktopModel::removeMailItem(const QString& id)
 
 bool CybouDesktopModel::mailReady() const
 {
-    return m_backend && m_capabilities.mail && m_status.identity_state == CybouIdentityState::Active;
+    return m_backend && m_availability.mail && m_status.identity_state == CybouIdentityState::Active;
 }
 
 bool CybouDesktopModel::filesReady() const
 {
-    return m_backend && m_capabilities.files && m_status.identity_state == CybouIdentityState::Active;
+    return m_backend && m_availability.files && m_status.identity_state == CybouIdentityState::Active;
 }
 
 void CybouDesktopModel::requestMailRead(const QString& id, bool read)
@@ -900,19 +897,19 @@ void CybouDesktopModel::setIdentityService(cybou::CybouIdentityService* identity
     m_recovery_rotation_pending = false;
     m_name_service.reset();
     m_identity_service = identity_service;
-    if (!m_identity_service && m_capabilities.account_creation) {
-        m_capabilities.account_creation = false;
-        m_requested_capabilities.account_creation = false;
-        Q_EMIT capabilitiesChanged();
+    if (!m_identity_service && m_availability.account_creation) {
+        m_availability.account_creation = false;
+        m_requested_availability.account_creation = false;
+        Q_EMIT featureAvailabilityChanged();
     }
     if (m_identity_service) {
         if (const auto path = m_identity_service->GetStoragePath()) {
             m_name_service = std::make_unique<cybou::CybouNameService>(
                 m_identity_service->GetNodeRuntime(), m_identity_service->GetKeyStore(), *path);
         }
-        m_capabilities.account_creation = true;
-        m_requested_capabilities.account_creation = true;
-        Q_EMIT capabilitiesChanged();
+        m_availability.account_creation = true;
+        m_requested_availability.account_creation = true;
+        Q_EMIT featureAvailabilityChanged();
 
         if (m_identity_service->GetPhase() == cybou::IdentityCreationPhase::ACTIVE &&
             m_identity_service->GetAccountId().has_value()) {
@@ -932,10 +929,10 @@ void CybouDesktopModel::setWalletService(cybou::CybouWalletService* wallet_servi
 {
     m_wallet_service = wallet_service;
     const bool payments = m_wallet_service && m_status.identity_state == CybouIdentityState::Active;
-    if (m_capabilities.payments != payments) {
-        m_capabilities.payments = payments;
-        m_requested_capabilities.payments = payments;
-        Q_EMIT capabilitiesChanged();
+    if (m_availability.payments != payments) {
+        m_availability.payments = payments;
+        m_requested_availability.payments = payments;
+        Q_EMIT featureAvailabilityChanged();
     }
 }
 
@@ -944,7 +941,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
     if (m_fixture_mode) {
         if (m_status.identity_state != CybouIdentityState::Active || m_status.name_claim_pending) return false;
         m_status.name_claim_pending = true;
-        m_status.name_claim_status = tr("Claiming %1.cybou…").arg(label);
+        m_status.name_claim_status = tr("Claiming %1.cybouâ€¦").arg(label);
         Q_EMIT statusChanged();
         Q_EMIT nameClaimRequested(label);
         return true;
@@ -953,7 +950,7 @@ bool CybouDesktopModel::requestClaimName(const QString& label, const QString& va
         m_status.name_claim_pending || !m_status.primary_name.isEmpty()) return false;
     if (m_name_worker.joinable()) m_name_worker.join();
     m_status.name_claim_pending = true;
-    m_status.name_claim_status = tr("Saving encrypted name claim…");
+    m_status.name_claim_status = tr("Saving encrypted name claimâ€¦");
     Q_EMIT statusChanged();
     m_name_worker = std::jthread([this, name = label.toStdString(), password = vault_password.toStdString()]() mutable {
         const auto result = m_name_service->ClaimSync(std::move(name), password,
@@ -1232,7 +1229,7 @@ QString CybouDesktopModel::nameLabelProblem(const QString& label) const
     case E::EMPTY: return tr("Enter a name.");
     case E::TOO_SHORT: return tr("Use at least 5 characters.");
     case E::TOO_LONG: return tr("Use at most 32 characters.");
-    case E::INVALID_CHARACTER: return tr("Use lowercase letters a–z, digits and hyphens.");
+    case E::INVALID_CHARACTER: return tr("Use lowercase letters aâ€“z, digits and hyphens.");
     case E::INVALID_START_END: return tr("A name cannot start or end with a hyphen.");
     case E::CONSECUTIVE_HYPHENS: return tr("A name cannot contain two hyphens in a row.");
     case E::IDN_PREFIX: return tr("Names cannot start with \"xn--\".");
@@ -1294,8 +1291,8 @@ void CybouDesktopModel::completeVaultLock()
     m_payment_pending = false;
     m_recovery_rotation_pending = false;
     m_vault_locking = false;
-    m_capabilities.payments = false;
-    m_requested_capabilities.payments = false;
+    m_availability.payments = false;
+    m_requested_availability.payments = false;
     Q_EMIT statusChanged();
     Q_EMIT namesChanged();
     Q_EMIT contactsChanged();
@@ -1303,7 +1300,7 @@ void CybouDesktopModel::completeVaultLock()
     Q_EMIT walletChanged();
     Q_EMIT authorityChanged();
     Q_EMIT networkAuthorityChanged();
-    Q_EMIT capabilitiesChanged();
+    Q_EMIT featureAvailabilityChanged();
 }
 
 namespace {
@@ -1320,10 +1317,6 @@ CybouIdentityStep StepForPhase(cybou::IdentityCreationPhase phase)
 
 void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 {
-    if (m_status.syncing) {
-        Q_EMIT identityCreationFailed(tr("Wait for the network to finish syncing before creating an Identity."));
-        return;
-    }
     // The UI boundary ends here: anti-Sybil work, operation construction and
     // finality handling belong to core. The flag is request bookkeeping only.
     m_identity_request_pending = true;
@@ -1359,7 +1352,6 @@ void CybouDesktopModel::requestCreateIdentity(const QString& vault_password)
 
 bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, const QString& vault_password)
 {
-    if (m_status.syncing) return false;
     if (!recoveryPhraseValid(recovery_phrase)) return false;
     if (!m_identity_service) {
         // Fixture mode: hand the request to the fixture driver.

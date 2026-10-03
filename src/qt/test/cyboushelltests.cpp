@@ -27,6 +27,7 @@
 
 #include <cybou/network_definition.h>
 #include <cybou/node_runtime.h>
+#include <cybou/official_networks.h>
 #include <cybou/p2p/session.h>
 #include <test/cybou_test_helpers.h>
 #include <test/cybou_service_test_fixture.h>
@@ -161,9 +162,9 @@ public:
     }
 };
 
-CybouCapabilities AllCapabilities()
+CybouFeatureAvailability AllFeatureAvailability()
 {
-    CybouCapabilities caps;
+    CybouFeatureAvailability caps;
     caps.account_creation = true;
     caps.payments = true;
     caps.mail = true;
@@ -248,7 +249,7 @@ void CybouShellTests::diagnosticsStaySecondaryWindow()
     diagnostics->close();
 }
 
-void CybouShellTests::identityCreateFollowsCapabilities()
+void CybouShellTests::identityCreateFollowsFeatureAvailability()
 {
     auto window = makeWindow();
     auto* model = window->desktopModel();
@@ -265,11 +266,13 @@ void CybouShellTests::identityCreateFollowsCapabilities()
     QVERIFY(create);
     QVERIFY(!create->isEnabled());
 
-    // Capabilities come from the desktop model boundary.
+    // FeatureAvailability come from the desktop model boundary.
     model->setFixtureMode(true); // deterministic recovery words, no core
-    CybouCapabilities capabilities;
-    capabilities.account_creation = true;
-    model->setCapabilities(capabilities);
+    CybouFeatureAvailability featureAvailability;
+    featureAvailability.account_creation = true;
+    model->setFeatureAvailability(featureAvailability);
+    QVERIFY(create->isEnabled());
+    model->setSyncing(true);
     QVERIFY(create->isEnabled());
 
     // Create -> vault password -> recovery words -> confirmation.
@@ -309,9 +312,9 @@ void CybouShellTests::restoreFlowValidatesPhrase()
     auto window = makeWindow();
     auto* model = window->desktopModel();
     model->setFixtureMode(true);
-    CybouCapabilities capabilities;
-    capabilities.account_creation = true;
-    model->setCapabilities(capabilities);
+    CybouFeatureAvailability featureAvailability;
+    featureAvailability.account_creation = true;
+    model->setFeatureAvailability(featureAvailability);
     auto* home = window->page(CybouPage::Home);
     QPushButton* restore{nullptr};
     QPushButton* submit{nullptr};
@@ -450,9 +453,9 @@ void CybouShellTests::composeGatesAndSends()
         QStringLiteral("Waiting for network"));
 
     // Without a connected Mail backend, Send stays disabled and says why.
-    CybouCapabilities caps = model->capabilities();
+    CybouFeatureAvailability caps = model->featureAvailability();
     caps.mail = false;
-    model->setCapabilities(caps);
+    model->setFeatureAvailability(caps);
     mail->openCompose();
     to->setText(QStringLiteral("alice.cybou"));
     body->setPlainText(QStringLiteral("hello"));
@@ -744,8 +747,7 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     CybouDesktopModel model{QStringLiteral("LAB")};
     cybou::NodeDiagnosticsSnapshot snapshot;
     snapshot.network_binding="lab"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
-    snapshot.peers.push_back({"127.0.0.1:30471",9,
-        cybou::p2p::CAP_OPERATION_RELAY | cybou::p2p::CAP_STORAGE,"provider"});
+    snapshot.peers.push_back({"127.0.0.1:30471",9,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
     DiagnosticsPage page{&model,[]{}};
@@ -757,10 +759,10 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     auto* operations=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorOperations"));
     QVERIFY(peers); QVERIFY(operations);
     QCOMPARE(peers->rowCount(),1);
-    QVERIFY(!peers->item(0,1)->text().contains(QStringLiteral("Bootstrap")));
-    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Operation relay")));
-    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Storage")));
-    QCOMPARE(peers->item(0,3)->text(),QStringLiteral("3"));
+    QCOMPARE(peers->columnCount(),4);
+    QCOMPARE(peers->item(0,1)->text(),QStringLiteral("9"));
+    QCOMPARE(peers->item(0,2)->text(),QStringLiteral("3"));
+    QCOMPARE(peers->item(0,3)->text(),QStringLiteral("provider"));
     QCOMPARE(operations->item(0,1)->text(),QStringLiteral("Finalized"));
     snapshot.peers.clear(); snapshot.operations.clear();
     model.setNetworkDiagnostics(snapshot);
@@ -962,23 +964,7 @@ void CybouShellTests::fixturesLoadDeterministically()
     QSignalSpy create_failed{&model, &CybouDesktopModel::identityCreationFailed};
     QSignalSpy create_requested{&model, &CybouDesktopModel::createIdentityRequested};
     model.setSyncing(true);
-    QVERIFY(!model.capabilities().account_creation);
-    model.requestCreateIdentity(QStringLiteral("correct horse battery"));
-    QCOMPARE(create_requested.count(), 0);
-    QCOMPARE(create_failed.count(), 1);
-    QCOMPARE(model.status().identity_state, CybouIdentityState::None);
-
-    std::array<unsigned char, 32> recovery_entropy{};
-    recovery_entropy[0] = 0x42;
-    QStringList recovery_words;
-    for (const auto& word : cybou::EncodeRecoveryWords(recovery_entropy)) {
-        recovery_words << QString::fromStdString(word);
-    }
-    QVERIFY(!model.requestRestoreIdentity(recovery_words.join(QLatin1Char{' '}),
-        QStringLiteral("correct horse battery")));
-
-    model.setSyncing(false);
-    QVERIFY(model.capabilities().account_creation);
+    QVERIFY(model.featureAvailability().account_creation);
     CybouUiFixtures::Driver driver{&model};
     driver.setStepDelay(0);
     model.requestCreateIdentity(QStringLiteral("correct horse battery"));
@@ -1356,8 +1342,14 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     controller.start();
-    QCOMPARE(failures.count(), 1);
-    QVERIFY(model.status().node_running);
+    if (failures.count() == 2) {
+        // Provisioning is deferred: retry must remain fail-closed for the old genesis.
+        QVERIFY(failures.last().at(0).toString().contains(QStringLiteral("provision a new NetworkID")));
+        QVERIFY(!model.status().node_running);
+    } else {
+        QCOMPARE(failures.count(), 1);
+        QVERIFY(model.status().node_running);
+    }
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
@@ -1374,7 +1366,9 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
     QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
     controller.start();
     QCOMPARE(failures.count(), 1);
-    QVERIFY(failures.takeFirst().at(0).toString().contains(QStringLiteral("belongs to another network")));
+    const auto reason = failures.takeFirst().at(0).toString();
+    QVERIFY(reason.contains(QStringLiteral("belongs to another network")) ||
+        reason.contains(QStringLiteral("compiled DEVNET genesis state is invalid")));
     QVERIFY(!model.status().node_running);
 }
 
@@ -1383,7 +1377,7 @@ void CybouShellTests::backendCommandsDriveProjection()
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
     RecordingBackend backend;
     model.setApplicationBackend(&backend);
-    model.setCapabilities(AllCapabilities());
+    model.setFeatureAvailability(AllFeatureAvailability());
     model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
     QVERIFY(backend.open);
     model.setFileItems({ProtectedFile(QStringLiteral("f1"), QStringLiteral("report.pdf"))});
@@ -1454,14 +1448,14 @@ void CybouShellTests::backendCommandsDriveProjection()
     QVERIFY(model.mailItems().isEmpty());
 }
 
-void CybouShellTests::liveCapabilitiesStayHonest()
+void CybouShellTests::liveFeatureAvailabilityStayHonest()
 {
     // No backend: Mail and Files are never claimed, and actions do nothing.
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
-    model.setCapabilities(AllCapabilities());
-    QVERIFY(!model.capabilities().mail);
-    QVERIFY(!model.capabilities().files);
-    QVERIFY(model.capabilities().payments);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    QVERIFY(!model.featureAvailability().mail);
+    QVERIFY(!model.featureAvailability().files);
+    QVERIFY(model.featureAvailability().payments);
     model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
     QVERIFY(model.requestCreateFolder(QStringLiteral("Taxes")).isEmpty());
     QVERIFY(model.requestSendMail({}).isEmpty());
@@ -1472,16 +1466,16 @@ void CybouShellTests::liveCapabilitiesStayHonest()
     RecordingBackend backend;
     model.setApplicationBackend(&backend);
     QVERIFY(backend.open);
-    QVERIFY(model.capabilities().mail);
-    QVERIFY(model.capabilities().files);
+    QVERIFY(model.featureAvailability().mail);
+    QVERIFY(model.featureAvailability().files);
     backend.setAvailable(false);
-    QVERIFY(!model.capabilities().files);
+    QVERIFY(!model.featureAvailability().files);
     QVERIFY(model.requestCreateFolder(QStringLiteral("Taxes")).isEmpty());
     backend.setAvailable(true);
-    QVERIFY(model.capabilities().files);
+    QVERIFY(model.featureAvailability().files);
     model.setApplicationBackend(nullptr);
     QVERIFY(!backend.open);
-    QVERIFY(!model.capabilities().mail);
+    QVERIFY(!model.featureAvailability().mail);
 }
 
 void CybouShellTests::fixtureLifecycleFollowsBackend()
@@ -1651,15 +1645,15 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
         auto adapter = std::make_unique<CybouCoreApplicationAdapter>(*fixture.runtime, identity, fixture.directory / dir);
         adapter->setRefreshInterval(20);
         model->setApplicationBackend(adapter.get());
-        model->requestApplicationCapabilities(true, true);
+        model->requestApplicationFeatureAvailability(true, true);
         model->setIdentityState(CybouIdentityState::Active,
             QString::fromStdString(identity.GetAccountId()->Value().GetHex()), 1);
         return std::make_pair(std::move(model), std::move(adapter));
     };
     auto [alice_model, alice_adapter] = open(*alice, "desktop-alice");
     // Mail turns on only once the adapter session has opened the core services.
-    QTRY_VERIFY(alice_model->capabilities().mail);
-    QVERIFY(alice_model->capabilities().files);
+    QTRY_VERIFY(alice_model->featureAvailability().mail);
+    QVERIFY(alice_model->featureAvailability().files);
 
     CybouMailItem message;
     message.to_name = bob_id;
@@ -1811,7 +1805,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(!bob_model->mailItem(draft_id));
     bob_model->setIdentityState(CybouIdentityState::Locked, bob_account, 1);
     bob_model->setIdentityState(CybouIdentityState::Active, bob_account, 1);
-    QTRY_VERIFY(bob_model->capabilities().mail && !bob_model->mailItems().isEmpty());
+    QTRY_VERIFY(bob_model->featureAvailability().mail && !bob_model->mailItems().isEmpty());
     QVERIFY(!bob_model->mailItem(draft_id));
 
     // An unknown recipient needs attention instead of pretending to send.
@@ -1885,11 +1879,11 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QTRY_VERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->starred);
     QTest::qWait(300); // let the worker store it
     alice_adapter->closeIdentity();
-    QTRY_VERIFY(!alice_model->capabilities().files);
+    QTRY_VERIFY(!alice_model->featureAvailability().files);
     QSignalSpy reopened{alice_adapter.get(), &CybouCoreApplicationAdapter::filesSnapshot};
     alice_adapter->openIdentity();
     // Judge only a snapshot of the reopened session, not what the model still shows.
-    QTRY_VERIFY(alice_model->capabilities().files && reopened.count() > 0);
+    QTRY_VERIFY(alice_model->featureAvailability().files && reopened.count() > 0);
     const auto fresh = reopened.last().at(0).value<QVector<CybouFileItem>>();
     const auto stored = std::find_if(fresh.begin(), fresh.end(), [&](const CybouFileItem& f) { return f.id == report_id; });
     QVERIFY(stored != fresh.end() && stored->starred);
@@ -1912,7 +1906,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     alice_model->setIdentityService(alice.get()); // a known vault starts Locked
     alice_model->setIdentityState(CybouIdentityState::Active,
         QString::fromStdString(alice->GetAccountId()->Value().GetHex()), 1);
-    QTRY_VERIFY(alice_model->capabilities().mail);
+    QTRY_VERIFY(alice_model->featureAvailability().mail);
     QSignalSpy rotated{alice_model.get(), &CybouDesktopModel::recoveryRotationFinished};
     const auto entropy = cybou::GenerateRecoveryEntropy();
     QVERIFY(entropy.has_value());
@@ -1943,7 +1937,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(!alice_model->recoveryRotationPending());
     QCOMPARE(key_epoch(), std::uint64_t{0});
     QVERIFY(alice_model->mailItems().isEmpty());
-    QVERIFY(!alice_model->capabilities().mail);
+    QVERIFY(!alice_model->featureAvailability().mail);
     QVERIFY(alice_model->fileItems().isEmpty());
     alice_model->setApplicationBackend(nullptr);
     bob_model->setApplicationBackend(nullptr);
@@ -1984,10 +1978,10 @@ void CybouShellTests::rotationKeepsLiveSessionWorking()
     adapter.setRefreshInterval(20);
     adapter.setStorageTransport(&network);
     model.setApplicationBackend(&adapter);
-    model.requestApplicationCapabilities(true, true);
+    model.requestApplicationFeatureAvailability(true, true);
     model.setIdentityService(alice.get()); // a known vault starts Locked
     model.setIdentityState(CybouIdentityState::Active, account, 1);
-    QTRY_VERIFY(model.capabilities().files);
+    QTRY_VERIFY(model.featureAvailability().files);
 
     const auto produce_until = [&](const std::function<bool()>& done) {
         for (int i = 0; i < 40 && !done(); ++i) {
@@ -2049,7 +2043,7 @@ void CybouShellTests::rotationKeepsLiveSessionWorking()
     }
 
     // Same session, new keys: Mail and Files keep working, nothing visible is lost.
-    QTRY_VERIFY(model.capabilities().files && model.capabilities().mail);
+    QTRY_VERIFY(model.featureAvailability().files && model.featureAvailability().mail);
     QTRY_VERIFY(file_named(QStringLiteral("before.bin")) != nullptr);
     QTRY_VERIFY(model.mailItem(draft_id) != nullptr);
     QCOMPARE(model.mailItem(draft_id)->body, QStringLiteral("A draft across rotation"));

@@ -301,7 +301,7 @@ void HomePage::refresh()
     m_restore_banner->setText(tr("Mail and Files are still being restored. They appear as they are verified."));
     m_restore_banner->setVisible(restoring);
 
-    const bool mail_connected = m_model->capabilities().mail;
+    const bool mail_connected = m_model->featureAvailability().mail;
     const int unread = m_model->unreadMailCount();
     m_mail_value->setText(!mail_connected ? tr("Not connected yet")
         : unread > 0 ? tr("%1 unread").arg(unread) : tr("No unread mail"));
@@ -315,7 +315,7 @@ void HomePage::refresh()
     for (const auto& file : m_model->fileItems()) {
         if (!file.folder && !file.trashed) ++files;
     }
-    m_files_value->setText(!m_model->capabilities().files ? tr("Not connected yet") : (files == 1 ? tr("1 file") : tr("%1 files").arg(files)));
+    m_files_value->setText(!m_model->featureAvailability().files ? tr("Not connected yet") : (files == 1 ? tr("1 file") : tr("%1 files").arg(files)));
     m_files_caption->setText(tr("%1 used").arg(CybouProduct::sizeText(status.storage_used)));
 
     m_wallet_value->setText(cybouAmountText(status.balance));

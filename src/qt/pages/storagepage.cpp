@@ -419,7 +419,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         rebuildDetails();
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshChrome(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refreshChrome(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshChrome(); });
 
     m_nav->setCurrentRow(0);
     refreshChrome();
@@ -820,7 +820,7 @@ void StoragePage::refreshChrome()
 {
     const auto& status = m_model->status();
     const bool identity = status.identity_state == CybouIdentityState::Active;
-    const bool connected = m_model->capabilities().files;
+    const bool connected = m_model->featureAvailability().files;
     m_banner->setVisible(!identity || !connected);
     m_banner_text->setText(!identity ? tr("Files needs your CYBOU Identity. Create or restore it on Home.")
                                      : tr("Files is not connected yet. Your files will appear here once it is."));
@@ -1004,7 +1004,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
         [this, id, starred = item->starred] { m_model->requestFileStarred(id, !starred); });
     if (!item->folder) {
         auto* send = menu.addAction(tr("Send by CYBOU Mail"), this, [this, id] { if (onSendByMail) onSendByMail(id); });
-        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
+        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->featureAvailability().mail);
     }
     menu.addSeparator();
     menu.addAction(tr("Move to Trash"), this, [this, ids] {
@@ -1166,7 +1166,7 @@ void StoragePage::rebuildDetails()
         auto* send = new QPushButton{tr("Send by Mail"), m_details};
         send->setObjectName(QStringLiteral("secondaryButton"));
         send->setProperty("cybouId", QStringLiteral("fileSendByMail"));
-        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->capabilities().mail);
+        send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->featureAvailability().mail);
         connect(send, &QPushButton::clicked, this, [this, id = item->id] { if (onSendByMail) onSendByMail(id); });
         layout->addWidget(send);
     }

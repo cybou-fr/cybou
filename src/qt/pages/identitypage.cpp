@@ -156,7 +156,7 @@ IdentityPage::IdentityPage(CybouDesktopModel* model, std::function<void()> home_
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::namesChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::nameClaimFailed, this, [this](const QString& reason) {
         QMessageBox::warning(this, tr("Name not claimed"),
             reason.isEmpty() ? tr("The name could not be claimed.") : reason);
@@ -332,7 +332,7 @@ void IdentityPage::refresh()
     static_cast<QStackedLayout*>(layout())->setCurrentWidget(active ? m_content : m_setup);
     if (!active) {
         // Same availability as Home: the local node must be able to create Identities.
-        const bool can = m_model->capabilities().account_creation;
+        const bool can = m_model->featureAvailability().account_creation;
         m_setup_create->setEnabled(can);
         m_setup_restore->setEnabled(can);
         return;

@@ -283,7 +283,7 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     root->addStretch();
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     refresh();
 }
 

@@ -891,6 +891,11 @@ Stan</translation>
 </context>
 <context>
     <name>DiagnosticsPage</name>
+    <message><source>Node type</source><translation>Type de nœud</translation></message>
+    <message><source>Full Node</source><translation>Nœud complet</translation></message>
+    <message><source>CYP2 version</source><translation>Version CYP2</translation></message>
+    <message><source>Storage used / capacity</source><translation>Stockage utilisé / capacité</translation></message>
+    <message><source>PoA signer active</source><translation>Signataire PoA actif</translation></message>
     <message>
         <source>Peer admission Geo database</source>
         <translation>Base Geo pour l’admission des pairs</translation>
@@ -970,11 +975,6 @@ Stan</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="145" />
-        <source>Advertised capabilities</source>
-        <translation>Capacités annoncées</translation>
-    </message>
-    <message>
-        <location filename="../pages/diagnosticspage.cpp" line="145" />
         <source>Advertised height</source>
         <translation>Hauteur annoncée</translation>
     </message>
@@ -989,40 +989,8 @@ Stan</translation>
         <translation>ID du fournisseur</translation>
     </message>
     <message>
-        <source>Serve blocks</source>
-        <translation>Servir les blocs</translation>
-    </message>
-    <message>
-        <source>Accept operations</source>
-        <translation>Accepter les opérations</translation>
-    </message>
-    <message>
-        <source>Block inventory</source>
-        <translation>Inventaire des blocs</translation>
-    </message>
-    <message>
-        <source>Block announcements</source>
-        <translation>Annonce des blocs</translation>
-    </message>
-    <message>
-        <source>Peer discovery</source>
-        <translation>Découverte de pairs</translation>
-    </message>
-    <message>
-        <source>Storage proofs</source>
-        <translation>Preuves de stockage</translation>
-    </message>
-    <message>
         <source>Bootstrap</source>
         <translation>Bootstrap</translation>
-    </message>
-    <message>
-        <source>Operation relay</source>
-        <translation>Relais d’opérations</translation>
-    </message>
-    <message>
-        <source>None advertised</source>
-        <translation>Aucune capacité annoncée</translation>
     </message>
     <message>
         <location filename="../pages/diagnosticspage.cpp" line="146" />
@@ -2988,8 +2956,8 @@ Mail, Files, Names and Wallet.</source>
     </message>
     <message>
         <location filename="../pages/onboardingview.cpp" line="216" />
-        <source>CYBOU is catching up with the network (block %1). You can create or restore your Identity once it is up to date.</source>
-        <translation>CYBOU se synchronise avec le réseau (bloc %1). Vous pourrez créer ou restaurer votre identité une fois la synchronisation terminée.</translation>
+        <source>CYBOU is catching up with known peers (block %1). Identity creation uses the locally verified finalized state.</source>
+        <translation>CYBOU rattrape les pairs connus (bloc %1). La création d’Identité utilise l’état finalisé vérifié localement.</translation>
     </message>
     <message>
         <location filename="../pages/onboardingview.cpp" line="229" />
@@ -3323,11 +3291,6 @@ Mail, Files, Names and Wallet.</source>
         <location filename="../pages/onboardingview.cpp" line="803" />
         <source>These words are not a valid CYBOU recovery phrase. Check the spelling and order.</source>
         <translation>Ces mots ne forment pas une phrase de récupération CYBOU valide. Vérifiez l’orthographe et l’ordre.</translation>
-    </message>
-    <message>
-        <location filename="../pages/onboardingview.cpp" line="811" />
-        <source>Wait for the network to finish syncing before restoring an Identity.</source>
-        <translation>Attendez la fin de la synchronisation du réseau avant de restaurer une identité.</translation>
     </message>
     <message>
         <location filename="../pages/onboardingview.cpp" line="812" />

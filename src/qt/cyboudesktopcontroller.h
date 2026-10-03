@@ -49,7 +49,7 @@ private:
     bool m_validation_signer_enabled{false};
     /** Where data of an older DEV network was moved at startup, if it was. */
     void stop();
-    void updatePoaFinalizer();
+    void updatePoaSigner();
     void updateValidationSigner();
     void publishAuthority();
     void lockIdentity();

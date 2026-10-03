@@ -74,21 +74,6 @@ void Row(QVBoxLayout* layout, const QString& key, const QString& value, QWidget*
     layout->addLayout(row);
 }
 
-QString AdvertisedCapabilities(const std::uint64_t capabilities)
-{
-    QStringList result;
-    const auto translate = [](const char* source) { return QCoreApplication::translate("DiagnosticsPage", source); };
-    if (capabilities & cybou::p2p::CAP_SERVE_BLOCKS) result << translate("Serve blocks");
-    if (capabilities & cybou::p2p::CAP_FINALIZER_PROOF) result << translate("PoA key proof");
-    if (capabilities & cybou::p2p::CAP_BLOCK_INVENTORY) result << translate("Block inventory");
-    if (capabilities & cybou::p2p::CAP_BLOCK_ANNOUNCEMENTS) result << translate("Block announcements");
-    if (capabilities & cybou::p2p::CAP_PEER_DISCOVERY) result << translate("Peer discovery");
-    if (capabilities & cybou::p2p::CAP_STORAGE) result << translate("Storage");
-    if (capabilities & cybou::p2p::CAP_STORAGE_PROOFS) result << translate("Storage proofs");
-    if (capabilities & cybou::p2p::CAP_OPERATION_RELAY) result << translate("Operation relay");
-    return result.isEmpty() ? translate("None advertised") : result.join(QStringLiteral(", "));
-}
-
 } // namespace
 
 DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()> diagnostics_window_requested,
@@ -159,7 +144,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
             layout->addWidget(widget); return widget;
         };
-        auto* peers = table({tr("Peer endpoint"),tr("Advertised capabilities"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
+        auto* peers = table({tr("Peer endpoint"),tr("Advertised height"),tr("Lag"),tr("ProviderID")});
         auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")});
         auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")});
         peers->setObjectName(QStringLiteral("networkMonitorPeers"));
@@ -177,7 +162,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
             };
             peers->setRowCount(0);
             for (const auto& peer : d.peers) row(peers,{QString::fromStdString(peer.endpoint),
-                AdvertisedCapabilities(peer.capabilities),QString::number(peer.advertised_height),
+                QString::number(peer.advertised_height),
                 QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.provider_id)});
             operations->setRowCount(0);
             const QStringList states{tr("Unknown"),tr("Local pending"),tr("Accepted remotely"),tr("Finalized"),tr("Rejected"),tr("History unavailable")};
@@ -203,7 +188,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
     root->addStretch();
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::capabilitiesChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
     connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
@@ -218,11 +203,16 @@ void DiagnosticsPage::refresh()
     m_node->setText(status.node_running ? tr("Running") : tr("Stopped"));
     m_network->setText(status.network_name);
     m_peers->setText(QString::number(status.peer_count));
-    m_height->setText(status.finality_known ? QLocale{}.toString(status.finalized_height) : QStringLiteral("—"));
+    m_height->setText(status.finality_known ? QLocale{}.toString(status.finalized_height) : QStringLiteral("â€”"));
     m_finality->setText(status.finality_known ? tr("PoA verified") : tr("Waiting"));
 
     ClearLayout(m_rows);
     QWidget* parent = m_rows->parentWidget();
+    const auto& diagnostics = m_model->networkDiagnostics();
+    Row(m_rows, tr("Node type"), tr("Full Node"), parent);
+    Row(m_rows, tr("CYP2 version"), QString::number(diagnostics.cyp2_version), parent);
+    Row(m_rows, tr("Storage used / capacity"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.storage_used).arg(diagnostics.storage_capacity), parent);
+    Row(m_rows, tr("PoA signer active"), diagnostics.poa_signer_active ? tr("Yes") : tr("No"), parent);
     Row(m_rows, tr("Connection"), cybouConnectionText(status), parent);
     const QString geo_status = status.geo_admission == CybouGeoAdmissionStatus::Ready ? tr("Ready")
         : status.geo_admission == CybouGeoAdmissionStatus::NotRequired ? tr("Not required by Lab policy")
@@ -238,7 +228,7 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Validation eligible"), auth_val > 1000000 ? tr("Yes") : tr("No"), parent);
 
     ClearLayout(m_services);
-    const auto& caps = m_model->capabilities();
+    const auto& caps = m_model->featureAvailability();
     const QPair<QString, bool> services[] = {
         {tr("Identity"), caps.account_creation},
         {tr("Wallet"), caps.payments},

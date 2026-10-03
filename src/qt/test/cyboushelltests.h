@@ -30,7 +30,7 @@ private Q_SLOTS:
     void homePageIsDefault();
     void navigationSwitchesPages();
     void diagnosticsStaySecondaryWindow();
-    void identityCreateFollowsCapabilities();
+    void identityCreateFollowsFeatureAvailability();
     void restoreFlowValidatesPhrase();
     void identityPageHidesSecrets();
     void mailNavigationAndSearch();
@@ -65,7 +65,7 @@ private Q_SLOTS:
     void runtimeStartupFailureCanBeRetried();
     void runtimeRejectsStateFromAnotherNetwork();
     void backendCommandsDriveProjection();
-    void liveCapabilitiesStayHonest();
+    void liveFeatureAvailabilityStayHonest();
     void fixtureLifecycleFollowsBackend();
     void filesShowLocalAvailability();
     void lockHidesPrivateContent();

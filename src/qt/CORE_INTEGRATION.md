@@ -47,7 +47,7 @@ reach core.
   DB (`ApplicationService::SaveDraft/ListDrafts/DeleteDraft`), including local
   attachment paths and Files references; never published and not rebuilt from
   history. Commands issued just before locking still complete.
-- **Capabilities:** `mail` and `files` turn on only once the adapter session
+- **FeatureAvailability:** `mail` and `files` turn on only once the adapter session
   has opened the core services.
 - **Restore progress:** the Mail row follows the application scan.
 - **Recovery phrase rotation:** `CybouDesktopModel` asks the backend to

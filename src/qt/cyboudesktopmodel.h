@@ -31,7 +31,7 @@ class CybouNameService;
 
 class CybouApplicationBackend;
 
-struct CybouCapabilities {
+struct CybouFeatureAvailability {
     bool account_creation{false};
     bool payments{false};
     bool mail{false};
@@ -120,7 +120,7 @@ public:
     ~CybouDesktopModel() override;
 
     const CybouDesktopStatus& status() const { return m_status; }
-    const CybouCapabilities& capabilities() const { return m_capabilities; }
+    const CybouFeatureAvailability& featureAvailability() const { return m_availability; }
 
     /** True when the desktop is fed by a deterministic UI fixture, not core. */
     bool fixtureMode() const { return m_fixture_mode; }
@@ -134,7 +134,7 @@ public:
 
     /* ---- Core adapter entries (doc 73). Unchanged values are a no-op. ---- */
     void setNodeStatus(bool running, int peer_count, bool online, const QString& data_directory = {});
-    void setCapabilities(const CybouCapabilities& capabilities);
+    void setFeatureAvailability(const CybouFeatureAvailability& featureAvailability);
     void setNetworkInfo(const QString& network_name, const QString& network_binding);
     void setFinalizedHeight(quint64 finalized_height);
     void setPeerCount(int peer_count);
@@ -162,12 +162,12 @@ public:
      * Connects the Mail/Files application backend (not owned). Every
      * persistent Mail/Files action becomes a command on it, and the Mail and
      * Files collections below are the projection it reports back. Without a
-     * backend, Mail and Files capabilities stay off.
+     * backend, Mail and Files featureAvailability stay off.
      */
     void setApplicationBackend(CybouApplicationBackend* backend);
     CybouApplicationBackend* applicationBackend() const { return m_backend; }
     /** Requests Mail/Files; they turn on only while the backend can serve them. */
-    void requestApplicationCapabilities(bool mail, bool files);
+    void requestApplicationFeatureAvailability(bool mail, bool files);
 
     /* ---- Product collections (fed by adapters or fixtures). ---- */
     const QVector<CybouNameItem>& names() const { return m_names; }
@@ -370,7 +370,7 @@ Q_SIGNALS:
     void statusChanged();
     void networkAuthorityChanged();
     void notificationRequested(const QString& text, const QString& action_label, std::function<void()> action);
-    void capabilitiesChanged();
+    void featureAvailabilityChanged();
     void namesChanged();
     void mailChanged();
     void contactsChanged();
@@ -412,7 +412,7 @@ private:
     bool m_recovery_rotation_pending{false};
     bool m_fixture_mode{false};
     CybouDesktopStatus m_status;
-    CybouCapabilities m_capabilities;
+    CybouFeatureAvailability m_availability;
     QDateTime m_last_sync;
     bool m_identity_request_pending{false};
     QVector<CybouNameItem> m_names;
@@ -438,9 +438,9 @@ private:
     /** Opens or closes the backend's Identity session to match identity_state. */
     void syncIdentitySession();
     bool m_session_open{false};
-    /** Mail/Files capabilities never exceed what the backend can do. */
-    CybouCapabilities honest(CybouCapabilities capabilities) const;
-    CybouCapabilities m_requested_capabilities;
+    /** Mail/Files featureAvailability never exceed what the backend can do. */
+    CybouFeatureAvailability honest(CybouFeatureAvailability featureAvailability) const;
+    CybouFeatureAvailability m_requested_availability;
 };
 
 #endif // BITCOIN_QT_CYBOUDESKTOPMODEL_H
