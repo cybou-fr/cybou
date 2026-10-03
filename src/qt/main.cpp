@@ -16,7 +16,7 @@
 MAIN_FUNCTION
 {
     // One executable: a headless command runs the node/operator CLI, otherwise the desktop.
-    if (argc > 1 && cybou::cli::IsCommand(argv[1])) {
+    if (argc > 1 && (cybou::cli::IsCommand(argv[1]) || argv[1][0] != '-')) {
 #ifdef WIN32
         // The desktop is a GUI-subsystem binary; reuse the caller's console for CLI output.
         if (AttachConsole(ATTACH_PARENT_PROCESS)) {

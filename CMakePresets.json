@@ -6,7 +6,7 @@
       "displayName": "CYBOU consumer desktop application",
       "binaryDir": "${sourceDir}/build_cybou_consumer",
       "cacheVariables": {
-        "CYBOU_CONSUMER_BUILD": "ON",
+        "BUILD_GUI": "ON",
         "BUILD_TESTS": "ON"
       }
     },
@@ -32,7 +32,7 @@
         "CMAKE_CXX_COMPILER": "C:\\Qt\\Tools\\mingw1310_64\\bin\\g++.exe",
         "CMAKE_MAKE_PROGRAM": "C:\\Qt\\Tools\\Ninja\\ninja.exe",
         "CMAKE_PREFIX_PATH": "C:\\Qt\\6.11.2\\mingw_64",
-        "CYBOU_CONSUMER_BUILD": "ON",
+        "BUILD_GUI": "ON",
         "BUILD_TESTS": "ON",
         "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
         "VCPKG_HOST_TRIPLET": "x64-mingw-dynamic",
@@ -48,6 +48,15 @@
         "BUILD_GUI": "ON",
         "BUILD_GUI_TESTS": "ON",
         "BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "cybou-headless",
+      "displayName": "CYBOU headless node",
+      "binaryDir": "${sourceDir}/build_headless",
+      "cacheVariables": {
+        "BUILD_GUI": "OFF",
+        "BUILD_TESTS": "OFF"
       }
     }
   ]

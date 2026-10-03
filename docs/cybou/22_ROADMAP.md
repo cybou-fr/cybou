@@ -6,7 +6,7 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 
 1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).
-2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, `CAP_BOOTSTRAP`, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 10` (Completed in code HEAD `0437427`).
+2. **State & transport cleanup**: completely eliminate obsolete bootstrap Identity, consensus grants, `CAP_BOOTSTRAP`, and legacy state decoders; establish clean `CYBOU_STATE_VERSION = 11` (Completed in code HEAD `0437427`).
 3. **Compiled official network definition** (Completed `ec76ef3`, `d5d90cb`): one `OfficialNetwork` built from the compiled Network Public Key, signed `NetworkGenesis`, initial state and bootstrap locators; CYG1/CYN1 and external network files are removed.
 
 ## Phase 2 — Network identity and bootstrap transition

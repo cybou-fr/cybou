@@ -63,7 +63,7 @@ experimental software, not a public mail or cloud-storage service.
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- CYP2 v3 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
+- CYP2 v4 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
   session. Ordinary peers do not have global authenticated identities.
 
 ## Documentation hierarchy

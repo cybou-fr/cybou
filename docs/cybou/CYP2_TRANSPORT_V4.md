@@ -1,13 +1,14 @@
-# CYP2 transport version 3
+# CYP2 transport version 4
 
-CYP2 v3 carries peer discovery, finalized block synchronization, bounded
+CYP2 v4 carries peer discovery, finalized block synchronization, bounded
 operation relay, Validation attestation propagation, and authorized
 encrypted chunk transfer over TCP/TLS 1.3.
 
 ## Connection protection and roles
 
 TLS 1.3 is required before HELLO or application frames, with no plaintext
-fallback. The configured hybrid key exchange is `X25519MLKEM768`; a build
+fallback. Session role proofs use the TLS exporter label
+`EXPORTER-CYBOU-CYP2-V4`. The configured hybrid key exchange is `X25519MLKEM768`; a build
 without it fails the handshake. The ephemeral self-signed TLS certificate is
 not a global peer identity. Addresses, timing and traffic sizes remain visible.
 

@@ -47,7 +47,7 @@ schemas, recipients, filenames and graph edges remain encrypted. Providers
 verify full ChunkIDs and finalized-publication authorization proofs. Finality
 authorizes admission, not availability or durability.
 
-CYP2 v3 requires TLS 1.3 and `X25519MLKEM768`. Finalizer and provider role
+CYP2 v4 requires TLS 1.3 and `X25519MLKEM768`. Finalizer and provider role
 proofs bind to the TLS exporter and both HELLOs. Ordinary peers are not
 globally authenticated by their ephemeral certificates. Secret files require
 owner-only permissions and must reject links or reparse points.

@@ -21,6 +21,16 @@
 
 namespace cybou {
 
+NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir)
+{
+    return NodeRuntimeConfig{
+        .network_definition = network.network_definition,
+        .bootstrap_locators = {network.bootstrap_locators.begin(), network.bootstrap_locators.end()},
+        .data_dir = data_dir,
+    };
+}
+
+
 namespace {
 
 std::string ChunkIdHex(const ChunkId& id)
@@ -783,12 +793,6 @@ bool CybouNodeRuntime::IsPoaFinalizerEnabled() const
     return m_finalizer_node && m_finalizer_node->SignerEnabled();
 }
 
-bool CybouNodeRuntime::IsConfiguredP2pEndpoint(const std::string_view address, const uint16_t port) const
-{
-    return m_config.p2p_endpoint && m_config.p2p_endpoint->first == address &&
-        m_config.p2p_endpoint->second == port;
-}
-
 BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
 {
     std::lock_guard lock(m_mutex);
@@ -1211,7 +1215,9 @@ void CybouNodeRuntime::SetExplicitPeerEndpoints(const std::vector<std::pair<std:
 std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetExplicitPeerEndpoints() const
 {
     std::lock_guard lock(m_mutex);
-    return {m_explicit_peer_endpoints.begin(), m_explicit_peer_endpoints.end()};
+    std::vector<std::pair<std::string, uint16_t>> result{m_explicit_peer_endpoints.begin(), m_explicit_peer_endpoints.end()};
+    if (m_config.p2p_endpoint) result.push_back(*m_config.p2p_endpoint);
+    return result;
 }
 
 void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)

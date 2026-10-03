@@ -104,7 +104,6 @@ endif()
 #=============================
 include(CMakeDependentOption)
 # When adding a new option, end the <help_text> with a full stop for consistency.
-option(CYBOU_CONSUMER_BUILD "Build only the CYBOU desktop consumer application." OFF)
 option(BUILD_GUI "Build CYBOU desktop executable." OFF)
 
 option(BUILD_TESTS "Build test and other unit test executables." ON)

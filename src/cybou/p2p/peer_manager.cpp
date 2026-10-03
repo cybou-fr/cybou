@@ -48,16 +48,17 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     }
     if (m_peers.contains(endpoint)) return false;
     if (m_peers.size() >= MAX_OUTBOUND_PEERS) {
-        if (!m_explicit_endpoints.contains(endpoint)) {
+        if (!(m_explicit_endpoints.contains(endpoint) || m_runtime.PinnedSpki(endpoint.first, endpoint.second).has_value())) {
             // Discovered endpoints never displace existing connections.
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
             return false;
         }
-        // Explicit configured peer endpoint: evict a connected non-explicit peer
+        // Operator-configured or compiled rendezvous endpoint: evict an unprotected peer
         // to make room. Frontier knowledge for the evicted endpoint is kept
         // (its chain only grows, so the knowledge stays valid on reconnect).
         const auto victim = std::find_if(m_peers.begin(), m_peers.end(), [&](const auto& entry) {
-            return !m_explicit_endpoints.contains(entry.first);
+            return !m_explicit_endpoints.contains(entry.first) &&
+                !m_runtime.PinnedSpki(entry.first.first, entry.first.second).has_value();
         });
         if (victim == m_peers.end()) {
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
@@ -93,10 +94,9 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
     uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
         CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY;
     if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    // The PoA key holder proves its key to an explicitly configured peer (or every peer);
+    // The PoA key holder proves its key to every mesh peer;
     // the proof confirms finalized tips and never routes operations.
-    if (m_runtime.IsPoaFinalizerEnabled() &&
-        (m_runtime.AuthenticatesFinalizerToAnyPeer() || m_runtime.IsConfiguredP2pEndpoint(endpoint.first, port))) {
+    if (m_runtime.IsPoaFinalizerEnabled()) {
         caps |= CAP_FINALIZER_PROOF;
     }
     Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,

@@ -113,7 +113,6 @@ void CybouDesktopController::start()
         // The desktop starts only from the compiled, verified DEVNET constants.
         const auto& network = cybou::RequireOfficialNetwork("devnet");
         const auto& genesis = network.genesis_state;
-        const auto& definition = network.network_definition;
         m_model->setNetworkInfo(QStringLiteral("CYBOU DEVNET"),
             QString::fromStdString(HexStr(network.genesis.GetNetworkId())));
         const std::filesystem::path data_dir = m_data_directory / "cybou_state";
@@ -149,17 +148,10 @@ void CybouDesktopController::start()
         m_geo_admission_required = peer_admission.geo_required;
         m_model->setGeoAdmissionStatus(!m_geo_admission_required ? CybouGeoAdmissionStatus::NotRequired
             : (peer_admission.policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting));
-        cybou::NodeRuntimeConfig config{
-            .network_definition = definition,
-            .bootstrap_locators = {network.bootstrap_locators.begin(), network.bootstrap_locators.end()},
-            .data_dir = data_dir,
-            .poa_finalizer_recovery_entropy = std::nullopt,
-            .p2p_endpoint = configured_p2p,
-            .local_p2p_endpoint = network_config.listen_endpoint,
-            .authenticate_finalizer_to_any_peer = true,
-            .db_cache_bytes = 8 << 20,
-            .peer_admission_policy = std::move(peer_admission.policy),
-        };
+        auto config = cybou::MakeNodeRuntimeConfig(network, data_dir);
+        config.p2p_endpoint = configured_p2p;
+        config.local_p2p_endpoint = network_config.listen_endpoint;
+        config.peer_admission_policy = std::move(peer_admission.policy);
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime = std::move(config),
             .genesis = genesis,

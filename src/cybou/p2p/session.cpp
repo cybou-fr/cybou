@@ -31,7 +31,7 @@ constexpr size_t HEADER_SIZE{10};
 constexpr size_t HELLO_SIZE{88};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{30}};
 constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
-constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V3"};
+constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V4"};
 
 struct TlsContexts {
     SSL_CTX* client{nullptr};

@@ -227,7 +227,7 @@ int CybouNodeService::RunFinalizer(const CybouFinalizerServiceConfig& config, st
 
     if (p2p_server) p2p_listener.emplace([&] { p2p_server->Run(stopping); });
 
-    if (!config.peers.empty()) gossip_worker.emplace([&] {
+    gossip_worker.emplace([&] {
         m_runtime->SetExplicitPeerEndpoints(config.peers);
         p2p::PeerManager peers{*m_runtime};
         std::map<std::pair<std::string, uint16_t>, std::chrono::steady_clock::time_point> retry_after;

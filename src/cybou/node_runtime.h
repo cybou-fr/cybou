@@ -60,8 +60,6 @@ struct NodeRuntimeConfig {
     std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
     std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
-    /** When this node holds the genesis PoA key, prove it (FINALIZER_PROOF) to every mesh peer, not only the configured one. */
-    bool authenticate_finalizer_to_any_peer{false};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -73,6 +71,9 @@ struct NodeRuntimeConfig {
     /** Required local address policy for all public P2P sockets. */
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 };
+
+/** Construct consistent runtime inputs from a verified compiled network. */
+NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir);
 
 enum class NodeRuntimeState : uint8_t {
     UNINITIALIZED = 0,
@@ -204,8 +205,6 @@ public:
     /** Stop signing while preserving the node's pending operation pool and journal. */
     void DisablePoaFinalizer();
     bool IsPoaFinalizerEnabled() const;
-    bool IsConfiguredP2pEndpoint(std::string_view address, uint16_t port) const;
-    bool AuthenticatesFinalizerToAnyPeer() const { return m_config.authenticate_finalizer_to_any_peer; }
 
     /** Relay only after this node independently executed the operation on its finalized state. */
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,

@@ -757,7 +757,7 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     auto* operations=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorOperations"));
     QVERIFY(peers); QVERIFY(operations);
     QCOMPARE(peers->rowCount(),1);
-    QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Bootstrap")));
+    QVERIFY(!peers->item(0,1)->text().contains(QStringLiteral("Bootstrap")));
     QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Operation relay")));
     QVERIFY(peers->item(0,1)->text().contains(QStringLiteral("Storage")));
     QCOMPARE(peers->item(0,3)->text(),QStringLiteral("3"));

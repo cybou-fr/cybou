@@ -141,6 +141,7 @@ target_link_libraries(cybou_cli PUBLIC cybou_node)
 if(NOT BUILD_GUI)
   add_executable(cybou cybou_main.cpp)
   target_link_libraries(cybou PRIVATE cybou_cli)
+  install_binary_component(cybou)
   add_windows_application_manifest(cybou)
 endif()
 # Developer/test load generator; never part of a production build.

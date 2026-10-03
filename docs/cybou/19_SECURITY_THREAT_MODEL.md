@@ -22,7 +22,7 @@
 
 ## Transport and service identity
 
-CYP2 v3 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
+CYP2 v4 requires TLS 1.3 with the configured hybrid X25519+ML-KEM-768 group.
 Finalizer and provider role proofs are tied to both HELLOs and the TLS exporter.
 The ephemeral TLS certificate alone is not a peer identity. Ordinary peers do
 not have globally authenticated identities; discovered addresses are hints.

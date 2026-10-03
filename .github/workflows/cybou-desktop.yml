@@ -89,7 +89,7 @@ jobs:
             -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
             -DVCPKG_MANIFEST_FEATURES=tests \
             -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" \
-            -DCYBOU_CONSUMER_BUILD=ON \
+            -DBUILD_GUI=ON \
             -DBUILD_GUI=ON \
             -DBUILD_TESTS=ON
 
@@ -139,7 +139,7 @@ jobs:
             -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON `
             -DVCPKG_MANIFEST_FEATURES=tests `
             -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}/../../.." `
-            -DCYBOU_CONSUMER_BUILD=ON `
+            -DBUILD_GUI=ON `
             -DBUILD_TESTS=ON
 
       - name: Build cybou.exe

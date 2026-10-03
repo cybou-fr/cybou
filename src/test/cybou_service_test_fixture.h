@@ -86,6 +86,16 @@ struct CybouServiceTestFixture {
         return proof;
     }
 
+    // Ordinary mock peers verify any advertised PoA role just like production peers.
+    bool HandshakeAsPeer(cybou::p2p::PeerSession& session, const cybou::p2p::Hello& hello,
+        const cybou::p2p::ProviderProofSigner& provider_signer = {},
+        const cybou::p2p::FinalizerProofSigner& finalizer_signer = {},
+        const cybou::IdentityHybridPublicKey* finalizer_key = nullptr) const
+    {
+        return session.Handshake(hello, provider_signer, finalizer_signer,
+            finalizer_key ? finalizer_key : &definition.poa_finalizer_public_key);
+    }
+
     bool HandshakeAsFinalizer(cybou::p2p::PeerSession& session, const cybou::p2p::Hello& hello) const
     {
         return session.Handshake(hello, {},

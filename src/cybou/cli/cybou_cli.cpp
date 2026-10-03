@@ -60,10 +60,10 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
   finalizer run --network devnet --data-dir DIR --key-file FILE --listen IP:PORT
                 [--block-interval 1000ms] [--peers FILE] [--capacity 20GiB] [--advertise IP:PORT]
                 [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|lab]
-  provider run  --network devnet --data-dir DIR --peer IP:PORT --listen IP:PORT --capacity 20GiB
+  provider run  --network devnet --data-dir DIR [--peer IP:PORT] --listen IP:PORT --capacity 20GiB
                 [--peers FILE] [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
                 [--event-log FILE] [--event-log-mode minimal|lab]
-  observer run  --network devnet --data-dir DIR (--peer IP:PORT | --listen IP:PORT) [--peers FILE]
+  observer run  --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
                 [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
                 [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
@@ -192,15 +192,10 @@ void Allow(const Options& opts, std::initializer_list<std::string> keys, bool ad
     opts.AllowSet(set);
 }
 
-/** The one place a runtime is configured from the verified official network. */
+/** Apply CLI-local policy to the shared official runtime configuration. */
 NodeRuntimeConfig RuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir)
 {
-    NodeRuntimeConfig config{
-        .network_definition = network.network_definition,
-        .bootstrap_locators = {network.bootstrap_locators.begin(), network.bootstrap_locators.end()},
-        .data_dir = data_dir,
-        .db_cache_bytes = 8 << 20,
-    };
+    auto config = MakeNodeRuntimeConfig(network, data_dir);
     config.peer_admission_policy = peer_admission_policy;
     config.event_writer = events;
     return config;
@@ -487,9 +482,10 @@ int RunPeer(const std::string& role, const Options& opts)
     const auto listen = opts.Has("listen") ? std::optional{ParseEndpoint(opts.Get("listen"))} : std::nullopt;
 
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
-    // A rendezvous (bootstrap) node has no upstream peer; others name one.
+    // Official networks discover peers from their compiled rendezvous locators.
     if (opts.Has("peer")) config.p2p_endpoint = ParseEndpoint(opts.Get("peer"));
-    else if (!listen) throw std::invalid_argument("an observer without --peer must --listen");
+    else if (network.bootstrap_locators.empty() && !opts.Has("peers") && !listen)
+        throw std::invalid_argument("a network without bootstrap locators requires --peer, --peers or --listen");
     if (listen) config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
     config.storage_enabled = provider;

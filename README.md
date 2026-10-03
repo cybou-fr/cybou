@@ -23,8 +23,8 @@ et la connectivité ; Internet ou intranet ne sont pas des produits différents.
 Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
 bout en bout. Le VPS DEV héberge actuellement un prototype bootstrap autonome
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
-sont inactifs. Le cœur finalizer de bureau existe, mais la découverte bootstrap
-et la vérification de la genèse signée / Network Key ne sont pas intégrées de bout en bout.
+sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
+avec son pin TLS ; la migration du VPS vers ce protocole reste à effectuer.
 L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
 interface, `finalizer run`, `provider run` et `observer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en
@@ -43,7 +43,7 @@ service d'un réseau privé d'entreprise.
   une publication finalisée. `StorageService` gère les répliques distantes,
   l'audit d'intégrité et la réparation. La finalité seule ne signifie pas que
   le contenu est disponible ou durable.
-- **Transport P2P.** CYP2 v3 utilise TLS 1.3 avec l'échange hybride
+- **Transport P2P.** CYP2 v4 utilise TLS 1.3 avec l'échange hybride
   `X25519MLKEM768`. Les preuves de rôle du finalizer et du fournisseur sont
   liées à la session TLS.
 - **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
@@ -77,7 +77,7 @@ les publications chiffrées, le stockage et le transport P2P. Les tests natifs
 couvrent notamment ces composants, l'admission des pairs et le cycle de vie du
 stockage ; le shell Qt dispose également de tests d'interface.
 
-Le client de bureau démarre actuellement avec un fichier réseau DEV intégré et
+Le client de bureau démarre actuellement avec les constantes publiques DEVNET compilées et
 n'active pas encore le finalizer dans le parcours utilisateur ; le finalizer
 PoA s'exécute séparément via la commande opérateur `finalizer run`. Le CLI fournit aussi des outils de
 diagnostic, de synchronisation et de vérification du stockage. Les
@@ -87,7 +87,7 @@ fonction utilisable depuis le bureau.
 
 DEVNET est le profil officiel visé avec le bootstrap `51.255.46.58:29461`.
 MAINNET n'est pas encore provisionné et doit rester désactivé dans l'interface.
-Les chemins actuels de fichiers réseau externes sont une dette de migration.
+Les fichiers réseau officiels externes ont été supprimés.
 
 Ce projet est en développement actif. Le code et ses tests ne constituent ni
 une certification, ni un audit de sécurité indépendant, ni une garantie
