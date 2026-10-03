@@ -26,7 +26,7 @@ sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
 sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
 avec son pin TLS ; la migration du VPS vers ce protocole reste à effectuer.
 L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
-interface, `finalizer run`, `provider run` et `observer run`, mais le
+interface, `node run` et `finalizer run`, mais le
 client ne possède pas encore de parcours général de création et de mise en
 service d'un réseau privé d'entreprise.
 
@@ -43,9 +43,9 @@ service d'un réseau privé d'entreprise.
   une publication finalisée. `StorageService` gère les répliques distantes,
   l'audit d'intégrité et la réparation. La finalité seule ne signifie pas que
   le contenu est disponible ou durable.
-- **Transport P2P.** CYP2 v4 utilise TLS 1.3 avec l'échange hybride
-  `X25519MLKEM768`. Les preuves de rôle du finalizer et du fournisseur sont
-  liées à la session TLS.
+- **Transport P2P.** CYP2 v5 utilise TLS 1.3 avec l'échange hybride
+  `X25519MLKEM768`. Chaque nœud complet implémente le même protocole. L’identité de stockage
+  est prouvée à la demande ; les certificats de blocs prouvent seuls l’autorité PoA.
 - **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
   finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
   blocs et les transitions d'état. L'autorité racine du réseau est la clé

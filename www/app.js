@@ -264,7 +264,7 @@ const translations = {
     faqA1: "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3 post-quantique.",
     faqTlsBadge: "Transport Post-Quantique",
     faqQTls: "En quoi le transport TLS 1.3 de CYBOU est-il post-quantique et que protège-t-il ?",
-    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v4) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».",
+    faqATls: "Toutes les communications entre pairs et nœuds CYBOU (protocole CYP2 v5) utilisent un handshake TLS 1.3 avec le groupe d'échange de clés X25519MLKEM768. Cette négociation associe la cryptographie classique à ML-KEM-768 (standard NIST FIPS 203). Si un pair ne supporte pas ce mode post-quantique, la connexion est immédiatement interrompue. Cela protège vos transferts contre l'interception locale (Wi-Fi public, FAI) et contre la stratégie d'espionnage « Récolter maintenant, déchiffrer plus tard ».",
     faqOpensslBadge: "Standard Audité",
     faqQOpenssl: "Les algorithmes de CYBOU sont-ils développés en interne (« crypto maison ») ?",
     faqAOpenssl: "Absolument pas. La règle d'or de la sécurité est formelle : « Don't roll your own crypto » (ne réinventez jamais la cryptographie). CYBOU s'appuie exclusivement sur la bibliothèque officielle OpenSSL v3.5.2+, internationalement auditée et éprouvée. Les primitives post-quantiques intégrées sont les standards officiels du NIST : ML-KEM-768 (FIPS 203) et ML-DSA-44/65 (FIPS 204). Vous bénéficiez ainsi d'une robustesse mathématique vérifiable, sans aucune boîte noire ni algorithme expérimental fait maison.",
@@ -503,7 +503,7 @@ const translations = {
     eStep3Title: "Nœuds d'Amorçage Initiaux",
     eStep3Desc: "Déploiement de 1 à 4 pairs CYBOU ordinaires avec points de contact connus sur votre intranet pour l'aiguillage initial des pairs et la synchronisation.",
     eStep4Title: "Grappe de Stockage",
-    eStep4Desc: "Activation du rôle stockage (cybou provider run) sur vos serveurs internes pour héberger les fragments chiffrés.",
+    eStep4Desc: "Configuration du quota de stockage du nœud complet (cybou node run) sur vos serveurs internes pour héberger les fragments chiffrés.",
 
     eCompTableTitle: "Tableau Comparatif : Réseau Public vs. Réseau Privé d'Entreprise",
     eThParam: "Caractéristique",
@@ -1270,7 +1270,7 @@ const translations = {
     eStep3Title: "Initial Bootstrap Peers (1 to 4)",
     eStep3Desc: "Deployment of 1 to 4 ordinary CYBOU full peers with known locators across your corporate intranet for initial peer discovery and synchronization.",
     eStep4Title: "Private Storage Cluster",
-    eStep4Desc: "Enabling storage provider capability (cybou provider run) on internal servers to host encrypted chunk replicas.",
+    eStep4Desc: "Configuring the Full Node storage quota (cybou node run) on internal servers to host encrypted chunk replicas.",
 
     eCompTableTitle: "Comparison Matrix: Public Network vs. Dedicated Enterprise Network",
     eThParam: "Feature",

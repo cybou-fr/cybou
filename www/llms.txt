@@ -25,8 +25,7 @@ experimental software, not a public mail or cloud-storage service.
 
 ## Architecture rules
 
-- All participants run the same full-node core. Storage and PoA finalization
-  are optional capabilities. Bootstrap is an ordinary CYBOU full peer for initial discovery.
+- All participants run the same full-node core. Storage is intrinsic with a local quota; PoA finalization requires the private key. Bootstrap is an ordinary CYBOU full peer for initial discovery.
 - Official network public data is compiled into the client: Network Public Key
   (`NetworkID`), immutable signed genesis, initial state and bootstrap locators.
   No external official network file is loaded. The Network Private Key is strictly
@@ -36,7 +35,7 @@ experimental software, not a public mail or cloud-storage service.
 - `cybou.cybou` is an ordinary Identity with a distinct genesis-authorized PoA
   key role; its name and AUTH value do not grant finalization rights.
 - The Central Authority finalizer is operated from its desktop after unlock using
-  the genesis-authorized PoA key. Its live route is authenticated per session and then discarded.
+  the genesis-authorized PoA key. Its blocks are authenticated by genesis-authorized PoA certificates.
 - Authority is canonical non-transferable AUTH in AccountState, excluded from
   CYBOU supply. AUTH changes only by finalized transitions (+1 per finalized identity
   operation, PoA-signed GRANT/BURN adjustments) and is never transferred. Every full node executes
@@ -63,8 +62,8 @@ experimental software, not a public mail or cloud-storage service.
   substrate.
 - Attachments depend on measured storage durability and recovery.
 - Backup is post-Beta.
-- CYP2 v4 uses TLS 1.3; provider and finalizer role proofs are bound to the TLS
-  session. Ordinary peers do not have global authenticated identities.
+- CYP2 v5 uses TLS 1.3; on-demand storage key proofs bind both HELLOs, a fresh challenge and the TLS
+  session. PoA authority is proved only by finalized block certificates. Ordinary peers do not have global authenticated identities.
 
 ## Documentation hierarchy
 

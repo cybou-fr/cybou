@@ -22,7 +22,7 @@ cmake --build build_cybou_qt_mingw --target cybou cybou-core-test -j 4
 & build_cybou_qt_mingw/bin/cybou-core-test.exe --log_level=error
 ```
 
-`build_cybou_qt_mingw/bin/cybou.exe` is the desktop when started without a command and the headless node with one, for example `cybou.exe network info --network devnet` or `cybou.exe observer run --network devnet ...`. A `BUILD_GUI=OFF` build produces a headless-only `cybou`. `cybou-loadgen` is built only with `BUILD_TESTS=ON`.
+`build_cybou_qt_mingw/bin/cybou.exe` is the desktop when started without a command and the headless node with one, for example `cybou.exe network info --network devnet` or `cybou.exe node run --network devnet ...`. A `BUILD_GUI=OFF` build produces a headless-only `cybou`. `cybou-loadgen` is built only with `BUILD_TESTS=ON`.
 
 ## Linux and other platforms
 
@@ -30,7 +30,7 @@ The project has CMake/vcpkg CI builds for the native core and desktop; see [the 
 
 ## DEV node
 
-The DEV VPS (`51.255.46.58`, TCP port 29461; SSH on port 22) still runs a retired prototype bootstrap service built from an older commit. This repository no longer builds that executable; the planned replacement is an ordinary headless `cybou` node on the compiled DEVNET (`cybou observer run --network devnet ... --tls-certificate FILE --tls-key FILE`). The DEVNET bootstrap locator and its TLS SPKI SHA-256 pin are compiled in [`src/cybou/official_networks.cpp`](src/cybou/official_networks.cpp). Nodes and the desktop dial that locator automatically and check its compiled pin, so the VPS must present the matching certificate. This deployment is a development prototype, not the target architecture described in [`docs/cybou/04_NETWORK_LIFECYCLE.md`](docs/cybou/04_NETWORK_LIFECYCLE.md). Never use development keys or balances as production assets.
+The DEV VPS (`51.255.46.58`, TCP port 29461; SSH on port 22) still runs a retired prototype bootstrap service built from an older commit. This repository no longer builds that executable; the planned replacement is an ordinary headless `cybou` node on the compiled DEVNET (`cybou node run --network devnet ... --tls-certificate FILE --tls-key FILE`). The DEVNET bootstrap locator and its TLS SPKI SHA-256 pin are compiled in [`src/cybou/official_networks.cpp`](src/cybou/official_networks.cpp). Nodes and the desktop dial that locator automatically and check its compiled pin, so the VPS must present the matching certificate. This deployment is a development prototype, not the target architecture described in [`docs/cybou/04_NETWORK_LIFECYCLE.md`](docs/cybou/04_NETWORK_LIFECYCLE.md). Never use development keys or balances as production assets.
 
 ## Tests
 
