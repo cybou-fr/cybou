@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/poa_conflict_detector.h>
-#include <cybou/poa_finalizer.h>
+#include <cybou/poa_signing_service.h>
 #include <cybou/poa_finality.h>
 #include <cybou/poa_signing_journal.h>
 #include <cybou/crypto/cleanse.h>
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)
 
     {
         auto db = OpenDb(path, true);
-        cybou::PoaFinalizer finalizer{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService finalizer{*db, network, genesis, entropy, *finalizer_key};
         BOOST_CHECK(finalizer.CheckCanonicalTip(0, genesis) == cybou::PoaJournalStatus::NONE);
         const auto first = finalizer.SignFinality(0, genesis, block);
         BOOST_REQUIRE(first.certificate);
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(finalizer_retries_same_intent_and_recovers_after_restart)
 
     {
         auto db = OpenDb(path, false);
-        cybou::PoaFinalizer recovered{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService recovered{*db, network, genesis, entropy, *finalizer_key};
         const auto retry = recovered.SignFinality(0, genesis, block);
         BOOST_REQUIRE(retry.certificate);
         BOOST_CHECK(retry.status == cybou::PoaSigningStatus::ALREADY_PREPARED);
@@ -278,11 +278,11 @@ BOOST_AUTO_TEST_CASE(finalizer_rejects_wrong_recovery_and_halts_on_any_same_heig
 
     {
         auto db = OpenDb(path, true);
-        BOOST_CHECK_THROW((cybou::PoaFinalizer{*db, network, genesis,
+        BOOST_CHECK_THROW((cybou::PoaSigningService{*db, network, genesis,
             wrong_entropy, *finalizer_key}), std::invalid_argument);
-        BOOST_CHECK_THROW((cybou::PoaFinalizer{*db, network, genesis,
+        BOOST_CHECK_THROW((cybou::PoaSigningService{*db, network, genesis,
             entropy, *wrong_finalizer_key}), std::invalid_argument);
-        cybou::PoaFinalizer finalizer{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService finalizer{*db, network, genesis, entropy, *finalizer_key};
         const auto first = TestBlock(genesis, 1, 44);
         BOOST_CHECK(finalizer.SignFinality(0, genesis, first).status == cybou::PoaSigningStatus::SIGNED);
         const auto alternate_block = TestBlock(genesis, 1, 45);
@@ -295,9 +295,9 @@ BOOST_AUTO_TEST_CASE(finalizer_rejects_wrong_recovery_and_halts_on_any_same_heig
 
     {
         auto db = OpenDb(path, false);
-        BOOST_CHECK_THROW((cybou::PoaFinalizer{*db, network, genesis,
+        BOOST_CHECK_THROW((cybou::PoaSigningService{*db, network, genesis,
             wrong_entropy, *finalizer_key}), std::invalid_argument);
-        cybou::PoaFinalizer recovered{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService recovered{*db, network, genesis, entropy, *finalizer_key};
         BOOST_CHECK(recovered.CheckCanonicalTip(1, TestId(99)) ==
             cybou::PoaJournalStatus::JOURNAL_HALTED);
     }
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(finalizer_halts_on_parent_or_canonical_history_mismatch)
 
     {
         auto db = OpenDb(parent_path, true);
-        cybou::PoaFinalizer finalizer{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService finalizer{*db, network, genesis, entropy, *finalizer_key};
         BOOST_CHECK(finalizer.SignFinality(0, genesis, block).status == cybou::PoaSigningStatus::SIGNED);
         const auto wrong_parent = TestBlock(TestId(27), 1, 49);
         const auto result = finalizer.SignFinality(0, genesis, wrong_parent);
@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(finalizer_halts_on_parent_or_canonical_history_mismatch)
 
     {
         auto db = OpenDb(history_path, true);
-        cybou::PoaFinalizer finalizer{*db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService finalizer{*db, network, genesis, entropy, *finalizer_key};
         BOOST_CHECK(finalizer.SignFinality(0, genesis, block).status == cybou::PoaSigningStatus::SIGNED);
         BOOST_CHECK(finalizer.CheckCanonicalTip(1, TestId(98)) ==
             cybou::PoaJournalStatus::HISTORY_MISMATCH);
@@ -370,8 +370,8 @@ BOOST_AUTO_TEST_CASE(conflict_detector_persists_observations_and_equivocation_ev
     {
         auto first_db = OpenDb(first_path, true);
         auto second_db = OpenDb(second_path, true);
-        cybou::PoaFinalizer first_signer{*first_db, network, genesis, entropy, *finalizer_key};
-        cybou::PoaFinalizer second_signer{*second_db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService first_signer{*first_db, network, genesis, entropy, *finalizer_key};
+        cybou::PoaSigningService second_signer{*second_db, network, genesis, entropy, *finalizer_key};
         const auto first = first_signer.SignFinality(0, genesis, first_block);
         const auto second = second_signer.SignFinality(0, genesis, second_block);
         BOOST_REQUIRE(first.certificate);

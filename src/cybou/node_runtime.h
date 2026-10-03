@@ -4,7 +4,7 @@
 #ifndef CYBOU_NODE_RUNTIME_H
 #define CYBOU_NODE_RUNTIME_H
 
-#include <cybou/finalizer_node.h>
+#include <cybou/poa_finalizer.h>
 #include <cybou/account_id.h>
 #include <cybou/diagnostics.h>
 #include <cybou/event_record.h>
@@ -65,7 +65,6 @@ struct NodeRuntimeConfig {
     bool wipe_data{false};
     /** Only on the node serving a bootstrap locator; ordinary nodes use ephemeral TLS. */
     std::optional<TlsServerIdentity> tls_server_identity;
-    bool storage_enabled{false};
     uint64_t storage_capacity_bytes{0};
     std::shared_ptr<EventWriter> event_writer;
     /** Required local address policy for all public P2P sockets. */
@@ -88,7 +87,7 @@ struct NodeRuntimeStatus {
     uint64_t finalized_height{0};
     uint256 finalized_tip;
     uint256 state_root;
-    bool is_finalizer{false};
+    bool poa_signer_active{false};
     bool is_initialized{false};
     bool poa_safety_halted{false};
     NodeRuntimeState runtime_state{NodeRuntimeState::UNINITIALIZED};
@@ -173,7 +172,6 @@ public:
     /** Current runtime status */
     NodeRuntimeStatus GetStatus() const;
     NodeDiagnosticsSnapshot GetDiagnostics() const;
-    void SetServicePeerDiagnostics(std::vector<PeerDiagnostics> peers);
     std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;
 
@@ -200,11 +198,11 @@ public:
 
     /** Produce a block if running as the PoA finalizer */
     std::optional<FinalizedBlock> ProduceBlock(bool sync = true);
-    /** Arm the local PoA capability with a signer matching this network's genesis key. */
-    bool EnablePoaFinalizer(std::shared_ptr<PoaSigner> signer);
+    /** Arm the local PoA signer with a signer matching this network's genesis key. */
+    bool EnablePoaSigner(std::shared_ptr<PoaSigner> signer);
     /** Stop signing while preserving the node's pending operation pool and journal. */
-    void DisablePoaFinalizer();
-    bool IsPoaFinalizerEnabled() const;
+    void DisablePoaSigner();
+    bool IsPoaSignerActive() const;
 
     /** Relay only after this node independently executed the operation on its finalized state. */
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
@@ -244,8 +242,7 @@ public:
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
     bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
-    bool HasStorageProvider() const { return m_finalized_chunk_store != nullptr; }
-    /** Local encrypted staging/cache, available independently of provider mode. */
+    /** Local encrypted staging/cache, available on every Full Node. */
     ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
     /** Why local blobs stay: pins and evictable cache entries (never content semantics). */
     ChunkRetentionRegistry& GetChunkRetention() { return *m_chunk_retention; }
@@ -263,7 +260,7 @@ public:
     std::optional<ChunkAuthorizationProof> GetFinalizedChunkAuthorizationProof(
         const uint256& publication_operation_id, const ChunkId& chunk_id) const;
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
-    /** A connected CYP2 storage peer and the ProviderID it proved in the handshake. */
+    /** A connected CYP2 storage peer and the ProviderID it proved on demand. */
     struct StoragePeer {
         std::string address;
         uint16_t port{0};
@@ -276,11 +273,10 @@ public:
         const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof);
     std::optional<std::vector<unsigned char>> GetChunkFromStoragePeer(const std::string& address,
         uint16_t port, const std::array<unsigned char, 32>& provider_id, const ChunkId& chunk_id);
-    /** This node's storage provider identity; nullopt unless storage is enabled. */
+    /** This node's storage provider identity; available on every Full Node. */
     std::optional<std::array<unsigned char, 32>> LocalProviderId() const;
-    /** Encoded PROVIDER_PROOF for a handshake message; nullopt unless storage is enabled. */
+    /** Encoded PROVIDER_PROOF for a storage challenge; available on every Full Node. */
     std::optional<std::vector<unsigned char>> SignProviderProof(std::span<const unsigned char> message) const;
-    std::optional<std::vector<unsigned char>> SignFinalizerTransportProof(std::span<const unsigned char> message) const;
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStoragePeer(
         const std::string& address, uint16_t port, const std::array<unsigned char, 32>& provider_id,
         const uint256& publication_operation_id, const ChunkId& chunk_id);
@@ -337,7 +333,7 @@ private:
     CybouStateStore m_store;
     /** Every full node's own volatile candidate pool; a PoA node seals blocks from it. */
     OperationPool m_operation_pool{m_store};
-    std::unique_ptr<CybouFinalizerNode> m_finalizer_node;
+    std::unique_ptr<PoaFinalizer> m_poa_finalizer;
     ValidationPool m_validation_pool;
     ValidationSignerRef m_validation_signer;
     OperationRelay m_operation_relay;
@@ -351,7 +347,6 @@ private:
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
     mutable std::mutex m_mutex;
     std::deque<FinalizedHead> m_recent_finalized_blocks;
-    std::vector<PeerDiagnostics> m_service_peers;
     using Endpoint = std::pair<std::string, uint16_t>;
     std::set<Endpoint> m_explicit_peer_endpoints;
     p2p::IngressBudget m_ingress;

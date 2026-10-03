@@ -6,7 +6,7 @@
 
 #include <uint256.h>
 #include <cybou/account_id.h>
-#include <cybou/finalizer_node.h>
+#include <cybou/poa_finalizer.h>
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/operation_relay.h>
 #include <cybou/validation_pool.h>
@@ -30,18 +30,7 @@ namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
 inline constexpr uint32_t MAX_FRAME_PAYLOAD{4096};
-inline constexpr uint8_t WIRE_VERSION{4};
-inline constexpr uint64_t CAP_SERVE_BLOCKS{1ULL << 0};
-/** The peer proves the genesis PoA finalizer key in this session (FINALIZER_PROOF); it grants no routing role. */
-inline constexpr uint64_t CAP_FINALIZER_PROOF{1ULL << 1};
-inline constexpr uint64_t CAP_BLOCK_INVENTORY{1ULL << 3};
-inline constexpr uint64_t CAP_BLOCK_ANNOUNCEMENTS{1ULL << 4};
-inline constexpr uint64_t CAP_PEER_DISCOVERY{1ULL << 6};
-inline constexpr uint64_t CAP_STORAGE{1ULL << 7};
-inline constexpr uint64_t CAP_STORAGE_PROOFS{1ULL << 8};
-inline constexpr uint64_t CAP_RESERVED_9{1ULL << 9};
-/** Every full node can stage and relay exact signed operations hop by hop. */
-inline constexpr uint64_t CAP_OPERATION_RELAY{1ULL << 10};
+inline constexpr uint8_t WIRE_VERSION{5};
 inline constexpr uint8_t MAX_BLOCK_INVENTORY{32};
 // Shared bound for the peer discovery list: both the encoder and the decoder
 // must enforce it so a malicious peer cannot stuff a PEERS frame with more
@@ -76,7 +65,6 @@ enum class MessageType : uint8_t {
     CHUNK_AUTHORIZATION_PROOF = 35,
     PROVIDER_PROOF = 36,
     RESERVED_37 = 37, RESERVED_38 = 38, RESERVED_39 = 39,
-    FINALIZER_PROOF = 40,
     RESERVED_41 = 41,
     RESERVED_42 = 42,
     RESERVED_43 = 43,
@@ -89,19 +77,12 @@ enum class MessageType : uint8_t {
     VALIDATION_ATTESTATION_POLL = 49,
     /** One serialized ValidationAttestation, or an empty payload when none is new. */
     VALIDATION_ATTESTATION = 50,
+    GET_PROVIDER_PROOF = 51,
 };
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::VALIDATION_ATTESTATION)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::GET_PROVIDER_PROOF)};
 
 /** Stable identity of a storage provider: BLAKE3 of its STORAGE_PROVIDER public key. */
 using ProviderId = std::array<unsigned char, 32>;
-/**
- * Signs a PROVIDER_PROOF message with the local provider key and returns the
- * encoded proof payload (public key + hybrid signature), or nullopt.
- */
-using ProviderProofSigner = std::function<std::optional<std::vector<unsigned char>>(
-    std::span<const unsigned char> message)>;
-using FinalizerProofSigner = ProviderProofSigner;
-
 /** Message a provider signs to prove its key in this TLS session. */
 struct Hello;
 std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello& verifier,
@@ -109,12 +90,6 @@ std::vector<unsigned char> ProviderProofMessage(const Hello& signer, const Hello
 /** Verifies a PROVIDER_PROOF payload and returns the proven ProviderID. */
 std::optional<ProviderId> VerifyProviderProof(std::span<const unsigned char> payload,
     std::span<const unsigned char> message);
-/** Channel-bound challenge a genesis-key finalizer signs for transport authentication. */
-std::vector<unsigned char> FinalizerProofMessage(const Hello& signer, const Hello& verifier,
-    std::span<const unsigned char> tls_exporter);
-bool VerifyFinalizerProof(std::span<const unsigned char> payload, std::span<const unsigned char> message,
-    const IdentityHybridPublicKey& genesis_finalizer_key);
-
 struct Frame {
     MessageType type;
     std::vector<unsigned char> payload;
@@ -124,7 +99,6 @@ struct Hello {
     uint256 network_binding;
     uint64_t finalized_height{0};
     uint256 finalized_tip;
-    uint64_t capabilities{0};
     uint64_t nonce{0};
 
     friend bool operator==(const Hello&, const Hello&) = default;
@@ -189,17 +163,10 @@ public:
     ~PeerSession();
     PeerSession(const PeerSession&) = delete;
     PeerSession& operator=(const PeerSession&) = delete;
-    /**
-     * A peer advertising CAP_STORAGE must prove its provider key; a local
-     * CAP_STORAGE hello needs provider_signer to do the same.
-     */
-    bool Handshake(const Hello& local, const ProviderProofSigner& provider_signer = {},
-        const FinalizerProofSigner& finalizer_signer = {},
-        const IdentityHybridPublicKey* genesis_finalizer_key = nullptr);
-    /** Proven ProviderID of a storage peer. */
+    bool Handshake(const Hello& local);
+    /** On-demand, channel-bound storage relationship proof; never part of HELLO. */
+    std::optional<ProviderId> ProveStorageIdentity();
     const std::optional<ProviderId>& PeerProviderId() const { return m_peer_provider_id; }
-    /** True only while this live session has verified the peer's genesis PoA proof. */
-    bool PeerFinalizerAuthenticated() const { return m_peer_finalizer_authenticated; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     bool Ping(uint64_t nonce);
     bool AnswerPing();
@@ -259,10 +226,7 @@ private:
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
     std::optional<ProviderId> m_peer_provider_id;
-    // Ephemeral session fact. Never serialize or persist an Authority address
-    // or map this role to a durable node identity.
-    bool m_peer_finalizer_authenticated{false};
-    uint64_t m_local_capabilities{0};
+    std::optional<Hello> m_local;
     // Attestations already served to this peer on the current finalized base.
     uint256 m_served_attestation_base;
     std::set<ValidationPool::Key> m_served_attestations;

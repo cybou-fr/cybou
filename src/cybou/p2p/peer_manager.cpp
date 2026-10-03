@@ -91,25 +91,12 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
         return false;
     }
-    uint64_t caps = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
-        CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY;
-    if (m_runtime.HasStorageProvider()) caps |= CAP_STORAGE | CAP_STORAGE_PROOFS;
-    // The PoA key holder proves its key to every mesh peer;
-    // the proof confirms finalized tips and never routes operations.
-    if (m_runtime.IsPoaFinalizerEnabled()) {
-        caps |= CAP_FINALIZER_PROOF;
-    }
     Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
-        .finalized_tip = status.finalized_tip, .capabilities = caps, .nonce = *nonce};
+        .finalized_tip = status.finalized_tip, .nonce = *nonce};
     TlsSessionConfig tls;
     tls.expected_server_spki_sha256 = m_runtime.PinnedSpki(endpoint.first, port);
     auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
-    const auto signer = [this](std::span<const unsigned char> message) { return m_runtime.SignProviderProof(message); };
-    const auto finalizer_signer = [this](std::span<const unsigned char> message) {
-        return m_runtime.SignFinalizerTransportProof(message);
-    };
-    if (!peer->Handshake(local, signer, finalizer_signer,
-            &m_runtime.GetNetworkDefinition().poa_finalizer_public_key)) {
+    if (!peer->Handshake(local)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
         case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
@@ -197,7 +184,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
     const Endpoint endpoint{address.to_string(), port};
     auto it = m_peers.find(endpoint);
     if (it == m_peers.end()) return result;
-    if (!it->second->Peer() || !(it->second->Peer()->capabilities & CAP_SERVE_BLOCKS)) {
+    if (!it->second->Peer()) {
         result.status = SyncPeerStatus::PROTOCOL_ERROR;
         m_peers.erase(it);
         return result;
@@ -214,8 +201,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         const uint64_t height = status.finalized_height + 1;
-        const bool use_inventory = (it->second->Peer()->capabilities & CAP_BLOCK_INVENTORY) != 0;
-        if (use_inventory) {
+        {
             if (inventory_cursor < inventory.size() && inventory[inventory_cursor].height != height) {
                 // Our height moved underneath the batch (e.g. a gossiped block): pipelined
                 // responses no longer line up, so drop the session and resync cleanly.
@@ -234,7 +220,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
                     if (height <= it->second->Peer()->finalized_height) {
                         result.status = SyncPeerStatus::CONNECTION_FAILED;
                         m_peers.erase(it);
-                    } else result.reached_peer_tip = true;
+                    } else result.caught_up_with_known_peers = true;
                     break;
                 }
                 if (announced.status != BlockRequestStatus::OK) {
@@ -256,7 +242,7 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
                 in_flight = inventory.size();
             }
         }
-        const auto response = in_flight > 0 ? it->second->ReadBlockResponse() : it->second->RequestBlock(height);
+        const auto response = it->second->ReadBlockResponse();
         if (in_flight > 0) --in_flight;
         if (response.status != BlockRequestStatus::OK && response.status != BlockRequestStatus::NOT_FOUND) {
             result.status = response.status == BlockRequestStatus::UNAVAILABLE ?
@@ -265,10 +251,8 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             break;
         }
         if (response.status == BlockRequestStatus::NOT_FOUND) {
-            if (use_inventory || height <= it->second->Peer()->finalized_height) {
-                result.status = SyncPeerStatus::CONNECTION_FAILED;
-                m_peers.erase(it);
-            } else result.reached_peer_tip = true;
+            result.status = SyncPeerStatus::CONNECTION_FAILED;
+            m_peers.erase(it);
             break;
         }
         const auto block = DeserializeFinalizedBlock(response.bytes);
@@ -276,14 +260,14 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
         if (!block || block->block.height != height ||
             block->certificate.network_binding != status.network_binding ||
             block->certificate.block_id != ComputeBlockId(block->block) ||
-            (use_inventory && block->certificate.block_id != inventory[inventory_cursor].block_id) ||
+            (block->certificate.block_id != inventory[inventory_cursor].block_id) ||
             (height == announced.finalized_height && block->certificate.block_id != announced.finalized_tip) ||
             !m_runtime.CommitBlock(*block)) {
             result.status = SyncPeerStatus::PROTOCOL_ERROR;
             m_peers.erase(it);
             break;
         }
-        if (use_inventory) ++inventory_cursor;
+        ++inventory_cursor;
         ++result.blocks_applied;
         result.status = SyncPeerStatus::BLOCKS_APPLIED;
     }
@@ -331,8 +315,6 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
             it = m_peers.find(endpoint);
         }
         if (it == m_peers.end() || !it->second->Peer()) continue;
-        const auto capabilities = it->second->Peer()->capabilities;
-        if (!(capabilities & CAP_OPERATION_RELAY)) continue;
         const auto acknowledgment = it->second->SubmitOperation(operation);
         if (!acknowledgment) {
             result.delivery_uncertain = true;
@@ -366,7 +348,7 @@ size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
             if (!live_ids.contains(*known)) known = announced.erase(known);
             else ++known;
         }
-        if (!it->second->Peer() || !(it->second->Peer()->capabilities & CAP_BLOCK_ANNOUNCEMENTS)) {
+        if (!it->second->Peer()) {
             ++it;
             continue;
         }
@@ -417,8 +399,7 @@ size_t PeerManager::PollOperationRelays()
     constexpr size_t MAX_RELAY_OPERATIONS_PER_PEER{4};
     for (auto& [endpoint, session] : m_peers) {
         (void)endpoint;
-        if (!session->Peer() ||
-            !(session->Peer()->capabilities & CAP_OPERATION_RELAY)) continue;
+        if (!session->Peer()) continue;
         for (size_t i = 0; i < MAX_RELAY_OPERATIONS_PER_PEER; ++i) {
             if (!session->PollOperationRelay(m_runtime)) break;
             ++delivered;
@@ -433,8 +414,7 @@ size_t PeerManager::PollValidationAttestations()
     constexpr size_t MAX_ATTESTATIONS_PER_PEER{8};
     for (auto& [endpoint, session] : m_peers) {
         (void)endpoint;
-        if (!session->Peer() ||
-            !(session->Peer()->capabilities & CAP_OPERATION_RELAY)) continue;
+        if (!session->Peer()) continue;
         for (size_t i = 0; i < MAX_ATTESTATIONS_PER_PEER; ++i) {
             if (!session->PollValidationAttestation(m_runtime)) break;
             ++received;
@@ -449,21 +429,24 @@ std::vector<PeerInfo> PeerManager::Peers() const
     peers.reserve(m_peers.size());
     for (const auto& [endpoint, session] : m_peers) {
         if (session->Peer()) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
-                session->PeerFinalizerAuthenticated()});
+            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId()});
         }
     }
     return peers;
 }
 
-std::vector<PeerInfo> PeerManager::StoragePeers() const
+std::vector<PeerInfo> PeerManager::StoragePeers()
 {
     std::vector<PeerInfo> peers;
-    for (const auto& [endpoint, session] : m_peers) {
-        if (session->Peer() && (session->Peer()->capabilities & CAP_STORAGE) && session->PeerProviderId()) {
-            peers.push_back(PeerInfo{endpoint.first, endpoint.second, *session->Peer(), session->PeerProviderId(),
-                session->PeerFinalizerAuthenticated()});
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& session = it->second;
+        if (!session->Peer() || !session->ProveStorageIdentity()) {
+            m_announced_blocks.erase(it->first);
+            it = m_peers.erase(it);
+            continue;
         }
+        peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerProviderId()});
+        ++it;
     }
     return peers;
 }
@@ -522,8 +505,12 @@ PeerSession* PeerManager::FindStorageSession(
     if (ec) return nullptr;
     const Endpoint key{parsed.to_string(), port};
     const auto it = m_peers.find(key);
-    if (it == m_peers.end() || !it->second->Peer() ||
-        !(it->second->Peer()->capabilities & CAP_STORAGE) || !it->second->PeerProviderId()) return nullptr;
+    if (it == m_peers.end()) return nullptr;
+    if (!it->second->Peer() || !it->second->ProveStorageIdentity()) {
+        m_announced_blocks.erase(key);
+        m_peers.erase(it);
+        return nullptr;
+    }
     // A different provider now answering at this endpoint is not the recorded replica.
     if (provider_id && *it->second->PeerProviderId() != *provider_id) return nullptr;
     if (endpoint) *endpoint = key;
@@ -555,7 +542,7 @@ size_t PeerManager::DiscoverPeers(const size_t max_sessions)
         ++it;
         ++scanned;
         m_discovery_cursor = endpoint;
-        if (peer && (peer->capabilities & CAP_PEER_DISCOVERY)) targets.push_back(endpoint);
+        if (peer) targets.push_back(endpoint);
     }
     for (const auto& endpoint : targets) {
         const auto session = m_peers.find(endpoint);

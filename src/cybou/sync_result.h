@@ -21,8 +21,8 @@ enum class SyncPeerStatus : uint8_t {
 struct SyncPeerResult {
     SyncPeerStatus status{SyncPeerStatus::CONNECTION_FAILED};
     uint64_t blocks_applied{0};
-    /** The peer explicitly answered that no next finalized block exists. */
-    bool reached_peer_tip{false};
+    /** Known-peer round completed; liveness/UX only, never global freshness. */
+    bool caught_up_with_known_peers{false};
 
     operator uint64_t() const { return blocks_applied; }
     bool IsConnected() const {

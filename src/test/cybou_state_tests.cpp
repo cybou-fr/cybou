@@ -441,8 +441,8 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
     BOOST_REQUIRE(new_recovery_id);
     BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);
-    // IdentityRotate keeps the account's AUTH and earns the flat finalized +1.
-    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'002U);
+    // IdentityRotate preserves the account's AUTH and earns 0 AUTH (security maintenance).
+    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'001U);
     const auto replay = ExecuteBlockOperations(*rotated.state, {operation}, network_binding, 2, params);
     BOOST_CHECK(replay.error == BlockExecutionError::INVALID_IDENTITY_ROTATE);
 }
@@ -1034,6 +1034,97 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, previous_ca_balance - 5 + params.payment_fee);
     BOOST_CHECK_EQUAL(state.accounts.at(authority).system_balance, previous_ca_budget - params.payment_fee);
     BOOST_CHECK_EQUAL(TotalSupply(state), previous_supply);
+}
+
+BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> root_seed{}, device_seed{};
+    root_seed[0] = 0x77;
+    device_seed[0] = 0x78;
+    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
+    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
+    BOOST_REQUIRE(root && device);
+
+    uint256 net_bytes{};
+    net_bytes.begin()[0] = 0x11;
+    const uint256 network{net_bytes};
+
+    AccountId account_id{net_bytes};
+    account_id.begin()[0] = 0x99;
+
+    AccountId recipient_id{net_bytes};
+    recipient_id.begin()[0] = 0xAA;
+
+    CybouState state = CreateDevGenesisState();
+    auto params = DevProtocolParameters();
+    params.account_creation_work_bits = 0;
+
+    state.accounts[account_id] = AccountState{
+        .balance = 1000,
+        .system_balance = 1000,
+        .authority = 0,
+    };
+    state.identities.RegisterAccount(account_id, *root, *device, {}, 0);
+
+    state.accounts[recipient_id] = AccountState{
+        .balance = 100,
+        .system_balance = 100,
+        .authority = 0,
+    };
+    state.identities.RegisterAccount(recipient_id, *root, *device, {}, 0);
+
+    // 1. Payment does NOT earn AUTH
+    AuthorizedPayment payment{
+        {.account_id = account_id, .nonce = 0, .kind = IdentityOperationKind::PAYMENT},
+        {recipient_id, 10}
+    };
+    payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(payment.payment);
+    payment.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, payment.authorization));
+
+    const auto payment_res = ExecuteBlockOperations(state, {payment}, network, 1, params);
+    BOOST_REQUIRE(payment_res);
+    BOOST_CHECK_EQUAL(payment_res.state->accounts.at(account_id).authority, 0U);
+
+    // 2. Velocity limit: two SystemLock operations by the same account in the SAME block
+    AuthorizedSystemLock lock1{
+        {.account_id = account_id, .nonce = 1, .kind = IdentityOperationKind::SYSTEM_LOCK},
+        SystemLockPayload{5}
+    };
+    lock1.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock1.payload);
+    lock1.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, lock1.authorization));
+
+    AuthorizedSystemLock lock2{
+        {.account_id = account_id, .nonce = 2, .kind = IdentityOperationKind::SYSTEM_LOCK},
+        SystemLockPayload{5}
+    };
+    lock2.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock2.payload);
+    lock2.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, lock2.authorization));
+
+    // Execute both locks in block height 2: authority must increase by only +1 (not +2)
+    const auto double_lock_res = ExecuteBlockOperations(*payment_res.state, {lock1, lock2}, network, 2, params);
+    BOOST_REQUIRE(double_lock_res);
+    BOOST_CHECK_EQUAL(double_lock_res.state->accounts.at(account_id).authority, 1U);
+
+    // 3. In the next block, another SystemLock grants +1 AUTH
+    AuthorizedSystemLock lock3{
+        {.account_id = account_id, .nonce = 3, .kind = IdentityOperationKind::SYSTEM_LOCK},
+        SystemLockPayload{5}
+    };
+    lock3.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock3.payload);
+    lock3.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+        *ComputeIdentityOperationDigest(network, lock3.authorization));
+
+    const auto next_block_res = ExecuteBlockOperations(*double_lock_res.state, {lock3}, network, 3, params);
+    BOOST_REQUIRE(next_block_res);
+    BOOST_CHECK_EQUAL(next_block_res.state->accounts.at(account_id).authority, 2U);
+
+    // 4. Verify AuthorityEarningAccount behavior across op types
+    BOOST_CHECK(!AuthorityEarningAccount(payment));
+    BOOST_CHECK(AuthorityEarningAccount(lock1) == account_id);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -43,17 +43,19 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
     for (const auto& peer : d.peers) {
         peers.emplace(peer.endpoint,peer);
         if (!m_peers.contains(peer.endpoint)) {
-            Write(NodeEvent::peer_connected,{{"peer",peer.endpoint},{"advertised_height",peer.advertised_height},
-                {"capabilities",peer.capabilities}});
-            if (!peer.provider_id.empty()) Write(NodeEvent::provider_connected,{{"peer",peer.endpoint},{"provider_id",peer.provider_id}});
+            Write(NodeEvent::peer_connected,{{"peer",peer.endpoint},{"advertised_height",peer.advertised_height}});
         }
+        const auto previous = m_peers.find(peer.endpoint);
+        if (!peer.provider_id.empty() && (previous == m_peers.end() || previous->second.provider_id != peer.provider_id))
+            Write(NodeEvent::provider_connected,{{"peer",peer.endpoint},{"provider_id",peer.provider_id}});
     }
     for (const auto& [endpoint,peer] : m_peers) if (!peers.contains(endpoint)) {
         Write(NodeEvent::peer_disconnected,{{"peer",endpoint}});
         if (!peer.provider_id.empty()) Write(NodeEvent::provider_disconnected,{{"provider_id",peer.provider_id}});
     }
     m_peers = std::move(peers);
-    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"role",d.role},{"height",d.height},
+    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"node_type",d.node_type},{"cyp2_version",std::uint64_t{d.cyp2_version}},
+        {"poa_signer_active",d.poa_signer_active},{"validation_eligible",d.validation_eligible},{"height",d.height},
         {"tip",d.tip},{"state_root",d.state_root},{"peers",std::uint64_t{d.peers.size()}},
         {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}});
     if (d.safety_halted) Write(NodeEvent::poa_safety_halt);
@@ -62,10 +64,10 @@ EventWriter::~EventWriter() { if(m_file)std::fclose(m_file); }
 bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file && std::ferror(m_file)==0; }
 void EventWriter::Write(NodeEvent event, const EventFields& fields) {
     static const std::set<std::string> ALLOWED{
-        "network_binding","role","height","tip","state_root","peers","storage_used",
+        "network_binding","node_type","cyp2_version","poa_signer_active","validation_eligible","height","tip","state_root","peers","storage_used",
         "storage_capacity","safety_halted","operation_id","block_id","provider_id",
         "chunk_id","peer","bytes","duration_ms","error_code","replicas","target","account_id","nonce",
-        "nonce","account_id","base_height","advertised_height","capabilities"};
+        "nonce","account_id","base_height","advertised_height"};
     if (fields.size() > 24 || static_cast<size_t>(event) >= std::size(NAMES)) throw std::invalid_argument("invalid event");
     for (const auto& [key,value] : fields) {
         if (!ALLOWED.contains(key) || (std::holds_alternative<std::string>(value) && std::get<std::string>(value).size() > 256))

@@ -12,7 +12,7 @@ namespace cybou {
 
 inline constexpr uint64_t DEV_ONBOARDING_BONUS{6000};
 inline constexpr uint32_t DEFAULT_MAX_ACCOUNT_CREATES_PER_BLOCK{100};
-inline constexpr uint32_t DEFAULT_ACCOUNT_CREATION_WORK_BITS{16};
+inline constexpr uint32_t DEFAULT_ACCOUNT_CREATION_WORK_BITS{25};
 inline constexpr uint64_t DEFAULT_ACCOUNT_CREATION_EPOCH_LAG{1};
 inline constexpr uint64_t DEFAULT_EPOCH_BLOCKS{1024};
 inline constexpr uint64_t DEFAULT_PAYMENT_FEE{1};

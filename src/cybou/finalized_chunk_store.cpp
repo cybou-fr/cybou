@@ -89,8 +89,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
     const bool wipe_data)
     : m_blobs{blobs}, m_namespace{"chunk-store/v4/" + Hex(network_binding)}, m_capacity_bytes{capacity_bytes}
 {
-    if (capacity_bytes == 0 ||
-        std::all_of(network_binding.begin(), network_binding.end(), [](const auto byte) { return byte == 0; }) ||
+    if (std::all_of(network_binding.begin(), network_binding.end(), [](const auto byte) { return byte == 0; }) ||
         (!m_blobs.MemoryOnly() && path.empty())) {
         throw std::invalid_argument{"invalid finalized chunk store configuration"};
     }

@@ -8,7 +8,7 @@
 #include <cybou/kv_store.h>
 #include <cybou/name_service.h>
 #include <cybou/block_executor.h>
-#include <cybou/poa_finalizer.h>
+#include <cybou/poa_signing_service.h>
 #include <cybou/secret_file.h>
 #include <cybou/validation_attestation.h>
 #include <test/cybou_service_test_fixture.h>
@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
     BOOST_CHECK(writer.Good());
     const auto snapshot=fixture.runtime->GetDiagnostics();
     BOOST_CHECK(snapshot.initialized);
-    BOOST_CHECK_EQUAL(snapshot.role, "finalizer");
+    BOOST_CHECK_EQUAL(snapshot.node_type, "Full Node");
     BOOST_CHECK_EQUAL(snapshot.height,fixture.runtime->GetStatus().finalized_height);
 }
 
@@ -94,7 +94,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     CybouServiceTestFixture fixture;
     const auto status = fixture.runtime->GetStatus();
     BOOST_CHECK(status.is_initialized);
-    BOOST_CHECK(status.is_finalizer);
+    BOOST_CHECK(status.poa_signer_active);
     const auto alice = fixture.CreateIdentity("alice.cybou");
     const auto account = alice->GetAccountId();
     BOOST_REQUIRE(account);
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     };
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    BOOST_CHECK(!observer.GetStatus().is_finalizer);
+    BOOST_CHECK(!observer.GetStatus().poa_signer_active);
     BOOST_REQUIRE(observer.CommitBlock(*block));
     BOOST_CHECK(observer.GetAccountState(*account) == fixture.runtime->GetAccountState(*account));
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1);
@@ -406,7 +406,7 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
         .peer_admission_policy = TestLabAdmissionPolicy(),
     }};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
-    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
+    BOOST_CHECK(!runtime.GetStatus().poa_signer_active);
     BOOST_CHECK(!runtime.ProduceBlock());
 
     auto material = cybou::GenerateIdentityMaterial();
@@ -416,19 +416,19 @@ BOOST_AUTO_TEST_CASE(runtime_finalizer_can_be_armed_and_disarmed_with_a_vault_si
     cybou::CybouKeyStore keystore;
     BOOST_REQUIRE(keystore.LoadMaterial(std::move(*material)));
     auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(keystore);
-    BOOST_REQUIRE(runtime.EnablePoaFinalizer(signer));
-    BOOST_CHECK(runtime.GetStatus().is_finalizer);
+    BOOST_REQUIRE(runtime.EnablePoaSigner(signer));
+    BOOST_CHECK(runtime.GetStatus().poa_signer_active);
     BOOST_REQUIRE(runtime.ProduceBlock());
 
-    runtime.DisablePoaFinalizer();
-    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
+    runtime.DisablePoaSigner();
+    BOOST_CHECK(!runtime.GetStatus().poa_signer_active);
     BOOST_CHECK(!runtime.ProduceBlock());
 
     cybou::CybouKeyStore wrong_keystore;
     BOOST_REQUIRE(wrong_keystore.GenerateNew());
     auto wrong_signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(wrong_keystore);
-    BOOST_CHECK(!runtime.EnablePoaFinalizer(wrong_signer));
-    BOOST_CHECK(!runtime.GetStatus().is_finalizer);
+    BOOST_CHECK(!runtime.EnablePoaSigner(wrong_signer));
+    BOOST_CHECK(!runtime.GetStatus().poa_signer_active);
 }
 
 BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
@@ -442,7 +442,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     cybou::KVStore alternate_signer_db{cybou::KVStoreOptions{.memory_only = true}};
     cybou::RecoveryEntropy operator_entropy{};
     operator_entropy[0] = fixture.validator_seed[0];
-    cybou::PoaFinalizer alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
+    cybou::PoaSigningService alternate_signer{alternate_signer_db, fixture.runtime->GetNetworkBinding(),
         fixture.definition.genesis_block_id, operator_entropy,
         fixture.definition.poa_finalizer_public_key};
     const auto alternate_signature = alternate_signer.SignFinality(0,
@@ -709,7 +709,7 @@ BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
     BOOST_CHECK_EQUAL(gossip[3].first, "198.51.100.5");
 }
 
-BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_finalizer)
+BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
 {
     CybouServiceTestFixture fixture;
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
@@ -726,10 +726,11 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
         tcp::socket socket{io};
         finalizer_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const bool handshake = fixture.HandshakeAsFinalizer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
+        const bool handshake = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *tip,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_FINALIZER_PROOF, .nonce = 1301});
-        finalizer_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+            .nonce = 1301});
+        finalizer_served = handshake;
+        for (int i = 0; i < 5 && finalizer_served; ++i) finalizer_served = session.ServeNext(*fixture.runtime);
     }};
 
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
@@ -742,7 +743,7 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
     finalizer_server.join();
     BOOST_CHECK(finalizer_served.load());
     BOOST_CHECK_EQUAL(finalizer_sync.blocks_applied, 1U);
-    BOOST_CHECK(finalizer_sync.reached_peer_tip);
+    BOOST_CHECK(finalizer_sync.caught_up_with_known_peers);
 
     tcp::acceptor provider_acceptor{io, tcp::endpoint{loopback, 0}};
     const auto provider_port = provider_acceptor.local_endpoint().port();
@@ -753,8 +754,9 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         const bool handshake = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *tip,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 1302});
-        provider_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+            .nonce = 1302});
+        provider_served = handshake;
+        for (int i = 0; i < 5 && provider_served; ++i) provider_served = session.ServeNext(*fixture.runtime);
     }};
 
     cybou::NodeRuntimeConfig provider_observer_config{.network_definition = fixture.definition,
@@ -767,7 +769,7 @@ BOOST_AUTO_TEST_CASE(sync_tip_confirmation_requires_the_configured_genesis_final
     provider_server.join();
     BOOST_CHECK(provider_served.load());
     BOOST_CHECK_EQUAL(provider_sync.blocks_applied, 1U);
-    BOOST_CHECK(!provider_sync.reached_peer_tip);
+    BOOST_CHECK(provider_sync.caught_up_with_known_peers);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

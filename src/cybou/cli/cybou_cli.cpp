@@ -5,7 +5,7 @@
 
 #include <cybou/cli/command_line.h>
 #include <cybou/crypto/cleanse.h>
-#include <cybou/finalizer_node.h>
+#include <cybou/poa_finalizer.h>
 #include <cybou/hex.h>
 #include <cybou/identity_service.h>
 #include <cybou/keystore.h>
@@ -60,12 +60,10 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
   finalizer run --network devnet --data-dir DIR --key-file FILE --listen IP:PORT
                 [--block-interval 1000ms] [--peers FILE] [--capacity 20GiB] [--advertise IP:PORT]
                 [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|lab]
-  provider run  --network devnet --data-dir DIR [--peer IP:PORT] --listen IP:PORT --capacity 20GiB
-                [--peers FILE] [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
-                [--event-log FILE] [--event-log-mode minimal|lab]
-  observer run  --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
-                [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
-                [--event-log FILE] [--event-log-mode minimal|lab]
+  node run --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
+           [--capacity 20GiB] [--poa-key-file FILE] [--block-interval 1000ms]
+           [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
+           [--event-log FILE] [--event-log-mode minimal|lab]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
   network provision-devnet [--private-dir DIR] [--out-constants FILE] [--force yes]
   network probe --network devnet --data-dir DIR --peer IP:PORT
@@ -209,14 +207,14 @@ std::unique_ptr<CybouNodeService> StartNode(const OfficialNetwork& network, Node
     return node;
 }
 
-void StartEvents(const Options& opts, const std::string& role)
+void StartEvents(const Options& opts, const std::string& node_type)
 {
     const auto mode = opts.Get("event-log-mode", "minimal");
     if (mode != "minimal" && mode != "lab") throw std::invalid_argument("event log mode must be minimal or lab");
     if (opts.Has("event-log")) {
         events = std::make_shared<EventWriter>(opts.Get("event-log"),
             mode == "lab" ? EventLogMode::LAB : EventLogMode::MINIMAL);
-        events->Write(NodeEvent::node_started, {{"role", role}});
+        events->Write(NodeEvent::node_started, {{"node_type", node_type}});
     }
 }
 
@@ -278,7 +276,7 @@ int NetworkProbe(const Options& opts)
     if (!peers.Connect(peer.first, peer.second) || peers.PingAll() != 1) throw std::runtime_error("P2P handshake or ping failed");
     const auto info = peers.Peers().front();
     std::cout << "peer=" << info.address << ':' << info.port << " height=" << info.hello.finalized_height
-              << " capabilities=" << info.hello.capabilities << std::endl;
+              << std::endl;
     return 0;
 }
 
@@ -422,62 +420,15 @@ int OperationCommand(const std::string& action, const Options& opts)
     return PrintPeerSubmitResult(peers.SubmitOperationToAny(endpoints, *operation));
 }
 
-// ---- node roles ----
+// ---- ordinary Full Node ----
 
-int RunFinalizer(const Options& opts)
+int RunNode(const Options& opts, bool require_poa_key)
 {
-    Allow(opts, {"network", "data-dir", "key-file", "listen", "block-interval", "peers", "capacity", "advertise",
-        "tls-certificate", "tls-key", "event-log", "event-log-mode"}, true);
-    ConfigurePeerAdmission(opts, opts.Require("data-dir"));
-    StartEvents(opts, "finalizer");
-    const auto& network = RequireOfficialNetwork(opts.Require("network"));
-    auto key_file = ReadSecretFile(opts.Require("key-file"), 32);
-    if (!key_file || key_file->size() != 32) throw std::runtime_error("PoA finalizer key file must be private and contain exactly 32 raw bytes");
-    std::array<unsigned char, 32> key{};
-    std::copy(key_file->begin(), key_file->end(), key.begin());
-    crypto::CleanseMemory(key_file->data(), key_file->size());
-    Secret32 finalizer_key{key};
-    crypto::CleanseMemory(key.data(), key.size());
-
-    const auto listen = ParseEndpoint(opts.Require("listen"));
-    const auto interval = Quantity(opts.Get("block-interval", "1000ms"), true);
-    if (interval > 60000) throw std::invalid_argument("block interval exceeds 60s");
-    const auto gossip = PeerList(opts).value_or(std::vector<Endpoint>{});
-    if (opts.Has("capacity") && gossip.empty()) throw std::invalid_argument("finalizer storage requires explicit --peers");
-
-    auto config = RuntimeConfig(network, opts.Require("data-dir"));
-    config.poa_finalizer_recovery_entropy = std::move(finalizer_key);
-    config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : listen;
-    config.tls_server_identity = TlsIdentity(opts);
-    if (opts.Has("capacity")) {
-        config.storage_enabled = true;
-        config.storage_capacity_bytes = Quantity(opts.Get("capacity"));
-    }
-    auto node = StartNode(network, std::move(config));
-    std::jthread monitor;
-    if (events) monitor = std::jthread{[&](std::stop_token stop) {
-        while (!stop.stop_requested() && !stopping) {
-            events->Observe(node->Runtime().GetDiagnostics());
-            if (!events->Good()) stopping = true;
-            for (int i = 0; i < 20 && !stop.stop_requested() && !stopping; ++i) std::this_thread::sleep_for(std::chrono::milliseconds{100});
-        }
-    }};
-    const auto result = node->RunFinalizer(CybouFinalizerServiceConfig{
-        .bind_address = listen.first, .p2p_port = listen.second, .block_interval_ms = interval, .peers = gossip,
-    }, stopping);
-    return events && !events->Good() ? 2 : result;
-}
-
-int RunPeer(const std::string& role, const Options& opts)
-{
-    const bool provider = role == "provider";
     Allow(opts, {"network", "data-dir", "peer", "listen", "peers", "capacity", "advertise",
-        "tls-certificate", "tls-key", "event-log", "event-log-mode"}, true);
-    if (!provider && opts.Has("capacity")) throw std::invalid_argument("observer has no storage role");
-    if (provider && !opts.Has("listen")) throw std::invalid_argument("missing --listen");
+        "tls-certificate", "tls-key", "event-log", "event-log-mode", "key-file", "poa-key-file", "block-interval"}, true);
     if (opts.Has("advertise") && !opts.Has("listen")) throw std::invalid_argument("--advertise requires --listen");
     ConfigurePeerAdmission(opts, opts.Require("data-dir"));
-    StartEvents(opts, role);
+    StartEvents(opts, "Full Node");
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     const auto listen = opts.Has("listen") ? std::optional{ParseEndpoint(opts.Get("listen"))} : std::nullopt;
 
@@ -488,12 +439,25 @@ int RunPeer(const std::string& role, const Options& opts)
         throw std::invalid_argument("a network without bootstrap locators requires --peer, --peers or --listen");
     if (listen) config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
-    config.storage_enabled = provider;
-    config.storage_capacity_bytes = provider ? Quantity(opts.Require("capacity")) : 0;
+    config.storage_capacity_bytes = opts.Has("capacity") ? Quantity(opts.Get("capacity")) : 0;
+    if ((!require_poa_key && opts.Has("key-file")) || (require_poa_key && opts.Has("poa-key-file"))) {
+        throw std::runtime_error("use --poa-key-file with node run, or --key-file with finalizer run");
+    }
+    if (require_poa_key || opts.Has("poa-key-file")) {
+        auto bytes = ReadSecretFile(require_poa_key ? opts.Require("key-file") : opts.Require("poa-key-file"), 32);
+        if (!bytes || bytes->size() != 32) throw std::runtime_error("PoA key file must be private and contain exactly 32 raw bytes");
+        std::array<unsigned char, 32> seed{};
+        std::copy(bytes->begin(), bytes->end(), seed.begin());
+        crypto::CleanseMemory(bytes->data(), bytes->size());
+        config.poa_finalizer_recovery_entropy = Secret32{seed};
+        crypto::CleanseMemory(seed.data(), seed.size());
+    }
+    const auto interval = Quantity(opts.Get("block-interval", "1000ms"), true);
+    if (interval == 0 || interval > 60000) throw std::invalid_argument("invalid block interval");
     auto node = StartNode(network, std::move(config));
     if (const auto explicit_peers = PeerList(opts)) node->Runtime().SetExplicitPeerEndpoints(*explicit_peers);
     std::atomic<std::uint64_t> last_height{0};
-    node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{1000}, .listen_endpoint = listen},
+    node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval, .listen_endpoint = listen},
         [&last_height, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
             if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH ||
                 status.runtime_state == NodeRuntimeState::CORRUPT ||
@@ -685,10 +649,9 @@ int Dispatch(int argc, char* argv[])
     if (group == "storage") return StorageCommand(action, opts);
     if (action != "run") throw std::invalid_argument("unknown command; use --help");
     int result{0};
-    if (group == "finalizer") result = RunFinalizer(opts);
-    else if (group == "provider" || group == "observer") result = RunPeer(group, opts);
+    if (group == "finalizer" || group == "node") result = RunNode(opts, group == "finalizer");
     else throw std::invalid_argument("unknown command; use --help");
-    if (events) events->Write(NodeEvent::node_stopping, {{"role", group}});
+    if (events) events->Write(NodeEvent::node_stopping, {{"node_type", std::string{"Full Node"}}});
     return result;
 }
 
@@ -696,7 +659,7 @@ int Dispatch(int argc, char* argv[])
 
 bool IsCommand(const std::string_view first)
 {
-    return first == "finalizer" || first == "provider" || first == "observer" || first == "network" ||
+    return first == "finalizer" || first == "node" || first == "network" ||
         first == "operation" || first == "doctor" || first == "storage" || first == "--help" || first == "help";
 }
 

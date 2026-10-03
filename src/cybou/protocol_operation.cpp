@@ -346,6 +346,18 @@ std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
     }, operation);
 }
 
+std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operation)
+{
+    return std::visit([](const auto& op) -> std::optional<AccountId> {
+        using T = std::decay_t<decltype(op)>;
+        if constexpr (std::is_same_v<T, AuthorizedRootPublication> ||
+                      std::is_same_v<T, AuthorizedSystemLock>) {
+            return op.authorization.account_id;
+        }
+        return std::nullopt;
+    }, operation);
+}
+
 std::optional<uint256> ComputeOperationId(const ProtocolOperation& operation)
 {
     constexpr std::string_view domain{"CYBOU/OP-ID/V5"};

@@ -8,6 +8,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/session.h>
+#include <cybou/p2p/peer_manager.h>
 #include <cybou/publication_service.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_storage_test_network.h>
@@ -73,6 +74,56 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
+
+BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_sync)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("quota-owner.cybou");
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "quota-application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    std::vector<cybou::AuthorizedChunk> leaves;
+    for (const auto& id : content.leaves) leaves.push_back({id});
+    const auto commitment = cybou::BuildChunkAuthorizationCommitment(leaves);
+    BOOST_REQUIRE(commitment);
+    const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
+    BOOST_REQUIRE(publication);
+    BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->proofs.front()));
+    cybou::CybouNodeRuntime node{{.network_definition = fixture.definition,
+        .data_dir = fixture.directory / "quota-node", .memory_only = true,
+        .wipe_data = true, .storage_capacity_bytes = 0,
+        .peer_admission_policy = TestLabAdmissionPolicy()}};
+    BOOST_REQUIRE(node.InitializeGenesis(fixture.genesis));
+    for (uint64_t h = 1; h <= fixture.runtime->GetFinalizedHeight().value(); ++h)
+        BOOST_REQUIRE(node.CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    cybou::p2p::InboundPeerServer server{node, io, tcp::endpoint{loopback, 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listener{[&] { server.Run(stopping); }};
+    struct StopListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
+    } stop_listener{stopping, listener};
+    tcp::socket socket{io};
+    socket.connect({loopback, server.Port()});
+    cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT};
+    BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+        .finalized_height = fixture.runtime->GetFinalizedHeight().value(),
+        .finalized_tip = fixture.runtime->GetFinalizedTip().value(), .nonce = 55001}));
+    BOOST_CHECK(!client.PeerProviderId());
+    BOOST_REQUIRE(client.ProveStorageIdentity());
+    const auto bytes = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
+    BOOST_REQUIRE(bytes);
+    const auto admission = client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->proofs.front());
+    BOOST_REQUIRE(admission);
+    BOOST_CHECK(admission->status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
+    BOOST_CHECK(client.Ping(55002));
+    const auto block = client.RequestBlock(1);
+    BOOST_CHECK(block.status == cybou::p2p::BlockRequestStatus::OK);
+    BOOST_CHECK_EQUAL(node.GetDiagnostics().storage_used, 0U);
+}
 
 BOOST_AUTO_TEST_CASE(nothing_leaves_the_node_before_finality)
 {
@@ -253,8 +304,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     for (int i{0}; i < 2; ++i) {
         cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / ("socket-provider-" + std::to_string(i)),
-            .memory_only = true, .wipe_data = true, .storage_enabled = true,
-            .storage_capacity_bytes = 64ULL << 20,
+            .memory_only = true, .wipe_data = true, .storage_capacity_bytes = 64ULL << 20,
             .peer_admission_policy = TestLabAdmissionPolicy()};
         auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         BOOST_REQUIRE(provider->InitializeGenesis(fixture.genesis));
@@ -266,7 +316,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     }
     for (auto& server : servers) listeners.emplace_back([&stopping, s = server.get()] { s->Run(stopping); });
     {
-        // A light client whose runtime reaches providers only through CYP2.
+        // A Full Node whose runtime reaches providers only through CYP2.
         cybou::NodeRuntimeConfig client_config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / "socket-client", .p2p_endpoint = endpoints.front(),
             .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
@@ -275,7 +325,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
         client.SetExplicitPeerEndpoints(endpoints);
         for (int i{0}; i < 6 && client.StoragePeerEndpoints().size() < 2; ++i) client.SyncFromConfiguredPeer(10);
         BOOST_REQUIRE_EQUAL(client.StoragePeerEndpoints().size(), 2U);
-        // Each storage peer is known by the ProviderID it proved in the handshake.
+        // Each storage peer is known by the ProviderID it proved on demand.
         std::set<std::array<unsigned char, 32>> proven;
         for (const auto& peer : client.StoragePeerEndpoints()) proven.insert(peer.provider_id);
         BOOST_CHECK(proven == (std::set{*providers[0]->LocalProviderId(), *providers[1]->LocalProviderId()}));
@@ -360,7 +410,7 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     CybouServiceTestFixture fixture;
     cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "proof-provider", .memory_only = true, .wipe_data = true,
-        .storage_enabled = true, .storage_capacity_bytes = 1ULL << 20};
+        .storage_capacity_bytes = 1ULL << 20};
     cybou::CybouNodeRuntime provider{std::move(config)};
     BOOST_REQUIRE(provider.InitializeGenesis(fixture.genesis));
     const auto network_binding = provider.GetNetworkBinding();
@@ -381,8 +431,8 @@ BOOST_AUTO_TEST_CASE(provider_proof_binds_key_session_and_network)
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, cybou::p2p::ProviderProofMessage(other_network, verifier, exporter)));
     (*proof)[5] ^= 0x01;
     BOOST_CHECK(!cybou::p2p::VerifyProviderProof(*proof, message));
-    // A node without storage has no provider identity.
-    BOOST_CHECK(!fixture.runtime->LocalProviderId());
+    // Even a zero-quota Full Node has its own storage identity.
+    BOOST_CHECK(fixture.runtime->LocalProviderId());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

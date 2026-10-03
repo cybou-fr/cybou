@@ -25,20 +25,14 @@ struct CybouNodeServiceConfig {
     CybouState genesis;
 };
 
-struct CybouFinalizerServiceConfig {
-    std::string bind_address;
-    uint16_t p2p_port{0};
-    uint64_t block_interval_ms{1000};
-    std::vector<std::pair<std::string, uint16_t>> peers;
-};
-
 struct CybouNetworkServiceConfig {
     std::chrono::milliseconds sync_interval{3000};
     uint64_t sync_batch_size{64};
+    uint64_t block_interval_ms{1000};
     std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
 };
 
-/** Owns node runtime startup and the observer's network lifecycle. */
+/** Owns node runtime startup and the Full Node network lifecycle. */
 class CybouNodeService final {
 public:
     using NetworkUpdate = std::function<bool(const SyncPeerResult&, const NodeRuntimeStatus&, size_t)>;
@@ -56,26 +50,24 @@ public:
         CybouNetworkServiceConfig config,
         NetworkUpdate update);
     void StopNetwork();
-    /** Start or stop desktop PoA production and block gossip as the vault unlocks/locks. */
-    void StartDesktopFinalizer(uint64_t block_interval_ms = 1000);
-    void StopDesktopFinalizer();
-    /** Run the finalizer block production, inbound CYP2 and gossip loops. */
-    int RunFinalizer(const CybouFinalizerServiceConfig& config, std::atomic_bool& stopping);
+    /** Start or stop local PoA block production as the vault unlocks/locks. */
+    void StartBlockProduction(uint64_t block_interval_ms = 1000);
+    void StopBlockProduction();
 
     CybouNodeRuntime& Runtime() { return *m_runtime; }
     const CybouNodeRuntime& Runtime() const { return *m_runtime; }
 
 private:
-    struct ObserverListener;
+    struct NetworkListener;
     std::unique_ptr<CybouNodeRuntime> m_runtime;
-    std::unique_ptr<ObserverListener> m_observer_listener;
+    std::unique_ptr<NetworkListener> m_network_listener;
     CybouState m_genesis;
     bool m_started{false};
     std::atomic_bool m_stop_network{false};
     std::thread m_sync_thread;
     std::thread m_listener_thread;
-    std::atomic_bool m_stop_desktop_finalizer{true};
-    std::thread m_desktop_finalizer_thread;
+    std::atomic_bool m_stop_block_production{true};
+    std::thread m_block_production_thread;
 };
 
 } // namespace cybou

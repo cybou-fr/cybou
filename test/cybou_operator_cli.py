@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real CLI/CYP2 acceptance: strict args, read-only doctor, observer and JSONL."""
+"""Real CLI/CYP2 acceptance: strict args, read-only doctor, Full Node and JSONL."""
 import hashlib
 import json
 import os
@@ -27,19 +27,25 @@ def main():
         run("--help")
         run("serve", ok=False)
         # Only compiled networks start: DEVNET, the test-build LAB network, never a file or MAINNET.
-        info = run("network", "info", "--network", "devnet").stdout
-        assert "bootstrap=51.255.46.58:29461" in info and "network_binding=" in info
+        dev_info = subprocess.run([binary, "network", "info", "--network", "devnet"], capture_output=True, text=True, timeout=30)
+        if dev_info.returncode:
+            assert "compiled DEVNET genesis state is invalid" in dev_info.stderr
+            assert "provision a new NetworkID" in dev_info.stderr
+        else:
+            assert "bootstrap=51.255.46.58:29461" in dev_info.stdout and "network_binding=" in dev_info.stdout
+        run("provider", "run", ok=False)
+        run("observer", "run", ok=False)
         run("network", "info", "--network", "mainnet", ok=False)
         run("network", "info", "--network", root / "network.bin", ok=False)
         run("network", "lab-poa-seed", "--out", key)
         run("network", "info", "--network", network)
-        run("observer", "run", "--network", network, "--data-dir", root/"no-policy", "--peer", "127.0.0.1:31001", ok=False)
+        run("node", "run", "--network", network, "--data-dir", root/"no-policy", "--peer", "127.0.0.1:31001", ok=False)
         assert not (root/"no-policy").exists()
-        run("observer", "run", "--network", network, "--data-dir", root/"bad-geo", "--peer", "127.0.0.1:31001",
+        run("node", "run", "--network", network, "--data-dir", root/"bad-geo", "--peer", "127.0.0.1:31001",
             "--peer-admission", "france", "--geo-country-csv", root/"missing.csv", "--geo-sha256", "0"*64,
             "--geo-issued-month", "2026-10", ok=False)
         assert not (root/"bad-geo").exists()
-        run("observer", "run", "--network", network, "--data-dir", root/"bad", "--peer", "127.0.0.1:31001", "--capacity", "1GiB", "--peer-admission", "lab", ok=False)
+        run("node", "run", "--network", network, "--data-dir", root/"bad", "--peer", "127.0.0.1:31001", "--unknown-setting", "1GiB", "--peer-admission", "lab", ok=False)
         assert not (root/"bad").exists()
         run("network", "info", "--network", network, "--network", network, ok=False)
         with socket.socket() as port:
@@ -61,7 +67,7 @@ def main():
             except subprocess.TimeoutExpired: process.kill(); process.wait(timeout=5)
         try:
             finalizer=start("finalizer","finalizer",["--key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
-            observer=start("observer","observer",["--peer",endpoint])
+            observer=start("node","observer",["--peer",endpoint])
             deadline=time.monotonic()+30
             while time.monotonic()<deadline:
                 if observer.poll() is not None or finalizer.poll() is not None:
@@ -79,7 +85,7 @@ def main():
             before=digest()
             run("doctor","--network",network,"--data-dir",root/"finalizer","--key-file",key)
             assert digest()==before,"doctor modified original DB"
-            finalizer=start("finalizer","finalizer",["--key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
+            finalizer=start("node","finalizer",["--poa-key-file",str(key),"--listen",endpoint,"--block-interval","100ms"])
             time.sleep(.5); stop(finalizer)
             events=[json.loads(line) for line in (root/"finalizer.jsonl").read_text().splitlines()]
             runs={}

@@ -1,168 +1,139 @@
-// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// Copyright (c) 2026 Stanislav SAVELIEV
+// Distributed under the MIT software license, see the accompanying file COPYING.
 
 #include <cybou/poa_finalizer.h>
 
-#include <cybou/crypto/cleanse.h>
-
-#include <algorithm>
-#include <memory>
-#include <stdexcept>
+#include <limits>
 #include <utility>
 
 namespace cybou {
 namespace {
 
-bool Nonzero(const std::span<const unsigned char> bytes)
+BlockProductionResult Failure(const BlockProductionError error)
 {
-    return std::any_of(bytes.begin(), bytes.end(), [](const unsigned char value) { return value != 0; });
-}
-
-const IdentityHybridPublicKey& ValidateRecoveryPoaKey(
-    const RecoveryEntropy& entropy, const IdentityHybridPublicKey& expected)
-{
-    if (!Nonzero(entropy)) throw std::invalid_argument{"empty operator recovery entropy"};
-    const auto derived = DeriveIdentityPublicKey(entropy, IdentityKeyPurpose::POA_FINALIZER);
-    if (!derived || *derived != expected) {
-        throw std::invalid_argument{"operator recovery phrase does not match genesis PoA key"};
-    }
-    return expected;
-}
-
-class RecoveryEntropyPoaSigner final : public PoaSigner {
-public:
-    explicit RecoveryEntropyPoaSigner(const RecoveryEntropy& entropy) : m_entropy{entropy}
-    {
-        auto key = DeriveIdentityPublicKey(m_entropy, IdentityKeyPurpose::POA_FINALIZER);
-        if (!key) throw std::invalid_argument{"cannot derive operator PoA key"};
-        m_public_key = std::move(*key);
-    }
-    ~RecoveryEntropyPoaSigner() override { crypto::CleanseMemory(m_entropy.data(), m_entropy.size()); }
-    std::optional<IdentityHybridPublicKey> PublicKey() const override { return m_public_key; }
-    std::optional<IdentityHybridSignature> Sign(const std::span<const unsigned char> message) const override
-    {
-        if (message.empty()) return std::nullopt;
-        return SignIdentityMessage(m_entropy, IdentityKeyPurpose::POA_FINALIZER, message);
-    }
-
-private:
-    RecoveryEntropy m_entropy;
-    IdentityHybridPublicKey m_public_key;
-};
-
-std::optional<PoaFinalityCertificate> CreateCertificate(
-    const IdentityHybridSignature& signature, const uint256& network_binding,
-    const uint256& block_id, const uint64_t height, const uint256& parent_block_id)
-{
-    if (network_binding.IsNull() || block_id.IsNull() || height == 0 || parent_block_id.IsNull()) return std::nullopt;
-    PoaFinalityCertificate certificate{
-        .version = POA_FINALITY_CERTIFICATE_VERSION,
-        .network_binding = network_binding,
-        .block_id = block_id,
-        .height = height,
-        .parent_block_id = parent_block_id,
-        .signature = signature,
-    };
-    if (!SerializePoaFinalityCertificate(certificate)) return std::nullopt;
-    return certificate;
+    BlockProductionResult result;
+    result.error = error;
+    return result;
 }
 
 } // namespace
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_block_id, const IdentityHybridPublicKey& genesis_finalizer_key)
-    : m_network_binding{network_binding}, m_public_key{genesis_finalizer_key},
-      m_journal{db, network_binding, genesis_block_id, m_public_key}
+PoaFinalizer::PoaFinalizer(
+    CybouStateStore& store, OperationPool& pool)
+    : m_store{store},
+      m_finalizer{std::make_unique<PoaSigningService>(store.GetDatabase(), store.GetNetworkBinding(),
+          store.GetNetworkDefinition().genesis_block_id, store.GetNetworkDefinition().poa_finalizer_public_key)},
+      m_pool{pool}
 {
-    if (genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
-        genesis_finalizer_key.ml_dsa.size() != 1952) {
-        throw std::invalid_argument{"invalid genesis PoA public key"};
-    }
 }
 
-PoaFinalizer::PoaFinalizer(KVStore& db, const uint256& network_binding,
-    const uint256& genesis_block_id, const RecoveryEntropy& operator_recovery_entropy,
-    const IdentityHybridPublicKey& genesis_finalizer_key)
-    : PoaFinalizer{db, network_binding, genesis_block_id,
-          ValidateRecoveryPoaKey(operator_recovery_entropy, genesis_finalizer_key)}
+PoaFinalizer::PoaFinalizer(
+    CybouStateStore& store, OperationPool& pool, const RecoveryEntropy& poa_recovery_entropy)
+    : m_store{store},
+      m_finalizer{std::make_unique<PoaSigningService>(store.GetDatabase(), store.GetNetworkBinding(),
+          store.GetNetworkDefinition().genesis_block_id, poa_recovery_entropy,
+          store.GetNetworkDefinition().poa_finalizer_public_key)},
+      m_pool{pool}
 {
-    auto signer = std::make_shared<RecoveryEntropyPoaSigner>(operator_recovery_entropy);
-    if (!EnableSigner(std::move(signer))) {
-        throw std::invalid_argument{"operator recovery phrase does not match genesis PoA key"};
+}
+
+PoaFinalizer::~PoaFinalizer() = default;
+
+OperationSubmitStatus PoaFinalizer::SubmitOperationWithStatus(
+    const ProtocolOperation& operation, std::optional<std::string> source_peer)
+{
+    switch (m_pool.Admit(operation, std::move(source_peer))) {
+    case PoolAdmission::ACCEPTED: return OperationSubmitStatus::ACCEPTED;
+    case PoolAdmission::ALREADY_PENDING: return OperationSubmitStatus::ALREADY_PENDING;
+    case PoolAdmission::ALREADY_FINALIZED: return OperationSubmitStatus::ALREADY_FINALIZED;
+    case PoolAdmission::REJECTED: return OperationSubmitStatus::REJECTED;
     }
+    return OperationSubmitStatus::REJECTED;
+}
+
+OperationSubmitResult PoaFinalizer::SubmitAuthAdjustment(
+    const PoaAuthAction action, const AccountId& target, const uint64_t amount)
+{
+    const auto head = m_store.GetFinalizedHead();
+    if (!head || head->height == std::numeric_limits<uint64_t>::max() || SafetyHalted()) return {};
+    PoaAuthAdjustment adjustment{
+        .action = action,
+        .target_account_id = target,
+        .amount = amount,
+        .block_height = head->height + 1,
+    };
+    if (!m_finalizer->SignAuthAdjustment(adjustment)) return {};
+    const ProtocolOperation operation{std::move(adjustment)};
+    return {
+        .status = SubmitOperationWithStatus(operation),
+        .op_id = ComputeOperationId(operation).value_or(uint256{}),
+    };
+}
+
+bool PoaFinalizer::SubmitOperation(const ProtocolOperation& operation)
+{
+    return SubmitOperationWithStatus(operation) == OperationSubmitStatus::ACCEPTED;
+}
+
+BlockProductionResult PoaFinalizer::ProduceNextBlock(const bool sync)
+{
+    if (SafetyHalted()) return Failure(BlockProductionError::POA_SAFETY_HALTED);
+    if (!SignerEnabled()) return Failure(BlockProductionError::POA_SIGNING_FAILED);
+    const auto head = m_store.GetFinalizedHead();
+    if (!head || head->height == std::numeric_limits<uint64_t>::max()) {
+        return Failure(BlockProductionError::STATE_UNAVAILABLE);
+    }
+
+    const uint64_t height = head->height + 1;
+    const auto operations = m_pool.Snapshot();
+    const auto state_root = m_store.ComputeCandidateStateRoot(operations, height);
+    if (!state_root) return Failure(BlockProductionError::INVALID_PENDING_OPERATIONS);
+
+    CybouBlock block{
+        .parent_block_id = head->block_id,
+        .height = height,
+        .operations = operations,
+        .resulting_state_root = *state_root,
+    };
+    const auto signing = m_finalizer->SignFinality(head->height, head->block_id, block);
+    if (!signing.certificate) return Failure(BlockProductionError::POA_SIGNING_FAILED);
+
+    FinalizedBlock finalized{
+        .block = std::move(block),
+        .certificate = *signing.certificate,
+    };
+    const auto serialized = SerializeFinalizedBlock(finalized);
+    if (!serialized || serialized->size() > MAX_FINALIZER_SERIALIZED_BLOCK_BYTES) {
+        return Failure(BlockProductionError::BLOCK_TOO_LARGE);
+    }
+
+    const auto committed = m_store.CommitFinalizedBlock(finalized, sync);
+    if (!committed) {
+        auto failure = Failure(BlockProductionError::COMMIT_FAILED);
+        failure.commit_result = committed;
+        return failure;
+    }
+    return BlockProductionResult{.finalized_block = std::move(finalized)};
+}
+
+bool PoaFinalizer::SafetyHalted() const
+{
+    return m_store.PoaSafetyHalted() || m_finalizer->SafetyHalted();
 }
 
 bool PoaFinalizer::EnableSigner(PoaSignerRef signer)
 {
-    if (!signer) return false;
-    const auto key = signer->PublicKey();
-    if (!key || *key != m_public_key) return false;
-    m_signer = std::move(signer);
-    return true;
+    return m_finalizer->EnableSigner(std::move(signer));
 }
 
 void PoaFinalizer::DisableSigner()
 {
-    m_signer.reset();
+    m_finalizer->DisableSigner();
 }
 
-PoaJournalStatus PoaFinalizer::CheckCanonicalTip(
-    const uint64_t finalized_height, const uint256& finalized_tip)
+bool PoaFinalizer::SignerEnabled() const
 {
-    return m_journal.CheckCanonicalTip(finalized_height, finalized_tip);
-}
-
-PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
-    const uint256& finalized_tip, const CybouBlock& block)
-{
-    if (!SerializeBlock(block)) return {.status = PoaSigningStatus::SIGNING_FAILED};
-    const auto block_id = ComputeBlockId(block);
-    if (block_id.IsNull()) return {.status = PoaSigningStatus::SIGNING_FAILED};
-    if (!m_signer || m_journal.SafetyHalted()) {
-        return {.status = PoaSigningStatus::SIGNING_FAILED};
-    }
-    const auto history_status = m_journal.CheckCanonicalTip(finalized_height, finalized_tip);
-    if (history_status != PoaJournalStatus::NONE) {
-        return {.status = PoaSigningStatus::JOURNAL_REJECTED, .journal_status = history_status};
-    }
-    const auto journal_status = m_journal.PrepareToSign(block.height, block.parent_block_id, block_id);
-    if (journal_status != PoaJournalStatus::NONE && journal_status != PoaJournalStatus::ALREADY_PREPARED) {
-        return {.status = PoaSigningStatus::JOURNAL_REJECTED, .journal_status = journal_status};
-    }
-    if (!m_signer) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
-    const auto digest = ComputePoaFinalityDigest(m_network_binding, block_id, block.height, block.parent_block_id);
-    const auto signature = m_signer->Sign(digest);
-    if (!signature || !VerifyIdentityMessage(m_public_key, *signature, digest)) {
-        return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
-    }
-    const auto certificate = CreateCertificate(*signature, m_network_binding, block_id, block.height, block.parent_block_id);
-    if (!certificate) return {.status = PoaSigningStatus::SIGNING_FAILED, .journal_status = journal_status};
-    return {
-        .status = journal_status == PoaJournalStatus::ALREADY_PREPARED ?
-            PoaSigningStatus::ALREADY_PREPARED : PoaSigningStatus::SIGNED,
-        .journal_status = journal_status,
-        .certificate = *certificate,
-    };
-}
-
-std::optional<IdentityHybridSignature> PoaFinalizer::SignTransportProof(
-    const std::span<const unsigned char> message) const
-{
-    if (message.empty() || m_journal.SafetyHalted() || !m_signer) return std::nullopt;
-    const auto signature = m_signer->Sign(message);
-    if (!signature || !VerifyIdentityMessage(m_public_key, *signature, message)) return std::nullopt;
-    return signature;
-}
-
-bool PoaFinalizer::SignAuthAdjustment(PoaAuthAdjustment& adjustment) const
-{
-    const auto digest = ComputePoaAuthAdjustmentDigest(m_network_binding, adjustment);
-    if (!digest || m_journal.SafetyHalted() || !m_signer) return false;
-    const auto signature = m_signer->Sign(*digest);
-    if (!signature || !VerifyIdentityMessage(m_public_key, *signature, *digest)) return false;
-    adjustment.poa_signature = *signature;
-    return true;
+    return m_finalizer->SignerEnabled();
 }
 
 } // namespace cybou

@@ -350,7 +350,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     m_phase.store(IdentityCreationPhase::WAITING_FOR_FINALITY);
     if (on_phase) on_phase(IdentityCreationPhase::WAITING_FOR_FINALITY, "Waiting for PoA finality certificate...");
 
-    if (m_runtime.GetStatus().is_finalizer) {
+    if (m_runtime.GetStatus().poa_signer_active) {
         m_runtime.ProduceBlock();
     }
 

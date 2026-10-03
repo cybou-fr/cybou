@@ -31,7 +31,6 @@ public:
                 .data_dir = fixture.directory / ("provider-" + std::to_string(i)),
                 .memory_only = true,
                 .wipe_data = true,
-                .storage_enabled = true,
                 .storage_capacity_bytes = 64ULL << 20,
             };
             auto provider = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));

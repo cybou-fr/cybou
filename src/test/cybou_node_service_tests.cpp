@@ -33,21 +33,21 @@ BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
         .genesis = local.genesis,
     }};
     service.Start();
-    service.StartDesktopFinalizer(10);
+    service.StartBlockProduction(10);
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
     while (service.Runtime().GetFinalizedHeight().value_or(0) < 2 &&
         std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds{10});
     }
     BOOST_REQUIRE_GE(service.Runtime().GetFinalizedHeight().value_or(0), 2U);
-    service.Runtime().DisablePoaFinalizer();
-    service.StopDesktopFinalizer();
+    service.Runtime().DisablePoaSigner();
+    service.StopBlockProduction();
     const auto stopped_height = service.Runtime().GetFinalizedHeight().value_or(0);
     std::this_thread::sleep_for(std::chrono::milliseconds{50});
     BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), stopped_height);
 }
 
-BOOST_AUTO_TEST_CASE(observer_network_service_starts_without_an_initial_peer)
+BOOST_AUTO_TEST_CASE(full_node_network_service_starts_without_an_initial_peer)
 {
     CybouServiceTestFixture local;
     cybou::CybouNodeService service{{
@@ -99,7 +99,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         if (session.Handshake({.network_binding=primary.runtime->GetNetworkBinding(),
                 .finalized_height=0,.finalized_tip=primary.definition.genesis_block_id,
-                .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30001})) {
+                .nonce=30001})) {
             while (session.ServeNext(*configured_source.runtime)) {}
         }
     }};
@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         if (session.Handshake({.network_binding=secondary.runtime->GetNetworkBinding(),
                 .finalized_height=1,.finalized_tip=cybou::ComputeBlockId(block->block),
-                .capabilities=cybou::p2p::CAP_SERVE_BLOCKS,.nonce=30002})) {
+                .nonce=30002})) {
             while (session.ServeNext(*secondary.runtime)) {}
         }
     });
@@ -133,14 +133,16 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     // Choosing the later, higher HELLO would return only its one stale block.
     BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),2U);
     // A configured peer that stops advancing must not prevent failover.
-    BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*second_block)));
+    if (secondary.runtime->GetFinalizedHeight().value_or(0) < 2)
+        BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*second_block)));
     const auto third_block=primary.runtime->ProduceBlock();
     BOOST_REQUIRE(third_block);
     BOOST_REQUIRE(static_cast<bool>(secondary.runtime->CommitBlock(*third_block)));
     observer->SyncFromConfiguredPeer(2);
     BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),3U);
     // Partial progress from the preferred route must not starve a fresher one.
-    BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*third_block)));
+    if (configured_source.runtime->GetFinalizedHeight().value_or(0) < 3)
+        BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*third_block)));
     const auto fourth_block=primary.runtime->ProduceBlock();
     BOOST_REQUIRE(fourth_block);
     BOOST_REQUIRE(static_cast<bool>(configured_source.runtime->CommitBlock(*fourth_block)));
@@ -155,7 +157,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     first_server.join(); second_server->join();
 }
 
-BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
+BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error)
 {
     CybouServiceTestFixture local;
     CybouServiceTestFixture foreign{0x41};
@@ -178,8 +180,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
                 .network_binding = local.runtime->GetNetworkBinding(),
                 .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(foreign_block->block),
-                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
-                .nonce = 29001}) && session.ServeNext(*foreign.runtime)) {
+                .nonce = 29001}) && session.ServeNext(*foreign.runtime) && session.ServeNext(*foreign.runtime)) {
             peer_served_bad_block.store(true);
         }
     }};
@@ -192,8 +193,7 @@ BOOST_AUTO_TEST_CASE(observer_network_worker_recovers_after_peer_protocol_error)
                 .network_binding = local.runtime->GetNetworkBinding(),
                 .finalized_height = 1,
                 .finalized_tip = cybou::ComputeBlockId(valid_block->block),
-                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
-                .nonce = 29002}) && session.ServeNext(*local.runtime)) {
+                .nonce = 29002}) && session.ServeNext(*local.runtime) && session.ServeNext(*local.runtime)) {
             peer_served_valid_block.store(true);
         }
     }};

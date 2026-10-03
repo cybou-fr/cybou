@@ -28,10 +28,6 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     if (nonce == 0) return std::nullopt;
     return Hello{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
-        .capabilities = CAP_SERVE_BLOCKS | CAP_BLOCK_INVENTORY | CAP_BLOCK_ANNOUNCEMENTS |
-            CAP_PEER_DISCOVERY | CAP_OPERATION_RELAY |
-            (runtime.HasStorageProvider() ? CAP_STORAGE | CAP_STORAGE_PROOFS : 0) |
-            (status.is_finalizer ? CAP_FINALIZER_PROOF : 0),
         .nonce = nonce};
 }
 
@@ -76,14 +72,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             }
             PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
             const auto hello = LocalHello(m_runtime);
-            const auto signer = [this](std::span<const unsigned char> message) {
-                return m_runtime.SignProviderProof(message);
-            };
-            const auto finalizer_signer = [this](std::span<const unsigned char> message) {
-                return m_runtime.SignFinalizerTransportProof(message);
-            };
-            if (hello && session.Handshake(*hello, signer, finalizer_signer,
-                    &m_runtime.GetNetworkDefinition().poa_finalizer_public_key) &&
+            if (hello && session.Handshake(*hello) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }

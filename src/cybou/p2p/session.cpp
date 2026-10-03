@@ -28,10 +28,10 @@
 namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{10};
-constexpr size_t HELLO_SIZE{88};
+constexpr size_t HELLO_SIZE{80};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{30}};
 constexpr auto TLS_HANDSHAKE_TIMEOUT{std::chrono::seconds{10}};
-constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V4"};
+constexpr std::string_view TLS_EXPORTER_LABEL{"EXPORTER-CYBOU-CYP2-V5"};
 
 struct TlsContexts {
     SSL_CTX* client{nullptr};
@@ -255,8 +255,8 @@ bool IsSupportedMessageType(const uint8_t type)
 {
     switch (static_cast<MessageType>(type)) {
     case MessageType::HELLO:
+    case MessageType::GET_PROVIDER_PROOF:
     case MessageType::PROVIDER_PROOF:
-    case MessageType::FINALIZER_PROOF:
     case MessageType::PING:
     case MessageType::PONG:
     case MessageType::GET_BLOCK:
@@ -321,7 +321,6 @@ std::vector<unsigned char> EncodeHello(const Hello& hello)
     out.insert(out.end(), hello.network_binding.begin(), hello.network_binding.end());
     Put64(out, hello.finalized_height);
     out.insert(out.end(), hello.finalized_tip.begin(), hello.finalized_tip.end());
-    Put64(out, hello.capabilities);
     Put64(out, hello.nonce);
     return out;
 }
@@ -333,8 +332,7 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
     std::copy_n(bytes.begin(), 32, hello.network_binding.begin());
     hello.finalized_height = Read64(bytes.data() + 32);
     std::copy_n(bytes.begin() + 40, 32, hello.finalized_tip.begin());
-    hello.capabilities = Read64(bytes.data() + 72);
-    hello.nonce = Read64(bytes.data() + 80);
+    hello.nonce = Read64(bytes.data() + 72);
     if (hello.network_binding.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
     return hello;
 }
@@ -610,7 +608,7 @@ std::vector<unsigned char> ProviderProofMessage(const Hello& signer,const Hello&
     const std::span<const unsigned char> tls_exporter)
 {
     if (tls_exporter.size() != 32) return {};
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v3"};
+    constexpr std::string_view DOMAIN{"CYBOU/CYP2/PROVIDER-PROOF/v5"};
     std::vector<unsigned char> message(DOMAIN.begin(),DOMAIN.end());
     message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
     const auto signer_bytes=EncodeHello(signer),verifier_bytes=EncodeHello(verifier);
@@ -646,36 +644,11 @@ std::optional<ProviderId> VerifyProviderProof(const std::span<const unsigned cha
     return ComputeBlake3Digest(id_input);
 }
 
-std::vector<unsigned char> FinalizerProofMessage(const Hello& signer, const Hello& verifier,
-    const std::span<const unsigned char> tls_exporter)
-{
-    if (tls_exporter.size() != 32) return {};
-    constexpr std::string_view DOMAIN{"CYBOU/CYP2/FINALIZER-PROOF/v1"};
-    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
-    message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
-    const auto signer_bytes = EncodeHello(signer), verifier_bytes = EncodeHello(verifier);
-    message.insert(message.end(), signer_bytes.begin(), signer_bytes.end());
-    message.insert(message.end(), verifier_bytes.begin(), verifier_bytes.end());
-    return message;
-}
-
-bool VerifyFinalizerProof(const std::span<const unsigned char> payload,
-    const std::span<const unsigned char> message, const IdentityHybridPublicKey& genesis_finalizer_key)
-{
-    if (payload.size() != 64 + 3309 || genesis_finalizer_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
-        genesis_finalizer_key.ml_dsa.size() != 1952) return false;
-    IdentityHybridSignature signature;
-    std::copy_n(payload.begin(), signature.ed25519.size(), signature.ed25519.begin());
-    signature.ml_dsa.assign(payload.begin() + signature.ed25519.size(), payload.end());
-    return VerifyIdentityMessage(genesis_finalizer_key, signature, message);
-}
-
-bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provider_signer,
-    const FinalizerProofSigner& finalizer_signer, const IdentityHybridPublicKey* genesis_finalizer_key)
+bool PeerSession::Handshake(const Hello& local)
 {
     m_peer.reset();
     m_peer_provider_id.reset();
-    m_peer_finalizer_authenticated = false;
+    m_local.reset();
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_binding.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
     m_handshake_status = HandshakeStatus::UNAVAILABLE;
@@ -694,51 +667,26 @@ bool PeerSession::Handshake(const Hello& local, const ProviderProofSigner& provi
         m_handshake_status = HandshakeStatus::WRONG_NETWORK;
         return false;
     }
-    // Storage peers prove their provider key over both session nonces.
-    if (local.capabilities & CAP_STORAGE) {
-        if (!provider_signer) {
-            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-            return false;
-        }
-        const auto proof = provider_signer(ProviderProofMessage(local, *peer, m_tls_exporter));
-        if (!proof || !Write(Frame{MessageType::PROVIDER_PROOF, *proof})) {
-            m_handshake_status = HandshakeStatus::UNAVAILABLE;
-            return false;
-        }
-    }
-    if (local.capabilities & CAP_FINALIZER_PROOF) {
-        if (!finalizer_signer) {
-            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-            return false;
-        }
-        const auto proof = finalizer_signer(FinalizerProofMessage(local, *peer, m_tls_exporter));
-        if (!proof || !Write(Frame{MessageType::FINALIZER_PROOF, *proof})) {
-            m_handshake_status = HandshakeStatus::UNAVAILABLE;
-            return false;
-        }
-    }
-    if (peer->capabilities & CAP_STORAGE) {
-        const auto proof_frame = Read();
-        if (!proof_frame || proof_frame->type != MessageType::PROVIDER_PROOF) return false;
-        m_peer_provider_id = VerifyProviderProof(proof_frame->payload,
-            ProviderProofMessage(*peer, local, m_tls_exporter));
-        if (!m_peer_provider_id) return false;
-    }
-    if (peer->capabilities & CAP_FINALIZER_PROOF) {
-        if (!genesis_finalizer_key || genesis_finalizer_key->purpose != IdentityKeyPurpose::POA_FINALIZER) {
-            m_handshake_status = HandshakeStatus::INVALID_LOCAL;
-            return false;
-        }
-        const auto proof_frame = Read();
-        if (!proof_frame || proof_frame->type != MessageType::FINALIZER_PROOF ||
-            !VerifyFinalizerProof(proof_frame->payload,
-                FinalizerProofMessage(*peer, local, m_tls_exporter), *genesis_finalizer_key)) return false;
-        m_peer_finalizer_authenticated = true;
-    }
     m_peer = *peer;
-    m_local_capabilities = local.capabilities;
+    m_local = local;
     m_handshake_status = HandshakeStatus::CONNECTED;
     return true;
+}
+
+std::optional<ProviderId> PeerSession::ProveStorageIdentity()
+{
+    if (!m_peer || !m_local) return std::nullopt;
+    if (m_peer_provider_id) return m_peer_provider_id;
+    std::array<unsigned char, 32> challenge{};
+    if (RAND_bytes(challenge.data(), challenge.size()) != 1) return std::nullopt;
+    if (!Write(Frame{MessageType::GET_PROVIDER_PROOF, {challenge.begin(), challenge.end()}})) { m_peer.reset(); return std::nullopt; }
+    const auto response = Read();
+    if (!response || response->type != MessageType::PROVIDER_PROOF) { m_peer.reset(); return std::nullopt; }
+    auto message = ProviderProofMessage(*m_peer, *m_local, m_tls_exporter);
+    message.insert(message.end(), challenge.begin(), challenge.end());
+    m_peer_provider_id = VerifyProviderProof(response->payload, message);
+    if (!m_peer_provider_id) { m_peer.reset(); return std::nullopt; }
+    return m_peer_provider_id;
 }
 
 bool PeerSession::Ping(uint64_t nonce)
@@ -761,7 +709,7 @@ bool PeerSession::AnswerPing()
 
 BlockRequestResult PeerSession::RequestBlock(uint64_t height)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0)
+    if (!m_peer || height == 0)
         return {.status = BlockRequestStatus::INVALID_REQUEST, .bytes = {}};
     if (!SendBlockRequest(height)) return {.status = BlockRequestStatus::UNAVAILABLE, .bytes = {}};
     return ReadBlockResponse();
@@ -769,7 +717,7 @@ BlockRequestResult PeerSession::RequestBlock(uint64_t height)
 
 bool PeerSession::SendBlockRequest(uint64_t height)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) || height == 0) return false;
+    if (!m_peer || height == 0) return false;
     std::vector<unsigned char> request;
     Put64(request, height);
     return Write(Frame{MessageType::GET_BLOCK, request}, std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT);
@@ -801,8 +749,7 @@ BlockRequestResult PeerSession::ReadBlockResponse()
 
 BlockInventoryResult PeerSession::RequestBlockInventory(uint64_t first_height, uint8_t max_blocks)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_SERVE_BLOCKS) ||
-        !(m_peer->capabilities & CAP_BLOCK_INVENTORY) || first_height == 0 ||
+    if (!m_peer || first_height == 0 ||
         max_blocks == 0 || max_blocks > MAX_BLOCK_INVENTORY ||
         first_height > std::numeric_limits<uint64_t>::max() - max_blocks + 1) {
         return {.status = BlockRequestStatus::INVALID_REQUEST, .blocks = {}};
@@ -844,8 +791,7 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
     const BlockAnnouncement& announcement, const FinalizedBlock& block, uint64_t& peer_finalized_height)
 {
     peer_finalized_height = 0;
-    if (!m_peer || !(m_peer->capabilities & CAP_BLOCK_ANNOUNCEMENTS) ||
-        announcement.height == 0 || announcement.block_id.IsNull() ||
+    if (!m_peer || announcement.height == 0 || announcement.block_id.IsNull() ||
         block.block.height != announcement.height || ComputeBlockId(block.block) != announcement.block_id) return std::nullopt;
     std::vector<unsigned char> inventory{1};
     Put64(inventory, announcement.height);
@@ -883,7 +829,7 @@ std::optional<BlockAnnounceResult> PeerSession::AdvertiseBlock(
 
 std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const ProtocolOperation& operation)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY)) return std::nullopt;
+    if (!m_peer) return std::nullopt;
     const auto bytes = SerializeProtocolOperation(operation);
     const auto op_id = ComputeOperationId(operation);
     if (!bytes || !op_id || bytes->empty() || bytes->size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
@@ -908,8 +854,7 @@ std::optional<OperationSubmitResult> PeerSession::SubmitOperation(const Protocol
 
 bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
-        !(m_local_capabilities & CAP_OPERATION_RELAY)) return false;
+    if (!m_peer) return false;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     if (!Write(Frame{MessageType::OPERATION_RELAY_POLL, {}}, deadline)) return false;
     const auto meta = Read(deadline);
@@ -950,8 +895,7 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
 
 bool PeerSession::PollValidationAttestation(CybouNodeRuntime& runtime)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
-        !(m_local_capabilities & CAP_OPERATION_RELAY)) return false;
+    if (!m_peer) return false;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
     if (!Write(Frame{MessageType::VALIDATION_ATTESTATION_POLL, {}}, deadline)) return false;
     const auto response = Read(deadline);
@@ -966,7 +910,7 @@ bool PeerSession::PollValidationAttestation(CybouNodeRuntime& runtime)
 
 std::vector<std::pair<std::string, uint16_t>> PeerSession::RequestPeers(std::chrono::steady_clock::time_point deadline)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_PEER_DISCOVERY)) return {};
+    if (!m_peer) return {};
     if (!Write(Frame{MessageType::GET_PEERS, {}}, deadline)) return {};
     const auto response = Read(deadline);
     if (!response || response->type != MessageType::PEERS) return {};
@@ -985,7 +929,7 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
     const uint256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || publication_operation_id.IsNull() ||
+    if (!m_peer || publication_operation_id.IsNull() ||
         IsZeroChunkId(chunk_id) || stored_bytes.size() < ENCRYPTED_CHUNK_MIN_STORED_BYTES ||
         stored_bytes.size() > ENCRYPTED_CHUNK_MAX_STORED_BYTES || proof.siblings.size() > 32) return std::nullopt;
     const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
@@ -1012,7 +956,7 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
 
 std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkId& chunk_id)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE) || IsZeroChunkId(chunk_id)) return std::nullopt;
+    if (!m_peer || IsZeroChunkId(chunk_id)) return std::nullopt;
     const auto unavailable = [this]() -> std::optional<std::vector<unsigned char>> {
         m_peer.reset();
         m_peer_provider_id.reset();
@@ -1041,7 +985,7 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
 std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
     const uint256& publication_operation_id, const ChunkId& chunk_id)
 {
-    if (!m_peer || !(m_peer->capabilities & CAP_STORAGE_PROOFS) || publication_operation_id.IsNull() ||
+    if (!m_peer || publication_operation_id.IsNull() ||
         IsZeroChunkId(chunk_id)) return std::nullopt;
     const auto unavailable = [this]() -> std::optional<ChunkAuthorizationProof> {
         m_peer.reset();
@@ -1078,8 +1022,18 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     if (!request) {
         return m_socket.is_open();
     }
+    if (request->type == MessageType::GET_PROVIDER_PROOF) {
+        boost::system::error_code ec;
+        const auto remote = m_socket.remote_endpoint(ec);
+        if (ec || !runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::OPERATION, request->payload.size())) return false;
+        if (!m_local || request->payload.size() != 32) return false;
+        auto message = ProviderProofMessage(*m_local, *m_peer, m_tls_exporter);
+        message.insert(message.end(), request->payload.begin(), request->payload.end());
+        const auto proof = runtime.SignProviderProof(message);
+        return proof && Write(Frame{MessageType::PROVIDER_PROOF, *proof});
+    }
     if (request->type == MessageType::PUT_AUTHORIZED_CHUNK) {
-        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() < 73) return false;
+        if (request->payload.size() < 73) return false;
         uint256 publication_id;
         std::copy_n(request->payload.begin(), 32, publication_id.begin());
         ChunkId chunk_id{};
@@ -1109,7 +1063,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             {static_cast<unsigned char>(result.status)}} , deadline);
     }
     if (request->type == MessageType::GET_CHUNK_BY_ID) {
-        if (!(m_local_capabilities & CAP_STORAGE) || request->payload.size() != 32) return false;
+        if (request->payload.size() != 32) return false;
         ChunkId chunk_id{};
         std::copy_n(request->payload.begin(), 32, chunk_id.begin());
         const auto bytes = runtime.GetFinalizedChunk(chunk_id);
@@ -1128,7 +1082,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return true;
     }
     if (request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
-        if (!(m_local_capabilities & CAP_STORAGE_PROOFS) || request->payload.size() != 64) return false;
+        if (request->payload.size() != 64) return false;
         uint256 publication_id;
         std::copy_n(request->payload.begin(), 32, publication_id.begin());
         ChunkId chunk_id{};
@@ -1143,13 +1097,11 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return Write(Frame{MessageType::CHUNK_AUTHORIZATION_PROOF, response});
     }
     if (request->type == MessageType::GET_PEERS) {
-        if (!(m_local_capabilities & CAP_PEER_DISCOVERY)) return false;
-        const auto endpoints = runtime.GetPeerEndpointsForGossip();
+            const auto endpoints = runtime.GetPeerEndpointsForGossip();
         return SendPeers(endpoints);
     }
     if (request->type == MessageType::OPERATION_RELAY_POLL) {
-        if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
-            !(m_local_capabilities & CAP_OPERATION_RELAY) || !request->payload.empty()) return false;
+        if (!m_peer || !request->payload.empty()) return false;
         const auto item = runtime.ClaimRelayedOperation();
         std::vector<unsigned char> meta{static_cast<unsigned char>(item.has_value())};
         if (item) {
@@ -1184,8 +1136,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             {static_cast<unsigned char>(acknowledged)}}, deadline);
     }
     if (request->type == MessageType::VALIDATION_ATTESTATION_POLL) {
-        if (!m_peer || !(m_peer->capabilities & CAP_OPERATION_RELAY) ||
-            !(m_local_capabilities & CAP_OPERATION_RELAY) || !request->payload.empty()) return false;
+        if (!m_peer || !request->payload.empty()) return false;
         if (const auto tip = runtime.GetFinalizedTip(); tip && *tip != m_served_attestation_base) {
             m_served_attestation_base = *tip;
             m_served_attestations.clear();
@@ -1206,8 +1157,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});
     }
     if (request->type == MessageType::OP_META) {
-        if (!(m_local_capabilities & CAP_OPERATION_RELAY)) return false;
-        if (request->payload.size() != 4) return false;
+            if (request->payload.size() != 4) return false;
         const uint32_t size = Read32(request->payload.data());
         if (size == 0 || size > MAX_OPERATION_PAYLOAD_BYTES) return false;
         boost::system::error_code budget_error;
@@ -1253,8 +1203,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return Write(Frame{MessageType::OP_RESULT, response});
     }
     if (request->type == MessageType::BLOCK_INV) {
-        if (!(m_local_capabilities & CAP_BLOCK_ANNOUNCEMENTS) ||
-            request->payload.size() != 41 || request->payload[0] != 1) return false;
+        if (request->payload.size() != 41 || request->payload[0] != 1) return false;
         const uint64_t height = Read64(request->payload.data() + 1);
         uint256 id;
         std::copy_n(request->payload.begin() + 9, 32, id.begin());
@@ -1334,8 +1283,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return acknowledge(*applied);
     }
     if (request->type == MessageType::GET_BLOCKS) {
-        if (!(m_local_capabilities & CAP_SERVE_BLOCKS) ||
-            !(m_local_capabilities & CAP_BLOCK_INVENTORY) || request->payload.size() != 9) return false;
+        if (request->payload.size() != 9) return false;
         const uint64_t first_height = Read64(request->payload.data());
         const uint8_t count = request->payload[8];
         if (first_height == 0 || count == 0 || count > MAX_BLOCK_INVENTORY ||
@@ -1354,7 +1302,6 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return Write(Frame{MessageType::BLOCK_INV, inventory});
     }
     if (request->type != MessageType::GET_BLOCK || request->payload.size() != 8) return false;
-    if (!(m_local_capabilities & CAP_SERVE_BLOCKS)) return false;
     const uint64_t height = Read64(request->payload.data());
     if (height == 0) return false;
     const auto block = runtime.GetBlockAtHeight(height);

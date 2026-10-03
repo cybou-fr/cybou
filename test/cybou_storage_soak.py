@@ -64,7 +64,7 @@ def main() -> int:
                       "--peer-admission", "lab"]
 
     def provider_args(name):
-        return [node, "provider", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
+        return [node, "node", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
                 "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{PROVIDERS[name]}", "--capacity", CAPACITY,
                 "--peer-admission", "lab"]
 

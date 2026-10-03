@@ -4,7 +4,7 @@
 # file COPYING or https://opensource.org/license/mit/.
 """Multi-process PoA + storage provider smoke test.
 
-Starts a real PoA finalizer, two real storage providers (`cybou provider run`)
+Starts a real PoA finalizer, two real storage providers (`cybou node run`)
 and the `cybou-storage-smoke` client, all as separate processes on loopback:
 
     block production -> verified sync -> Identity -> RootPublication
@@ -51,7 +51,7 @@ def main() -> int:
                         "--peer-admission", "lab"])
     time.sleep(2)
     for name, port in PROVIDERS.items():
-        start(f"provider-{name}", [node, "provider", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
+        start(f"provider-{name}", [node, "node", "run", "--network", str(network), "--data-dir", str(work / f"provider-{name}-db"),
                                    "--peer", f"127.0.0.1:{FINALIZER_P2P}", "--listen", f"127.0.0.1:{port}", "--capacity", CAPACITY,
                                    "--peer-admission", "lab"])
 

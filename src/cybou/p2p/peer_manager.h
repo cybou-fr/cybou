@@ -43,8 +43,6 @@ struct PeerInfo {
     Hello hello;
     /** Proven ProviderID for storage peers. */
     std::optional<ProviderId> provider_id;
-    /** Session-only proof of the genesis PoA key; cleared when the session drops. */
-    bool finalizer_authenticated{false};
 };
 
 struct PeerSubmitResult {
@@ -58,7 +56,7 @@ struct PeerSubmitResult {
 
 // Single-threaded outbound peer set. Callers schedule connection attempts and
 // health checks; this class never supplies consensus trust. Dynamic discovery
-// only collects untrusted routing hints — explicit operator-configured peer endpoints keep
+// only collects untrusted routing hints â€” explicit operator-configured peer endpoints keep
 // gossip priority, and discovered peers never define consensus connectivity.
 class PeerManager {
 public:
@@ -86,9 +84,8 @@ public:
     size_t PollValidationAttestations();
     size_t ConnectedCount() const { return m_peers.size(); }
     std::vector<PeerInfo> Peers() const;
-    /** Live finalizer-authenticated sessions; endpoints are transient routes only. */
-    /** Connected peers that advertised the optional ciphertext storage service. */
-    std::vector<PeerInfo> StoragePeers() const;
+    /** Connected Full Nodes whose storage identity is proven on demand. */
+    std::vector<PeerInfo> StoragePeers();
     std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
         const std::string& address, uint16_t port, const ProviderId& provider_id,
         const uint256& publication_operation_id,

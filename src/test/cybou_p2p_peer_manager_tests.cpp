@@ -76,6 +76,29 @@ std::optional<TestTlsIdentity> CreateTestTlsIdentity(const std::filesystem::path
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(v5_hello_has_only_baseline_fields_and_rejects_v4)
+{
+    cybou::p2p::Hello hello;
+    hello.network_binding = uint256::ONE;
+    hello.finalized_height = 123;
+    hello.finalized_tip = uint256::ONE;
+    hello.nonce = 456;
+    const auto encoded = cybou::p2p::EncodeHello(hello);
+    BOOST_CHECK_EQUAL(encoded.size(), 80U);
+    const auto decoded = cybou::p2p::DecodeHello(encoded);
+    BOOST_REQUIRE(decoded);
+    BOOST_CHECK(decoded->network_binding == hello.network_binding);
+    BOOST_CHECK_EQUAL(decoded->finalized_height, hello.finalized_height);
+    BOOST_CHECK(decoded->finalized_tip == hello.finalized_tip);
+    BOOST_CHECK_EQUAL(decoded->nonce, hello.nonce);
+    auto frame = cybou::p2p::EncodeFrame({cybou::p2p::MessageType::HELLO, encoded});
+    BOOST_REQUIRE(frame);
+    BOOST_CHECK_EQUAL((*frame)[4], 5U);
+    (*frame)[4] = 4;
+    BOOST_CHECK(!cybou::p2p::DecodeFrame(*frame));
+    BOOST_CHECK(!cybou::p2p::EncodeFrame({static_cast<cybou::p2p::MessageType>(40), {}}));
+}
+
 BOOST_AUTO_TEST_CASE(public_peer_policy_rejects_before_opening_socket)
 {
     CybouServiceTestFixture fixture;
@@ -170,7 +193,7 @@ BOOST_AUTO_TEST_CASE(pinned_tls_identity_gates_an_ordinary_cyp2_handshake)
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER,
                 std::move(tls)};
             server_handshake = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(),
-                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 1});
+                .nonce = 1});
         }};
         tcp::socket socket{io};
         socket.connect(tcp::endpoint{loopback, acceptor.local_endpoint().port()});
@@ -179,7 +202,7 @@ BOOST_AUTO_TEST_CASE(pinned_tls_identity_gates_an_ordinary_cyp2_handshake)
         cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT,
             std::move(tls)};
         const bool client_handshake = client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(),
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 2});
+            .nonce = 2});
         server.join();
         return std::pair{client_handshake, server_handshake};
     };
@@ -196,6 +219,50 @@ BOOST_AUTO_TEST_CASE(pinned_tls_identity_gates_an_ordinary_cyp2_handshake)
     std::filesystem::remove(identity->private_key);
 }
 
+BOOST_AUTO_TEST_CASE(poa_signer_toggles_preserve_the_full_node_session)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    cybou::p2p::InboundPeerServer server{*fixture.runtime, io,
+        tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listener{[&] { server.Run(stopping); }};
+    struct StopListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
+    } stop_listener{stopping, listener};
+    auto node = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+        .network_definition = fixture.definition,
+        .data_dir = fixture.directory / "toggle-node", .memory_only = true,
+        .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()});
+    BOOST_REQUIRE(node->InitializeGenesis(fixture.genesis));
+    node->SetExplicitPeerEndpoints({{"127.0.0.1", server.Port()}});
+    BOOST_REQUIRE(node->SyncFromConfiguredPeer(1).caught_up_with_known_peers);
+    BOOST_REQUIRE_EQUAL(node->ConnectedPeerCount(), 1U);
+    BOOST_CHECK(!node->GetDiagnostics().peers.front().provider_id.size());
+    BOOST_CHECK(!node->ProduceBlock());
+    auto material = cybou::GenerateIdentityMaterial();
+    BOOST_REQUIRE(material);
+    cybou::crypto::CleanseMemory(material->recovery_entropy.data(), material->recovery_entropy.size());
+    material->recovery_entropy = fixture.validator_seed;
+    cybou::CybouKeyStore keystore;
+    BOOST_REQUIRE(keystore.LoadMaterial(std::move(*material)));
+    auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(keystore);
+    BOOST_REQUIRE(node->EnablePoaSigner(signer));
+    BOOST_CHECK_EQUAL(node->ConnectedPeerCount(), 1U);
+    node->DisablePoaSigner();
+    BOOST_CHECK_EQUAL(node->ConnectedPeerCount(), 1U);
+    BOOST_REQUIRE(node->SyncFromConfiguredPeer(1).caught_up_with_known_peers);
+    BOOST_REQUIRE(node->EnablePoaSigner(signer));
+    BOOST_REQUIRE(node->ProduceBlock());
+    node->SyncFromConfiguredPeer(1);
+    BOOST_CHECK(node->GetFinalizedTip() == fixture.runtime->GetFinalizedTip());
+    BOOST_CHECK_EQUAL(node->ConnectedPeerCount(), 1U);
+    node.reset();
+}
+
 BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
 {
     CybouServiceTestFixture fixture;
@@ -210,14 +277,14 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
         tcp::socket socket{io};
         first_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        served[0] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 12, .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 101}) &&
+        served[0] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 12, .finalized_tip = fixture.definition.genesis_block_id, .nonce = 101}) &&
             session.AnswerPing();
     }};
     std::jthread second_server{[&] {
         tcp::socket socket{io};
         second_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        served[1] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 13, .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 102}) &&
+        served[1] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 13, .finalized_tip = fixture.definition.genesis_block_id, .nonce = 102}) &&
             session.AnswerPing();
     }};
 
@@ -232,7 +299,6 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
     const auto peers = manager.Peers();
     BOOST_REQUIRE_EQUAL(peers.size(), 2U);
     BOOST_CHECK(peers[0].hello.network_binding == network);
-    BOOST_CHECK(std::none_of(peers.begin(), peers.end(), [](const auto& peer) { return peer.finalizer_authenticated; }));
     BOOST_CHECK_EQUAL(manager.PingAll(), 2U);
     first_server.join();
     second_server.join();
@@ -241,7 +307,7 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
-BOOST_AUTO_TEST_CASE(manager_tracks_finalizer_proof_only_for_the_live_session)
+BOOST_AUTO_TEST_CASE(ordinary_handshake_is_independent_of_local_poa_signer)
 {
     CybouServiceTestFixture fixture;
     boost::asio::io_context io;
@@ -254,17 +320,15 @@ BOOST_AUTO_TEST_CASE(manager_tracks_finalizer_proof_only_for_the_live_session)
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        handshake_ok = fixture.HandshakeAsFinalizer(session, {.network_binding = network,
+        handshake_ok = fixture.HandshakeAsPeer(session, {.network_binding = network,
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_FINALIZER_PROOF, .nonce = 901});
+            .nonce = 901});
     }};
 
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_REQUIRE(manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
     const auto live_routes = manager.Peers();
     BOOST_REQUIRE_EQUAL(live_routes.size(), 1U);
-    BOOST_CHECK(live_routes.front().finalizer_authenticated);
-    BOOST_CHECK(live_routes.front().hello.capabilities & cybou::p2p::CAP_FINALIZER_PROOF);
 
     server.join();
     BOOST_CHECK(handshake_ok);
@@ -272,7 +336,7 @@ BOOST_AUTO_TEST_CASE(manager_tracks_finalizer_proof_only_for_the_live_session)
     BOOST_CHECK(manager.Peers().empty());
 }
 
-BOOST_AUTO_TEST_CASE(authority_proves_key_to_unconfigured_live_peer_session)
+BOOST_AUTO_TEST_CASE(poa_signer_uses_the_same_ordinary_handshake)
 {
     CybouServiceTestFixture fixture;
     boost::asio::io_context io;
@@ -291,23 +355,19 @@ BOOST_AUTO_TEST_CASE(authority_proves_key_to_unconfigured_live_peer_session)
     BOOST_REQUIRE(authority.InitializeGenesis(fixture.genesis));
 
     bool server_handshake{false};
-    bool finalizer_authenticated{false};
     std::jthread server{[&] {
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         server_handshake = fixture.HandshakeAsPeer(session, {.network_binding = authority.GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_OPERATION_RELAY, .nonce = 9912}, {}, {},
-            &fixture.definition.poa_finalizer_public_key);
-        finalizer_authenticated = session.PeerFinalizerAuthenticated();
+            .nonce = 9912});
     }};
 
     cybou::p2p::PeerManager manager{authority};
     BOOST_CHECK(manager.Connect(endpoint.first, endpoint.second));
     server.join();
     BOOST_CHECK(server_handshake);
-    BOOST_CHECK(finalizer_authenticated);
 }
 
 BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
@@ -438,8 +498,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
             " initialized=" << authority.GetStatus().is_initialized << " status=" <<
             static_cast<unsigned>(authority_peers.LastConnectStatus()));
     BOOST_REQUIRE_EQUAL(authority_peers.Peers().size(), 1U);
-    BOOST_CHECK(!authority_peers.Peers().front().finalizer_authenticated);
-    BOOST_CHECK(authority_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
 
     cybou::p2p::PeerManager relay_mesh_peers{second_relay_node};
     BOOST_REQUIRE(relay_mesh_peers.Connect(server_endpoint.first, server_endpoint.second));
@@ -457,7 +515,6 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     cybou::p2p::PeerManager client_peers{client};
     BOOST_REQUIRE(client_peers.Connect(server_endpoint.first, server_endpoint.second));
     BOOST_REQUIRE_EQUAL(client_peers.Peers().size(), 1U);
-    BOOST_CHECK(client_peers.Peers().front().hello.capabilities & cybou::p2p::CAP_OPERATION_RELAY);
 
     const auto submitted = client_peers.SubmitOperationToAny({server_endpoint}, client_operation);
     BOOST_REQUIRE(submitted.acknowledgment);
@@ -484,7 +541,7 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
 
     BOOST_CHECK_EQUAL(relay_mesh_peers.PollOperationRelays(), 1U);
     BOOST_CHECK_EQUAL(authority_peers.PollOperationRelays(), 2U);
-    BOOST_REQUIRE(authority.IsPoaFinalizerEnabled());
+    BOOST_REQUIRE(authority.IsPoaSignerActive());
     BOOST_REQUIRE(authority.GetOperationStatus(*client_operation_id).kind ==
         cybou::OperationStatusKind::LOCAL_PENDING);
     BOOST_REQUIRE(authority.GetOperationStatus(*second_client_operation_id).kind ==
@@ -492,7 +549,7 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     const auto finalized = authority.ProduceBlock();
     BOOST_REQUIRE_MESSAGE(finalized, "height=" << authority.GetStatus().finalized_height <<
         " poa_halted=" << authority.GetStatus().poa_safety_halted <<
-        " signer=" << authority.IsPoaFinalizerEnabled() <<
+        " signer=" << authority.IsPoaSignerActive() <<
         " operation_status=" << static_cast<unsigned>(authority.GetOperationStatus(*client_operation_id).kind));
     const bool included = std::any_of(finalized->block.operations.begin(), finalized->block.operations.end(),
         [&](const cybou::ProtocolOperation& op) { return cybou::ComputeOperationId(op) == client_operation_id; });
@@ -742,7 +799,7 @@ BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)
         first_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served[0] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 1801}) &&
+            .finalized_tip = fixture.definition.genesis_block_id, .nonce = 1801}) &&
             session.AnswerPing();
     }};
     std::jthread second_server{[&] {
@@ -750,7 +807,7 @@ BOOST_AUTO_TEST_CASE(manager_pings_only_the_requested_peer_budget_and_rotates)
         second_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served[1] = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 1802}) &&
+            .finalized_tip = fixture.definition.genesis_block_id, .nonce = 1802}) &&
             session.AnswerPing();
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -777,7 +834,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_network_peer)
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        fixture.HandshakeAsPeer(session, {.network_binding = *wrong_network, .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 103});
+        fixture.HandshakeAsPeer(session, {.network_binding = *wrong_network, .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id, .nonce = 103});
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
@@ -796,7 +853,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     auto make_provider = [&](const std::string& name) {
         cybou::NodeRuntimeConfig config{.network_definition = fixture.definition,
             .data_dir = fixture.directory / name, .memory_only = true, .wipe_data = true,
-            .storage_enabled = true, .storage_capacity_bytes = 64ULL << 20, .peer_admission_policy = TestLabAdmissionPolicy()};
+            .storage_capacity_bytes = 64ULL << 20, .peer_admission_policy = TestLabAdmissionPolicy()};
         auto runtime = std::make_unique<cybou::CybouNodeRuntime>(std::move(config));
         if (!runtime->InitializeGenesis(fixture.genesis)) throw std::runtime_error{"provider genesis failed"};
         return runtime;
@@ -817,16 +874,15 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         first_handshake = fixture.HandshakeAsPeer(session, {.network_binding = network,
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_PROOFS,
-            .nonce = 0x3101}, [provider = first.get()](auto message) {
-                return provider->SignProviderProof(message);
-            });
+            .nonce = 0x3101});
+        if (first_handshake) session.ServeNext(*first);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_REQUIRE(manager.Connect(address, port));
+    BOOST_CHECK(!manager.Peers().front().provider_id);
+    const auto discovered = manager.StoragePeers();
     first_server.join();
     BOOST_REQUIRE(first_handshake.load());
-    const auto discovered = manager.StoragePeers();
     BOOST_REQUIRE_EQUAL(discovered.size(), 1U);
     BOOST_CHECK(discovered.front().provider_id == first_id);
     manager.DisconnectAll();
@@ -839,10 +895,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         second_handshake = fixture.HandshakeAsPeer(session, {.network_binding = network,
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_STORAGE | cybou::p2p::CAP_STORAGE_PROOFS,
-            .nonce = 0x3102}, [provider = second.get()](auto message) {
-                return provider->SignProviderProof(message);
-            });
+            .nonce = 0x3102});
         if (second_handshake) request_served = session.ServeNext(*second);
     }};
     BOOST_REQUIRE(manager.Connect(address, port));
@@ -856,7 +909,7 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_provider_id)
     manager.DisconnectAll();
     second_server.join();
     BOOST_CHECK(second_handshake.load());
-    BOOST_CHECK(!request_served.load());
+    BOOST_CHECK(request_served.load()); // proof request only; no chunk request to the mismatched identity
 }
 
 BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)
@@ -881,7 +934,7 @@ BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
             handshakes[i] = fixture.HandshakeAsPeer(session, {.network_binding = network,
                 .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-                .capabilities = 0, .nonce = 200 + i});
+                .nonce = 200 + i});
         });
     }
     replacement_acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
@@ -901,7 +954,7 @@ BOOST_AUTO_TEST_CASE(explicit_validator_peer_evicts_discovered_peer_at_capacity)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         handshakes.back() = fixture.HandshakeAsPeer(session, {.network_binding = network,
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = 0, .nonce = 300});
+            .nonce = 300});
     });
     BOOST_REQUIRE(manager.Connect(address, replacement_port)); // explicit validator replaces a discovered peer
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), cybou::p2p::MAX_OUTBOUND_PEERS);
@@ -937,7 +990,7 @@ BOOST_AUTO_TEST_CASE(pinned_rendezvous_evicts_discovered_peer_at_capacity)
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
             handshakes[i] = fixture.HandshakeAsPeer(session, {.network_binding = network,
                 .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-                .capabilities = 0, .nonce = 200 + i});
+                .nonce = 200 + i});
         });
     }
     replacement_acceptors.push_back(std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0}));
@@ -972,7 +1025,7 @@ BOOST_AUTO_TEST_CASE(pinned_rendezvous_evicts_discovered_peer_at_capacity)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER, std::move(tls)};
         handshakes.back() = fixture.HandshakeAsPeer(session, {.network_binding = network,
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = 0, .nonce = 300});
+            .nonce = 300});
     });
     BOOST_REQUIRE(manager.Connect(address, replacement_port)); // pinned rendezvous replaces a discovered peer
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), cybou::p2p::MAX_OUTBOUND_PEERS);
@@ -1001,7 +1054,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_hello_tip_conflicting_with_known_block)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         handshake_ok = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = uint256::ONE,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 111});
+            .nonce = 111});
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
@@ -1018,7 +1071,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_hello_tip_conflicting_with_known_block)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         matching_handshake_ok = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = *fixture.runtime->GetFinalizedTip(),
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 112});
+            .nonce = 112});
     }};
     BOOST_CHECK(manager.Connect(loopback.to_string(), matching_acceptor.local_endpoint().port()));
     matching_server.join();
@@ -1042,7 +1095,7 @@ BOOST_AUTO_TEST_CASE(manager_refuses_wrong_genesis_tip)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         handshake_ok = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = wrong_tip,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 115});
+            .nonce = 115});
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_CHECK(!manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
@@ -1085,7 +1138,7 @@ BOOST_AUTO_TEST_CASE(storage_placeme_peer_that_closes_without_hello)
     server.join();
 }
 
-BOOST_AUTO_TEST_CASE(manager_rejects_peer_without_block_service)
+BOOST_AUTO_TEST_CASE(manager_handles_disconnect_after_baseline_handshake)
 {
     CybouServiceTestFixture fixture;
     boost::asio::io_context io;
@@ -1098,7 +1151,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_peer_without_block_service)
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = 0, .nonce = 107});
+            .finalized_tip = fixture.definition.genesis_block_id, .nonce = 107});
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     const auto address = loopback.to_string();
@@ -1106,7 +1159,7 @@ BOOST_AUTO_TEST_CASE(manager_rejects_peer_without_block_service)
     BOOST_REQUIRE(manager.Connect(address, port));
     const auto result = manager.SyncFromPeer(address, port, 1);
     server.join();
-    BOOST_CHECK(result.status == cybou::SyncPeerStatus::PROTOCOL_ERROR);
+    BOOST_CHECK(result.status == cybou::SyncPeerStatus::CONNECTION_FAILED);
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
 }
 
@@ -1125,12 +1178,11 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_malformed_block_response_from_disconn
             acceptor.accept(socket);
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
             served = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 1,
-                .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
-                .nonce = malformed ? 108ULL : 109ULL});
+                .finalized_tip = fixture.definition.genesis_block_id, .nonce = malformed ? 108ULL : 109ULL});
             const auto request = session.ReceiveFrame();
-            served = served && request && request->type == cybou::p2p::MessageType::GET_BLOCK;
+            served = served && request && request->type == cybou::p2p::MessageType::GET_BLOCKS;
             if (served && malformed) {
-                served = session.SendFrame({cybou::p2p::MessageType::BLOCK_META,
+                served = session.SendFrame({cybou::p2p::MessageType::BLOCK_INV,
                     {0xff, 0xff, 0xff, 0x7f}});
             }
         }};
@@ -1162,7 +1214,6 @@ BOOST_AUTO_TEST_CASE(manager_retries_peer_that_cannot_serve_announced_height)
             cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
             served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
                 .finalized_height = promises_block ? 1ULL : 0ULL, .finalized_tip = fixture.definition.genesis_block_id,
-                .capabilities = cybou::p2p::CAP_SERVE_BLOCKS,
                 .nonce = promises_block ? 113ULL : 114ULL}) &&
                 session.ServeNext(*fixture.runtime);
         }};
@@ -1201,7 +1252,7 @@ BOOST_AUTO_TEST_CASE(manager_syncs_two_verified_blocks_on_one_session)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 2,
             .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_BLOCK_INVENTORY, .nonce = 104}) &&
+            .nonce = 104}) &&
             session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime) &&
             session.ServeNext(*fixture.runtime);
     }};
@@ -1238,7 +1289,7 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_finalized_block_without_duplicate_payload)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_BLOCK_ANNOUNCEMENTS, .nonce = 121}) &&
+            .nonce = 121}) &&
             session.ServeNext(observer);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -1271,7 +1322,6 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_that_disagrees_with_inventory)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         if (!fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = fixture.runtime->GetFinalizedTip().value(),
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_BLOCK_INVENTORY,
             .nonce = 115})) return;
         const auto request = session.ReceiveFrame();
         if (!request || request->type != cybou::p2p::MessageType::GET_BLOCKS) return;
@@ -1322,8 +1372,8 @@ BOOST_AUTO_TEST_CASE(manager_rejects_block_conflicting_with_announced_finalized_
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 1, .finalized_tip = uint256::ONE,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 110}) &&
-            session.ServeNext(*fixture.runtime);
+            .nonce = 110}) &&
+            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
     }};
     cybou::p2p::PeerManager manager{observer};
     const auto address = loopback.to_string();
@@ -1364,9 +1414,9 @@ BOOST_AUTO_TEST_CASE(manager_submits_canonical_operation_with_separate_acknowled
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        served = fixture.HandshakeAsFinalizer(session, {.network_binding = network, .finalized_height = 0,
+        served = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
             .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_FINALIZER_PROOF | cybou::p2p::CAP_OPERATION_RELAY, .nonce = 105}) &&
+            .nonce = 105}) &&
             session.ServeNext(receiver) && session.ServeNext(receiver);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -1419,15 +1469,15 @@ BOOST_AUTO_TEST_CASE(manager_submits_to_next_peer_when_first_cannot_accept_opera
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         first_handshake = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = 0, .nonce = 116});
+            .nonce = 116});
     }};
     std::jthread second_server{[&] {
         tcp::socket socket{io};
         second.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        second_served = fixture.HandshakeAsFinalizer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
+        second_served = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_FINALIZER_PROOF | cybou::p2p::CAP_OPERATION_RELAY, .nonce = 117}) &&
+            .nonce = 117}) &&
             session.ServeNext(receiver);
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
@@ -1472,9 +1522,9 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
         tcp::socket socket{io};
         reject_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        const bool handshake = fixture.HandshakeAsFinalizer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
+        const bool handshake = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_FINALIZER_PROOF | cybou::p2p::CAP_OPERATION_RELAY, .nonce = 118});
+            .nonce = 118});
         if (!handshake) return;
         const auto meta = session.ReceiveFrame();
         if (!meta || meta->type != cybou::p2p::MessageType::OP_META || meta->payload.size() != 4) return;
@@ -1515,9 +1565,9 @@ BOOST_AUTO_TEST_CASE(manager_distinguishes_rejection_from_missing_operation_ackn
         tcp::socket socket{io};
         dropped_acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        dropped_handshake = fixture.HandshakeAsFinalizer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
+        dropped_handshake = fixture.HandshakeAsPeer(session, {.network_binding = fixture.runtime->GetNetworkBinding(),
             .finalized_height = 0, .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_FINALIZER_PROOF | cybou::p2p::CAP_OPERATION_RELAY, .nonce = 119});
+            .nonce = 119});
     }};
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "unconfirmed-observer",
@@ -1555,28 +1605,30 @@ BOOST_AUTO_TEST_CASE(runtime_routes_submission_and_verified_sync_over_configured
         tcp::socket socket{io};
         acceptor.accept(socket);
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
-        served = fixture.HandshakeAsFinalizer(session, {.network_binding = network, .finalized_height = 0,
-            .finalized_tip = fixture.definition.genesis_block_id, .capabilities = cybou::p2p::CAP_SERVE_BLOCKS |
-                cybou::p2p::CAP_FINALIZER_PROOF | cybou::p2p::CAP_OPERATION_RELAY, .nonce = 106}) &&
+        served = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
+            .finalized_tip = fixture.definition.genesis_block_id, .nonce = 106}) &&
             session.ServeNext(producer) && producer.ProduceBlock().has_value() &&
-            session.ServeNext(producer) && session.ServeNext(producer);
+            session.ServeNext(producer);
+        if (served) while (session.ServeNext(producer)) {}
     }};
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "route-observer",
         .p2p_endpoint = std::make_pair(loopback.to_string(), acceptor.local_endpoint().port()),
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
-    cybou::CybouNodeRuntime observer{std::move(observer_config)};
-    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
-    const auto submitted = observer.SubmitOperation(operation);
+    auto observer = std::make_unique<cybou::CybouNodeRuntime>(std::move(observer_config));
+    BOOST_REQUIRE(observer->InitializeGenesis(fixture.genesis));
+    const auto submitted = observer->SubmitOperation(operation);
     BOOST_CHECK(submitted.status == cybou::OperationSubmitStatus::RELAY_QUEUED);
-    BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 0U);
-    const auto synced = observer.SyncFromConfiguredPeer(1);
-    server.join();
+    BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99), 0U);
+    const auto synced = observer->SyncFromConfiguredPeer(1);
+
     BOOST_CHECK(served);
     BOOST_CHECK_EQUAL(synced.blocks_applied, 1U);
-    BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1U);
-    BOOST_CHECK(observer.GetFinalizedTip() == producer.GetFinalizedTip());
-    BOOST_CHECK_EQUAL(observer.ConnectedPeerCount(), 1U);
+    BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(0), 1U);
+    BOOST_CHECK(observer->GetFinalizedTip() == producer.GetFinalizedTip());
+    BOOST_CHECK_EQUAL(observer->ConnectedPeerCount(), 1U);
+    observer.reset();
+    server.join();
 }
 
 BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
@@ -1613,9 +1665,9 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
         cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
         const bool handshake = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
             .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS | cybou::p2p::CAP_PEER_DISCOVERY, .nonce = 7811});
-        seed_served = handshake && session.ServeNext(seed) && session.ServeNext(seed) &&
-            session.ServeNext(seed) && session.ServeNext(seed);
+            .nonce = 7811});
+        seed_served = handshake;
+        if (handshake) while (session.ServeNext(seed)) {}
     }};
     std::jthread source_server{[&] {
         tcp::socket socket{io};
@@ -1626,8 +1678,9 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
         // UP_TO_DATE peer would mask its new block.
         const bool handshake = fixture.HandshakeAsPeer(session, {.network_binding = network, .finalized_height = 0,
             .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_SERVE_BLOCKS, .nonce = 7812});
-        source_served = handshake && session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+            .nonce = 7812});
+        source_served = handshake;
+        if (handshake) while (session.ServeNext(*fixture.runtime)) {}
     }};
 
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
@@ -1645,6 +1698,7 @@ BOOST_AUTO_TEST_CASE(runtime_discovers_and_syncs_from_a_second_peer)
     BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(0), 1U);
     BOOST_CHECK_EQUAL(observer->ConnectedPeerCount(), 2U);
 
+    observer.reset();
     seed_server.join();
     source_server.join();
     BOOST_CHECK(seed_served.load());
@@ -1665,7 +1719,7 @@ BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
         {"192.168.1.51", 29460},
     };
 
-    // Remote node with CAP_PEER_DISCOVERY
+    // Ordinary remote Full Node
     cybou::NodeRuntimeConfig remote_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "remote-discovery-node",
         .p2p_endpoint = std::make_pair("192.168.1.49", uint16_t{29460}),
@@ -1681,7 +1735,6 @@ BOOST_AUTO_TEST_CASE(manager_discovers_peers_from_connected_peer)
         BOOST_REQUIRE(fixture.HandshakeAsPeer(session, {
             .network_binding = network, .finalized_height = 0,
             .finalized_tip = fixture.definition.genesis_block_id,
-            .capabilities = cybou::p2p::CAP_PEER_DISCOVERY,
             .nonce = 7771,
         }));
         session.ServeNext(remote_runtime);

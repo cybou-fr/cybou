@@ -12,7 +12,7 @@
 
 namespace cybou {
 
-/** Signing boundary for local PoA capabilities. Implementations keep key material private. */
+/** Signing boundary for local PoA signers. Implementations keep key material private. */
 class PoaSigner {
 public:
     virtual ~PoaSigner() = default;

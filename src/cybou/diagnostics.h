@@ -9,7 +9,6 @@ namespace cybou {
 struct PeerDiagnostics {
     std::string endpoint;
     std::uint64_t advertised_height{0};
-    std::uint64_t capabilities{0};
     std::string provider_id;
 };
 struct OperationDiagnostics {
@@ -19,9 +18,10 @@ struct OperationDiagnostics {
 };
 /** One immutable canonical head; peer heights are untrusted advertisements. */
 struct NodeDiagnosticsSnapshot {
-    std::string network_binding, role, tip, state_root;
+    std::string network_binding, node_type, tip, state_root;
     std::uint64_t height{0}, storage_used{0}, storage_capacity{0};
-    bool initialized{false}, safety_halted{false};
+    std::uint8_t cyp2_version{5};
+    bool initialized{false}, safety_halted{false}, poa_signer_active{false}, validation_eligible{false};
     std::vector<PeerDiagnostics> peers;
     std::vector<OperationDiagnostics> operations;
 };

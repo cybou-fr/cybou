@@ -29,6 +29,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     if (creates > params.max_account_creates_per_block) return fail(BlockExecutionError::TOO_MANY_ACCOUNT_CREATES);
     auto candidate = parent;
     std::set<std::array<unsigned char, 32>> adjustment_digests;
+    std::set<AccountId> auth_credited_accounts;
     if (params.name_commit_max_lifetime > 0) {
         std::erase_if(candidate.names.pending_commits, [&](const auto& item) {
             return block_height > item.second.commit_height &&
@@ -104,15 +105,19 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
                 return failure;
             }
         }
-        // Finalized execution only: AccountCreate earns nothing, so a genesis
-        // allocation keeps its exact AUTH. Saturating keeps a PoA-granted
-        // maximum from blocking the account's later operations.
-        if (const auto actor = AuthorizingAccount(operations[i])) {
-            const auto account = candidate.accounts.find(*actor);
-            if (account == candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
-            auto& authority = account->second.authority;
-            authority = authority > std::numeric_limits<uint64_t>::max() - AUTH_PER_FINALIZED_OPERATION
-                ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
+        // Finalized execution only: only operations that confer network utility
+        // earn AUTH (RootPublication, SystemLock). Identity maintenance (IdentityRotate,
+        // NameCommit/Reveal) and payments earn no AUTH to prevent Sybil/ping-pong farming.
+        // Furthermore, an account may earn at most AUTH_PER_FINALIZED_OPERATION per block
+        // to enforce a strict velocity limit.
+        if (const auto actor = AuthorityEarningAccount(operations[i])) {
+            if (auth_credited_accounts.insert(*actor).second) {
+                const auto account = candidate.accounts.find(*actor);
+                if (account == candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
+                auto& authority = account->second.authority;
+                authority = authority > std::numeric_limits<uint64_t>::max() - AUTH_PER_FINALIZED_OPERATION
+                    ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
+            }
         }
     }
     const uint64_t final_supply = TotalSupply(candidate);

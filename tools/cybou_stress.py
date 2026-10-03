@@ -323,7 +323,7 @@ class Lab:
         root = host["root"].rstrip("/\\")
         sep = "\\" if host["type"] == "windows" else "/"
         join = lambda name: root + sep + name
-        args = [host["binary"], "doctor"] if doctor else [host["binary"], node["role"], "run"]
+        args = [host["binary"], "doctor"] if doctor else [host["binary"], "finalizer" if node["role"] == "finalizer" else "node", "run"]
         args += ["--network", "lab", "--data-dir", join(node["name"] + ".db")]
         if "listen" in node:
             args += ["--listen", node["listen"]]
