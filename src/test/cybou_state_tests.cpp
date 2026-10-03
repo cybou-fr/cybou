@@ -1039,40 +1039,42 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
 BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
 {
     using namespace cybou;
-    std::array<unsigned char, 32> root_seed{}, device_seed{};
-    root_seed[0] = 0x77;
-    device_seed[0] = 0x78;
-    const auto root = DeriveIdentityPublicKey(root_seed, IdentityKeyPurpose::RECOVERY_ROOT);
-    const auto device = DeriveIdentityPublicKey(device_seed, IdentityKeyPurpose::AUTHORIZATION);
-    BOOST_REQUIRE(root && device);
-
-    uint256 net_bytes{};
-    net_bytes.begin()[0] = 0x11;
-    const uint256 network{net_bytes};
-
-    AccountId account_id{net_bytes};
-    account_id.begin()[0] = 0x99;
-
-    AccountId recipient_id{net_bytes};
-    recipient_id.begin()[0] = 0xAA;
-
-    CybouState state = CreateDevGenesisState();
+    uint256 network{};
+    network.begin()[0] = 0x11;
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
 
-    state.accounts[account_id] = AccountState{
-        .balance = 1000,
-        .system_balance = 1000,
-        .authority = 0,
+    const auto make_account = [&](unsigned char seed_byte) {
+        std::array<unsigned char, 32> recovery{}, authorization{};
+        recovery[0] = seed_byte;
+        authorization[0] = static_cast<unsigned char>(seed_byte + 1);
+        uint256 raw{};
+        raw.begin()[0] = seed_byte;
+        const AccountId account{raw};
+        const IdentityAuthorization keys{
+            *DeriveIdentityPublicKey(recovery, IdentityKeyPurpose::RECOVERY_ROOT),
+            *DeriveIdentityPublicKey(authorization, IdentityKeyPurpose::AUTHORIZATION)};
+        const auto binding = test::MakeIdentityKemBinding(network, account, keys);
+        AccountCreateOp create{account, keys, binding.package,
+            {.network_binding = network, .account_id = account, .authorization_commitment = binding.authorization_commitment},
+            *SignIdentityMessage(recovery, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest),
+            *SignIdentityMessage(authorization, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest)};
+        return std::make_pair(create, authorization);
     };
-    state.identities.RegisterAccount(account_id, *root, *device, {}, 0);
 
-    state.accounts[recipient_id] = AccountState{
-        .balance = 100,
-        .system_balance = 100,
-        .authority = 0,
-    };
-    state.identities.RegisterAccount(recipient_id, *root, *device, {}, 0);
+    const auto [sender_create, sender_auth_seed] = make_account(0x51);
+    const auto [recipient_create, recipient_auth_seed] = make_account(0x61);
+    const auto account_id = sender_create.account_id;
+    const auto recipient_id = recipient_create.account_id;
+
+    auto state = CreateDevGenesisState();
+    state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{
+        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
+    BOOST_REQUIRE(ApplyAccountCreate(sender_create, network, 0, params, state) == AccountCreateStateError::NONE);
+    BOOST_REQUIRE(ApplyAccountCreate(recipient_create, network, 0, params, state) == AccountCreateStateError::NONE);
+
+    state.accounts.at(account_id).balance = 1000;
+    state.accounts.at(recipient_id).balance = 100;
 
     // 1. Payment does NOT earn AUTH
     AuthorizedPayment payment{
@@ -1080,7 +1082,7 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
         {recipient_id, 10}
     };
     payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(payment.payment);
-    payment.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+    payment.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, payment.authorization));
 
     const auto payment_res = ExecuteBlockOperations(state, {payment}, network, 1, params);
@@ -1092,16 +1094,16 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
         {.account_id = account_id, .nonce = 1, .kind = IdentityOperationKind::SYSTEM_LOCK},
         SystemLockPayload{5}
     };
-    lock1.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock1.payload);
-    lock1.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+    lock1.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock1.lock);
+    lock1.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, lock1.authorization));
 
     AuthorizedSystemLock lock2{
         {.account_id = account_id, .nonce = 2, .kind = IdentityOperationKind::SYSTEM_LOCK},
         SystemLockPayload{5}
     };
-    lock2.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock2.payload);
-    lock2.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+    lock2.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock2.lock);
+    lock2.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, lock2.authorization));
 
     // Execute both locks in block height 2: authority must increase by only +1 (not +2)
@@ -1114,8 +1116,8 @@ BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
         {.account_id = account_id, .nonce = 3, .kind = IdentityOperationKind::SYSTEM_LOCK},
         SystemLockPayload{5}
     };
-    lock3.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock3.payload);
-    lock3.authorization.signature = *SignIdentityMessage(device_seed, IdentityKeyPurpose::AUTHORIZATION,
+    lock3.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock3.lock);
+    lock3.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, lock3.authorization));
 
     const auto next_block_res = ExecuteBlockOperations(*double_lock_res.state, {lock3}, network, 3, params);

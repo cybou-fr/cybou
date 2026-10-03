@@ -128,10 +128,10 @@ target_link_libraries(cybou_node
   PUBLIC
     cybou_core
     Boost::headers
+    $<$<PLATFORM_ID:Windows>:ws2_32>
+    $<$<PLATFORM_ID:Windows>:mswsock>
   PRIVATE
     leveldb
-    $<TARGET_NAME_IF_EXISTS:libevent::core>
-    $<TARGET_NAME_IF_EXISTS:libevent::extra>
     OpenSSL::Crypto
     OpenSSL::SSL
     ZLIB::ZLIB

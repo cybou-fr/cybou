@@ -82,8 +82,10 @@ Account values (AccountState, committed by the state root):
 AUTH:
     - changes only through deterministic finalized state transitions
     - GenesisAllocation may assign initial AUTH
-    - finalized Identity-authorized operation -> +1 AUTH to its authorizing
-      account; AccountCreate earns nothing (only its genesis AUTH, if any)
+    - finalized network utility operations (RootPublication, SystemLock) -> +1 AUTH
+      to their authorizing account, velocity-capped at max +1 AUTH per account per block
+    - AccountCreate, Payment, IdentityRotate, NameCommit, NameReveal earn no AUTH
+      (prevents zero-cost and ping-pong Sybil farming)
     - PoaAuthAdjustment GRANT (signed by the genesis PoA key) -> +N AUTH
     - PoaAuthAdjustment BURN  (signed by the genesis PoA key) -> -N AUTH, floor 0
     - PoaAuthAdjustment itself earns no AUTH
@@ -314,11 +316,13 @@ architecture that is absent from higher levels:
   All three are committed by the finalized state root.
 - AUTH changes only through deterministic finalized transitions:
   GenesisAllocation (claimed exactly once by AccountCreate), +1 AUTH to the
-  authorizing account of every finalized Identity-authorized operation except
-  AccountCreate, and the PoA-signed `PoaAuthAdjustment` GRANT (+N) / BURN
-  (-N, floor 0). AUTH is never transferred between Identities. Amounts locked,
-  paid as fees, credited at onboarding or stored never scale AUTH; such an
-  operation earns only the flat +1.
+  authorizing account of finalized utility operations (RootPublication,
+  SystemLock) subject to an anti-Sybil per-block velocity limit of max +1 AUTH
+  per account per block, and the PoA-signed `PoaAuthAdjustment` GRANT (+N) / BURN
+  (-N, floor 0). Payments, key rotations, and name claims earn no AUTH to prevent
+  ping-pong and zero-cost Sybil farming. AUTH is never transferred between Identities.
+  Amounts locked, paid as fees, credited at onboarding or stored never scale AUTH;
+  such an operation earns only the flat +1.
 - Authority > 1,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, NO stake weight,
   and NO balance or resource allocations.

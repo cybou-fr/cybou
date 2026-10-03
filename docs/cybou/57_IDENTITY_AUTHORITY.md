@@ -19,15 +19,16 @@ AUTH changes only through deterministic transitions in a PoA-finalized block:
 
 ```text
 GenesisAllocation.authority          -> initial AUTH, claimed once by AccountCreate
-finalized Identity-authorized op     -> +1 AUTH to its authorizing account
+finalized utility op                 -> +1 AUTH to authorizing account (max 1 per block)
 PoaAuthAdjustment GRANT N            -> +N AUTH to target account
 ```
 
 ```text
-Payment, SystemLock, IdentityRotate,
-NameCommit, NameReveal, RootPublication  -> +1 AUTH
-AccountCreate                            -> genesis AUTH or 0, no +1
-PoaAuthAdjustment                        -> no +1
+RootPublication, SystemLock          -> +1 AUTH (velocity-capped at max 1 per block)
+Payment, IdentityRotate              -> 0 AUTH (no Sybil or ping-pong farming)
+NameCommit, NameReveal               -> 0 AUTH
+AccountCreate                        -> genesis AUTH or 0, no +1
+PoaAuthAdjustment                    -> no +1
 ```
 
 The Identity does not exist before its AccountCreate, so a genesis allocation
@@ -54,7 +55,7 @@ no automatic penalty rule is defined.
 
 There is no AUTH transfer between Identities. Locked, paid or stored CYBOU
 amounts never scale AUTH, and onboarding credit leaves it unchanged.
-IdentityRotate preserves the account and its AUTH (and earns the flat +1).
+IdentityRotate preserves the account and its AUTH (and earns 0 AUTH).
 
 ## Validation eligibility
 
