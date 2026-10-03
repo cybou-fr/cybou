@@ -112,7 +112,7 @@ int PublicationDurability::ProgressPercent(const std::uint8_t target) const
 std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
 {
     std::vector<StorageEndpoint> providers;
-    for (auto& peer : m_runtime.StorageEndpointEndpoints()) {
+    for (auto& peer : m_runtime.StorageEndpoints()) {
         StorageEndpoint endpoint{peer.provider_id, peer.address, peer.port};
         if (!HasProvider(providers, endpoint)) providers.push_back(std::move(endpoint));
     }
@@ -389,8 +389,8 @@ PublicationDurability StorageService::Place(Placement& placement)
     std::vector<AuthorizedChunk> chunks;
     chunks.reserve(placement.leaves.size());
     for (const auto& leaf : placement.leaves) chunks.push_back({leaf});
-    const auto commitment = BuildChunkAuthorizationCommitment(chunks);
-    if (!commitment || commitment->proofs.size() != placement.leaves.size()) {
+    const auto commitment = BuildChunkAuthorizationTree(chunks);
+    if (!commitment || commitment->chunk_count != placement.leaves.size()) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot rebuild chunk authorization proofs"};
     }
     auto providers = m_transport.Providers();
@@ -413,7 +413,7 @@ PublicationDurability StorageService::Place(Placement& placement)
             // One provider key is one replica, whatever endpoints it answers on.
             if (HasProvider(replicas, provider)) continue;
             const auto admitted = m_transport.Put(provider, placement.operation_id, placement.leaves[i],
-                *bytes, commitment->proofs[i]);
+                *bytes, commitment->Proof(i));
             // STORED and ALREADY_STORED both mean the provider now retains the chunk.
             if (!admitted || !*admitted) {
                 admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +

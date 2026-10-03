@@ -5,6 +5,7 @@
 #include <cybou/chunk_authorization.h>
 
 #include <algorithm>
+#include <stdexcept>
 #include <limits>
 #include <set>
 #include <string_view>
@@ -144,7 +145,7 @@ bool VerifyChunkAuthorizationPath(
     }
 }
 
-std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
+std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(
     const std::span<const AuthorizedChunk> chunks)
 {
     if (!ValidChunkSet(chunks)) return std::nullopt;
@@ -168,27 +169,29 @@ std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
             levels.push_back(std::move(next));
         }
 
-        ChunkAuthorizationCommitment result;
+        ChunkAuthorizationTree result;
         result.root = levels.back().front();
         result.chunk_count = static_cast<std::uint32_t>(ordered.size());
-        result.proofs.reserve(ordered.size());
-        for (std::size_t leaf = 0; leaf < ordered.size(); ++leaf) {
-            ChunkAuthorizationProof proof;
-            proof.leaf_index = static_cast<std::uint32_t>(leaf);
-            auto index = leaf;
-            auto width = ordered.size();
-            for (std::size_t level = 0; width > 1; ++level) {
-                const auto sibling = index ^ 1U;
-                proof.siblings.push_back(levels[level][sibling < width ? sibling : index]);
-                index /= 2;
-                width = (width + 1) / 2;
-            }
-            result.proofs.push_back(std::move(proof));
-        }
+        result.m_levels = std::move(levels);
         return result;
     } catch (...) {
         return std::nullopt;
     }
+}
+
+ChunkAuthorizationProof ChunkAuthorizationTree::Proof(const std::uint32_t leaf_index) const
+{
+    if (leaf_index >= chunk_count) throw std::out_of_range{"chunk authorization leaf index"};
+    ChunkAuthorizationProof proof{.leaf_index = leaf_index};
+    auto index = static_cast<std::size_t>(leaf_index);
+    auto width = static_cast<std::size_t>(chunk_count);
+    for (std::size_t level = 0; width > 1; ++level) {
+        const auto sibling = index ^ 1U;
+        proof.siblings.push_back(m_levels[level][sibling < width ? sibling : index]);
+        index /= 2;
+        width = (width + 1) / 2;
+    }
+    return proof;
 }
 
 bool VerifyChunkAuthorizationProof(

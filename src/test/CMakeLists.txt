@@ -40,7 +40,6 @@ add_executable(cybou-core-test
   cybou_kv_store_tests.cpp
   cybou_private_application_store_tests.cpp
   cybou_private_application_schema_tests.cpp
-  cybou_publication_bundle_stager_tests.cpp
   cybou_publication_service_tests.cpp
   cybou_storage_service_tests.cpp
   cybou_application_service_tests.cpp

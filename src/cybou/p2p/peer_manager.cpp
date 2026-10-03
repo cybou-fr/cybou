@@ -32,7 +32,7 @@ std::optional<uint64_t> RandomNonce()
 
 PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime}
 {
-    SetExplicitEndpoints(m_runtime.GetExplicitPeerEndpoints());
+    SetExplicitEndpoints(m_runtime.GetConfiguredPeerEndpoints());
 }
 
 bool PeerManager::Connect(const std::string& numeric_address, const uint16_t port)

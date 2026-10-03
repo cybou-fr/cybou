@@ -8,7 +8,7 @@
 #include <cybou/identity_operation_coordinator.h>
 #include <cybou/private_application_schema.h>
 #include <cybou/private_application_store.h>
-#include <cybou/publication_bundle_stager.h>
+#include <cybou/encrypted_chunk_tree.h>
 
 #include <functional>
 #include <mutex>
@@ -22,6 +22,13 @@ namespace cybou {
 
 class CybouNodeRuntime;
 class StorageService;
+
+struct PreparedPublicationBundle {
+    ChunkId root_chunk_id{};
+    ContentKey content_key{};
+    ChunkId chunk_authorization_root{};
+    std::uint32_t chunk_count{0};
+};
 
 enum class PublicationJobPhase : std::uint8_t {
     WAITING_FINALITY = 1,
@@ -60,11 +67,6 @@ class PublicationService final {
 public:
     PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
         PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator);
-    /** staging_db holds local bundle proof indexes for the Publish* helpers. */
-    PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
-        PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator,
-        KVStore& staging_db);
-
     PublicationJobResult SubmitPrepared(std::string_view local_job_id,
         const PreparedPublicationBundle& bundle,
         std::optional<AccountId> recipient = std::nullopt);
@@ -148,7 +150,6 @@ private:
     CybouKeyStore& m_identity;
     PrivateApplicationStore& m_application_db;
     IdentityOperationCoordinator& m_coordinator;
-    KVStore* m_staging_db{nullptr};
     std::mutex m_mutex;
 };
 

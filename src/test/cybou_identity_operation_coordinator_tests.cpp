@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(relayed_identity_operation_is_retried_after_volatile_ack)
     cybou::CybouNodeRuntime client{{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "retry-origin",
-        .p2p_endpoint = std::pair<std::string, uint16_t>{loopback.to_string(), port},
+        .configured_peers = {{std::pair<std::string, uint16_t>{loopback.to_string(), port}}},
         .memory_only = true,
         .wipe_data = true,
         .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(uncertain_submission_keeps_one_exact_journal_across_restart
         return cybou::NodeRuntimeConfig{
             .network_definition = definition,
             .data_dir = client_data,
-            .p2p_endpoint = std::pair<std::string, uint16_t>{"127.0.0.1", port},
+            .configured_peers = {{std::pair<std::string, uint16_t>{"127.0.0.1", port}}},
             .memory_only = false,
             .wipe_data = wipe_data,
             .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -450,7 +450,7 @@ BOOST_AUTO_TEST_CASE(finalized_earlier_operation_does_not_block_rotation)
     // Leave a finalized RootPublication (for example a RecoveryBridge) in the journal.
     cybou::KVStore staging{cybou::KVStoreOptions{.memory_only = true}};
     cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "app"};
-    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), db, coordinator, staging};
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), db, coordinator};
     cybou::FilesMutationBatch batch;
     const auto item = *cybou::NewPrivateItemId();
     batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item,

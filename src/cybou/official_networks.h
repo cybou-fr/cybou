@@ -26,7 +26,7 @@ enum class NetworkKind : uint8_t {
 };
 
 /** Known rendezvous peer: an ordinary full node, pinned for transport discovery only. */
-struct OfficialBootstrapLocator {
+struct RendezvousLocator {
     std::string_view host;
     uint16_t port{0};
     std::array<unsigned char, 32> tls_spki_sha256{};
@@ -44,7 +44,7 @@ struct OfficialNetwork {
     VerifiedNetworkGenesis genesis;
     CybouState genesis_state;
     CybouNetworkDefinition network_definition;
-    std::span<const OfficialBootstrapLocator> bootstrap_locators;
+    std::span<const RendezvousLocator> rendezvous_locators;
 };
 
 /**

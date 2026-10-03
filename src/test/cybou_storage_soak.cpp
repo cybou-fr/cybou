@@ -109,7 +109,6 @@ struct Services {
     std::filesystem::path dir;
     cybou::RuntimeStorageTransport transport;
     std::unique_ptr<cybou::PrivateApplicationStore> db;
-    std::unique_ptr<cybou::KVStore> staging;
     std::unique_ptr<cybou::StorageService> storage;
     std::unique_ptr<cybou::PublicationService> publication;
     std::unique_ptr<cybou::ApplicationService> application;
@@ -125,7 +124,6 @@ struct Services {
         application.reset();
         publication.reset();
         storage.reset();
-        staging.reset();
         db.reset();
     }
 
@@ -140,10 +138,9 @@ struct Services {
             std::filesystem::remove_all(dir / "app.db");
             db = std::make_unique<cybou::PrivateApplicationStore>(keystore, dir);
         }
-        staging = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.path = dir / "staging"});
         storage = std::make_unique<cybou::StorageService>(runtime, transport, *db, cybou::BETA_REMOTE_REPLICA_TARGET);
         publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
-            runtime.GetIdentityOperationCoordinator(keystore), *staging);
+            runtime.GetIdentityOperationCoordinator(keystore));
         application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);
     }
 
@@ -234,7 +231,7 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
 {
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
         .runtime = cybou::NodeRuntimeConfig{.network_definition = network.network_definition,
-            .data_dir = data_dir, .p2p_endpoint = std::make_pair(ip, port), .peer_admission_policy = TestLabAdmissionPolicy()},
+            .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
         .genesis = network.genesis_state,
     });
     node->Start();
@@ -246,13 +243,13 @@ std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork&
 std::set<std::array<unsigned char, 32>> StorageIds(cybou::CybouNodeRuntime& runtime)
 {
     std::set<std::array<unsigned char, 32>> ids;
-    for (const auto& peer : runtime.StorageEndpointEndpoints()) ids.insert(peer.provider_id);
+    for (const auto& peer : runtime.StorageEndpoints()) ids.insert(peer.provider_id);
     return ids;
 }
 
 std::optional<std::uint16_t> PortOf(cybou::CybouNodeRuntime& runtime, const std::array<unsigned char, 32>& id)
 {
-    for (const auto& peer : runtime.StorageEndpointEndpoints()) {
+    for (const auto& peer : runtime.StorageEndpoints()) {
         if (peer.provider_id == id) return peer.port;
     }
     return std::nullopt;

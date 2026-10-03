@@ -148,11 +148,11 @@ BOOST_AUTO_TEST_CASE(official_bootstrap_locator_is_an_ordinary_rendezvous_peer)
     }
     const auto& devnet = cybou::RequireOfficialNetwork(cybou::NetworkKind::DEVNET);
     BOOST_CHECK_EQUAL(devnet.name, "DEVNET");
-    BOOST_REQUIRE_EQUAL(devnet.bootstrap_locators.size(), 1U);
-    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].host, "51.255.46.58");
-    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].port, 29461);
-    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].tls_spki_sha256[0], 0xd8);
-    BOOST_CHECK_EQUAL(devnet.bootstrap_locators[0].tls_spki_sha256[31], 0xdb);
+    BOOST_REQUIRE_EQUAL(devnet.rendezvous_locators.size(), 1U);
+    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].host, "51.255.46.58");
+    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].port, 29461);
+    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].tls_spki_sha256[0], 0xd8);
+    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].tls_spki_sha256[31], 0xdb);
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(cybou::NetworkKind::MAINNET), std::runtime_error);
 }
 
@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(lab_network_is_isolated_from_devnet)
     BOOST_REQUIRE(retired_devnet);
     BOOST_CHECK(cybou::VerifySignedNetworkGenesis(*retired_devnet) == cybou::NetworkGenesisError::NONE);
     BOOST_CHECK(lab.kind == cybou::NetworkKind::LAB);
-    BOOST_CHECK(lab.bootstrap_locators.empty());
+    BOOST_CHECK(lab.rendezvous_locators.empty());
     BOOST_CHECK(cybou::ComputeNetworkBinding(lab.network_definition.network_public_key) !=
         cybou::ComputeNetworkBinding(retired_devnet->network_public_key));
     BOOST_CHECK(lab.network_definition.poa_finalizer_public_key != retired_devnet->poa_finalizer_public_key);

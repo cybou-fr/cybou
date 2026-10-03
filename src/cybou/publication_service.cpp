@@ -121,13 +121,16 @@ PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore&
     : m_runtime{runtime}, m_identity{identity}, m_application_db{application_db},
       m_coordinator{coordinator}
 {
-}
+    if (const auto attempt = m_application_db.Get("publication/staging-attempt")) {
+        const std::string job{attempt->begin(), attempt->end()};
+        if (!ValidJobId(job)) throw std::runtime_error{"invalid local publication staging marker"};
+        if (!m_application_db.Has(JobKey(job)) && !m_application_db.Has(IntentKey(job))) {
+            if (!m_runtime.GetChunkRetention().Release(JobRetention(m_application_db.Account(), job), NowMs()) ||
+                !m_application_db.Erase(LeavesKey(job))) throw std::runtime_error{"cannot clean interrupted publication pins"};
+        }
+        if (!m_application_db.Erase("publication/staging-attempt")) throw std::runtime_error{"cannot clear publication staging marker"};
+    }
 
-PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
-    PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator, KVStore& staging_db)
-    : m_runtime{runtime}, m_identity{identity}, m_application_db{application_db},
-      m_coordinator{coordinator}, m_staging_db{&staging_db}
-{
 }
 
 std::optional<PublicationService::Job> PublicationService::Load(const std::string_view local_job_id) const
@@ -418,6 +421,11 @@ bool PublicationService::SaveIntent(const std::string_view local_job_id, const I
     }
     const bool saved = m_application_db.Put(IntentKey(local_job_id), out);
     crypto::CleanseMemory(out.data(), out.size());
+    if (saved) {
+        const auto attempt = m_application_db.Get("publication/staging-attempt");
+        if (attempt && std::string_view{reinterpret_cast<const char*>(attempt->data()), attempt->size()} == local_job_id)
+            (void)m_application_db.Erase("publication/staging-attempt");
+    }
     return saved;
 }
 
@@ -520,84 +528,73 @@ std::optional<PrivateItemId> NewPrivateItemId()
 std::optional<PublicationService::Staged> PublicationService::Stage(const std::string_view local_job_id,
     std::vector<NewContent>& children, const BuildMetadata& build_metadata, std::string& error)
 {
-    if (!m_staging_db) {
-        error = "No local staging store";
+    if (m_application_db.Has(IntentKey(local_job_id))) {
+        error = "Publication already has a saved intent; resume it before preparing content";
         return std::nullopt;
     }
     const auto network = std::span<const unsigned char, 32>{m_runtime.GetNetworkBinding().begin(), 32};
-    // Job IDs already satisfy the proof-index namespace rules.
-    const std::string index_id{local_job_id};
-    bool pinned{false};
     const auto retention = JobRetention(m_application_db.Account(), local_job_id);
-    try {
-        // An interrupted earlier attempt leaves a fail-closed index; start clean.
-        {
-            PublicationBundleStager stale{m_runtime.GetChunkBlobStore(), *m_staging_db, index_id, network};
-            if (!stale.Discard()) {
-                error = "Cannot reset local staging";
-                return std::nullopt;
-            }
+    auto& pins = m_runtime.GetChunkRetention();
+    // Retrying an interrupted local attempt replaces its pins; no operation was submitted.
+    if (!pins.Release(retention, NowMs())) { error = "Cannot reset local staging pins"; return std::nullopt; }
+    if (!m_application_db.Put("publication/staging-attempt", std::span{
+            reinterpret_cast<const unsigned char*>(local_job_id.data()), local_job_id.size()})) {
+        error = "Cannot record local staging attempt"; return std::nullopt;
+    }
+    std::vector<EncryptedTreeSummary> summaries;
+    auto cleanse = [&] {
+        for (auto& summary : summaries) crypto::CleanseMemory(summary.content_key.data(), summary.content_key.size());
+    };
+    auto fail = [&]() -> std::optional<Staged> {
+        cleanse();
+        if (pins.Release(retention, NowMs())) {
+            (void)m_application_db.Erase(LeavesKey(local_job_id));
+            (void)m_application_db.Erase("publication/staging-attempt");
         }
-        PublicationBundleStager stager{m_runtime.GetChunkBlobStore(), *m_staging_db, index_id, network};
-        std::vector<EncryptedTreeSummary> summaries;
+        return std::nullopt;
+    };
+    try {
+        Staged staged;
+        std::set<ChunkId> unique;
+        ChunkAuthorizationAccumulator accumulator;
+        const auto stage = [&](std::uint32_t, const EncryptedChunk& chunk) {
+            if (staged.leaves.size() >= MAX_PUBLICATION_CHUNKS || !unique.insert(chunk.id).second) return false;
+            const std::array<ChunkId, 1> id{chunk.id};
+            if (!pins.Pin(retention, id)) return false;
+            const auto status = m_runtime.GetChunkBlobStore().Put(chunk.id, chunk.stored_bytes);
+            if (status != ChunkBlobPutStatus::STORED && status != ChunkBlobPutStatus::ALREADY_STORED) return false;
+            if (!accumulator.Add({chunk.id})) return false;
+            staged.leaves.push_back(chunk.id);
+            return true;
+        };
         for (auto& child : children) {
-            const auto tree = stager.StageTree(child.source);
-            if (!tree) {
-                stager.Discard();
-                error = "Cannot encrypt content";
-                return std::nullopt;
-            }
-            summaries.push_back(tree->tree);
+            const auto tree = BuildEncryptedChunkTree(network, child.source, stage);
+            if (!tree) { error = "Cannot encrypt content"; return fail(); }
+            summaries.push_back(*tree);
         }
         auto metadata = build_metadata(summaries);
-        for (auto& summary : summaries) crypto::CleanseMemory(summary.content_key.data(), summary.content_key.size());
-        if (!metadata) {
-            stager.Discard();
-            error = "Cannot encode private document";
-            return std::nullopt;
-        }
-        const auto main = stager.StageTree([](std::span<unsigned char>) -> std::optional<std::size_t> { return 0; },
-            *metadata);
+        cleanse();
+        if (!metadata) { error = "Cannot encode private document"; return fail(); }
+        const auto main = BuildEncryptedChunkTree(network,
+            [](std::span<unsigned char>) -> std::optional<std::size_t> { return 0; }, stage, *metadata);
         crypto::CleanseMemory(metadata->data(), metadata->size());
-        const auto prepared = main ? stager.Finish(*main) : std::nullopt;
-        if (!prepared) {
-            stager.Discard();
-            error = "Cannot prepare publication";
-            return std::nullopt;
+        const auto commitment = accumulator.Finish();
+        if (!main || !commitment || commitment->chunk_count != staged.leaves.size()) {
+            error = "Cannot prepare publication"; return fail();
         }
-        Staged staged{.bundle = *prepared};
+        staged.bundle = {main->root_chunk_id, main->content_key, commitment->root, commitment->chunk_count};
         std::vector<unsigned char> encoded;
-        for (std::uint32_t i{0}; i < prepared->chunk_count; ++i) {
-            const auto leaf = stager.GetLeafId(i);
-            if (!leaf) {
-                stager.Discard();
-                error = "Cannot read staged chunk order";
-                return std::nullopt;
-            }
-            staged.leaves.push_back(*leaf);
-            encoded.insert(encoded.end(), leaf->begin(), leaf->end());
-        }
-        // Until remote durability the local copy is the only one: pin it.
-        if (!m_runtime.GetChunkRetention().Pin(retention, staged.leaves)) {
-            stager.Discard();
-            error = "Cannot pin staged content";
-            return std::nullopt;
-        }
-        pinned = true;
-        // StorageService needs the exact ordered chunk set after finality.
+        encoded.reserve(staged.leaves.size() * 32);
+        for (const auto& leaf : staged.leaves) encoded.insert(encoded.end(), leaf.begin(), leaf.end());
         if (!m_application_db.Put(LeavesKey(local_job_id), encoded)) {
-            (void)m_runtime.GetChunkRetention().Release(retention, NowMs());
-            stager.Discard();
-            error = "Cannot save staged chunk order";
-            return std::nullopt;
+            error = "Cannot save staged chunk order"; return fail();
         }
-        stager.Discard();
         return staged;
     } catch (const std::exception&) {
-        if (pinned) (void)m_runtime.GetChunkRetention().Release(retention, NowMs());
         error = "Local staging failed";
-        return std::nullopt;
+        return fail();
     }
+
 }
 
 std::optional<std::vector<ChunkId>> PublicationService::LoadLeaves(const std::string_view local_job_id) const

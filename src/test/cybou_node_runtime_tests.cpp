@@ -603,7 +603,7 @@ BOOST_AUTO_TEST_CASE(runtime_explicit_peers_take_priority_over_discovered)
     cybou::NodeRuntimeConfig config{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "peer-priority",
-        .local_p2p_endpoint = std::make_pair("127.0.0.1", uint16_t{29001}),
+        .advertised_endpoint = std::make_pair("127.0.0.1", uint16_t{29001}),
         .memory_only = true,
         .wipe_data = true,
     };
@@ -611,7 +611,7 @@ BOOST_AUTO_TEST_CASE(runtime_explicit_peers_take_priority_over_discovered)
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
 
     // Operator-approved validator endpoints.
-    runtime.SetExplicitPeerEndpoints({{"10.0.0.10", 8333}, {"10.0.0.11", 8333}});
+    runtime.SetConfiguredPeerEndpoints({{"10.0.0.10", 8333}, {"10.0.0.11", 8333}});
     // Malicious flood: lexicographically smaller addresses that would eclipse
     // the validator topology in a single sorted set, plus this node's own
     // listener, plus out-of-scope targets.
@@ -646,13 +646,13 @@ BOOST_AUTO_TEST_CASE(runtime_discovery_filters_self_and_out_of_scope_addresses)
     cybou::NodeRuntimeConfig config{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "peer-policy",
-        .local_p2p_endpoint = std::make_pair("203.0.113.5", uint16_t{29001}),
+        .advertised_endpoint = std::make_pair("203.0.113.5", uint16_t{29001}),
         .memory_only = true,
         .wipe_data = true,
     };
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
-    runtime.SetExplicitPeerEndpoints({
+    runtime.SetConfiguredPeerEndpoints({
         {"10.0.0.7", 8333}, {"172.16.0.7", 8333}, {"192.168.0.7", 8333},
     });
 
@@ -688,7 +688,7 @@ BOOST_AUTO_TEST_CASE(runtime_private_listener_accepts_private_discovery)
     cybou::NodeRuntimeConfig config{
         .network_definition = fixture.definition,
         .data_dir = fixture.directory / "private-peer-policy",
-        .local_p2p_endpoint = std::make_pair("10.1.1.1", uint16_t{29001}),
+        .advertised_endpoint = std::make_pair("10.1.1.1", uint16_t{29001}),
         .memory_only = true,
         .wipe_data = true,
     };
@@ -736,7 +736,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
 
     cybou::NodeRuntimeConfig observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "finalizer-tip-observer",
-        .p2p_endpoint = std::make_pair(loopback.to_string(), finalizer_port),
+        .configured_peers = {{std::make_pair(loopback.to_string(), finalizer_port)}},
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime observer{std::move(observer_config)};
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
@@ -762,7 +762,7 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
 
     cybou::NodeRuntimeConfig provider_observer_config{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "provider-tip-observer",
-        .p2p_endpoint = std::make_pair(loopback.to_string(), provider_port),
+        .configured_peers = {{std::make_pair(loopback.to_string(), provider_port)}},
         .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
     cybou::CybouNodeRuntime provider_observer{std::move(provider_observer_config)};
     BOOST_REQUIRE(provider_observer.InitializeGenesis(fixture.genesis));

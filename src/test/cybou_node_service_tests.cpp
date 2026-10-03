@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
     std::optional<std::jthread> second_server;
     auto observer=std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
         .network_definition=primary.definition,.data_dir=primary.directory/"route-observer",
-        .p2p_endpoint=std::make_pair(loopback.to_string(),first.local_endpoint().port()),
+        .configured_peers={{std::make_pair(loopback.to_string(),first.local_endpoint().port())}},
         .memory_only=true,.wipe_data=true,
         .peer_admission_policy = TestLabAdmissionPolicy()});
     BOOST_REQUIRE(observer->InitializeGenesis(primary.genesis));
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(configured_peer_is_not_eclipsed_by_newer_stale_hello)
             while (session.ServeNext(*secondary.runtime)) {}
         }
     });
-    observer->SetExplicitPeerEndpoints({{loopback.to_string(),second.local_endpoint().port()}});
+    observer->SetConfiguredPeerEndpoints({{loopback.to_string(),second.local_endpoint().port()}});
     observer->SyncFromConfiguredPeer(2);
     // Choosing the later, higher HELLO would return only its one stale block.
     BOOST_CHECK_EQUAL(observer->GetFinalizedHeight().value_or(99),2U);
@@ -202,7 +202,7 @@ BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error
         .runtime = cybou::NodeRuntimeConfig{
             .network_definition = local.definition,
             .data_dir = local.directory / "service-observer",
-            .p2p_endpoint = std::make_pair(loopback.to_string(), acceptor.local_endpoint().port()),
+            .configured_peers = {{std::make_pair(loopback.to_string(), acceptor.local_endpoint().port())}},
             .memory_only = true,
             .wipe_data = true,
             .peer_admission_policy = TestLabAdmissionPolicy(),
@@ -210,7 +210,8 @@ BOOST_AUTO_TEST_CASE(full_node_network_worker_recovers_after_peer_protocol_error
         .genesis = local.genesis,
     }};
     service.Start();
-    service.Runtime().SetExplicitPeerEndpoints({
+    service.Runtime().SetConfiguredPeerEndpoints({
+        {loopback.to_string(), acceptor.local_endpoint().port()},
         {loopback.to_string(), recovery_acceptor.local_endpoint().port()},
     });
 

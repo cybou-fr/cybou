@@ -10,6 +10,7 @@
 #include <cybou/p2p/session.h>
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/publication_service.h>
+#include <test/cybou_publication_builder.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_storage_test_network.h>
 
@@ -34,7 +35,7 @@ PublishedContent Publish(CybouServiceTestFixture& fixture, cybou::CybouIdentityS
     cybou::PrivateApplicationStore& application_db, bool finalize)
 {
     cybou::KVStore proof_db{cybou::KVStoreOptions{.memory_only = true}};
-    cybou::PublicationBundleStager stager{fixture.runtime->GetChunkBlobStore(), proof_db, "storage-pub",
+    cybou::test::PublicationBuilder stager{fixture.runtime->GetChunkBlobStore(),
         std::span<const unsigned char, 32>{fixture.runtime->GetNetworkBinding().begin(), 32}};
     std::size_t remaining{600 * 1024};
     const auto source = [&remaining](std::span<unsigned char> out) -> std::optional<std::size_t> {
@@ -83,11 +84,11 @@ BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_syn
     const auto content = Publish(fixture, *identity, application_db, true);
     std::vector<cybou::AuthorizedChunk> leaves;
     for (const auto& id : content.leaves) leaves.push_back({id});
-    const auto commitment = cybou::BuildChunkAuthorizationCommitment(leaves);
+    const auto commitment = cybou::BuildChunkAuthorizationTree(leaves);
     BOOST_REQUIRE(commitment);
     const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
     BOOST_REQUIRE(publication);
-    BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->proofs.front()));
+    BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->Proof(0)));
     cybou::CybouNodeRuntime node{{.network_definition = fixture.definition,
         .data_dir = fixture.directory / "quota-node", .memory_only = true,
         .wipe_data = true, .storage_capacity_bytes = 0,
@@ -116,7 +117,7 @@ BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_syn
     BOOST_REQUIRE(client.ProveStorageIdentity());
     const auto bytes = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
     BOOST_REQUIRE(bytes);
-    const auto admission = client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->proofs.front());
+    const auto admission = client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->Proof(0));
     BOOST_REQUIRE(admission);
     BOOST_CHECK(admission->status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
     BOOST_CHECK(client.Ping(55002));
@@ -318,16 +319,16 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
     {
         // A Full Node whose runtime reaches providers only through CYP2.
         cybou::NodeRuntimeConfig client_config{.network_definition = fixture.definition,
-            .data_dir = fixture.directory / "socket-client", .p2p_endpoint = endpoints.front(),
+            .data_dir = fixture.directory / "socket-client", .configured_peers = {{endpoints.front()}},
             .memory_only = true, .wipe_data = true, .peer_admission_policy = TestLabAdmissionPolicy()};
         cybou::CybouNodeRuntime client{std::move(client_config)};
         BOOST_REQUIRE(client.InitializeGenesis(fixture.genesis));
-        client.SetExplicitPeerEndpoints(endpoints);
-        for (int i{0}; i < 6 && client.StorageEndpointEndpoints().size() < 2; ++i) client.SyncFromConfiguredPeer(10);
-        BOOST_REQUIRE_EQUAL(client.StorageEndpointEndpoints().size(), 2U);
+        client.SetConfiguredPeerEndpoints(endpoints);
+        for (int i{0}; i < 6 && client.StorageEndpoints().size() < 2; ++i) client.SyncFromConfiguredPeer(10);
+        BOOST_REQUIRE_EQUAL(client.StorageEndpoints().size(), 2U);
         // Each storage peer is known by the ProviderID it proved on demand.
         std::set<std::array<unsigned char, 32>> proven;
-        for (const auto& peer : client.StorageEndpointEndpoints()) proven.insert(peer.provider_id);
+        for (const auto& peer : client.StorageEndpoints()) proven.insert(peer.provider_id);
         BOOST_CHECK(proven == (std::set{*providers[0]->LocalStorageId(), *providers[1]->LocalStorageId()}));
 
         cybou::RuntimeStorageTransport transport{client};
@@ -340,7 +341,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_cyp2)
             BOOST_CHECK(providers[0]->HasFinalizedChunk(leaf));
             BOOST_CHECK(providers[1]->HasFinalizedChunk(leaf));
             std::optional<cybou::ChunkAuthorizationProof> proof;
-            for (const auto& peer : client.StorageEndpointEndpoints()) {
+            for (const auto& peer : client.StorageEndpoints()) {
                 proof = transport.GetProof({peer.provider_id, peer.address, peer.port}, content.operation_id, leaf);
                 if (proof) break;
             }

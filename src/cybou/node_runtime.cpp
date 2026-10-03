@@ -24,11 +24,10 @@ namespace cybou {
 
 NodeRuntimeConfig MakeNodeRuntimeConfig(const OfficialNetwork& network, const std::filesystem::path& data_dir)
 {
-    return NodeRuntimeConfig{
-        .network_definition = network.network_definition,
-        .bootstrap_locators = {network.bootstrap_locators.begin(), network.bootstrap_locators.end()},
-        .data_dir = data_dir,
-    };
+    NodeRuntimeConfig config{.network_definition = network.network_definition, .data_dir = data_dir};
+    for (const auto& locator : network.rendezvous_locators)
+        config.configured_peers.push_back({{std::string{locator.host}, locator.port}, locator.tls_spki_sha256});
+    return config;
 }
 
 
@@ -69,7 +68,7 @@ bool IsPrivateAddress(const boost::asio::ip::address& addr)
 
 bool IsConnectableDiscoveredAddress(
     const boost::asio::ip::address& addr,
-    const std::optional<std::pair<std::string, uint16_t>>& local_p2p_endpoint)
+    const std::optional<std::pair<std::string, uint16_t>>& advertised_endpoint)
 {
     auto is_link_local = [](const boost::asio::ip::address& a) {
         if (a.is_v4()) return (a.to_v4().to_uint() & 0xFFFF0000U) == 0xA9FE0000U;
@@ -77,24 +76,24 @@ bool IsConnectableDiscoveredAddress(
         return bytes[0] == 0xFEU && (bytes[1] & 0xC0U) == 0x80U;
     };
     if (addr.is_unspecified() || addr.is_multicast()) return false;
-    if (IsPrivateAddress(addr) && local_p2p_endpoint) {
+    if (IsPrivateAddress(addr) && advertised_endpoint) {
         boost::system::error_code ec;
-        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        const auto local = boost::asio::ip::make_address(advertised_endpoint->first, ec);
         if (!ec && !IsPrivateAddress(local) && !local.is_loopback() && !is_link_local(local) &&
             !local.is_unspecified() && !local.is_multicast()) {
             return false;
         }
     }
     if (addr.is_loopback()) {
-        if (!local_p2p_endpoint) return true;
+        if (!advertised_endpoint) return true;
         boost::system::error_code ec;
-        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        const auto local = boost::asio::ip::make_address(advertised_endpoint->first, ec);
         return !ec && local.is_loopback();
     }
     if (is_link_local(addr)) {
-        if (!local_p2p_endpoint) return true;
+        if (!advertised_endpoint) return true;
         boost::system::error_code ec;
-        const auto local = boost::asio::ip::make_address(local_p2p_endpoint->first, ec);
+        const auto local = boost::asio::ip::make_address(advertised_endpoint->first, ec);
         return !ec && is_link_local(local);
     }
     return true;
@@ -243,7 +242,7 @@ bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
     return m_finalized_chunk_store->HasChunk(chunk_id);
 }
 
-std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpointEndpoints() const
+std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoints() const
 {
     std::lock_guard p2p_lock(m_p2p_mutex);
     std::vector<StorageEndpoint> endpoints;
@@ -629,7 +628,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, std::optional<std::string> source_peer)
 {
     const uint256 op_id = ComputeOperationId(op).value_or(uint256{});
-    std::optional<std::pair<std::string, uint16_t>> p2p_endpoint;
     uint256 net_id{};
     {
         std::lock_guard lock(m_mutex);
@@ -660,14 +658,14 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?
                 OperationSubmitStatus::ACCEPTED : OperationSubmitStatus::ALREADY_PENDING, .op_id = op_id};
         }
-        p2p_endpoint = m_config.p2p_endpoint;
         net_id = m_network_binding;
     }
     if (m_peer_manager) {
         std::lock_guard p2p_lock(m_p2p_mutex);
         // Ordinary mesh relay: any connected relay peer executes the operation
         // itself and forwards it. There is no preferred finalizer route.
-        if (p2p_endpoint) m_peer_manager->Connect(p2p_endpoint->first, p2p_endpoint->second);
+        for (const auto& endpoint : GetConfiguredPeerEndpoints())
+            m_peer_manager->Connect(endpoint.first, endpoint.second);
         std::vector<std::pair<std::string, uint16_t>> accepting_candidates;
         for (const auto& peer : m_peer_manager->Peers()) {
             {
@@ -675,10 +673,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
                 if (std::find(accepting_candidates.begin(), accepting_candidates.end(), endpoint) ==
                     accepting_candidates.end()) accepting_candidates.push_back(endpoint);
             }
-        }
-        if (p2p_endpoint && std::find(accepting_candidates.begin(), accepting_candidates.end(), *p2p_endpoint) ==
-                accepting_candidates.end()) {
-            accepting_candidates.push_back(*p2p_endpoint);
         }
         const auto submitted = m_peer_manager->SubmitOperationToAny(accepting_candidates, op);
         // No acknowledgment from anyone is not a rejection: nothing proved the
@@ -986,12 +980,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         return SyncPeerResult{.status = SyncPeerStatus::PROTOCOL_ERROR};
     }
 
-    auto explicit_endpoints = GetExplicitPeerEndpoints();
-    if (m_config.p2p_endpoint &&
-        std::find(explicit_endpoints.begin(), explicit_endpoints.end(), *m_config.p2p_endpoint) ==
-            explicit_endpoints.end()) {
-        explicit_endpoints.push_back(*m_config.p2p_endpoint);
-    }
+    auto explicit_endpoints = GetConfiguredPeerEndpoints();
     m_peer_manager->SetExplicitEndpoints(explicit_endpoints);
     const auto maintenance_now = std::chrono::steady_clock::now();
     const bool have_connected_peers = m_peer_manager->ConnectedCount() != 0;
@@ -1040,8 +1029,9 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     }
     const auto route_rank = [&](const p2p::PeerInfo& peer) {
         const auto endpoint = std::make_pair(peer.address, peer.port);
-        if (m_config.p2p_endpoint && *m_config.p2p_endpoint == endpoint) return 0;
-        return std::find(explicit_endpoints.begin(), explicit_endpoints.end(), endpoint) != explicit_endpoints.end() ? 1 : 2;
+        const auto found = std::find(explicit_endpoints.begin(), explicit_endpoints.end(), endpoint);
+        return found == explicit_endpoints.end() ? explicit_endpoints.size() :
+            static_cast<size_t>(found - explicit_endpoints.begin());
     };
     // HELLO heights are connection-time snapshots. Prefer configured routes so
     // mutually lagging discovered providers cannot eclipse the bootstrap peer.
@@ -1141,8 +1131,9 @@ size_t CybouNodeRuntime::ConnectedPeerCount() const
 std::optional<std::array<unsigned char, 32>> CybouNodeRuntime::PinnedSpki(
     const std::string& address, const uint16_t port) const
 {
-    for (const auto& locator : m_config.bootstrap_locators) {
-        if (locator.host == address && locator.port == port) return locator.tls_spki_sha256;
+    std::lock_guard lock(m_mutex);
+    for (const auto& peer : m_config.configured_peers) {
+        if (peer.endpoint.first == address && peer.endpoint.second == port) return peer.tls_spki_sha256;
     }
     return std::nullopt;
 }
@@ -1152,60 +1143,42 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetPeerEndpoints
     std::lock_guard lock(m_mutex);
     constexpr size_t MAX_GOSSIP_TARGETS{32};
     std::vector<std::pair<std::string, uint16_t>> result;
-    const auto& configured = m_config.p2p_endpoint;
-    if (configured.has_value()) {
-        result.push_back(*configured);
-    }
-    // Compiled bootstrap locators are ordinary peers with a known address.
-    for (const auto& locator : m_config.bootstrap_locators) {
-        const std::pair<std::string, uint16_t> ep{std::string{locator.host}, locator.port};
-        if (m_config.local_p2p_endpoint == ep) continue; // this node is the locator
-        if (std::find(result.begin(), result.end(), ep) == result.end()) result.push_back(ep);
-    }
-    // Explicit operator-configured peer endpoints come first: a flood of
-    // malicious discovered hints must never eclipse the configured peer topology.
-    for (const auto& ep : m_explicit_peer_endpoints) {
+    for (const auto& peer : m_config.configured_peers) {
         if (result.size() >= MAX_GOSSIP_TARGETS) break;
-        if (!configured || ep != *configured) {
-            result.push_back(ep);
-        }
+        if (m_config.advertised_endpoint == peer.endpoint) continue;
+        if (std::find(result.begin(), result.end(), peer.endpoint) == result.end()) result.push_back(peer.endpoint);
     }
     for (const auto& ep : m_discovered_peer_endpoints) {
         if (result.size() >= MAX_GOSSIP_TARGETS) break;
-        if ((!configured || ep != *configured) &&
-            std::find(result.begin(), result.end(), ep) == result.end()) {
-            result.push_back(ep);
-        }
+        if (std::find(result.begin(), result.end(), ep) == result.end()) result.push_back(ep);
     }
     return result;
 }
 
-void CybouNodeRuntime::SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
+void CybouNodeRuntime::SetConfiguredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)
 {
     std::lock_guard lock(m_mutex);
-    m_explicit_peer_endpoints.clear();
+    // Retain release-pinned configured entries when replacing operator routes.
+    std::erase_if(m_config.configured_peers, [](const ConfiguredPeer& peer) { return !peer.tls_spki_sha256; });
     for (const auto& [host, port] : endpoints) {
-        if (port == 0) continue;
+        if (port == 0 || m_config.configured_peers.size() >= 32) continue;
         boost::system::error_code ec;
         const auto addr = boost::asio::ip::make_address(host, ec);
         if (ec) continue;
-        if (m_config.p2p_endpoint && addr.to_string() == m_config.p2p_endpoint->first &&
-            port == m_config.p2p_endpoint->second) {
-            continue;
-        }
-        if (m_config.local_p2p_endpoint && addr.to_string() == m_config.local_p2p_endpoint->first &&
-            port == m_config.local_p2p_endpoint->second) {
-            continue;
-        }
-        m_explicit_peer_endpoints.emplace(addr.to_string(), port);
+        const Endpoint endpoint{addr.to_string(), port};
+        if (m_config.advertised_endpoint == endpoint ||
+            std::any_of(m_config.configured_peers.begin(), m_config.configured_peers.end(),
+                [&](const ConfiguredPeer& peer) { return peer.endpoint == endpoint; })) continue;
+        m_config.configured_peers.push_back({endpoint, std::nullopt});
     }
 }
 
-std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetExplicitPeerEndpoints() const
+std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetConfiguredPeerEndpoints() const
 {
     std::lock_guard lock(m_mutex);
-    std::vector<std::pair<std::string, uint16_t>> result{m_explicit_peer_endpoints.begin(), m_explicit_peer_endpoints.end()};
-    if (m_config.p2p_endpoint) result.push_back(*m_config.p2p_endpoint);
+    std::vector<Endpoint> result;
+    for (const auto& peer : m_config.configured_peers)
+        if (m_config.advertised_endpoint != peer.endpoint) result.push_back(peer.endpoint);
     return result;
 }
 
@@ -1218,11 +1191,11 @@ void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<st
         boost::system::error_code ec;
         const auto addr = boost::asio::ip::make_address(host, ec);
         if (ec) continue;
-        if (!IsConnectableDiscoveredAddress(addr, m_config.local_p2p_endpoint)) continue;
+        if (!IsConnectableDiscoveredAddress(addr, m_config.advertised_endpoint)) continue;
         const auto canonical = std::make_pair(addr.to_string(), port);
-        if (m_config.p2p_endpoint && canonical == *m_config.p2p_endpoint) continue;
-        if (m_config.local_p2p_endpoint && canonical == *m_config.local_p2p_endpoint) continue;
-        if (m_explicit_peer_endpoints.count(canonical) > 0) continue;
+        if (m_config.advertised_endpoint && canonical == *m_config.advertised_endpoint) continue;
+        if (std::any_of(m_config.configured_peers.begin(), m_config.configured_peers.end(),
+                [&](const ConfiguredPeer& peer) { return peer.endpoint == canonical; })) continue;
         if (m_discovered_peer_endpoints.size() >= MAX_DISCOVERED_PEER_ENDPOINTS) break;
         m_discovered_peer_endpoints.emplace(canonical);
     }

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/publication_service.h>
+#include <test/cybou_publication_builder.h>
 #include <cybou/canonical_cbor.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/node_runtime.h>
@@ -26,7 +27,7 @@ cybou::RetentionKey JobKey(const cybou::AccountId& account, std::string_view id)
 cybou::PreparedPublicationBundle Prepare(cybou::CybouNodeRuntime& runtime,
     cybou::KVStore& proof_db, const std::string& index_id)
 {
-    cybou::PublicationBundleStager stager{runtime.GetChunkBlobStore(), proof_db, index_id,
+    cybou::test::PublicationBuilder stager{runtime.GetChunkBlobStore(),
         std::span<const unsigned char, 32>{runtime.GetNetworkBinding().begin(), 32}};
     const auto metadata = cybou::EncodeCanonicalCbor(cybou::CborValue::ArrayValue({
         cybou::CborValue::Unsigned(2), cybou::CborValue::Unsigned(1)
@@ -137,7 +138,7 @@ BOOST_AUTO_TEST_CASE(stage_releases_pin_when_private_leaf_index_write_fails)
     auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
     cybou::KVStore staging_db{cybou::KVStoreOptions{.memory_only = true}};
     cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(),
-        application_db, coordinator, staging_db};
+        application_db, coordinator};
     cybou::MailMessage message;
     message.message_id = *cybou::NewPrivateItemId();
     message.recipient_account_id = *account;
@@ -168,7 +169,7 @@ BOOST_AUTO_TEST_CASE(cancel_queued_publication_releases_its_retention_pin)
     cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
     auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
     cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(),
-        application_db, coordinator, staging_db};
+        application_db, coordinator};
     BOOST_CHECK(publication.SubmitPrepared("blocker-job", prepared).phase ==
         cybou::PublicationJobPhase::WAITING_FINALITY);
 
@@ -196,6 +197,26 @@ BOOST_AUTO_TEST_CASE(cancel_queued_publication_releases_its_retention_pin)
     BOOST_CHECK(!application_db.Has("publication/leaves/abandoned-job"));
     const auto jobs = publication.Jobs();
     BOOST_CHECK(std::find(jobs.begin(), jobs.end(), "abandoned-job") == jobs.end());
+}
+
+BOOST_AUTO_TEST_CASE(interrupted_encryption_releases_orphan_pins_on_reopen)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("publication-interrupted.cybou");
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    const std::string job{"interrupted-encryption"};
+    cybou::ChunkId chunk{};
+    chunk.fill(42);
+    const std::array<cybou::ChunkId, 1> chunks{chunk};
+    auto& retention = fixture.runtime->GetChunkRetention();
+    BOOST_REQUIRE(retention.Pin(JobKey(application_db.Account(), job), chunks));
+    BOOST_REQUIRE(application_db.Put("publication/staging-attempt", std::span{
+        reinterpret_cast<const unsigned char*>(job.data()), job.size()}));
+    BOOST_REQUIRE(retention.IsPinned(chunk));
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), application_db, coordinator};
+    BOOST_CHECK(!retention.IsPinned(chunk));
+    BOOST_CHECK(!application_db.Has("publication/staging-attempt"));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

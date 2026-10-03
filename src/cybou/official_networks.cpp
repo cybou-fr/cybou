@@ -14,7 +14,7 @@ namespace cybou {
 
 namespace {
 
-inline constexpr std::array<OfficialBootstrapLocator, 1> DEVNET_BOOTSTRAP_LOCATORS{{
+inline constexpr std::array<RendezvousLocator, 1> DEVNET_BOOTSTRAP_LOCATORS{{
     {
         .host = "51.255.46.58",
         .port = 29461,
@@ -63,7 +63,7 @@ OfficialNetwork VerifyCompiledDevnet()
         .genesis = std::move(*verified),
         .genesis_state = std::move(*state),
         .network_definition = std::move(definition),
-        .bootstrap_locators = DEVNET_BOOTSTRAP_LOCATORS,
+        .rendezvous_locators = DEVNET_BOOTSTRAP_LOCATORS,
     };
 }
 
@@ -116,7 +116,7 @@ OfficialNetwork BuildLabNetwork()
         .genesis = std::move(*verified),
         .genesis_state = std::move(state),
         .network_definition = std::move(definition),
-        .bootstrap_locators = {},
+        .rendezvous_locators = {},
     };
 }
 #endif

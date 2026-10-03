@@ -19,10 +19,10 @@ struct AuthorizedFixture {
     std::vector<unsigned char> bytes = std::vector<unsigned char>(1100, 0x5a);
     cybou::ChunkId chunk_id = cybou::ComputeChunkId(bytes);
     cybou::AuthorizedChunk authorized_chunk{chunk_id};
-    cybou::ChunkAuthorizationCommitment commitment = *cybou::BuildChunkAuthorizationCommitment(
+    cybou::ChunkAuthorizationTree commitment = *cybou::BuildChunkAuthorizationTree(
         std::span<const cybou::AuthorizedChunk>{&authorized_chunk, 1});
     cybou::RootPublication publication{};
-    cybou::ChunkAuthorizationProof proof = commitment.proofs.front();
+    cybou::ChunkAuthorizationProof proof = commitment.Proof(0);
     uint256 operation_id{uint8_t{1}};
 
     AuthorizedFixture()
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
     second_bytes[0] ^= 1;
     const auto second_id = cybou::ComputeChunkId(second_bytes);
     const cybou::AuthorizedChunk second_chunk{second_id};
-    const auto second_commitment = cybou::BuildChunkAuthorizationCommitment(
+    const auto second_commitment = cybou::BuildChunkAuthorizationTree(
         std::span<const cybou::AuthorizedChunk>{&second_chunk, 1});
     BOOST_REQUIRE(second_commitment.has_value());
     auto second_publication = fixture.publication;
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
         return std::nullopt;
     };
     BOOST_CHECK(store.PutChunk(second_id_op, second_id, second_bytes,
-        second_commitment->proofs.front(), second_lookup).status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
+        second_commitment->Proof(0), second_lookup).status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
 
     // The same physical chunk can be authorized by another finalized publication without doubling storage use.
     const auto second_publication_id = uint256{uint8_t{3}};
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_provider_c
         {cybou::ComputeChunkId(first_bytes)},
         {cybou::ComputeChunkId(second_bytes)},
     };
-    const auto commitment = cybou::BuildChunkAuthorizationCommitment(chunks);
+    const auto commitment = cybou::BuildChunkAuthorizationTree(chunks);
     BOOST_REQUIRE(commitment.has_value());
 
     const auto publication_id = uint256{uint8_t{4}};
@@ -143,9 +143,9 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_allows_proven_chunks_until_provider_c
     }();
     cybou::ChunkBlobStore blobs({}, true);
     cybou::FinalizedChunkStore store(blobs, {}, network_binding, 4096);
-    BOOST_CHECK(store.PutChunk(publication_id, chunks[0].id, first_bytes, commitment->proofs[0], lookup).status ==
+    BOOST_CHECK(store.PutChunk(publication_id, chunks[0].id, first_bytes, commitment->Proof(0), lookup).status ==
         cybou::ChunkAdmissionStatus::STORED);
-    BOOST_CHECK(store.PutChunk(publication_id, chunks[1].id, second_bytes, commitment->proofs[1], lookup).status ==
+    BOOST_CHECK(store.PutChunk(publication_id, chunks[1].id, second_bytes, commitment->Proof(1), lookup).status ==
         cybou::ChunkAdmissionStatus::STORED);
     BOOST_CHECK(store.UsedBytes() == first_bytes.size() + second_bytes.size());
 }

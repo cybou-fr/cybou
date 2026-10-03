@@ -26,10 +26,17 @@ struct ChunkAuthorizationProof {
     std::vector<ChunkId> siblings;
 };
 
-struct ChunkAuthorizationCommitment {
+/** O(N) Merkle nodes; creates only the requested O(log N) inclusion path. */
+class ChunkAuthorizationTree {
+public:
     ChunkId root{};
     std::uint32_t chunk_count{0};
-    std::vector<ChunkAuthorizationProof> proofs;
+    const ChunkId& Root() const { return root; }
+    std::uint32_t ChunkCount() const { return chunk_count; }
+    ChunkAuthorizationProof Proof(std::uint32_t leaf_index) const;
+private:
+    std::vector<std::vector<ChunkId>> m_levels;
+    friend std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(std::span<const AuthorizedChunk>);
 };
 
 struct ChunkAuthorizationSummary {
@@ -52,7 +59,7 @@ private:
     bool m_failed{false};
 };
 
-std::optional<ChunkAuthorizationCommitment> BuildChunkAuthorizationCommitment(
+std::optional<ChunkAuthorizationTree> BuildChunkAuthorizationTree(
     std::span<const AuthorizedChunk> chunks);
 
 bool VerifyChunkAuthorizationPath(

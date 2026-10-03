@@ -25,7 +25,6 @@ struct Party {
     std::unique_ptr<cybou::CybouIdentityService> identity;
     std::filesystem::path root;
     std::unique_ptr<cybou::PrivateApplicationStore> db;
-    std::unique_ptr<cybou::KVStore> staging;
     std::unique_ptr<cybou::IdentityOperationCoordinator> coordinator;
     std::unique_ptr<cybou::StorageService> storage;
     std::unique_ptr<cybou::PublicationService> publication;
@@ -36,7 +35,6 @@ struct Party {
     {
         coordinator = std::make_unique<cybou::IdentityOperationCoordinator>(*fixture.runtime,
             identity->GetKeyStore(), root / "operation.cyiop");
-        staging = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.memory_only = true});
         Open(fixture, network);
     }
 
@@ -52,7 +50,7 @@ struct Party {
         storage = std::make_unique<cybou::StorageService>(*fixture.runtime, network, *db,
             cybou::BETA_REMOTE_REPLICA_TARGET);
         publication = std::make_unique<cybou::PublicationService>(*fixture.runtime, identity->GetKeyStore(),
-            *db, *coordinator, *staging);
+            *db, *coordinator);
         application = std::make_unique<cybou::ApplicationService>(*fixture.runtime, identity->GetKeyStore(),
             *db, *storage);
     }

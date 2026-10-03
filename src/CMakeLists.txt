@@ -89,8 +89,6 @@ add_library(cybou_node STATIC
   cybou/chunk_blob_store.cpp
   cybou/chunk_retention.cpp
   cybou/finalized_chunk_store.cpp
-  cybou/chunk_authorization_proof_index.cpp
-  cybou/publication_bundle_stager.cpp
   cybou/publication_service.cpp
   cybou/storage_service.cpp
   cybou/application_service.cpp

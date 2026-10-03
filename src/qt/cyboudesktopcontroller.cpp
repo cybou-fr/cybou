@@ -149,8 +149,8 @@ void CybouDesktopController::start()
         m_model->setGeoAdmissionStatus(!m_geo_admission_required ? CybouGeoAdmissionStatus::NotRequired
             : (peer_admission.policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting));
         auto config = cybou::MakeNodeRuntimeConfig(network, data_dir);
-        config.p2p_endpoint = configured_p2p;
-        config.local_p2p_endpoint = network_config.listen_endpoint;
+        if (configured_p2p) config.configured_peers.push_back({*configured_p2p, std::nullopt});
+        config.advertised_endpoint = network_config.listen_endpoint;
         config.peer_admission_policy = std::move(peer_admission.policy);
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime = std::move(config),

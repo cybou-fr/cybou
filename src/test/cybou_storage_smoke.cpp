@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
 
         cybou::CybouNodeService node{{
             .runtime = cybou::NodeRuntimeConfig{.network_definition = network->network_definition,
-                .data_dir = work / "client-db", .p2p_endpoint = std::make_pair(finalizer_ip, finalizer_port), .peer_admission_policy = TestLabAdmissionPolicy()},
+                .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}}, .peer_admission_policy = TestLabAdmissionPolicy()},
             .genesis = network->genesis_state,
         }};
         node.Start();
@@ -91,16 +91,15 @@ int main(int argc, char* argv[])
 
         auto& keystore = identity.GetKeyStore();
         cybou::PrivateApplicationStore db{keystore, work / "app"};
-        cybou::KVStore staging{cybou::KVStoreOptions{.path = work / "staging"}};
         cybou::RuntimeStorageTransport transport{runtime};
         cybou::StorageService storage{runtime, transport, db};
         cybou::PublicationService publication{runtime, keystore, db,
-            runtime.GetIdentityOperationCoordinator(keystore), staging};
+            runtime.GetIdentityOperationCoordinator(keystore)};
         cybou::ApplicationService application{runtime, keystore, db, storage};
 
         WaitFor("two storage providers discovered through the finalizer",
-            [&] { return runtime.StorageEndpointEndpoints().size() >= 2; }, 120s);
-        Step("PROVIDERS " + std::to_string(runtime.StorageEndpointEndpoints().size()));
+            [&] { return runtime.StorageEndpoints().size() >= 2; }, 120s);
+        Step("PROVIDERS " + std::to_string(runtime.StorageEndpoints().size()));
 
         std::vector<unsigned char> original(700 * 1024);
         for (std::size_t i{0}; i < original.size(); ++i) original[i] = static_cast<unsigned char>((i * 131) ^ (i >> 7));

@@ -50,18 +50,22 @@ struct TlsServerIdentity {
     std::filesystem::path private_key_file;
 };
 
+struct ConfiguredPeer {
+    std::pair<std::string, uint16_t> endpoint;
+    std::optional<std::array<unsigned char, 32>> tls_spki_sha256;
+};
+
 struct NodeRuntimeConfig {
     CybouNetworkDefinition network_definition;
     /**
      * Compiled rendezvous peers of the official network: dialed first like any
      * ordinary peer, with the session TLS SPKI checked against the compiled pin.
      */
-    std::vector<OfficialBootstrapLocator> bootstrap_locators;
     std::filesystem::path data_dir;
     std::optional<Secret32> poa_finalizer_recovery_entropy{std::nullopt};
-    std::optional<std::pair<std::string, uint16_t>> p2p_endpoint{std::nullopt};
+    std::vector<ConfiguredPeer> configured_peers;
     /** This node's own CYP2 listener; used to filter self-addresses out of discovery. */
-    std::optional<std::pair<std::string, uint16_t>> local_p2p_endpoint{std::nullopt};
+    std::optional<std::pair<std::string, uint16_t>> advertised_endpoint{std::nullopt};
     size_t db_cache_bytes{8 << 20};
     bool memory_only{false};
     bool wipe_data{false};
@@ -243,7 +247,6 @@ public:
     /** Maintain discovered CYP2 sessions, fail over across peers, and sync verified blocks. */
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
     size_t ConnectedPeerCount() const;
-    bool HasP2pEndpoint() const { return m_config.p2p_endpoint.has_value(); }
     /** Local encrypted staging/cache, available on every Full Node. */
     ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
     /** Why local blobs stay: pins and evictable cache entries (never content semantics). */
@@ -268,7 +271,7 @@ public:
         uint16_t port{0};
         std::array<unsigned char, 32> provider_id{};
     };
-    std::vector<StorageEndpoint> StorageEndpointEndpoints() const;
+    std::vector<StorageEndpoint> StorageEndpoints() const;
     /** Storage calls go only to a session that proved the expected ProviderID. */
     std::optional<ChunkAdmissionResult> PutChunkToStorageEndpoint(const std::string& address, uint16_t port,
         const std::array<unsigned char, 32>& provider_id, const uint256& publication_operation_id,
@@ -295,9 +298,9 @@ public:
      * Explicit peers always come first in gossip targets and cannot be crowded
      * out by discovered routing hints.
      */
-    void SetExplicitPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
+    void SetConfiguredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     /** The explicit peer endpoints as last configured. */
-    std::vector<std::pair<std::string, uint16_t>> GetExplicitPeerEndpoints() const;
+    std::vector<std::pair<std::string, uint16_t>> GetConfiguredPeerEndpoints() const;
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
     /** Compiled SPKI pin for a bootstrap locator endpoint; nullopt for every other peer. */
     std::optional<std::array<unsigned char, 32>> PinnedSpki(const std::string& address, uint16_t port) const;
@@ -350,7 +353,6 @@ private:
     mutable std::mutex m_mutex;
     std::deque<FinalizedHead> m_recent_finalized_blocks;
     using Endpoint = std::pair<std::string, uint16_t>;
-    std::set<Endpoint> m_explicit_peer_endpoints;
     p2p::IngressBudget m_ingress;
     std::set<Endpoint> m_discovered_peer_endpoints;
 };

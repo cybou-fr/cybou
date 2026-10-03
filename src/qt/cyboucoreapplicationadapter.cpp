@@ -147,7 +147,6 @@ struct CybouCoreApplicationAdapter::Session {
     bool catching_up{false};
 
     std::unique_ptr<cybou::PrivateApplicationStore> db;
-    std::unique_ptr<cybou::KVStore> staging;
     std::unique_ptr<cybou::RuntimeStorageTransport> transport;
     cybou::StorageTransport* transport_override{nullptr};
     std::unique_ptr<cybou::StorageService> storage;
@@ -265,12 +264,11 @@ struct CybouCoreApplicationAdapter::Session {
                 std::filesystem::remove_all(root / "app.db");
                 db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
             }
-            staging = std::make_unique<cybou::KVStore>(cybou::KVStoreOptions{.path = root / "staging"});
             transport = std::make_unique<cybou::RuntimeStorageTransport>(runtime);
             storage = std::make_unique<cybou::StorageService>(runtime,
                 transport_override ? *transport_override : static_cast<cybou::StorageTransport&>(*transport), *db);
             publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
-                runtime.GetIdentityOperationCoordinator(keystore), *staging);
+                runtime.GetIdentityOperationCoordinator(keystore));
             application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);
             return true;
         } catch (const std::exception&) {

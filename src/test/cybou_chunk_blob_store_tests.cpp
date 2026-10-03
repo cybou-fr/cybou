@@ -43,7 +43,7 @@ BOOST_AUTO_TEST_CASE(local_blob_survives_restart_and_provider_admission_without_
     std::array<unsigned char, 32> network_binding{};
     network_binding.fill(0x7c);
     cybou::AuthorizedChunk authorized{id};
-    const auto commitment = cybou::BuildChunkAuthorizationCommitment(
+    const auto commitment = cybou::BuildChunkAuthorizationTree(
         std::span<const cybou::AuthorizedChunk>{&authorized, 1});
     BOOST_REQUIRE(commitment);
     cybou::RootPublication publication;
@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(local_blob_survives_restart_and_provider_admission_without_
     {
         cybou::FinalizedChunkStore provider(blobs, provider_path, network_binding, 4096);
         BOOST_CHECK(!provider.HasChunk(id));
-        BOOST_CHECK(provider.PutChunk(operation_id, id, bytes, commitment->proofs.front(), lookup).status ==
+        BOOST_CHECK(provider.PutChunk(operation_id, id, bytes, commitment->Proof(0), lookup).status ==
             cybou::ChunkAdmissionStatus::STORED);
         BOOST_CHECK(provider.GetChunk(id) == bytes);
         BOOST_CHECK_EQUAL(provider.UsedBytes(), bytes.size());
@@ -111,7 +111,7 @@ BOOST_AUTO_TEST_CASE(provider_startup_checks_size_not_content_and_put_heals_dama
     std::array<unsigned char, 32> network_binding{};
     network_binding.fill(0x6d);
     cybou::AuthorizedChunk authorized{id};
-    const auto commitment = cybou::BuildChunkAuthorizationCommitment(
+    const auto commitment = cybou::BuildChunkAuthorizationTree(
         std::span<const cybou::AuthorizedChunk>{&authorized, 1});
     BOOST_REQUIRE(commitment);
     cybou::RootPublication publication;
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(provider_startup_checks_size_not_content_and_put_heals_dama
     {
         cybou::ChunkBlobStore blobs(blob_root);
         cybou::FinalizedChunkStore provider(blobs, provider_path, network_binding, 4096);
-        BOOST_REQUIRE(provider.PutChunk(operation_id, id, bytes, commitment->proofs.front(), lookup).status ==
+        BOOST_REQUIRE(provider.PutChunk(operation_id, id, bytes, commitment->Proof(0), lookup).status ==
             cybou::ChunkAdmissionStatus::STORED);
     }
     for (const auto& entry : std::filesystem::recursive_directory_iterator(blob_root)) {
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(provider_startup_checks_size_not_content_and_put_heals_dama
     BOOST_CHECK(!provider.GetChunk(id));
     BOOST_CHECK(!blobs.Get(id));
     // An owner repairing with the valid bytes heals the provider copy.
-    BOOST_CHECK(provider.PutChunk(operation_id, id, bytes, commitment->proofs.front(), lookup).status ==
+    BOOST_CHECK(provider.PutChunk(operation_id, id, bytes, commitment->Proof(0), lookup).status ==
         cybou::ChunkAdmissionStatus::ALREADY_STORED);
     BOOST_CHECK(provider.GetChunk(id) == bytes);
     BOOST_CHECK_EQUAL(blobs.UsedBytes(), bytes.size());

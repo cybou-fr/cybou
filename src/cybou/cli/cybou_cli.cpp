@@ -257,7 +257,7 @@ int NetworkInfo(const Options& opts)
               << "\nnetwork_id=" << HexStr(network.genesis.GetNetworkId())
               << "\nnetwork_binding=" << ComputeNetworkBinding(network.network_definition.network_public_key).GetHex()
               << "\ngenesis=" << network.network_definition.genesis_block_id.GetHex() << '\n';
-    for (const auto& locator : network.bootstrap_locators) {
+    for (const auto& locator : network.rendezvous_locators) {
         std::cout << "bootstrap=" << locator.host << ':' << locator.port
                   << " spki_sha256=" << HexStr(locator.tls_spki_sha256) << '\n';
     }
@@ -433,10 +433,10 @@ int RunNode(const Options& opts)
 
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
     // Official networks discover peers from their compiled rendezvous locators.
-    if (opts.Has("peer")) config.p2p_endpoint = ParseEndpoint(opts.Get("peer"));
-    else if (network.bootstrap_locators.empty() && !opts.Has("peers") && !listen)
+    if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
+    else if (network.rendezvous_locators.empty() && !opts.Has("peers") && !listen)
         throw std::invalid_argument("a network without bootstrap locators requires --peer, --peers or --listen");
-    if (listen) config.local_p2p_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
+    if (listen) config.advertised_endpoint = opts.Has("advertise") ? ParseEndpoint(opts.Get("advertise")) : *listen;
     config.tls_server_identity = TlsIdentity(opts);
     config.storage_capacity_bytes = opts.Has("capacity") ? Quantity(opts.Get("capacity")) : 0;
     if (opts.Has("poa-key-file")) {
@@ -451,7 +451,10 @@ int RunNode(const Options& opts)
     const auto interval = Quantity(opts.Get("block-interval", "1000ms"), true);
     if (interval == 0 || interval > 60000) throw std::invalid_argument("invalid block interval");
     auto node = StartNode(network, std::move(config));
-    if (const auto explicit_peers = PeerList(opts)) node->Runtime().SetExplicitPeerEndpoints(*explicit_peers);
+    if (auto peers = PeerList(opts)) {
+        if (opts.Has("peer")) peers->insert(peers->begin(), ParseEndpoint(opts.Get("peer")));
+        node->Runtime().SetConfiguredPeerEndpoints(*peers);
+    }
     std::atomic<std::uint64_t> last_height{0};
     node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval, .listen_endpoint = listen},
         [&last_height, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
@@ -583,7 +586,7 @@ int StorageCommand(const std::string& action, const Options& opts)
     if (opts.Has("peer")) ConfigurePeerAdmission(opts, opts.Require("data-dir"));
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     auto config = RuntimeConfig(network, opts.Require("data-dir"));
-    if (opts.Has("peer")) config.p2p_endpoint = ParseEndpoint(opts.Get("peer"));
+    if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
     auto node = StartNode(network, std::move(config));
     auto& runtime = node->Runtime();
     if (action == "verify") {
@@ -601,7 +604,7 @@ int StorageCommand(const std::string& action, const Options& opts)
         auto bytes = runtime.GetChunkBlobStore().Get(chunk);
         if (!bytes && opts.Has("peer")) {
             runtime.SyncFromConfiguredPeer(100);
-            for (const auto& peer : runtime.StorageEndpointEndpoints()) {
+            for (const auto& peer : runtime.StorageEndpoints()) {
                 bytes = runtime.GetChunkFromStorageEndpoint(peer.address, peer.port, peer.provider_id, chunk);
                 if (bytes) break;
             }
