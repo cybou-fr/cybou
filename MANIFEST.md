@@ -8,7 +8,7 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 488 | 57356896ace9c0e2 |
+| AGENTS.md | 493 | 07a2df9037d26306 |
 | CONTRIBUTING.md | 50 | cf30228b23288058 |
 | INSTALL.md | 37 | 21b5ef259577e6d2 |
 | README.md | 149 | e1325490ec086090 |

@@ -517,6 +517,22 @@
         <source>The AUTH change was rejected by local execution.</source>
         <translation>La modification d’AUTH a été rejetée par l’exécution locale.</translation>
     </message>
+    <message>
+        <source>The next storage settlement is due %1 UTC.</source>
+        <translation>Le prochain règlement du stockage est dû le %1 UTC.</translation>
+    </message>
+    <message>
+        <source>Storage period %1 settled: %2 payouts, %3 CYBOU. It is finalized in the next block.</source>
+        <translation>Période de stockage %1 réglée : %2 paiements, %3 CYBOU. Elle sera finalisée dans le prochain bloc.</translation>
+    </message>
+    <message>
+        <source>The storage settlement was rejected by local execution.</source>
+        <translation>Le règlement du stockage a été rejeté par l’exécution locale.</translation>
+    </message>
+    <message>
+        <source>This device held data of a previous CYBOU network. It was moved aside; restore your Identity with its phrase.</source>
+        <translation>Cet appareil contenait les données d’un ancien réseau CYBOU. Elles ont été mises de côté ; restaurez votre identité avec sa phrase.</translation>
+    </message>
 </context>
 <context>
     <name>CybouFixtureApplicationBackend</name>
@@ -1325,6 +1341,26 @@ Racine d’état %7</translation>
         <source>Not connected yet</source>
         <translation>Pas encore connecté</translation>
     </message>
+    <message>
+        <source>Storage held for others / limit</source>
+        <translation>Stockage conservé pour les autres / limite</translation>
+    </message>
+    <message>
+        <source>Estimated storage service value</source>
+        <translation>Valeur estimée du service de stockage</translation>
+    </message>
+    <message>
+        <source>Local storage used / capacity</source>
+        <translation>Stockage local utilisé / capacité</translation>
+    </message>
+    <message>
+        <source>~%1 CYBOU/day (estimate, not paid)</source>
+        <translation>~%1 CYBOU/jour (estimation, non payée)</translation>
+    </message>
+    <message>
+        <source>Unavailable</source>
+        <translation>Indisponible</translation>
+    </message>
 </context>
 <context>
     <name>Driver</name>
@@ -1961,6 +1997,10 @@ Objet : %3
         <location line="+0"/>
         <source>Files are encrypted on this computer before they leave it.</source>
         <translation>Les fichiers sont chiffrés sur cet ordinateur avant d’en sortir.</translation>
+    </message>
+    <message>
+        <source>System Balance %1</source>
+        <translation>Solde système %1</translation>
     </message>
 </context>
 <context>
@@ -3315,6 +3355,18 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
     <message>
         <source>Not enabled</source>
         <translation type="vanished">Non activé</translation>
+    </message>
+    <message>
+        <source>Settle storage period</source>
+        <translation>Régler la période de stockage</translation>
+    </message>
+    <message>
+        <source>Pays verified storage service of the next complete period and returns escrow of ended leases</source>
+        <translation>Paie le stockage vérifié de la prochaine période complète et restitue le séquestre des baux terminés</translation>
+    </message>
+    <message>
+        <source>Storage escrow</source>
+        <translation>Séquestre de stockage</translation>
     </message>
 </context>
 <context>
@@ -5241,6 +5293,10 @@ Enregistrer quand même ?</translation>
         <location line="+7"/>
         <source>Show details</source>
         <translation>Afficher les détails</translation>
+    </message>
+    <message>
+        <source>System Balance pays CYBOU network fees and storage for your Mail, Files and payments.</source>
+        <translation>Le solde système paie les frais réseau CYBOU et le stockage de votre courrier, de vos fichiers et de vos paiements.</translation>
     </message>
 </context>
 </TS>

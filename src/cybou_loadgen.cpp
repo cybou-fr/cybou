@@ -60,7 +60,7 @@ struct Samples {
 /** Run-wide measurements written by --metrics. */
 struct Metrics {
     Samples wallet_finality, publication_finality, publication_protected;
-    std::map<std::string,uint64_t> submitted, failed;
+    std::map<std::string,uint64_t> submitted, failed, busy;
     uint64_t bytes_published{0};
 };
 Metrics metrics;
@@ -362,7 +362,15 @@ int main(int argc,char* argv[]) {
             if (actual=="payments" || actual=="system-locks") {
                 const auto submitted_at=Clock::now();
                 auto result=actual=="payments" ? client.wallet->SendPayment(*clients[(submitted+1)%count]->identity->GetAccountId(),1) : client.wallet->LockToSystemBalance(1);
-                if (!result) { ++metrics.failed[actual]; throw std::runtime_error("wallet load operation failed"); }
+                if (!result && result.operation_phase==cybou::IdentityOperationPhase::CONFLICT) {
+                    // One Identity, one nonce: its previous operation (often a publication) is still
+                    // unresolved. This is the per-account throughput limit, not a failure.
+                    ++metrics.busy[actual];
+                    ++submitted; next+=std::chrono::microseconds{1000000/rate};
+                    while (!stop && Clock::now()<next) std::this_thread::sleep_for(20ms);
+                    continue;
+                }
+                if (!result) { ++metrics.failed[actual]; throw std::runtime_error("wallet load operation failed: error="+std::to_string(static_cast<unsigned>(result.error))+" "+result.error_message); }
                 // Do not allocate a replacement nonce while delivery is uncertain.
                 auto deadline=std::chrono::steady_clock::now()+120s;
                 while (!stop && client.node->Runtime().GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED) {
@@ -455,6 +463,8 @@ int main(int argc,char* argv[]) {
         }
         for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping);
         const auto elapsed_s=std::chrono::duration<double>(Clock::now()-start).count();
+        // Attempts refused because the account was busy are not operations.
+        for (const auto& [_,n] : metrics.busy) submitted-=std::min<uint64_t>(submitted,n);
         std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : "INTERRUPTED") << '\n';
         if (opts.Has("metrics")) {
             std::ofstream out{opts.Get("metrics")};
@@ -468,6 +478,7 @@ int main(int argc,char* argv[]) {
                 << ",\"operations_per_s\":" << (elapsed_s>0 ? submitted/elapsed_s : 0.0)
                 << ",\"bytes_published\":" << metrics.bytes_published
                 << ",\"submitted\":" << counts(metrics.submitted) << ",\"failed\":" << counts(metrics.failed)
+                << ",\"busy\":" << counts(metrics.busy)
                 << ",\"wallet_submit_to_final\":" << metrics.wallet_finality.Json()
                 << ",\"publication_submit_to_final\":" << metrics.publication_finality.Json()
                 << ",\"publication_submit_to_protected\":" << metrics.publication_protected.Json() << "}\n";

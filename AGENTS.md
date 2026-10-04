@@ -191,6 +191,11 @@ There is no production network.
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.
   TLS files remain under `/etc/cybou-bootstrap/tls/` for transport identity only.
+  Two permanent DEVNET storage peers run beside it as `cybou-storage@2` and
+  `cybou-storage@3` (ports 29462/29463, state under `/var/lib/cybou/storage-N`,
+  installed by `tools/battle/vps_storage_nodes.sh`): ordinary Full Nodes giving
+  publications the two distinct remote replicas Beta durability needs. They share
+  the host, so they are distinct StorageIds, not independent failure domains.
 - Its pinned TLS endpoint is the approved DEV Bootstrap locator (`51.255.46.58:29461`);
   its SPKI SHA-256 pin is compiled in `src/cybou/official_networks.cpp` for initial transport
   discovery only. This grants no consensus role, no special protocol capability, and does not make
