@@ -120,7 +120,9 @@ Beta rate: 5 CYBOU per GiB per day per remote replica; `replica_target = 2`,
 so 10 CYBOU per logical GiB per day. Billing unit: 512 KiB per authorized chunk
 (2048 units = 1 GiB). Cost numerator `units x seconds x replicas x 5`,
 denominator `2048 x 86400`, integer only, with a carried remainder. The rate is
-provisional until shadow accounting (M4) measures real cost.
+provisional until shadow accounting (M4) measures real cost. M4 implements
+the exact arithmetic (`AccrueStorageRent`: floor with carried remainder, so
+split periods sum exactly) and accrues shadow rewards from verified intervals.
 
 ### Onboarding cannot be laundered
 

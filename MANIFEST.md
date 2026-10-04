@@ -21,14 +21,14 @@ editing an included file.
 | docs/cybou/08_P2P.md | 133 | f6cdba9bb682cfc9 |
 | docs/cybou/09_CRYPTO_PQ.md | 29 | 5f99f8a8845ae474 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 98f3227719c0291a |
-| docs/cybou/18_ECONOMICS_FEES.md | 142 | b667bd72e4db87aa |
+| docs/cybou/18_ECONOMICS_FEES.md | 144 | 3975a27baaeae183 |
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 100 | c2af60e8027936e4 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 68 | 08b4831d155d06d3 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 74 | 85101dd415897720 |
-| docs/cybou/24_DECISIONS.md | 223 | 2f60106dc6437ad2 |
+| docs/cybou/22_ROADMAP.md | 74 | 026ee16af0a9b645 |
+| docs/cybou/24_DECISIONS.md | 223 | 5aacfc4fc2269c2f |
 | docs/cybou/25_OPEN_QUESTIONS.md | 93 | d7586fc125777058 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 135 | 966ad8179255ae52 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 143 | a1e662ccac8309a0 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | d3fc59e20cb63db1 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | cadd921838903857 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -60,7 +60,7 @@ editing an included file.
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | a5ebc90bd1cb068b |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 509 | dc8947422109ea0d |
 | docs/cybou/DATA_ASSURANCE_AND_ERASURE.md | 347 | 90184044d3608454 |
-| docs/cybou/DATA_PROCESSING_INVENTORY.md | 75 | 019609c97ef671ae |
+| docs/cybou/DATA_PROCESSING_INVENTORY.md | 76 | 0cc58d2327cf6eca |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |
 | docs/cybou/DEVNET_LIVE_ACCEPTANCE.md | 98 | 408b3d2fce69dcd3 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
@@ -73,7 +73,7 @@ editing an included file.
 | docs/cybou/ROOT_PUBLICATION.md | 129 | 21dad0ace7f05a61 |
 | docs/cybou/SECURITY_GOVERNANCE.md | 75 | a67a214a43175bd8 |
 | docs/cybou/SECURITY_STANDARDS.md | 65 | 76ee18509f85730c |
-| docs/cybou/STORAGE_ADMISSION.md | 205 | 510d7f4a3e907bfe |
+| docs/cybou/STORAGE_ADMISSION.md | 207 | 5d94a08586b94a81 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 2a43f53cf9b9979e |
 | docs/cybou/VALIDATION.md | 109 | da4dd391e9327a9d |
 | spec/circulation_scenarios.csv | 2 | b63d09ab8a0355ce |

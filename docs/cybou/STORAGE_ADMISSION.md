@@ -193,7 +193,9 @@ credit and automatic allocation:
 - **Evidence** (implemented, M3): the provider association record is the
   durable obligation; signed StorageReceipt; random-offset audits and one full
   GET in eight with ChunkID recomputation; bounded in-memory rolling evidence,
-  off-chain only. Persistence for shadow accounting arrives with M4.
+  off-chain only. Since M4, evidence persists in the encrypted Application DB
+  and credits shadow billing-unit-seconds between consecutive successful
+  checks (gap capped at 24 h); estimated rent and provider reward move no CYBOU.
 - **Settlement**: daily PoA-signed StorageSettlement pays verified providers
   from escrow. Failed audit -> no payment, replica degraded, repair.
 - **Protected**: active publication + active funded lease + two remote

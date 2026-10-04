@@ -58,12 +58,12 @@ features and durability rather than reopening architecture cleanup.
 
 ## Storage economy (DEC-274–DEC-283)
 
-- **M1 Architecture freeze**: Level 0/1/2 documents and specs aligned.
-- **M2 Explicit local capacity**: `V >= 15 GiB`, provider budget `floor(2V/3)`,
+- **M1 Architecture freeze** (implemented): Level 0/1/2 documents and specs aligned.
+- **M2 Explicit local capacity** (implemented): `V >= 15 GiB`, provider budget `floor(2V/3)`,
   automatic allocation removed; current DEVNET.
-- **M3 Storage evidence**: durable obligations, receipts, audit transport, full-GET
+- **M3 Storage evidence** (implemented): durable obligations, receipts, audit transport, full-GET
   spot checks, rolling statistics; no money.
-- **M4 Shadow economy**: estimated rent and rewards on the live DEVNET; validate the
+- **M4 Shadow economy** (implemented; DEVNET measurement pending): estimated rent and rewards on the live DEVNET; validate the
   5 CYBOU rate; no CYBOU moved.
 - **M5 Consensus economics**: Treasury monetary base, 20,000 onboarding, StorageLease,
   StorageEscrow, StorageSettlement, AUTH storage quota removal.

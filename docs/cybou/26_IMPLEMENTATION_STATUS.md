@@ -47,6 +47,14 @@ only with a receipt from that StorageId and keeps it in the encrypted
 Application DB, `STORAGE_AUDIT_CHALLENGE`/`RESPONSE` (27/28) carry random-offset
 audits, and `StorageService::ProviderEvidence()` exposes bounded in-memory
 rolling evidence. Replicas still drop on the first failed check.
+M4 shadow accounting is implemented: `storage_economy.h` holds the exact
+integer rent arithmetic (512 KiB units, 5 CYBOU/GiB/day/replica, floor with
+carried remainder). StorageService credits verified billing-unit-seconds only
+between two successful checks of a replica (receipt opens the interval, gaps
+capped at 24 h, failure or restart closes it), accrues a shadow reward per
+provider, persists evidence in the encrypted Application DB and reports
+`EstimatedDailyRent()`. Diagnostics show a provider-side estimate. No CYBOU
+moves; measured DEVNET numbers will validate the rate before M5.
 
 ## Evidence limits reviewed on 2026-10-04
 

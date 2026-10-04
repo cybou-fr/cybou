@@ -9,6 +9,7 @@
 #include <qt/cybouui.h>
 
 #include <cybou/p2p/session.h>
+#include <cybou/storage_economy.h>
 #include <cybou/validation_attestation.h>
 
 #include <QFrame>
@@ -213,6 +214,9 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Node type"), tr("Full Node"), parent);
     Row(m_rows, tr("Local storage used / capacity"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.local_storage_used).arg(diagnostics.local_storage_capacity), parent);
     Row(m_rows, tr("Provider obligations / budget"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.storage_used).arg(diagnostics.storage_capacity), parent);
+    // Shadow accounting (M4): оценка при полной проверенной доступности; CYBOU не перемещаются.
+    const auto shadow = cybou::StorageRentPerDay(cybou::StorageBillingUnits(diagnostics.storage_used), 1);
+    Row(m_rows, tr("Shadow provider value"), shadow ? tr("~%1 CYBOU/day (estimate, not paid)").arg(*shadow) : tr("Unavailable"), parent);
     Row(m_rows, tr("PoA signer active"), diagnostics.poa_signer_active ? tr("Yes") : tr("No"), parent);
     Row(m_rows, tr("Connection"), cybouConnectionText(status), parent);
     const QString geo_status = status.geo_admission == CybouGeoAdmissionStatus::Ready ? tr("Ready")

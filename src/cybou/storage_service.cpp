@@ -99,6 +99,43 @@ std::string ReceiptKey(const cybou::Hash256& operation_id, const ChunkId& chunk_
         cybou::Hash256{std::span<const unsigned char, 32>{storage_id}}.GetHex();
 }
 
+constexpr std::string_view EVIDENCE_INDEX_KEY{"storage/evidence-index"};
+
+std::string EvidenceKey(const std::array<unsigned char, 32>& storage_id)
+{
+    return "storage/evidence/" + cybou::Hash256{std::span<const unsigned char, 32>{storage_id}}.GetHex();
+}
+
+/// Фиксированная локальная запись: десять little-endian 64-битных полей.
+constexpr std::size_t EVIDENCE_RECORD_BYTES{10 * 8};
+
+std::vector<unsigned char> EncodeEvidence(const StorageProviderEvidence& e)
+{
+    std::vector<unsigned char> out;
+    out.reserve(EVIDENCE_RECORD_BYTES);
+    for (const std::uint64_t value : {e.receipts, e.successes, e.failures, e.full_verifications,
+             static_cast<std::uint64_t>(e.last_success_ms), static_cast<std::uint64_t>(e.last_failure_ms),
+             static_cast<std::uint64_t>(e.last_full_verification_ms), e.verified_unit_seconds,
+             e.shadow_reward.cybou, e.shadow_reward.remainder}) {
+        for (unsigned i{0}; i < 8; ++i) out.push_back(static_cast<unsigned char>(value >> (8 * i)));
+    }
+    return out;
+}
+
+std::optional<StorageProviderEvidence> DecodeEvidence(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != EVIDENCE_RECORD_BYTES) return std::nullopt;
+    std::array<std::uint64_t, 10> v{};
+    for (std::size_t field{0}; field < v.size(); ++field) {
+        for (unsigned i{0}; i < 8; ++i) v[field] |= std::uint64_t{bytes[field * 8 + i]} << (8 * i);
+    }
+    if (v[9] >= STORAGE_RENT_DENOMINATOR) return std::nullopt;
+    return StorageProviderEvidence{.receipts = v[0], .successes = v[1], .failures = v[2], .full_verifications = v[3],
+        .last_success_ms = static_cast<std::int64_t>(v[4]), .last_failure_ms = static_cast<std::int64_t>(v[5]),
+        .last_full_verification_ms = static_cast<std::int64_t>(v[6]), .verified_unit_seconds = v[7],
+        .shadow_reward = {.cybou = v[8], .remainder = v[9]}};
+}
+
 std::int64_t NowMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -214,6 +251,7 @@ StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& tran
     : m_runtime{runtime}, m_transport{transport}, m_application_db{application_db},
       m_target{std::clamp<std::uint8_t>(remote_replica_target, 1, MAX_REPLICAS_PER_CHUNK)}
 {
+    LoadEvidence();
 }
 
 std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash256& operation_id, const bool rebuilding) const
@@ -547,6 +585,8 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                 continue;
             }
             RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; });
+            // Receipt открывает интервал хранения; следующая успешная проверка его засчитывает.
+            CreditReplica(provider.storage_id, chunk_id, bytes->size(), NowMs());
             if (!HasProvider(replicas, provider)) {
                 if (!SaveReceipt(op_id, chunk_id, provider, admitted->receipt)) {
                     admission_error = "Cannot save storage receipt";
@@ -685,22 +725,76 @@ bool StorageService::CheckReplica(const StorageEndpoint& provider, const ChunkId
         const auto expected = ComputeStorageAuditResponse(*local_bytes, challenge.byte_offset, challenge.nonce);
         if (const auto answer = m_transport.Audit(provider, challenge)) {
             const bool ok = expected && answer->held && answer->response_hash == *expected;
+            const auto now = NowMs();
             RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
-                if (ok) { ++e.successes; e.last_success_ms = NowMs(); }
-                else { ++e.failures; e.last_failure_ms = NowMs(); }
+                if (ok) { ++e.successes; e.last_success_ms = now; }
+                else { ++e.failures; e.last_failure_ms = now; }
             });
+            if (ok) CreditReplica(provider.storage_id, chunk_id, local_bytes->size(), now);
+            else ForgetReplica(provider.storage_id, chunk_id);
             return ok;
         }
         // Transport без audit или без ответа: проверяем exact bytes полным GET.
     }
     const auto bytes = m_transport.Get(provider, chunk_id);
     const bool ok = bytes && ComputeChunkId(*bytes) == chunk_id;
+    const auto now = NowMs();
     RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
-        const auto now = NowMs();
         if (ok) { ++e.successes; ++e.full_verifications; e.last_success_ms = now; e.last_full_verification_ms = now; }
         else { ++e.failures; e.last_failure_ms = now; }
     });
+    if (ok) CreditReplica(provider.storage_id, chunk_id, bytes->size(), now);
+    else ForgetReplica(provider.storage_id, chunk_id);
     return ok;
+}
+
+void StorageService::CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
+    const std::uint64_t stored_bytes, const std::int64_t now_ms)
+{
+    // Засчитываем только интервал между двумя успешными проверками и не длиннее суток:
+    // долгий пропуск не доказывает непрерывное хранение.
+    std::int64_t previous{0};
+    {
+        std::lock_guard lock{m_evidence_mutex};
+        const auto key = std::pair{chunk_id, storage_id};
+        if (const auto it = m_replica_verified_ms.find(key); it != m_replica_verified_ms.end()) previous = it->second;
+        else if (m_replica_verified_ms.size() >= MAX_TRACKED_REPLICA_CHECKS) m_replica_verified_ms.clear();
+        m_replica_verified_ms[key] = now_ms;
+    }
+    if (previous == 0 || now_ms <= previous) return;
+    const auto seconds = static_cast<std::uint64_t>(std::min(now_ms - previous, STORAGE_MAX_CREDITED_GAP_MS) / 1000);
+    const auto units = StorageBillingUnits(stored_bytes);
+    if (seconds == 0) return;
+    RecordEvidence(storage_id, [&](StorageProviderEvidence& e) {
+        auto reward = e.shadow_reward;
+        if (units > std::numeric_limits<std::uint64_t>::max() / seconds ||
+            e.verified_unit_seconds > std::numeric_limits<std::uint64_t>::max() - units * seconds ||
+            !AccrueStorageRent(reward, units, seconds, 1)) return;
+        e.verified_unit_seconds += units * seconds;
+        e.shadow_reward = reward;
+    });
+}
+
+void StorageService::ForgetReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id)
+{
+    std::lock_guard lock{m_evidence_mutex};
+    m_replica_verified_ms.erase(std::pair{chunk_id, storage_id});
+}
+
+std::optional<std::uint64_t> StorageService::EstimatedDailyRent()
+{
+    std::uint64_t units{0};
+    {
+        std::lock_guard lock{m_mutex};
+        for (const auto& operation_id : PlacementIndex()) {
+            const auto placement = Load(operation_id);
+            if (!placement) continue;
+            // Один billing unit на authorized chunk (DEC-279).
+            if (units > std::numeric_limits<std::uint64_t>::max() - placement->leaves.size()) return std::nullopt;
+            units += placement->leaves.size();
+        }
+    }
+    return StorageRentPerDay(units, m_target);
 }
 
 void StorageService::RecordEvidence(const std::array<unsigned char, 32>& storage_id,
@@ -715,11 +809,37 @@ void StorageService::RecordEvidence(const std::array<unsigned char, 32>& storage
                 return std::max(a.second.last_success_ms, a.second.last_failure_ms) <
                     std::max(b.second.last_success_ms, b.second.last_failure_ms);
             });
+            (void)m_application_db.Erase(EvidenceKey(oldest->first));
             m_evidence.erase(oldest);
         }
         it = m_evidence.emplace(storage_id, StorageProviderEvidence{}).first;
+        SaveEvidenceIndex();
     }
     update(it->second);
+    // Evidence переживает рестарт, чтобы shadow accounting копил реальные интервалы (M4).
+    (void)m_application_db.Put(EvidenceKey(storage_id), EncodeEvidence(it->second));
+}
+
+void StorageService::SaveEvidenceIndex()
+{
+    std::vector<unsigned char> index;
+    index.reserve(m_evidence.size() * 32);
+    for (const auto& [storage_id, _] : m_evidence) index.insert(index.end(), storage_id.begin(), storage_id.end());
+    (void)m_application_db.Put(EVIDENCE_INDEX_KEY, index);
+}
+
+void StorageService::LoadEvidence()
+{
+    std::lock_guard lock{m_evidence_mutex};
+    const auto index = m_application_db.Get(EVIDENCE_INDEX_KEY);
+    if (!index || index->size() % 32 != 0) return;
+    for (std::size_t offset{0}; offset < index->size() && m_evidence.size() < MAX_TRACKED_STORAGE_PROVIDERS;
+         offset += 32) {
+        std::array<unsigned char, 32> storage_id{};
+        std::copy_n(index->begin() + offset, 32, storage_id.begin());
+        const auto bytes = m_application_db.Get(EvidenceKey(storage_id));
+        if (const auto evidence = bytes ? DecodeEvidence(*bytes) : std::nullopt) m_evidence.emplace(storage_id, *evidence);
+    }
 }
 
 std::map<std::array<unsigned char, 32>, StorageProviderEvidence> StorageService::ProviderEvidence()

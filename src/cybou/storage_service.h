@@ -13,6 +13,7 @@
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/private_application_store.h>
 #include <cybou/storage_audit.h>
+#include <cybou/storage_economy.h>
 #include <cybou/hash256.h>
 
 #include <compare>
@@ -126,7 +127,16 @@ struct StorageProviderEvidence {
     std::uint64_t full_verifications{0};
     /// \brief Unix-время (ms) последнего успеха, последней неудачи и последнего полного GET.
     std::int64_t last_success_ms{0}, last_failure_ms{0}, last_full_verification_ms{0};
+    /// \brief Shadow accounting (M4): billing-unit-seconds, подтверждённые двумя успешными проверками подряд.
+    std::uint64_t verified_unit_seconds{0};
+    /// \brief Shadow-вознаграждение за `verified_unit_seconds`; CYBOU не перемещаются.
+    StorageRentAccumulator shadow_reward;
 };
+
+/// \brief Максимальный интервал между проверками, засчитываемый как непрерывное хранение.
+inline constexpr std::int64_t STORAGE_MAX_CREDITED_GAP_MS{24LL * 60 * 60 * 1000};
+/// \brief Предел числа реплик с отслеживаемым временем последней успешной проверки.
+inline constexpr std::size_t MAX_TRACKED_REPLICA_CHECKS{1U << 16};
 
 /// \brief Логическое состояние durability публикации.
 enum class DurabilityState : std::uint8_t {
@@ -266,6 +276,9 @@ public:
     /// \brief Снимок rolling evidence по providers, с которыми работал этот сервис.
     /// \details Evidence живёт в памяти процесса и ограничена `MAX_TRACKED_STORAGE_PROVIDERS`.
     std::map<std::array<unsigned char, 32>, StorageProviderEvidence> ProviderEvidence();
+    /// \brief Shadow-оценка суточного rent всех известных placements этой Identity (DEC-279).
+    /// \return CYBOU в сутки при `chunk_count × target` billing units; std::nullopt при переполнении.
+    std::optional<std::uint64_t> EstimatedDailyRent();
 
 private:
     struct Placement;
@@ -280,6 +293,13 @@ private:
         const std::optional<std::vector<unsigned char>>& local_bytes, bool force_full);
     void RecordEvidence(const std::array<unsigned char, 32>& storage_id,
         const std::function<void(StorageProviderEvidence&)>& update);
+    /// Засчитывает непрерывное хранение реплики с прошлой успешной проверки (shadow, M4).
+    void CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
+        std::uint64_t stored_bytes, std::int64_t now_ms);
+    void ForgetReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id);
+    void LoadEvidence();
+    /// Требует m_evidence_mutex.
+    void SaveEvidenceIndex();
     bool SaveReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
         const StorageEndpoint& provider, std::span<const unsigned char> receipt);
     void EraseReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id, const StorageEndpoint& provider);
@@ -296,6 +316,8 @@ private:
     std::size_t m_audit_placement_cursor{0};
     std::mutex m_evidence_mutex;
     std::map<std::array<unsigned char, 32>, StorageProviderEvidence> m_evidence;
+    /// Время последней успешной проверки реплики; теряется при рестарте (консервативный недосчёт).
+    std::map<std::pair<ChunkId, std::array<unsigned char, 32>>, std::int64_t> m_replica_verified_ms;
     std::vector<cybou::Hash256> PlacementIndex() const;
 };
 

@@ -282,6 +282,44 @@ BOOST_AUTO_TEST_CASE(audits_record_evidence_and_drop_a_provider_with_wrong_answe
     }
 }
 
+BOOST_AUTO_TEST_CASE(shadow_accounting_credits_verified_intervals_and_survives_restart)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture, 2};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    std::map<std::array<unsigned char, 32>, cybou::StorageProviderEvidence> before;
+    {
+        cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+        BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+        // Rent estimate: one billing unit per chunk at two replicas (DEC-279).
+        BOOST_CHECK(storage.EstimatedDailyRent() == cybou::StorageRentPerDay(content.leaves.size(), 2));
+        // A receipt alone earns nothing: credit needs a later successful check.
+        for (const auto& [_, evidence] : storage.ProviderEvidence()) BOOST_CHECK_EQUAL(evidence.verified_unit_seconds, 0U);
+        std::this_thread::sleep_for(std::chrono::milliseconds{1100});
+        BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
+        before = storage.ProviderEvidence();
+        BOOST_REQUIRE_EQUAL(before.size(), 2U);
+        for (const auto& [_, evidence] : before) {
+            BOOST_CHECK_GE(evidence.verified_unit_seconds, content.leaves.size());
+            BOOST_CHECK(evidence.shadow_reward.cybou > 0 || evidence.shadow_reward.remainder > 0);
+        }
+    }
+    // Evidence is persisted in the encrypted Application DB and reloads after restart.
+    cybou::StorageService restarted{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    const auto after = restarted.ProviderEvidence();
+    BOOST_REQUIRE_EQUAL(after.size(), before.size());
+    for (const auto& [storage_id, evidence] : before) {
+        BOOST_REQUIRE(after.contains(storage_id));
+        BOOST_CHECK_EQUAL(after.at(storage_id).verified_unit_seconds, evidence.verified_unit_seconds);
+        BOOST_CHECK_EQUAL(after.at(storage_id).successes, evidence.successes);
+        BOOST_CHECK_EQUAL(after.at(storage_id).receipts, evidence.receipts);
+        BOOST_CHECK_EQUAL(after.at(storage_id).shadow_reward.remainder, evidence.shadow_reward.remainder);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(surviving_remote_copy_repairs_every_chunk_without_local_cache)
 {
     CybouServiceTestFixture fixture;
