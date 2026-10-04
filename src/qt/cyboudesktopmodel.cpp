@@ -1344,6 +1344,13 @@ QString CybouDesktopModel::nameLabelProblem(const QString& label) const
     return tr("This name is not valid.");
 }
 
+QString CybouDesktopModel::recipientNameProblem(const QString& label) const
+{
+    // Reservation restricts claiming a name, not addressing its existing owner.
+    if (cybou::ValidateNameLabel(label.toStdString()) == cybou::NameValidationError::PROTECTED_NAME) return {};
+    return nameLabelProblem(label);
+}
+
 void CybouDesktopModel::setNameClaimFinished()
 {
     m_status.name_claim_pending = false;

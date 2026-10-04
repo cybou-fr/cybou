@@ -444,6 +444,12 @@ void CybouShellTests::composeGatesAndSends()
     to->setText(QStringLiteral("alice.cybou"));
     QVERIFY(send->isEnabled());
 
+    to->setText(QStringLiteral("cybou.cybou"));
+    QVERIFY(send->isEnabled());
+    QVERIFY(!model->nameLabelProblem(QStringLiteral("cybou")).isEmpty());
+    QVERIFY(model->recipientNameProblem(QStringLiteral("cybou")).isEmpty());
+    to->setText(QStringLiteral("alice.cybou"));
+
     const int before = model->mailItems().size();
     send->click();
     QCOMPARE(model->mailItems().size(), before + 1);
@@ -1950,6 +1956,31 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QTRY_VERIFY(QFile::exists(alice_download));
     {
         QFile in{alice_download};
+        QVERIFY(in.open(QIODevice::ReadOnly));
+        QCOMPARE(in.readAll(), contract);
+    }
+
+    // Self-mail enters Inbox and keeps a usable attachment, including reused Files content.
+    CybouMailItem self_mail;
+    self_mail.to_name = bob_id;
+    self_mail.subject = QStringLiteral("Note to myself");
+    self_mail.body = QStringLiteral("Keep this attachment.");
+    self_mail.attachments.append(reference);
+    QVERIFY(!bob_model->requestSendMail(self_mail).isEmpty());
+    const auto self_received = [&]() -> const CybouMailItem* {
+        for (const auto& item : bob_model->mailItems())
+            if (item.subject == self_mail.subject && item.folder == CybouMailFolder::Inbox)
+                return bob_model->mailItem(item.id);
+        return nullptr;
+    };
+    QVERIFY(produce_until([&] { return self_received() != nullptr; }));
+    QCOMPARE(self_received()->body, self_mail.body);
+    QCOMPARE(self_received()->attachments.size(), 1);
+    const QString self_download = attach_dir.filePath(QStringLiteral("self-contract.pdf"));
+    bob_model->requestAttachmentDownload(self_received()->id, self_received()->attachments.first().id, self_download);
+    QTRY_VERIFY(QFile::exists(self_download));
+    {
+        QFile in{self_download};
         QVERIFY(in.open(QIODevice::ReadOnly));
         QCOMPARE(in.readAll(), contract);
     }

@@ -392,7 +392,7 @@ QString MailCompose::recipientProblem() const
     if (to.contains(QRegularExpression{QStringLiteral("[,;\\s]")})) return tr("Send to one recipient at a time.");
     if (QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(to).hasMatch()) return {};
     if (!to.endsWith(QStringLiteral(".cybou"))) return tr("Use a CYBOU name, for example alice.cybou.");
-    const QString problem = m_model->nameLabelProblem(to.chopped(6));
+    const QString problem = m_model->recipientNameProblem(to.chopped(6));
     if (!problem.isEmpty()) return problem;
     return {};
 }

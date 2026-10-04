@@ -372,6 +372,7 @@ public:
     void setKeyEpoch(quint32 key_epoch);
     /** Empty when label is a valid .cybou label, else a user-facing reason. */
     QString nameLabelProblem(const QString& label) const;
+    QString recipientNameProblem(const QString& label) const;
     /** Adapter entry: the pending name claim finished (success or not). */
     void setNameClaimFinished();
 
