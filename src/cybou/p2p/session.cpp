@@ -22,6 +22,7 @@
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/rand.h>
 #include <openssl/x509.h>
@@ -525,6 +526,7 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
     if (server) SSL_set_accept_state(m_ssl);
     else SSL_set_connect_state(m_ssl);
     while (std::chrono::steady_clock::now() < deadline) {
+        ERR_clear_error();
         const int result = SSL_do_handshake(m_ssl);
         if (result == 1) {
             const char* negotiated_group = SSL_get0_group_name(m_ssl);
@@ -561,6 +563,8 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
     auto progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
     while (done < length && std::chrono::steady_clock::now() < progress_deadline) {
         size_t count{0};
+        // SSL_get_error uses this thread's queue, including unrelated capsule failures.
+        ERR_clear_error();
         const int result = SSL_read_ex(m_ssl, out + done, length - done, &count);
         if (result == 1 && count != 0) {
             done += count;
@@ -590,6 +594,7 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
     auto progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
     while (done < length && std::chrono::steady_clock::now() < progress_deadline) {
         size_t count{0};
+        ERR_clear_error();
         const int result = SSL_write_ex(m_ssl, bytes + done, length - done, &count);
         if (result == 1 && count != 0) {
             done += count;

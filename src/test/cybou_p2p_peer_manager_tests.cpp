@@ -15,6 +15,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <openssl/evp.h>
+#include <openssl/err.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
 
@@ -307,6 +308,32 @@ BOOST_AUTO_TEST_CASE(manager_tracks_two_live_peers_and_drops_closed_sockets)
     BOOST_CHECK(served[0] && served[1]);
     BOOST_CHECK_EQUAL(manager.PingAll(), 0U);
     BOOST_CHECK_EQUAL(manager.ConnectedCount(), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(tls_io_ignores_unrelated_thread_crypto_errors)
+{
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+    bool served{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io};
+        acceptor.accept(socket);
+        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+        if (!fixture.HandshakeAsPeer(session, {.network_binding=fixture.runtime->GetNetworkBinding(),
+                .finalized_tip=fixture.definition.GetGenesisAnchor(), .nonce=101})) return;
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+        ERR_raise(ERR_LIB_EVP, ERR_R_INTERNAL_ERROR);
+        served=session.AnswerPing();
+    }};
+    cybou::p2p::PeerManager manager{*fixture.runtime};
+    ERR_raise(ERR_LIB_EVP, ERR_R_INTERNAL_ERROR);
+    BOOST_REQUIRE(manager.Connect("127.0.0.1", acceptor.local_endpoint().port()));
+    ERR_raise(ERR_LIB_EVP, ERR_R_INTERNAL_ERROR);
+    BOOST_CHECK_EQUAL(manager.PingAll(), 1U);
+    server.join();
+    BOOST_CHECK(served);
 }
 
 BOOST_AUTO_TEST_CASE(ordinary_handshake_is_independent_of_local_poa_signer)
