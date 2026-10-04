@@ -112,6 +112,8 @@ private:
     bool handleItemDrag(QWidget* viewport, QEvent* event);
     bool m_sort_descending{false};
     QFrame* m_details{nullptr};
+    /** Scrollable body of the details panel: a tall Advanced section never squeezes rows. */
+    QWidget* m_details_body{nullptr};
     QString m_details_id;
 
     QStringList selectedIds() const;

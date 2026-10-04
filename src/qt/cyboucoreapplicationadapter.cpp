@@ -267,8 +267,10 @@ struct CybouCoreApplicationAdapter::Session {
                 db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
             }
             transport = std::make_unique<cybou::RuntimeStorageTransport>(runtime);
+            // Place as many remote replicas as the lease pays for (the network's storage_replica_target).
             storage = std::make_unique<cybou::StorageService>(runtime,
-                transport_override ? *transport_override : static_cast<cybou::StorageTransport&>(*transport), *db);
+                transport_override ? *transport_override : static_cast<cybou::StorageTransport&>(*transport), *db,
+                static_cast<std::uint8_t>(runtime.GetNetworkGenesis().GetProtocolParameters().storage_replica_target));
             publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
                 runtime.GetIdentityOperationCoordinator(keystore));
             application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);

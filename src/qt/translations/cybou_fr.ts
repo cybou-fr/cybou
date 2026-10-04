@@ -4822,6 +4822,14 @@ Enregistrer quand même ?</translation>
         <source>Not retrieved on this computer</source>
         <translation>Non récupéré sur cet ordinateur</translation>
     </message>
+    <message>
+        <source>Encrypted copies: %1 of %2</source>
+        <translation>Copies chiffrées : %1 sur %2</translation>
+    </message>
+    <message>
+        <source>Encrypted copies: %1</source>
+        <translation>Copies chiffrées : %1</translation>
+    </message>
 </context>
 <context>
     <name>WalletPage</name>

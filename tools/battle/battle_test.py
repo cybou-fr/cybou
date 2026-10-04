@@ -257,7 +257,9 @@ class Battle:
             path = self.dir / "to-desktop"
             path.mkdir(parents=True, exist_ok=True)
             seed_geo(path / "identity-0" / "node")
-            peer = ("127.0.0.1", WIN_PORT) if self.args.win_nodes else BOOTSTRAP
+            # Through the bootstrap, whose permanent storage peers outlive the run: letters to a real
+            # Identity must stay retrievable after the temporary battle nodes are deleted.
+            peer = BOOTSTRAP
             args = self.client_args("mail", self.args.duration, str(path / "metrics.json"))
             args[args.index("--identities") + 1] = "1"
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",

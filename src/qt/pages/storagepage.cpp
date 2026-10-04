@@ -32,6 +32,7 @@
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QStackedWidget>
+#include <QScrollArea>
 #include <QToolButton>
 #include <QTimer>
 #include <QTreeWidget>
@@ -355,7 +356,18 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_details->setObjectName(QStringLiteral("card"));
     m_details->setAccessibleName(tr("Details"));
     m_details->setFixedWidth(300);
-    new QVBoxLayout{m_details};
+    auto* details_frame = new QVBoxLayout{m_details};
+    details_frame->setContentsMargins(0, 0, 0, 0);
+    auto* details_scroll = new QScrollArea{m_details};
+    details_scroll->setWidgetResizable(true);
+    details_scroll->setFrameShape(QFrame::NoFrame);
+    details_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_details_body = new QWidget{details_scroll};
+    // The card paints the background; the scroll area and its body stay transparent over it.
+    details_scroll->setStyleSheet(QStringLiteral("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }"));
+    new QVBoxLayout{m_details_body};
+    details_scroll->setWidget(m_details_body);
+    details_frame->addWidget(details_scroll);
     m_details->setVisible(false);
     root->addWidget(m_details);
 
@@ -1053,7 +1065,7 @@ void DetailPair(QVBoxLayout* layout, const QString& key, const QString& value, Q
 void StoragePage::rebuildDetails()
 {
     if (!m_details->isVisible()) return;
-    auto* layout = static_cast<QVBoxLayout*>(m_details->layout());
+    auto* layout = static_cast<QVBoxLayout*>(m_details_body->layout());
     while (QLayoutItem* entry = layout->takeAt(0)) {
         if (entry->layout()) {
             while (QLayoutItem* inner = entry->layout()->takeAt(0)) {
@@ -1112,8 +1124,8 @@ void StoragePage::rebuildDetails()
         DetailPair(layout, tr("On the network"), item->min_remote_replicas < 0
             ? tr("Not stored on the network yet")
             : item->remote_replica_target > 0
-                ? tr("%1 of %2 encrypted copies").arg(item->min_remote_replicas).arg(item->remote_replica_target)
-                : tr("%1 encrypted copies").arg(item->min_remote_replicas), m_details);
+                ? tr("Encrypted copies: %1 of %2").arg(item->min_remote_replicas).arg(item->remote_replica_target)
+                : tr("Encrypted copies: %1").arg(item->min_remote_replicas), m_details);
     }
     DetailPair(layout, tr("Encryption"), tr("Encrypted content; recovery capsules may preserve access"), m_details);
     const auto& status = m_model->status();
@@ -1183,7 +1195,11 @@ void StoragePage::rebuildDetails()
         box_layout->setContentsMargins(0, 0, 0, 0);
         box_layout->setSpacing(4);
         const QString none = tr("Not reported yet");
-        DetailPair(box_layout, tr("Root content identifier"), item->content_root_id.isEmpty() ? none : item->content_root_id, box);
+        // A 64-hex identifier has no break point: show it shortened, full value selectable in the tooltip.
+        const QString root_id = item->content_root_id;
+        DetailPair(box_layout, tr("Root content identifier"), root_id.isEmpty() ? none
+            : root_id.size() > 20 ? root_id.left(10) + QStringLiteral("…") + root_id.right(8) : root_id, box);
+        box->setToolTip(root_id);
         DetailPair(box_layout, tr("Finalized height"), item->finalized_height > 0 ? QString::number(item->finalized_height) : none, box);
         DetailPair(box_layout, tr("Protection status"), CybouProduct::contentStateText(item->state), box);
         DetailPair(box_layout, tr("Local availability"), CybouProduct::localAvailabilityText(*item), box);
