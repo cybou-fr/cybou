@@ -6,6 +6,7 @@
 #include <cybou/p2p/inbound_server.h>
 
 #include <cybou/node_runtime.h>
+#include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/session.h>
 
 #include <openssl/rand.h>
@@ -76,14 +77,18 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             !m_runtime.AdmitIngress(remote.address().to_string(), IngressBudget::Work::CONNECTION)) {
             socket.close(); continue;
         }
-        if (m_workers.size() >= MAX_INBOUND_PEERS) {
+        const auto address = remote.address().to_string();
+        const auto same_address = static_cast<size_t>(std::count_if(m_workers.begin(), m_workers.end(),
+            [&](const Worker& worker) { return worker.address == address; }));
+        if (m_workers.size() >= MAX_INBOUND_PEERS ||
+            (same_address >= MAX_INBOUND_PEERS_PER_ADDRESS && !IsLocalNetworkAddress(address))) {
             // Новый пир отклоняется сразу, а не ставится в локальную очередь:
             // так зависшие сессии не создают скрытый backlog и лимит остается жестким.
             socket.close();
             continue;
         }
         auto done = std::make_shared<std::atomic_bool>(false);
-        m_workers.push_back(Worker{done, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
+        m_workers.push_back(Worker{done, address, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
             TlsSessionConfig tls;
             if (const auto& identity = m_runtime.GetTlsServerIdentity()) {
                 tls.certificate_chain_file = identity->certificate_chain_file;

@@ -13,15 +13,21 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
 namespace cybou { class CybouNodeRuntime; }
 namespace cybou::p2p {
 
-/// \brief Максимум одновременных inbound worker'ов: `8`.
-/// \details Это локальный эксплуатационный лимит, симметричный outbound-менеджеру, а не сетевой протокольный предел.
-inline constexpr size_t MAX_INBOUND_PEERS{8};
+/// \brief Максимум одновременных inbound worker'ов.
+/// \details Локальный эксплуатационный лимит, не протокольный. При `8` восемь любых сессий
+///          (battle test, один NAT) занимали все слоты, и PoA не мог подключиться к bootstrap.
+inline constexpr size_t MAX_INBOUND_PEERS{128};
+/// \brief Максимум одновременных inbound-сессий с одного публичного IP.
+/// \details Один адрес (один NAT, один злоумышленник) не может занять все слоты.
+///          Локальные адреса (loopback, LAN, DEC-285) — собственные машины оператора — не ограничены.
+inline constexpr size_t MAX_INBOUND_PEERS_PER_ADDRESS{8};
 
 /// \brief Ограниченный inbound-listener DEV-узла.
 /// \details У каждого пира свой worker; один зависший пир не блокирует accept следующего.
@@ -44,6 +50,8 @@ private:
     struct Worker {
         /// \brief Флаг завершения конкретного worker'а для ленивой уборки без join storm на accept-пути.
         std::shared_ptr<std::atomic_bool> done;
+        /// \brief Числовой адрес удалённой стороны для лимита на один IP.
+        std::string address;
         /// \brief Поток, который целиком обслуживает одну входящую P2P-сессию.
         std::jthread thread;
     };
