@@ -32,6 +32,11 @@ namespace {
 std::atomic_bool stop{false};
 void Stop(int) { stop=true; }
 
+/** cli::Quantity, but "0"/"0s" mean zero: a run that only creates Identities, no attachment. */
+uint64_t ZeroOrQuantity(const std::string& text,bool duration) {
+    return text=="0" || (duration && text=="0s") ? 0 : cybou::cli::Quantity(text,duration);
+}
+
 using Clock=std::chrono::steady_clock;
 double Ms(Clock::duration d) { return std::chrono::duration<double,std::milli>(d).count(); }
 
@@ -231,9 +236,9 @@ int main(int argc,char* argv[]) {
         const auto rate=cybou::cli::Number(opts.Get("operations-per-second","1"),1,1000);
         const auto maximum=cybou::cli::Number(opts.Get("max-operations","100000"),1,100000);
         const auto size=cybou::cli::Quantity(opts.Get("file-size","4MiB"));
-        const auto attachment_size=cybou::cli::Quantity(opts.Get("attachment-size","0"));
+        const auto attachment_size=ZeroOrQuantity(opts.Get("attachment-size","0"),false);
         if (attachment_size>(64ULL<<20)) throw std::runtime_error("attachment bound exceeded");
-        const auto duration=cybou::cli::Quantity(opts.Get("duration","15m"),true);
+        const auto duration=ZeroOrQuantity(opts.Get("duration","15m"),true);
         if (size>(64ULL<<20) || duration>86400000) throw std::runtime_error("load bounds exceeded");
         const auto target=cybou::cli::Number(opts.Get("replicas","2"),1,2);
         auto profile=opts.Get("profile","files");
