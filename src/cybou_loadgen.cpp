@@ -169,19 +169,21 @@ int main(int argc,char* argv[]) {
             std::cout << "cybou-loadgen --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
                 " [--identities 2] [--profile files|mail|root-publications|payments|system-locks|mixed|recovery]\n"
                 " [--expected-incoming-mail N] [--expected-files N] (recovery submits no operations)\n"
+                " [--recipient NAME.cybou --subject TEXT --body TEXT] (mail profile)\n"
                 " [--operations-per-second 1] [--file-size 4MiB] [--duration 15m] [--replicas 2]\n"
                 "Financial profiles require pre-funded synthetic vaults; onboarding funds only System Balance.\n";
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
         auto address=endpoint.substr(0,colon);
         if (address.starts_with('[') && address.ends_with(']')) address=address.substr(1,address.size()-2);
         const auto peer=std::pair{boost::asio::ip::make_address(address).to_string(),static_cast<uint16_t>(cybou::cli::Number(endpoint.substr(colon+1),1,65535))};
-        const auto count=cybou::cli::Number(opts.Get("identities","2"),2,100);
+        const auto recipient_name=opts.Get("recipient", "");
+        const auto count=cybou::cli::Number(opts.Get("identities","2"),recipient_name.empty() ? 2 : 1,100);
         const auto rate=cybou::cli::Number(opts.Get("operations-per-second","1"),1,1000);
         const auto maximum=cybou::cli::Number(opts.Get("max-operations","100000"),1,100000);
         const auto size=cybou::cli::Quantity(opts.Get("file-size","4MiB"));
@@ -189,6 +191,10 @@ int main(int argc,char* argv[]) {
         if (size>(64ULL<<20) || duration>86400000) throw std::runtime_error("load bounds exceeded");
         const auto target=cybou::cli::Number(opts.Get("replicas","2"),1,2);
         auto profile=opts.Get("profile","files");
+        if ((!recipient_name.empty() || opts.Has("subject") || opts.Has("body")) && profile!="mail")
+            throw std::runtime_error("recipient, subject and body require the mail profile");
+        if (recipient_name.empty() && (opts.Has("subject") || opts.Has("body")))
+            throw std::runtime_error("custom mail content requires an external recipient");
         if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed","recovery"}.contains(profile)) throw std::runtime_error("unknown profile");
         const auto expected_mail=cybou::cli::Number(opts.Get("expected-incoming-mail","0"),0,100000);
         const auto expected_files=cybou::cli::Number(opts.Get("expected-files","0"),0,100000);
@@ -249,11 +255,20 @@ int main(int argc,char* argv[]) {
                 if (actual=="mail") {
                     cybou::MailMessage message;
                     message.message_id=*cybou::NewPrivateItemId();
-                    message.recipient_account_id=*clients[(submitted+1)%count]->identity->GetAccountId();
+                    if (recipient_name.empty()) message.recipient_account_id=*clients[(submitted+1)%count]->identity->GetAccountId();
+                    else {
+                        auto label=recipient_name;
+                        if (label.ends_with(".cybou")) label.resize(label.size()-6);
+                        const auto state=client.node->Runtime().GetStore().LoadState();
+                        const auto* recipient=state && state.state ? state.state->names.Resolve(label) : nullptr;
+                        if (!recipient) throw std::runtime_error("recipient name is not finalized: "+recipient_name);
+                        message.recipient_account_id=*recipient;
+                    }
                     message.client_timestamp_ms=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-                    message.subject="Synthetic DEVNET mail"; message.body="Synthetic DEVNET payload";
+                    message.subject=opts.Get("subject", "Synthetic DEVNET mail");
+                    message.body=opts.Get("body", "Synthetic DEVNET payload");
                     result=client.publication->PublishMail(job,message);
-                    clients[(submitted+1)%count]->expected_incoming_mail.push_back(message.message_id);
+                    if (recipient_name.empty()) clients[(submitted+1)%count]->expected_incoming_mail.push_back(message.message_id);
                 } else {
                     cybou::FilesMutationBatch batch;
                     auto id=*cybou::NewPrivateItemId();
