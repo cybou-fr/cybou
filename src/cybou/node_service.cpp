@@ -7,6 +7,8 @@
 
 #include <cybou/node_service.h>
 
+#include <cybou/network_mismatch.h>
+
 #include <cybou/p2p/inbound_server.h>
 #include <cybou/p2p/peer_manager.h>
 
@@ -69,7 +71,7 @@ void CybouNodeService::Start()
     // Чужую сеть и повреждённое состояние останавливаем до любых фоновых потоков:
     // сетевой сервис не должен "лечить" network mismatch или corrupt local state.
     if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH) {
-        throw std::runtime_error("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
+        throw NetworkMismatchError("CYBOU state belongs to another network; DEV reset requires an explicit cutover");
     }
     if (status.runtime_state == NodeRuntimeState::CORRUPT) {
         throw std::runtime_error("CYBOU state is unavailable or corrupt");

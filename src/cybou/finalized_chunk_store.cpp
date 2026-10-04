@@ -115,7 +115,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
     std::vector<unsigned char> saved_network_binding;
     if (m_db->Read(network_key, saved_network_binding)) {
         if (!std::equal(saved_network_binding.begin(), saved_network_binding.end(), network_binding.begin(), network_binding.end())) {
-            throw std::invalid_argument{"finalized chunk store network ID mismatch"};
+            throw NetworkMismatchError{"finalized chunk store network ID mismatch"};
         }
     } else {
         if (m_db->Exists(network_key)) throw std::runtime_error{"corrupt finalized chunk store network ID"};

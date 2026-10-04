@@ -65,7 +65,7 @@ private Q_SLOTS:
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();
     void runtimeStartupFailureCanBeRetried();
-    void runtimeRejectsStateFromAnotherNetwork();
+    void runtimeRetiresStateFromAnotherNetwork();
     void backendCommandsDriveProjection();
     void liveFeatureAvailabilityStayHonest();
     void fixtureLifecycleFollowsBackend();

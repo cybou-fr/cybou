@@ -11,6 +11,7 @@
 #include <cybou/official_networks.h>
 #include <cybou/identity_service.h>
 #include <cybou/network_genesis.h>
+#include <cybou/network_mismatch.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>
@@ -19,6 +20,7 @@
 #include <cybou/identity_signer.h>
 #include <cybou/wallet_service.h>
 
+#include <QDateTime>
 #include <QFile>
 #include <QMetaObject>
 
@@ -36,6 +38,21 @@
 #include <QDebug>
 
 namespace {
+
+/// Network cutover (AGENTS.md): network-bound data of another official network is
+/// moved aside under `retired/<UTC time>/`; only the network-independent Geo cache stays.
+std::filesystem::path RetireForeignNetworkData(const std::filesystem::path& data_directory)
+{
+    const auto stamp = QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss")).toStdString();
+    const auto target = data_directory / "retired" / stamp;
+    std::filesystem::create_directories(target);
+    for (const auto& entry : std::filesystem::directory_iterator{data_directory}) {
+        const auto name = entry.path().filename();
+        if (name == "geo" || name == "retired") continue;
+        std::filesystem::rename(entry.path(), target / name);
+    }
+    return target;
+}
 std::array<unsigned char, 32> GeoSha256Pin(const QString& text)
 {
     const auto bytes = text.toLatin1();
@@ -307,6 +324,7 @@ void CybouDesktopController::start()
     } catch (const std::exception& e) {
         const QString reason = QString::fromLocal8Bit(e.what());
         qWarning() << "CYBOU desktop startup error:" << reason;
+        const bool foreign_network = dynamic_cast<const cybou::NetworkMismatchError*>(&e) != nullptr;
         if (m_node_service) m_node_service->StopNetwork();
         if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);
         m_identity_signer_enabled = false;
@@ -317,6 +335,23 @@ void CybouDesktopController::start()
         m_wallet_service.reset();
         m_identity_service.reset();
         m_node_service.reset();
+        if (foreign_network && !m_retired_network_data) {
+            // Retire once and start clean on the compiled network; the Identity is restored by its phrase.
+            m_geo_database_updater.reset();
+            try {
+                m_retired_network_data = RetireForeignNetworkData(m_data_directory);
+                qWarning() << "CYBOU moved data of another network to"
+                           << QString::fromStdString(m_retired_network_data->string());
+                start();
+                if (m_node_service) {
+                    m_model->notify(CybouDesktopModel::tr(
+                        "This device held data of a previous CYBOU network. It was moved aside; restore your Identity with its phrase."));
+                }
+                return;
+            } catch (const std::exception& retire_error) {
+                qWarning() << "cannot retire data of another network:" << retire_error.what();
+            }
+        }
         m_model->setNodeStatus(false, 0, false);
         m_model->setSyncError(reason);
         Q_EMIT startupFailed(reason);

@@ -11,6 +11,7 @@
 #include <cybou/chunk_blob_store.h>
 #include <cybou/chunk_authorization.h>
 #include <cybou/kv_store.h>
+#include <cybou/network_mismatch.h>
 
 #include <filesystem>
 #include <functional>

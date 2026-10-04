@@ -1517,7 +1517,7 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QVERIFY(model.status().node_running);
 }
 
-void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
+void CybouShellTests::runtimeRetiresStateFromAnotherNetwork()
 {
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
@@ -1530,12 +1530,13 @@ void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()
     CybouDesktopController controller{&model, directory.path().toStdString()};
     QSignalSpy failures{&controller, &CybouDesktopController::startupFailed};
     controller.start();
-    QCOMPARE(failures.count(), 1);
-    const auto reason = failures.takeFirst().at(0).toString();
-    QVERIFY2(reason.contains(QStringLiteral("belongs to another network")) ||
-        reason.contains(QStringLiteral("compiled DEVNET genesis")) ||
-        reason == QStringLiteral("finalized chunk store network ID mismatch"), qPrintable(reason));
-    QVERIFY(!model.status().node_running);
+    // Cutover: the foreign network-bound data is moved aside and the node starts clean.
+    QCOMPARE(failures.count(), 0);
+    QVERIFY(model.status().node_running);
+    const QDir retired{directory.filePath(QStringLiteral("retired"))};
+    const auto runs = retired.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    QCOMPARE(runs.size(), 1);
+    QVERIFY(!QDir{retired.filePath(runs.first())}.isEmpty());
 }
 
 void CybouShellTests::backendCommandsDriveProjection()

@@ -53,7 +53,8 @@ private:
     /** Runs one operator command (finalize now) off the GUI thread. */
     std::jthread m_operator_worker;
     void finalizeNow();
-    /** Where data of an older DEV network was moved at startup, if it was. */
+    /** Where data of another official network was moved at startup, if it was. */
+    std::optional<std::filesystem::path> m_retired_network_data;
     void stop();
     void updatePoaSigner();
     void updateIdentitySigner();
