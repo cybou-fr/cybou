@@ -12,8 +12,14 @@
 #include <QCompleter>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QMimeData>
+#include <QMenu>
+#include <QHeaderView>
+#include <QTreeWidget>
+#include <QSet>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -23,6 +29,7 @@
 #include <QTextEdit>
 #include <QToolButton>
 #include <QVBoxLayout>
+#include <algorithm>
 
 using namespace CybouUi;
 
@@ -144,9 +151,16 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     attach->setObjectName(QStringLiteral("secondaryButton"));
     attach->setProperty("cybouId", QStringLiteral("attachFile"));
     attach->setIcon(QIcon{glyphPixmap(Glyph::File, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
-    connect(attach, &QPushButton::clicked, this, [this] {
+    auto* sources = new QMenu{attach};
+    auto* local_files = sources->addAction(tr("From this computer"));
+    local_files->setObjectName(QStringLiteral("attachLocalFile"));
+    connect(local_files, &QAction::triggered, this, [this] {
         addAttachments(QFileDialog::getOpenFileNames(this, tr("Attach files")));
     });
+    auto* cybou_files = sources->addAction(tr("From CYBOU Files"));
+    cybou_files->setObjectName(QStringLiteral("attachCybouFile"));
+    connect(cybou_files, &QAction::triggered, this, [this] { chooseCybouFiles(); });
+    attach->setMenu(sources);
     actions->addWidget(attach);
     m_send_hint = MutedText({}, this);
     actions->addWidget(m_send_hint, 1);
@@ -160,7 +174,10 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     setTabOrder(m_to, m_subject);
     setTabOrder(m_subject, m_body);
     setTabOrder(m_body, m_send);
-    connect(m_to, &QLineEdit::textChanged, this, [this] { updateGates(); });
+    connect(m_to, &QLineEdit::textChanged, this, [this] {
+        if (!m_reply_address.isEmpty() && m_to->text()!=CybouProduct::shortId(m_reply_address)) m_reply_address.clear();
+        updateGates();
+    });
     connect(m_subject, &QLineEdit::textChanged, this, [this] { updateGates(); });
     connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); });
     connect(m_send, &QPushButton::clicked, this, [this] { send(); });
@@ -190,7 +207,10 @@ void MailCompose::start(const CybouMailItem& draft)
 {
     rebuildCompleter();
     m_draft_id = draft.draft ? draft.id : QString{};
-    m_to->setText(draft.to_name);
+    m_reply_address.clear();
+    if (QRegularExpression{QStringLiteral("^[0-9a-fA-F]{64}$")}.match(draft.to_name).hasMatch())
+        m_reply_address=draft.to_name.toLower();
+    m_to->setText(m_reply_address.isEmpty() ? draft.to_name : CybouProduct::shortId(m_reply_address));
     m_subject->setText(draft.subject);
     m_body->setPlainText(draft.body);
     m_attachments = draft.attachments;
@@ -225,6 +245,65 @@ void MailCompose::addProtectedAttachment(const CybouAttachmentItem& attachment)
     m_attachments.append(attachment);
     rebuildAttachments();
     updateGates();
+}
+
+void MailCompose::chooseCybouFiles()
+{
+    QDialog dialog{this};
+    dialog.setObjectName(QStringLiteral("cybouFilePicker"));
+    dialog.setWindowTitle(tr("Attach from CYBOU Files"));
+    dialog.resize(640, 420);
+    auto* layout = new QVBoxLayout{&dialog};
+    auto* hint = new QLabel{tr("Choose protected files. Their encrypted content is reused without uploading it again."), &dialog};
+    hint->setWordWrap(true);
+    layout->addWidget(hint);
+    auto* files = new QTreeWidget{&dialog};
+    files->setObjectName(QStringLiteral("cybouFileChoices"));
+    files->setHeaderLabels({tr("File"), tr("Size"), tr("State")});
+    files->setRootIsDecorated(false);
+    files->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    files->header()->setSectionResizeMode(0, QHeaderView::Stretch);
+    layout->addWidget(files, 1);
+    for (const auto& file : m_model->fileItems()) {
+        if (file.folder || file.trashed) continue;
+        QStringList path{file.name};
+        QSet<QString> seen{file.id};
+        auto parent = file.parent_id;
+        bool hidden{false};
+        while (!parent.isEmpty()) {
+            if (seen.contains(parent)) { hidden=true; break; }
+            seen.insert(parent);
+            const auto* folder=m_model->fileItem(parent);
+            if (!folder || folder->trashed) { hidden=true; break; }
+            path.prepend(folder->name);
+            parent=folder->parent_id;
+        }
+        if (hidden) continue;
+        const bool ready=m_model->attachmentFromFile(file.id).has_value();
+        auto* row = new QTreeWidgetItem{files, {path.join(QLatin1Char{'/'}),
+            CybouProduct::sizeText(file.logical_size), ready ? tr("Protected") : tr("Not protected yet")}};
+        row->setData(0, Qt::UserRole, file.id);
+        if (!ready) row->setFlags(row->flags() & ~Qt::ItemIsEnabled & ~Qt::ItemIsSelectable);
+    }
+    files->sortItems(0, Qt::AscendingOrder);
+    if (files->topLevelItemCount()==0) hint->setText(tr("There are no files to attach in CYBOU Files."));
+    auto* buttons = new QDialogButtonBox{QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog};
+    auto* confirm=buttons->button(QDialogButtonBox::Ok);
+    confirm->setText(tr("Attach"));
+    confirm->setEnabled(false);
+    connect(files, &QTreeWidget::itemSelectionChanged, &dialog, [files,confirm] {
+        confirm->setEnabled(!files->selectedItems().isEmpty());
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec()!=QDialog::Accepted) return;
+    for (const auto* row : files->selectedItems()) {
+        if (const auto attachment=m_model->attachmentFromFile(row->data(0,Qt::UserRole).toString())) {
+            if (std::none_of(m_attachments.begin(),m_attachments.end(),[&](const auto& current) { return current.id==attachment->id; }))
+                addProtectedAttachment(*attachment);
+        }
+    }
 }
 
 void MailCompose::rebuildAttachments()
@@ -307,9 +386,11 @@ const CybouContact* MailCompose::resolvedContact() const
 
 QString MailCompose::recipientProblem() const
 {
+    if (!m_reply_address.isEmpty()) return {};
     const QString to = m_to->text().trimmed().toLower();
     if (to.isEmpty()) return tr("Add a recipient.");
     if (to.contains(QRegularExpression{QStringLiteral("[,;\\s]")})) return tr("Send to one recipient at a time.");
+    if (QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(to).hasMatch()) return {};
     if (!to.endsWith(QStringLiteral(".cybou"))) return tr("Use a CYBOU name, for example alice.cybou.");
     const QString problem = m_model->nameLabelProblem(to.chopped(6));
     if (!problem.isEmpty()) return problem;
@@ -333,7 +414,8 @@ void MailCompose::updateGates()
     } else if (const auto* contact = resolvedContact()) {
         m_to_hint->setText(contact->verified ? tr("%1  ·  Verified identity").arg(contact->display_name) : contact->display_name);
     } else {
-        m_to_hint->setText(tr("The name is checked when you send."));
+        m_to_hint->setText(!m_reply_address.isEmpty() || m_to->text().trimmed().size()==64 ? tr("The Identity is checked when you send.")
+                                                          : tr("The name is checked when you send."));
     }
 
     QString reason;
@@ -355,7 +437,7 @@ CybouMailItem MailCompose::currentMessage() const
 {
     CybouMailItem item;
     item.id = m_draft_id;
-    item.to_name = m_to->text().trimmed().toLower();
+    item.to_name = m_reply_address.isEmpty() ? m_to->text().trimmed().toLower() : m_reply_address;
     item.subject = m_subject->text().trimmed();
     item.body = m_body->toPlainText();
     item.attachments = m_attachments;

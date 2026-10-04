@@ -55,6 +55,9 @@
 #include <QTest>
 #include <QToolButton>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QTreeWidget>
+#include <QTimer>
 #include <QFile>
 #include <QTemporaryDir>
 
@@ -480,6 +483,81 @@ void CybouShellTests::composeGatesAndSends()
     to->setText(QStringLiteral("alice.cybou"));
     body->setPlainText(QStringLiteral("hello"));
     QVERIFY(!send->isEnabled());
+}
+
+void CybouShellTests::replyUsesCompleteIdentityAddress()
+{
+    auto window=makeWindow();
+    auto* model=window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model,QStringLiteral("mail")));
+    CybouMailItem received;
+    received.id=QStringLiteral("unnamed-sender");
+    received.from_address=QStringLiteral("1822")+QString(56,QLatin1Char{'a'})+QStringLiteral("1930");
+    received.from_name=CybouProduct::shortId(received.from_address);
+    received.to_name=QStringLiteral("me.cybou");
+    received.subject=QStringLiteral("Hello");
+    received.body=QStringLiteral("A message from an unnamed Identity");
+    model->setMailItems({received});
+    auto* mail=dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->reader()->onReply(received.id);
+    QCOMPARE(mail->composer()->snapshotForRebuild().to_name,received.from_address);
+    QVERIFY(mail->composer()->findChild<QPushButton*>(QStringLiteral("sendButton"))->isEnabled());
+    QCOMPARE(received.from_name,QStringLiteral("1822")+QChar{0x2026}+QStringLiteral("1930"));
+    received.folder=CybouMailFolder::Archive;
+    received.outgoing=true;
+    received.to_name=QStringLiteral("recipient display");
+    received.to_address=QString(64,QLatin1Char{'b'});
+    model->setMailItems({received});
+    mail->reader()->onReply(received.id);
+    QCOMPARE(mail->composer()->snapshotForRebuild().to_name,received.to_address);
+}
+
+void CybouShellTests::composeSelectsProtectedCybouFiles()
+{
+    auto window=makeWindow();
+    auto* model=window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model,QStringLiteral("active")));
+    CybouFileItem folder;
+    folder.id=QStringLiteral("folder"); folder.name=QStringLiteral("Projects"); folder.folder=true;
+    CybouFileItem ready;
+    ready.id=QStringLiteral("ready"); ready.name=QStringLiteral("report.pdf"); ready.parent_id=folder.id;
+    ready.state=CybouContentState::Protected; ready.logical_size=1024;
+    auto waiting=ready; waiting.id=QStringLiteral("waiting"); waiting.name=QStringLiteral("upload.bin");
+    waiting.state=CybouContentState::Securing;
+    auto trashed=ready; trashed.id=QStringLiteral("trashed"); trashed.trashed=true;
+    auto hidden_folder=folder; hidden_folder.id=QStringLiteral("trash-folder"); hidden_folder.trashed=true;
+    auto hidden=ready; hidden.id=QStringLiteral("hidden"); hidden.parent_id=hidden_folder.id;
+    model->setFileItems({folder,ready,waiting,trashed,hidden_folder,hidden});
+    auto* mail=dynamic_cast<EmailPage*>(window->page(CybouPage::Mail));
+    mail->openCompose();
+    bool checked{false};
+    QTimer::singleShot(0,[&] {
+        auto* dialog=qobject_cast<QDialog*>(QApplication::activeModalWidget());
+        if (!dialog) return;
+        auto* tree=dialog->findChild<QTreeWidget*>(QStringLiteral("cybouFileChoices"));
+        auto* buttons=dialog->findChild<QDialogButtonBox*>();
+        if (tree && buttons && tree->topLevelItemCount()==2) {
+            bool ready_path{false}, waiting_disabled{false};
+            for (int i=0;i<tree->topLevelItemCount();++i) {
+                auto* row=tree->topLevelItem(i);
+                if (row->data(0,Qt::UserRole).toString()==ready.id) {
+                    ready_path=row->text(0)==QStringLiteral("Projects/report.pdf");
+                    row->setSelected(true);
+                } else waiting_disabled=!(row->flags() & Qt::ItemIsEnabled);
+            }
+            checked=ready_path && waiting_disabled;
+            buttons->button(QDialogButtonBox::Ok)->click();
+        } else dialog->reject();
+    });
+    mail->composer()->findChild<QAction*>(QStringLiteral("attachCybouFile"))->trigger();
+    QVERIFY(checked);
+    QCOMPARE(mail->composer()->attachments().size(),1);
+    const auto selected=mail->composer()->attachments().first();
+    QCOMPARE(selected.id,QStringLiteral("ref-ready"));
+    QVERIFY(selected.source_path.isEmpty());
+    QVERIFY(!model->attachmentFromFile(trashed.id));
+    model->setFileItems({});
+    QCOMPARE(mail->composer()->snapshotForRebuild().attachments.first().id,selected.id);
 }
 
 void CybouShellTests::mailFilesCrossProduct()
@@ -1772,6 +1850,8 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     const auto* received = bob_model->mailItem(sent_id);
     QCOMPARE(received->subject, QStringLiteral("Hello"));
     QCOMPARE(received->folder, CybouMailFolder::Inbox);
+    QCOMPARE(received->from_address,QString::fromStdString(alice->GetAccountId()->Value().GetHex()));
+    QCOMPARE(received->to_address,bob_id);
     QVERIFY(received->unread);
     QCOMPARE(bob_model->unreadMailCount(), 1);
     bob_model->requestMailRead(sent_id, true);

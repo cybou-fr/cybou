@@ -2374,6 +2374,50 @@ Objet : %3
 <context>
     <name>MailCompose</name>
     <message>
+        <source>From this computer</source>
+        <translation>Depuis cet ordinateur</translation>
+    </message>
+    <message>
+        <source>From CYBOU Files</source>
+        <translation>Depuis les fichiers CYBOU</translation>
+    </message>
+    <message>
+        <source>Attach from CYBOU Files</source>
+        <translation>Joindre un fichier CYBOU</translation>
+    </message>
+    <message>
+        <source>Choose protected files. Their encrypted content is reused without uploading it again.</source>
+        <translation>Choisissez des fichiers protégés. Leur contenu chiffré est réutilisé sans nouvel envoi.</translation>
+    </message>
+    <message>
+        <source>File</source>
+        <translation>Fichier</translation>
+    </message>
+    <message>
+        <source>Size</source>
+        <translation>Taille</translation>
+    </message>
+    <message>
+        <source>State</source>
+        <translation>État</translation>
+    </message>
+    <message>
+        <source>Not protected yet</source>
+        <translation>Pas encore protégé</translation>
+    </message>
+    <message>
+        <source>There are no files to attach in CYBOU Files.</source>
+        <translation>Aucun fichier à joindre dans les fichiers CYBOU.</translation>
+    </message>
+    <message>
+        <source>Attach</source>
+        <translation>Joindre</translation>
+    </message>
+    <message>
+        <source>The Identity is checked when you send.</source>
+        <translation>L’identité sera vérifiée lors de l’envoi.</translation>
+    </message>
+    <message>
         <location filename="../pages/mailcompose.cpp" line="+47"/>
         <location line="+11"/>
         <source>New message</source>

@@ -46,6 +46,8 @@ public:
     void addAttachments(const QStringList& paths);
     /** Adds already protected content (Files â†’ Send by CYBOU Mail). */
     void addProtectedAttachment(const CybouAttachmentItem& attachment);
+    /** Pick reusable encrypted content from this Identity's Files catalog. */
+    void chooseCybouFiles();
     const QVector<CybouAttachmentItem>& attachments() const { return m_attachments; }
     CybouMailItem snapshotForRebuild() const;
     void setBackVisible(bool visible);
@@ -59,6 +61,7 @@ protected:
 private:
     CybouDesktopModel* const m_model;
     QString m_draft_id;
+    QString m_reply_address;
     QToolButton* m_back{nullptr};
     QLineEdit* m_to{nullptr};
     QLabel* m_to_hint{nullptr};

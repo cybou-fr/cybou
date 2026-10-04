@@ -1678,7 +1678,7 @@ bool MutateFile(QVector<CybouFileItem>& files, const QString& id, F mutate)
 std::optional<CybouAttachmentItem> CybouDesktopModel::attachmentFromFile(const QString& file_id) const
 {
     const auto* file = fileItem(file_id);
-    if (!file || file->folder || file->state != CybouContentState::Protected) return std::nullopt;
+    if (!file || file->folder || file->trashed || file->state != CybouContentState::Protected) return std::nullopt;
     CybouAttachmentItem attachment;
     attachment.id = QStringLiteral("ref-") + file->id;
     attachment.name = file->name;

@@ -382,6 +382,8 @@ struct CybouCoreApplicationAdapter::Session {
             item.folder = FolderOf(record.folder);
             item.from_name = DisplayName(state, record.sender);
             item.to_name = DisplayName(state, record.message.recipient_account_id);
+            item.from_address = QString::fromStdString(record.sender.Value().GetHex());
+            item.to_address = QString::fromStdString(record.message.recipient_account_id.Value().GetHex());
             item.subject = QString::fromStdString(record.message.subject);
             item.body = QString::fromStdString(record.message.body);
             item.preview = item.body.simplified().left(90);
@@ -677,15 +679,10 @@ struct CybouCoreApplicationAdapter::Session {
         if (!loaded || !loaded.state) return std::nullopt;
         if (const auto* account = loaded.state->names.Resolve(label.toStdString())) return *account;
         // An Identity without a name can be addressed by its full AccountID.
-        const QByteArray bytes = QByteArray::fromHex(label.toLatin1());
-        if (label.size() != 64 || bytes.size() != 32) return std::nullopt;
-        cybou::Hash256 value;
-        std::copy(bytes.rbegin(), bytes.rend(), value.begin());
-        const cybou::AccountId account{value};
+        const auto value = cybou::Hash256::FromHex(label.toStdString());
+        if (!value) return std::nullopt;
+        const cybou::AccountId account{*value};
         if (loaded.state->identities.Find(account)) return account;
-        if (const auto direct = cybou::AccountId::FromBytes(std::span<const unsigned char>{
-                reinterpret_cast<const unsigned char*>(bytes.constData()), 32});
-            direct && loaded.state->identities.Find(*direct)) return direct;
         return std::nullopt;
     }
 };

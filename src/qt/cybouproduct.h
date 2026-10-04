@@ -144,6 +144,9 @@ struct CybouMailItem {
     CybouMailFolder folder{CybouMailFolder::Inbox};
     QString from_name;
     QString to_name;
+    /** Complete canonical AccountIDs for routing; display labels may be abbreviated. */
+    QString from_address;
+    QString to_address;
     QString subject;
     QString preview;
     QString body;
@@ -251,7 +254,7 @@ inline QString contentStateText(CybouContentState state)
 {
     switch (state) {
     case CybouContentState::Local: return QCoreApplication::translate("CybouProduct", "Local");
-    case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securingâ€¦");
+    case CybouContentState::Securing: return QCoreApplication::translate("CybouProduct", "Securing…");
     case CybouContentState::Protected: return QCoreApplication::translate("CybouProduct", "Protected");
     case CybouContentState::Received: return QCoreApplication::translate("CybouProduct", "Received");
     case CybouContentState::TemporarilyUnavailable: return QCoreApplication::translate("CybouProduct", "Temporarily unavailable");
@@ -271,7 +274,7 @@ inline QString operationStateText(CybouOperationState state)
 {
     switch (state) {
     case CybouOperationState::Local: return QCoreApplication::translate("CybouProduct", "On this device");
-    case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparingâ€¦");
+    case CybouOperationState::Preparing: return QCoreApplication::translate("CybouProduct", "Preparing…");
     case CybouOperationState::Submitted: return QCoreApplication::translate("CybouProduct", "Waiting for confirmation");
     case CybouOperationState::Validated: return QCoreApplication::translate("CybouProduct", "Validated");
     case CybouOperationState::Finalized: return QCoreApplication::translate("CybouProduct", "Finalized");
@@ -332,9 +335,9 @@ inline QString retrievalText(CybouRetrievalState state)
 {
     switch (state) {
     case CybouRetrievalState::Idle: return {};
-    case CybouRetrievalState::Downloading: return QCoreApplication::translate("CybouProduct", "Downloadingâ€¦");
-    case CybouRetrievalState::Verifying: return QCoreApplication::translate("CybouProduct", "Verifyingâ€¦");
-    case CybouRetrievalState::Decrypting: return QCoreApplication::translate("CybouProduct", "Decryptingâ€¦");
+    case CybouRetrievalState::Downloading: return QCoreApplication::translate("CybouProduct", "Downloading…");
+    case CybouRetrievalState::Verifying: return QCoreApplication::translate("CybouProduct", "Verifying…");
+    case CybouRetrievalState::Decrypting: return QCoreApplication::translate("CybouProduct", "Decrypting…");
     case CybouRetrievalState::Ready: return QCoreApplication::translate("CybouProduct", "Ready");
     }
     return {};
@@ -362,7 +365,7 @@ inline QString fileStatusText(const CybouFileItem& item, bool online,
         ? progressText(item.state, item.progress_percent, online)
         : contentWithOperationText(item.state, operation, online);
     if (item.state == CybouContentState::Protected && item.available_offline)
-        return state + QStringLiteral("  Â·  ") + localAvailabilityText(item);
+        return state + QStringLiteral("  ·  ") + localAvailabilityText(item);
     return state;
 }
 
@@ -380,7 +383,7 @@ inline QString sizeText(quint64 bytes)
 inline QString shortId(const QString& id)
 {
     if (id.size() <= 12) return id;
-    return id.left(4) + QStringLiteral("â€¦") + id.right(4);
+    return id.left(4) + QChar{0x2026} + id.right(4);
 }
 
 } // namespace CybouProduct

@@ -778,8 +778,10 @@ CybouMailItem EmailPage::replyTo(const QString& id) const
     CybouMailItem reply;
     const auto* item = m_model->mailItem(id);
     if (!item) return reply;
-    const bool outgoing = item->folder == CybouMailFolder::Sent;
-    reply.to_name = outgoing ? item->to_name : item->from_name;
+    const bool outgoing = item->outgoing || item->folder == CybouMailFolder::Sent;
+    const QString label = outgoing ? item->to_name : item->from_name;
+    const QString address = outgoing ? item->to_address : item->from_address;
+    reply.to_name = label.endsWith(QStringLiteral(".cybou")) || address.isEmpty() ? label : address;
     reply.subject = item->subject.startsWith(QStringLiteral("Re:")) ? item->subject : tr("Re: %1").arg(item->subject);
     QString quoted;
     for (const auto& line : item->body.split(QLatin1Char{'\n'})) quoted += QStringLiteral("> %1\n").arg(line);
