@@ -156,6 +156,8 @@ public:
     /// \return Сводка durability либо NEEDS_ATTENTION/SECURING, если rebuild не завершён.
     /// \pre \p candidate_chunks может быть неполным, но не должен содержать предположений о порядке.
     /// \post При успехе сохраняется канонический rebuilt placement.
+    /// Проверенные промежуточные результаты сохраняются отдельно в Application DB;
+    /// незавершённое восстановление никогда не считается защищённым placement.
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     PublicationDurability Rebuild(const cybou::Hash256& publication_operation_id,
@@ -231,8 +233,8 @@ public:
 
 private:
     struct Placement;
-    std::optional<Placement> Load(const cybou::Hash256& operation_id) const;
-    bool Save(const Placement& placement);
+    std::optional<Placement> Load(const cybou::Hash256& operation_id, bool rebuilding = false) const;
+    bool Save(const Placement& placement, bool rebuilding = false);
     PublicationDurability Place(std::unique_lock<std::mutex>& lock, Placement& placement);
     PublicationDurability Summarize(const Placement& placement) const;
     std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,

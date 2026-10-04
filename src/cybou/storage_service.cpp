@@ -196,9 +196,9 @@ StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& tran
 {
 }
 
-std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash256& operation_id) const
+std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash256& operation_id, const bool rebuilding) const
 {
-    const auto encoded = m_application_db.Get(PlacementKey(operation_id));
+    const auto encoded = m_application_db.Get(rebuilding ? "storage/rebuild/"+operation_id.GetHex() : PlacementKey(operation_id));
     if (!encoded) return std::nullopt;
     Reader in{*encoded};
     std::array<unsigned char, MAGIC.size()> magic{};
@@ -235,7 +235,7 @@ std::optional<StorageService::Placement> StorageService::Load(const cybou::Hash2
     return placement;
 }
 
-bool StorageService::Save(const Placement& placement)
+bool StorageService::Save(const Placement& placement, const bool rebuilding)
 {
     std::size_t reserve = MAGIC.size() + placement.operation_id.size() + 4;
     for (const auto& replicas : placement.replicas) {
@@ -263,6 +263,7 @@ bool StorageService::Save(const Placement& placement)
         }
     }
     // Placement и его присутствие в индексе должны фиксироваться как одна логическая запись.
+    if (rebuilding) return m_application_db.Put("storage/rebuild/"+placement.operation_id.GetHex(), out);
     PrivateApplicationStore::Batch batch{m_application_db};
     if (!m_application_db.Put(PlacementKey(placement.operation_id), out)) return false;
     auto index = PlacementIndex();
@@ -383,13 +384,21 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
     Placement placement{.operation_id = operation_id,
         .leaves = std::vector<ChunkId>(publication->chunk_count),
         .replicas = std::vector<std::vector<StorageEndpoint>>(publication->chunk_count)};
+    if (const auto progress=Load(operation_id, true); progress && progress->leaves.size()==publication->chunk_count)
+        placement=*progress;
     std::vector<bool> found(publication->chunk_count, false);
+    std::set<ChunkId> verified;
+    for (std::size_t i{0}; i<placement.leaves.size(); ++i) {
+        found[i]=placement.leaves[i]!=ChunkId{} && !placement.replicas[i].empty();
+        if (found[i]) verified.insert(placement.leaves[i]);
+    }
     std::set<ChunkId> unique;
     lock.unlock();
     const auto providers = m_transport.Providers();
     lock.lock();
     for (const auto& chunk_id : candidate_chunks) {
         if (chunk_id == ChunkId{} || !unique.insert(chunk_id).second) continue;
+        if (verified.contains(chunk_id)) continue;
         for (const auto& provider : providers) {
             lock.unlock();
             const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
@@ -405,10 +414,14 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
             }
             placement.leaves[index] = chunk_id;
             found[index] = true;
+            verified.insert(chunk_id);
             if (!HasProvider(placement.replicas[index], provider)) placement.replicas[index].push_back(provider);
         }
+        // Preserve verified progress and yield when providers are unavailable or rate limited.
+        if (!verified.contains(chunk_id)) break;
     }
     if (std::find(found.begin(), found.end(), false) != found.end()) {
+        if (!Save(placement, true)) return {.state=DurabilityState::NEEDS_ATTENTION, .error="Cannot save rebuild progress"};
         return {.state = DurabilityState::SECURING, .chunk_count = publication->chunk_count,
             .error = "Some finalized chunk proofs are not available from reachable providers"};
     }
@@ -425,6 +438,7 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
     if (!Save(placement)) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save rebuilt placement state"};
     }
+    m_application_db.Erase("storage/rebuild/"+operation_id.GetHex());
     return Place(lock, placement);
 }
 

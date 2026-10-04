@@ -100,6 +100,11 @@ into the restarted exercise; they remain cryptographically valid.
 
 See [DEVNET development](DEVNET_DEVELOPMENT.md) for commands and operator rules.
 
+The 2026-10-04 live exercise resumed PoA on Windows and verified remote Mail and
+Files publication and recovery through the VPS, including clean application
+index and chunk loss. See [live content acceptance](DEVNET_LIVE_ACCEPTANCE.md)
+for tested scope, repairs, the Windows transport workaround and economic limits.
+
 Verification results must be attributed to the tested revision and build.
 Committed baseline checks are recorded in [Data assurance and erasure](DATA_ASSURANCE_AND_ERASURE.md); they do not establish desktop CI or deployment status.
 The DEVNET CLI acceptance reaches the existing pinned locator, restarts an

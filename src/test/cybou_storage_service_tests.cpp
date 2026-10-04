@@ -322,6 +322,31 @@ BOOST_AUTO_TEST_CASE(all_remote_unavailable_downgrades_and_fresh_placement_rebui
     BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
 }
 
+BOOST_AUTO_TEST_CASE(rebuild_preserves_verified_progress_across_rate_limits_and_service_restarts)
+{
+    CybouServiceTestFixture fixture;
+    auto identity=fixture.CreateIdentity("rebuild-progress.cybou");
+    ProviderNetwork network{fixture, 1};
+    cybou::PrivateApplicationStore staging{identity->GetKeyStore(), fixture.directory/"staging"};
+    const auto content=Publish(fixture, *identity, staging, true);
+    BOOST_REQUIRE_GT(content.leaves.size(), 1U);
+    network.Sync();
+    cybou::StorageService initial{*fixture.runtime, network, staging, 1};
+    BOOST_REQUIRE(initial.Secure(content.operation_id, content.leaves).state==cybou::DurabilityState::PROTECTED);
+    const auto recovered_path=fixture.directory/"recovered";
+    for (std::size_t round{0}; round<content.leaves.size(); ++round) {
+        network.proof_budget=1;
+        cybou::PrivateApplicationStore db{identity->GetKeyStore(), recovered_path};
+        cybou::StorageService resumed{*fixture.runtime, network, db, 1};
+        BOOST_CHECK(!resumed.GetDurability(content.operation_id));
+        const auto result=resumed.Rebuild(content.operation_id, content.leaves);
+        if (round+1<content.leaves.size()) {
+            BOOST_CHECK(result.state==cybou::DurabilityState::SECURING);
+            BOOST_CHECK(!resumed.GetDurability(content.operation_id));
+        } else BOOST_CHECK(result.state==cybou::DurabilityState::PROTECTED);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(fetch_uses_local_cache_then_verified_remote_copy)
 {
     CybouServiceTestFixture fixture;

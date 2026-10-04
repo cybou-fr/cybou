@@ -94,6 +94,10 @@ public:
     std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
         const cybou::Hash256& operation_id, const cybou::ChunkId& chunk_id) override
     {
+        if (proof_budget) {
+            if (*proof_budget==0) return std::nullopt;
+            --*proof_budget;
+        }
         if (offline.contains(provider)) return std::nullopt;
         return m_providers.at(provider)->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);
     }
@@ -122,6 +126,7 @@ public:
     std::set<cybou::StorageEndpoint> corrupt;
     std::set<cybou::StorageEndpoint> lagging;
     int puts{0};
+    std::optional<std::size_t> proof_budget;
 
 private:
     CybouServiceTestFixture& m_fixture;

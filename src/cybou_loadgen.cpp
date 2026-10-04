@@ -41,8 +41,9 @@ struct Client {
     std::set<cybou::PrivateItemId> verified_files;
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
+    std::chrono::steady_clock::time_point next_audit{std::chrono::steady_clock::now()+30s};
     Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
-           const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target) {
+           const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target, bool recovery) {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         auto config=cybou::MakeNodeRuntimeConfig(net,dir/"node");
@@ -75,9 +76,13 @@ struct Client {
         if (std::filesystem::exists(dir/"identity.vault")) {
             if (!identity->LoadVault(password)) throw std::runtime_error("cannot unlock synthetic vault");
         } else {
+            if (recovery) throw std::runtime_error("recovery requires an existing synthetic vault");
             if (!identity->PrepareNewIdentity()) throw std::runtime_error("cannot prepare synthetic Identity");
         }
-        {
+        if (recovery) {
+            if (!identity->GetAccountId() || !node->Runtime().GetAccountState(*identity->GetAccountId()))
+                throw std::runtime_error("recovery requires a finalized synthetic Identity");
+        } else {
             const auto created = identity->CreateIdentitySync(password,nullptr,120s);
             if (!created.success) throw std::runtime_error("synthetic Identity creation failed: "+created.error_message);
         }
@@ -90,13 +95,16 @@ struct Client {
         application=std::make_unique<cybou::ApplicationService>(runtime,keys,*db,*storage);
         wallet=std::make_unique<cybou::CybouWalletService>(runtime,keys);
         jobs=publication->Jobs(); // Restart resumes durable exact operations and publication intents.
-        events->Write(cybou::NodeEvent::node_started,{{"role",std::string{"loadgen"}},{"network_binding",runtime.GetNetworkBinding().GetHex()}});
+        events->Write(cybou::NodeEvent::node_started,{{"network_binding",runtime.GetNetworkBinding().GetHex()}});
     }
     bool Advance() {
         publication->ProcessDurability(*storage);
         application->Scan();
         events->Observe(node->Runtime().GetDiagnostics());
-        storage->AuditNextPlacement(16);
+        if (std::chrono::steady_clock::now()>=next_audit) {
+            storage->AuditNextPlacement(1);
+            next_audit=std::chrono::steady_clock::now()+30s;
+        }
         bool done=true;
         for (const auto& job : jobs) {
             auto result=publication->GetJob(job);
@@ -119,18 +127,29 @@ struct Client {
             if (file.item.kind != cybou::FileItemKind::FILE || verified_files.contains(file.item.item_id)) continue;
             if (!file.item.content_key || !file.item.root_chunk_id) throw std::runtime_error("synthetic file content missing");
             uint64_t offset{0};
+            uint64_t fetched_chunks{0};
+            bool missing_chunk{false};
             std::set<cybou::ChunkId> seen;
             const auto written = cybou::FetchEncryptedChunkTree(
                 std::span<const unsigned char,32>{node->Runtime().GetNetworkBinding().begin(),32},
                 *file.item.content_key, *file.item.root_chunk_id,
-                [&](const cybou::ChunkId& id) { return storage->Fetch(id); },
+                [&](const cybou::ChunkId& id) {
+                    auto bytes=storage->Fetch(id);
+                    if (!bytes) missing_chunk=true;
+                    else ++fetched_chunks;
+                    return bytes;
+                },
                 [](std::span<const unsigned char>) { return true; },
                 [&](const cybou::ChunkId& id) { return seen.insert(id).second; },
                 [&](std::span<const unsigned char> bytes) {
                     for (auto byte : bytes) if (byte != static_cast<unsigned char>((offset++)*131)) return false;
                     return true;
                 }, file.item.logical_size);
-            if (!written || offset != file.item.logical_size) throw std::runtime_error("synthetic file download bytes differ");
+            if (missing_chunk) { done=false; continue; }
+            if (!written || offset != file.item.logical_size) throw std::runtime_error(
+                "synthetic file recovery failed: expected="+std::to_string(file.item.logical_size)+
+                " decoded="+std::to_string(offset)+" fetched_chunks="+std::to_string(fetched_chunks)+
+                " tree_ok="+(written ? "yes" : "no"));
             verified_files.insert(file.item.item_id);
         }
         for (const auto& id : expected_incoming_mail) {
@@ -148,13 +167,14 @@ int main(int argc,char* argv[]) {
     try {
         if (argc==1 || (argc==2 && std::string_view{argv[1]}=="--help")) {
             std::cout << "cybou-loadgen --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
-                " [--identities 2] [--profile files|mail|root-publications|payments|system-locks|mixed]\n"
+                " [--identities 2] [--profile files|mail|root-publications|payments|system-locks|mixed|recovery]\n"
+                " [--expected-incoming-mail N] [--expected-files N] (recovery submits no operations)\n"
                 " [--operations-per-second 1] [--file-size 4MiB] [--duration 15m] [--replicas 2]\n"
                 "Financial profiles require pre-funded synthetic vaults; onboarding funds only System Balance.\n";
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
@@ -169,7 +189,11 @@ int main(int argc,char* argv[]) {
         if (size>(64ULL<<20) || duration>86400000) throw std::runtime_error("load bounds exceeded");
         const auto target=cybou::cli::Number(opts.Get("replicas","2"),1,2);
         auto profile=opts.Get("profile","files");
-        if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed"}.contains(profile)) throw std::runtime_error("unknown profile");
+        if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed","recovery"}.contains(profile)) throw std::runtime_error("unknown profile");
+        const auto expected_mail=cybou::cli::Number(opts.Get("expected-incoming-mail","0"),0,100000);
+        const auto expected_files=cybou::cli::Number(opts.Get("expected-files","0"),0,100000);
+        if (profile=="recovery" && !expected_mail && !expected_files)
+            throw std::runtime_error("recovery requires an expected content count per Identity");
         std::ifstream file{opts.Require("password-file"),std::ios::binary};
         std::string password{std::istreambuf_iterator<char>{file},std::istreambuf_iterator<char>{}};
         if (!file || password.empty() || password.size()>1024) throw std::runtime_error("invalid password file");
@@ -178,7 +202,7 @@ int main(int argc,char* argv[]) {
         std::signal(SIGBREAK,Stop);
 #endif
         std::vector<std::unique_ptr<Client>> clients;
-        for (uint64_t i=0;i<count && !stop;++i) clients.push_back(std::make_unique<Client>(*net,std::filesystem::path{opts.Require("data-dir")}/("identity-"+std::to_string(i)),peer,password,target));
+        for (uint64_t i=0;i<count && !stop;++i) clients.push_back(std::make_unique<Client>(*net,std::filesystem::path{opts.Require("data-dir")}/("identity-"+std::to_string(i)),peer,password,target,profile=="recovery"));
         cybou::crypto::CleanseMemory(password.data(),password.size());
         if (clients.size()!=count) return 1;
         const auto accounts_deadline=std::chrono::steady_clock::now()+120s;
@@ -197,7 +221,7 @@ int main(int argc,char* argv[]) {
                 throw std::runtime_error("financial profile requires pre-funded DEVNET identities; no test funding bypass exists");
         auto start=std::chrono::steady_clock::now(); uint64_t submitted{0};
         auto next=start;
-        while (!stop && std::chrono::steady_clock::now()-start < std::chrono::milliseconds{duration}) {
+        while (!stop && profile!="recovery" && std::chrono::steady_clock::now()-start < std::chrono::milliseconds{duration}) {
             if (submitted>=maximum) {
                 for (auto& active : clients) active->Advance();
                 std::this_thread::sleep_for(1s);
@@ -254,11 +278,29 @@ int main(int argc,char* argv[]) {
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds{cybou::cli::Quantity(opts.Get("drain-timeout","5m"),true)};
         bool done=false;
         while (!stop && !done) {
-            done=true; for (auto& client : clients) if (!client->Advance()) done=false;
+            done=true;
+            for (auto& client : clients) {
+                if (!client->Advance()) done=false;
+                if (profile=="recovery") {
+                    uint64_t incoming{0};
+                    for (const auto& mail : client->application->ListMail()) if (!mail.outgoing) {
+                        if (mail.message.subject!="Synthetic DEVNET mail" || mail.message.body!="Synthetic DEVNET payload")
+                            throw std::runtime_error("recovered recipient mail differs");
+                        ++incoming;
+                    }
+                    if (incoming<expected_mail || client->verified_files.size()<expected_files) done=false;
+                    if (expected_files) for (const auto& recovered : client->application->ListFiles()) {
+                        if (recovered.item.kind!=cybou::FileItemKind::FILE) continue;
+                        const auto durability=client->storage->GetDurability(recovered.operation_id);
+                        if (!durability || durability->state!=cybou::DurabilityState::PROTECTED ||
+                            durability->min_replicas<client->storage->RemoteReplicaTarget()) done=false;
+                    }
+                }
+            }
             if (!done && std::chrono::steady_clock::now()>deadline) throw std::runtime_error("drain timeout: unfinished publications retained for restart");
-            if (!done) std::this_thread::sleep_for(100ms);
+            if (!done) std::this_thread::sleep_for(1s);
         }
-        for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping,{{"role",std::string{"loadgen"}}});
+        for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping);
         std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : "INTERRUPTED") << '\n';
         return done ? 0 : 1;
     } catch (const std::exception& e) { std::cerr << "cybou-loadgen: " << e.what() << '\n'; return 1; }
