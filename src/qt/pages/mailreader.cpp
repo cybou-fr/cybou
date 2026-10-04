@@ -433,13 +433,12 @@ void MailReader::showSecurityDetails()
     layout->setContentsMargins(24, 20, 24, 16);
     layout->setSpacing(8);
     layout->addWidget(SectionTitle(tr("Security details"), &dialog));
-    const bool confirmed = item->state == CybouContentState::Protected || item->state == CybouContentState::Received ||
-        item->state == CybouContentState::Securing;
-    AddDetailRow(layout, tr("Sender identity"), tr("Verified"), &dialog);
-    AddDetailRow(layout, tr("Identity authorization"), tr("Valid"), &dialog);
     const auto operation = m_model->displayedOperationState(item->operation_id, item->operation_state);
+    const bool confirmed = operation == CybouOperationState::Finalized && item->finalized_height > 0;
+    AddDetailRow(layout, tr("Sender identity"), tr("No separate verification result reported"), &dialog);
+    AddDetailRow(layout, tr("Identity authorization"), confirmed ? tr("Included in a finalized operation") : tr("Not reported yet"), &dialog);
     AddDetailRow(layout, tr("Network confirmation"), confirmed ? tr("Finalized") : tr("Waiting"), &dialog);
-    AddDetailRow(layout, tr("Content protection"), tr("Verified"), &dialog);
+    AddDetailRow(layout, tr("Content protection"), tr("No separate verification result reported"), &dialog);
     AddDetailRow(layout, tr("Content availability"), CybouProduct::contentStateText(item->state), &dialog);
     AddDetailRow(layout, tr("Post-quantum authorization"), tr("Ed25519 + ML-DSA"), &dialog);
     AddDetailRow(layout, tr("Post-quantum key encapsulation"), tr("X25519 + ML-KEM"), &dialog);

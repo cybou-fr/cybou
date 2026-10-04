@@ -190,7 +190,7 @@ closed when local Geo data is unavailable or corrupt; see
 The only node type is Full Node. Nodes announce no roles or capabilities.
 PoA authority is possession of the genesis-authorized private key; Validation
 is an eligible Identity signature checked against finalized state. Storage is
-intrinsic; StorageId proves replica independence only. Rendezvous is a known
+intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.
 

@@ -10,6 +10,29 @@ sources and implementation gaps. Resolve conflicts by revising decisions and
 planning compatibility before release; drafts remain experimental. This rule
 does not itself modify wire bytes, keys, cryptographic domains or genesis.
 
+
+## Storage implementation evidence boundary
+
+The Beta target remains two independent remote full replicas; the current
+placement algorithm deduplicates proven StorageIds, which does not establish
+independent hosts, operators or failure domains. The 1:3 reciprocal baseline
+is a capacity/service objective, not measured proof of contribution: automatic
+local allocation varies with disk space and does not guarantee 10–15 GB.
+Finalized quotas govern entitlement, not evidence of actual remote service.
+
+Canonical state currently records publications, roots and recipient capsules,
+not provider placements or audit reliability. Mutual-audit transport, PoA
+notarization and canonical reliability coefficients are unimplemented target
+work requiring an evidence/privacy/accounting design before implementation.
+Current operational checks use GET plus ChunkID verification; no new consensus
+proof or receipt format is introduced here.
+
+Finalized revocation stops admission and releases the author's canonical quota.
+Compliant providers journal purge of unshared chunks, retaining physical byte
+accounting until unlink succeeds or absence is confirmed; maintenance/restart
+retry failures. This does not prove deletion of hidden copies or crypto-erasure.
+See `docs/cybou/DATA_ASSURANCE_AND_ERASURE.md` for scoped regression evidence.
+
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
@@ -64,9 +87,9 @@ architecture that contradicts these decisions.
 | DEC-202 | Recoverable publisher content uses an application-layer self capsule. | Frozen |
 | DEC-203 | Files persistent private history uses a minimal ordered mutation model (`UPSERT_ITEM`, `DELETE_ITEM`) over canonical PoA order. | Frozen |
 | DEC-204 | Identity rotation must protect required historical KEM recovery material before rotation when clean recovery needs old epochs. | Frozen |
-| DEC-205 | Development targets 1 remote full replica; Beta targets 2 independent remote full replicas (plus local copy = 3 physical copies total). Local encrypted cache does not count toward remote durability; Beta erasure coding is disabled. | Frozen |
+| DEC-205 | Development targets 1 remote full replica; Beta targets 2 independent remote full replicas plus local cache. Placement currently counts distinct StorageIds; physical/operator independence requires separate evidence. Cache does not count toward remote durability; erasure coding is disabled. | Frozen; implementation boundary explicit |
 | DEC-206 | Placement, provider health, audit and repair are StorageService policy, not consensus state. | Frozen |
-| DEC-212 | StorageId is BLAKE3 of the existing domain-separated STORAGE public key encoding, proven on demand with a fresh challenge bound to TLS exporter and both HELLOs. It proves replica independence only; all Full Nodes implement storage. | Frozen |
+| DEC-212 | StorageId is BLAKE3 of the existing domain-separated STORAGE public key encoding, proven on demand with a fresh challenge bound to TLS exporter and both HELLOs. It proves possession of a cryptographic storage key only; all Full Nodes implement storage. | Frozen |
 | DEC-213 | Local blob retention is a generic node-local pin/cache registry keyed by opaque (holder, reference) tags; GC evicts only unpinned, non-admitted cache entries past a grace period. ChunkStore stays free of application semantics. | Frozen |
 | DEC-217 | Authority creates no canonical reservations, tickets, resource budgets, or per-I/O accounting. Provider limits are local policy. | Frozen |
 | DEC-244 | Official networks are DEVNET and MAINNET. Network identity is immutable `NetworkID = Network Public Key`. For each NetworkID, exactly one signed genesis is valid and immutable for the lifetime of that network. The Network Private Key is strictly offline, never online, and used solely by the network owner to sign the immutable genesis at network creation. | Frozen |
@@ -90,11 +113,11 @@ architecture that contradicts these decisions.
 | DEC-264 | Single-current-baseline architecture: if only one supported form of a structure, wire message, state, or schema exists, it has no version identifier. Version fields appear only when multiple formats actually coexist or temporary migration is required, and are removed once the migration window closes. Code does not record development history in type names or wire bytes. Cryptographic domain separation strings transition to eternal unversioned names exclusively during coordinated network genesis resets before MAINNET. | Frozen |
 | DEC-265 | Production Full Node always has a positive storage allocation. Configured capacity of zero is forbidden in production and restricted to memory-only unit tests. Default allocation is automatic based on available storage. Nodes with depleted local disk space reject new inbound admissions without changing node type, consensus authority, or mesh relay participation. | Frozen |
 | DEC-266 | Official network provisioning (Network Root key generation, NetworkID derivation, and genesis signing) is strictly offline tooling (`cybou-provision`), not a production `cybou` command or runtime capability. Production binaries contain only compiled public official network constants and cannot generate or re-provision official networks. | Frozen |
-| DEC-267 | Blockchain is a deterministic Notarial Register for application content: it records RootPublication metadata, chunk Merkle roots, recipient capsules, and mutual storage proofs. Resource quotas, storage allowances, and admission eligibility are derived deterministically strictly from PoA-finalized state. Local capacity declarations and off-chain vouchers convey zero authority. | Frozen |
+| DEC-267 | Canonical state records RootPublication metadata, roots and recipient capsules; quotas and admission rights derive from finalized state. Provider placements are encrypted local metadata. Canonical mutual-proof records remain an unimplemented target requiring an evidence/privacy/accounting design; no local capacity declaration grants authority. | Frozen; implementation boundary explicit |
 | DEC-268 | Resource rate limits and storage allowances are governed by the canonical AUTH ladder. Low-AUTH identities have bounded per-epoch operation rates and storage allowances to mitigate spam and Sybil attacks. Allowances scale progressively with finalized AUTH up to the Validator tier (AUTH > 10,000,000). The concrete, finite ladder is DEC-272. | Frozen |
-| DEC-269 | Every newly registered Identity receives an immediate Onboarding Trust Credit of 5 GB remote network storage. This credit is supported by the physical 1:3 reciprocal storage baseline (each Full Node allocating ~10–15 GB of local storage for foreign chunks). | Frozen |
-| DEC-270 | Mutual Proof of Storage and uptime auditing: nodes storing chunks for peers undergo periodic randomized challenge-response audits (verifying byte offsets and nonces of stored chunks). Audit verifications are notarized in PoA blocks, determining peer reliability coefficients. | Frozen |
-| DEC-271 | State synthesis and object pruning: block finalization synthesizes history into state. When an object is deleted by its author (`RevokePublication`), its active state record is tombstoned and pruned from active state, authorizing storing nodes to immediately purge the underlying chunks from local `ChunkStore`. | Frozen |
+| DEC-269 | Each newly registered Identity has a finalized 5 GiB remote publication quota at the onboarding tier. The 1:3 reciprocal baseline is a capacity/service objective, not evidence of actual contribution. Local automatic allocation depends on free disk space; it does not guarantee 10–15 GB or enforce measured service reciprocity. | Frozen; implementation boundary explicit |
+| DEC-270 | Target: randomized mutual storage audits and possible PoA-notarized reliability evidence. Current runtime uses operational GET/hash checks; mutual-audit transport, notarization and canonical reliability coefficients are unimplemented. Their evidence, privacy and accounting design remains open before implementation. | Target; proof design open |
+| DEC-271 | Finalized author RevokePublication removes the active register entry, frees canonical quota and stops admission. Compliant providers durably schedule unshared chunks for managed purge and retry failures. Historical blocks remain; finality and local purge do not prove hidden-copy deletion or crypto-erasure. | Frozen; implementation boundary explicit |
 | DEC-272 | Consensus-enforced AUTH tier limits. Block execution meters every Identity-authorized operation (Payment, SystemLock, IdentityRotate, NameCommit, NameReveal, RootPublication, RevokePublication) against the parent finalized AUTH: operations per block and per epoch, remote storage quota and largest publication. Counters (`usage`) and the publication register (`publications`, keyed by RootPublication OperationID) are committed by the state root; the section is omitted while empty, so the genesis state root is unchanged. Tiers: T0 <10k: 1/block, 30/epoch, 5 GiB, file 1 GiB; T1 >=10k: 5, 150, 25 GiB, 4 GiB; T2 >=100k: 25, 750, 100 GiB, 16 GiB; T3 >=1M: 100, 3,000, 500 GiB, 64 GiB; Validator >10M: 1,000, 30,000, 2 TiB, 256 GiB. Quota unit is 512 KiB per authorized chunk. `RevokePublication` (author-only, payment fee, no AUTH) frees quota and stops chunk admission; providers purge chunks no other publication authorizes. One `.cybou` name per Identity. | Frozen |
 | DEC-273 | Relay proof-of-work for every user operation. Work = SHA-256(`CYBOU/OP-WORK` || NetworkBinding || OperationID || nonce u64 LE) with leading zero bits >= the author tier difficulty (22/21/20/19/18 bits for T0..Validator; NameCommit/NameReveal +4). Every Full Node, PoA included, checks it before candidate execution and relay; `OP_META` carries the nonce beside the exact bytes. The work is pre-finalization evidence only: it is not part of the block, the block hash or the state, and finalized history is never re-checked for it. AccountCreate (consensus PoW) and PoaAuthAdjustment (genesis PoA signature) are exempt. | Frozen |
 

@@ -1,7 +1,9 @@
 # Data assurance and erasure review
 
 Status: implementation assessment and design proposal, 2026-10-04.
-Reviewed source baseline: `262198ba317e483a4a85f0265c4e90b20ddf013f`.
+Original assessment baseline: `262198ba317e483a4a85f0265c4e90b20ddf013f`.
+Current code and governance evidence reviewed at `f0e9293` (2026-10-04).
+Code fixes and regression coverage were committed in `a3f05aa`.
 This document does not introduce a wire format, consensus operation, service,
 network, key role or change to frozen decisions. Proposed mechanisms below are
 unimplemented and require an architecture decision before implementation.
@@ -29,7 +31,7 @@ check cannot prove that the endpoint is uncompromised or that no key ever leaked
 | Repair/recoverability | `StorageService` removes failed placements and attempts replacement from valid local/remote bytes | Can restore the target when a valid source and admitting destination are reachable | Lost final replica is unrecoverable; cache is evictable and not a remote replica; finality alone says nothing about recoverability | Restore after a provider failure; fail honestly when no valid source exists; test clean-machine recovery separately |
 | Reciprocal storage | Positive local allocation and AUTH-based finalized publication quota | Local capacity policy plus canonical entitlement | Allocation and signed promises would not prove actual 1:3 service contribution | Define measured contribution, Identity binding and Sybil resistance before claiming enforced reciprocity |
 | Revocation | Finalized author-only RevokePublication; admission rejects revoked publications | Publication no longer authorizes new storage admission and quota is freed | Finalization depends on PoA; historical block bytes remain | Verify author checks, finality, quota release and rejection of revoked admission |
-| Provider purge | `FinalizedChunkStore::PurgePublication` removes associations and unshared admitted blobs | Compliant provider attempts managed deletion after revocation | Shared chunks remain; blob removal result is ignored by this path; no remote purge receipt or retry guarantee established; hidden copies are unknowable | Inject blob deletion failure and restart; verify retries/accounting; retain chunks still authorized elsewhere |
+| Provider purge | `FinalizedChunkStore::PurgePublication` removes associations and unshared admitted blobs | Compliant provider attempts managed deletion after revocation | Shared chunks remain; failed unlink retains byte accounting and a durable purge marker for retry; no remote purge receipt; hidden copies are unknowable | Covered by locked-blob, restart-boundary, missed-revocation and shared-reference regressions; filesystem power-loss durability remains unverified |
 | Per-object crypto-erasure | No complete mechanism established | No current crypto-erasure guarantee | Historical self/recipient capsules and retained KEM material can recover ContentKey if corresponding bytes survive | Attempt unwrap from historical capsules after catalog deletion, revocation and rotation |
 | Mail deletion | Local semantic deletion and author revocation of eligible publications | Removes managed references according to implemented policy | Cannot revoke plaintext or keys already held by recipients | Separate deletion of own copy, publication revocation and recipient retention |
 
@@ -233,7 +235,7 @@ freezing exact bytes. This proposal does not authorize a genesis change.
 
 ## Implementation follow-through
 
-Prepared in the working tree on 2026-10-04: block fanout uses canonical history
+Committed in `a3f05aa` on 2026-10-04: block fanout uses canonical history
 and the session's HELLO/BLOCK_RESULT frontier, with a bounded per-peer budget.
 Genesis height zero is valid. Recent-block and announced-block caches are
 removed, so reopening persisted history requires no new block to begin fanout.
@@ -243,7 +245,7 @@ genesis, keys and canonical execution rules are unchanged.
 Local verification: the complete core suite passed and the headless `cybou`
 executable built successfully. Desktop CI and deployment were not performed.
 
-Offline AccountID cleanup is also prepared: provisioning no longer generates
+Offline AccountID cleanup is committed in `a3f05aa`: provisioning no longer generates
 AccountIDs or emits them in new secret files, summaries or public constants.
 AccountID is created by Identity onboarding. Existing private files were not
 rewritten; obsolete AccountID lines there are not used by verification or
@@ -252,7 +254,7 @@ reviewed baseline. The rebuilt offline tool verified existing DEVNET material
 without signing or creating a network, and a before/after byte comparison
 confirmed that the private files were unchanged.
 
-Public-claim alignment is prepared in README, `www/llms.txt`, the French and
+Initial public-claim alignment is committed in `a3f05aa` in README, `www/llms.txt`, the French and
 English compliance strings and their static HTML fallback. The texts distinguish
 distinct storage keys from physical independence, GET/hash checks from the
 unimplemented mutual-audit protocol, and finalized revocation/managed purge from
@@ -262,7 +264,7 @@ capsules. Implementation status and the threat model record these limitations
 without changing the frozen architecture target. JavaScript syntax and matching
 translation/fallback content were checked; no website publication was performed.
 
-Managed purge hardening is prepared: publication associations are removed and
+Managed purge hardening is committed in `a3f05aa`: publication associations are removed and
 unshared chunks receive a durable pending-purge record before unlink. Provider
 byte accounting is retained on physical removal failure and released only when
 removal succeeds or the blob is confirmed absent. A restart resumes the pending
@@ -318,3 +320,25 @@ does not advance finality. The test exercises author-signed protocol revocation,
 not the desktop's automatic selection of unreferenced publications. Purge is
 checked on compliant fixture providers; retained adversarial copies or the
 earlier machine's cache are outside this assertion.
+
+Documentation and UI alignment reviewed against the committed `f0e9293` code:
+StorageId establishes a cryptographic storage identity, while independent
+replicas remain the Beta target requiring separate diversity evidence. The
+canonical publication register does not store placements or mutual-audit
+reliability today. Capacity reciprocity remains an objective, not measured
+contribution. The current guarantee table now reflects committed purge retries,
+and implementation status distinguishes local verification from CI/deployment.
+Website FR/EN strings and static fallbacks no longer claim impenetrability,
+Cloud Act immunity, certified OpenSSL/product status or absence of a finalizer
+failure point. Mail/Files deletion dialogs describe managed purge and retained
+copies. Mail security details no longer synthesize separate Verified results
+from a content status; network confirmation requires the operation's finalized
+state and a reported finalized height. These changes do not add an evidence
+snapshot API, remote deletion proof or a new consensus operation.
+
+Validation of this alignment: Windows desktop `cybou` built successfully in
+`build_simplified_gui`; JavaScript syntax, translation XML and all 14 changed
+FR/EN string pairs with their static French HTML fallbacks were checked.
+Dialogs were not visually exercised and no website or binary deployment was
+performed. Runtime consensus/storage behavior is unchanged; Mail's confirmation
+display now uses operation evidence rather than content durability status.

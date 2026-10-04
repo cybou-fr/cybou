@@ -1533,8 +1533,8 @@ Racine d’état %7</translation>
     </message>
     <message>
         <location line="+7"/>
-        <source>Messages you sent are also removed from the network and free your storage. A recipient keeps only what their device already downloaded.</source>
-        <translation>Les messages que vous avez envoyés sont aussi retirés du réseau et libèrent votre stockage. Un destinataire ne garde que ce que son appareil a déjà téléchargé.</translation>
+        <source>Eligible sent publications can be revoked after finalization, freeing publication quota and initiating managed purge. Recipients and other holders may retain copies.</source>
+        <translation>Les publications envoyées éligibles peuvent être retirées après finalisation, libérant le quota de publication et déclenchant une suppression gérée. Les destinataires et d’autres détenteurs peuvent conserver des copies.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -2836,6 +2836,16 @@ Objet : %3
         <location line="+1"/>
         <source>Root content ID</source>
         <translation>ID de la racine du contenu</translation>
+    </message>
+
+    <message>
+        <source>No separate verification result reported</source>
+        <translation>Aucun résultat de vérification distinct signalé</translation>
+    </message>
+
+    <message>
+        <source>Included in a finalized operation</source>
+        <translation>Inclus dans une opération finalisée</translation>
     </message>
 </context>
 <context>
@@ -4270,8 +4280,8 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location line="+1"/>
-        <source>Permanently delete everything in Trash? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
-        <translation>Supprimer définitivement tout le contenu de la corbeille ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
+        <source>Delete everything in Trash from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.</source>
+        <translation>Supprimer tout le contenu de la corbeille de votre catalogue ? Après finalisation du retrait des publications éligibles, les fournisseurs doivent supprimer les chunks non partagés. D’autres copies peuvent subsister.</translation>
     </message>
     <message>
         <location line="+3"/>
@@ -4520,13 +4530,13 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location line="-170"/>
-        <source>Permanently delete? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
-        <translation>Supprimer définitivement ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
+        <source>Delete from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.</source>
+        <translation>Supprimer de votre catalogue ? Après finalisation du retrait des publications éligibles, les fournisseurs doivent supprimer les chunks non partagés. D’autres copies peuvent subsister.</translation>
     </message>
     <message>
         <location line="+171"/>
-        <source>Permanently delete this item? This cannot be undone. Once the network confirms it, the content is removed from the network and its storage is freed.</source>
-        <translation>Supprimer définitivement cet élément ? Cette action est irréversible. Une fois confirmée par le réseau, le contenu est retiré du réseau et son stockage est libéré.</translation>
+        <source>Delete this item from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.</source>
+        <translation>Supprimer cet élément de votre catalogue ? Après finalisation du retrait des publications éligibles, les fournisseurs doivent supprimer les chunks non partagés. D’autres copies peuvent subsister.</translation>
     </message>
     <message>
         <source>Remove from your Files? CYBOU releases retained storage according to the Storage retention policy.</source>
@@ -4644,8 +4654,8 @@ Enregistrer quand même ?</translation>
     </message>
     <message>
         <location line="+0"/>
-        <source>End-to-end, post-quantum; only you hold the keys</source>
-        <translation>De bout en bout, post-quantique ; vous seul détenez les clés</translation>
+        <source>Encrypted content; recovery capsules may preserve access</source>
+        <translation>Contenu chiffré ; les capsules de récupération peuvent préserver l’accès</translation>
     </message>
     <message>
         <location line="+2"/>

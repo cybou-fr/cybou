@@ -145,7 +145,7 @@
           <span class="compliance-status-good" data-i18n="cArt0Status">Honnêteté Technique</span>
         </div>
         <h2 class="compliance-article-title" data-i18n="cArt0Title">Principe de Transparence : Architecture Logicielle vs. Certification d'Hébergement</h2>
-        <div class="compliance-article-sub" data-i18n="cArt0Sub">Une distinction honnête entre les garanties mathématiques du logiciel et les exigences légales pesant sur les infrastructures d'hébergement.</div>
+        <div class="compliance-article-sub" data-i18n="cArt0Sub">Mesures techniques, responsabilités et obligations d’hébergement doivent être évaluées séparément.</div>
       </div>
       <div class="compliance-prose">
         <p data-i18n="cArt0P1">
@@ -157,7 +157,7 @@
         </ul>
         <div class="compliance-callout-box">
           <strong data-i18n="cArt0BoxTitle">Ce que cela implique concrètement :</strong><br>
-          <span data-i18n="cArt0BoxDesc">Si un professionnel ou un établissement de santé utilise CYBOU pour stocker des dossiers patients chez un prestataire commercial tiers, les nœuds de stockage de destination (fournisseurs de stockage P2P) doivent être déployés dans des centres de données certifiés HDS. En revanche, en mode <em>on-premise</em> (auto-hébergement sur les serveurs internes de l'établissement ou du cabinet), le praticien conserve la pleine garde physique et bénéficie de la protection cryptographique post-quantique sans dépendance tierce.</span>
+          <span data-i18n="cArt0BoxDesc">Tout usage de données de santé nécessite une analyse du traitement, des responsabilités et des prestataires. CYBOU ne fournit ni sélection automatique de fournisseurs HDS ni preuve de leur certification.</span>
         </div>
       </div>
     </article>
@@ -209,7 +209,7 @@
             <tr>
               <td><strong>Art. 32</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Sécurité des traitements</span></td>
               <td data-i18n="cRgpdArt32Req">Mettre en œuvre des mesures techniques appropriées, incluant le chiffrement et la résilience des systèmes.</td>
-              <td data-i18n="cRgpdArt32Sol"><strong>Cryptographie standard certifiée OpenSSL v3.5.2+.</strong> Algorithmes post-quantiques NIST FIPS 203 (ML-KEM-768), NIST FIPS 204 (ML-DSA-44/65), tunnels TLS 1.3 stricts et réplication de stockage multi-nœuds avec auto-réparation.</td>
+              <td data-i18n="cRgpdArt32Sol"><strong>Mesures techniques à évaluer selon les risques.</strong> Primitives ML-KEM/ML-DSA, TLS 1.3 et réplication de chunks. La conformité RGPD exige aussi des mesures organisationnelles et des preuves dans le périmètre concerné.</td>
             </tr>
             <tr>
               <td><strong>Art. 44 à 49</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Transferts hors UE (Schrems II)</span></td>
@@ -293,12 +293,12 @@
               <tr>
                 <td><strong>1. Usage en Cabinet / Auto-hébergement (On-Premise)</strong></td>
                 <td data-i18n="cHdsMode1Cadre">Le praticien ou l'hôpital conserve les données sur ses propres serveurs et terminaux internes.</td>
-                <td data-i18n="cHdsMode1Cybou"><strong>Conforme sans certification tierce.</strong> Le responsable de traitement assure lui-même la garde des données. Chiffrement post-quantique et étanchéité totale du système d'information.</td>
+                <td data-i18n="cHdsMode1Cybou"><strong>Périmètre à évaluer.</strong> L’auto-hébergement ne suffit pas à établir la conformité du traitement. Les contrôles, les flux et les obligations restent à vérifier.</td>
               </tr>
               <tr>
                 <td><strong>2. Stockage Distribué Tiers / Commercial</strong></td>
                 <td data-i18n="cHdsMode2Cadre">Les données chiffrées sont confiées à des fournisseurs de stockage distants gérés par des tiers.</td>
-                <td data-i18n="cHdsMode2Cybou"><strong>Exigence d'infrastructure HDS.</strong> Les nœuds de stockage (<code style="color: var(--brand-teal-dark);">cybou-provider</code>) doivent être déployés dans des centres de données détenteurs du certificat HDS (délivré sous l'égide de l'ANS). Le chiffrement Zero-Knowledge de CYBOU constitue une mesure de sécurité supplémentaire de niveau supérieur.</td>
+                <td data-i18n="cHdsMode2Cybou"><strong>Prestataires à vérifier.</strong> Évaluer les obligations HDS et le périmètre certifié des services utilisés. Les Full Nodes CYBOU n’annoncent aucun statut HDS.</td>
               </tr>
             </tbody>
           </table>
@@ -306,7 +306,7 @@
 
         <div class="compliance-callout-box amber">
           <strong data-i18n="cHdsBoxTitle">Engagement d'intégrité pour le secteur médical :</strong><br>
-          <span data-i18n="cHdsBoxDesc">CYBOU ne se substitue pas à la certification HDS des exploitants de datacenters. En revanche, CYBOU fournit la brique logicielle la plus sûre du marché pour immuniser les données médicales contre les cyberattaques par ransomware, l'espionnage extraterritorial et les fuites de données d'infogérance.</span>
+          <span data-i18n="cHdsBoxDesc">CYBOU ne revendique aucune certification HDS ou SecNumCloud. Le chiffrement ne remplace pas la vérification des prestataires, des contrôles opérationnels et des obligations du traitement.</span>
         </div>
       </div>
     </article>

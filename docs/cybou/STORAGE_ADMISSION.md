@@ -2,6 +2,29 @@
 
 Status: active admission substrate plus frozen durability architecture target.
 
+
+## Storage implementation evidence boundary
+
+The Beta target remains two independent remote full replicas; the current
+placement algorithm deduplicates proven StorageIds, which does not establish
+independent hosts, operators or failure domains. The 1:3 reciprocal baseline
+is a capacity/service objective, not measured proof of contribution: automatic
+local allocation varies with disk space and does not guarantee 10–15 GB.
+Finalized quotas govern entitlement, not evidence of actual remote service.
+
+Canonical state currently records publications, roots and recipient capsules,
+not provider placements or audit reliability. Mutual-audit transport, PoA
+notarization and canonical reliability coefficients are unimplemented target
+work requiring an evidence/privacy/accounting design before implementation.
+Current operational checks use GET plus ChunkID verification; no new consensus
+proof or receipt format is introduced here.
+
+Finalized revocation stops admission and releases the author's canonical quota.
+Compliant providers journal purge of unshared chunks, retaining physical byte
+accounting until unlink succeeds or absence is confirmed; maintenance/restart
+retry failures. This does not prove deletion of hidden copies or crypto-erasure.
+See [`DATA_ASSURANCE_AND_ERASURE.md`](DATA_ASSURANCE_AND_ERASURE.md) for scoped regression evidence.
+
 ## Physical store
 
 Providers use one content-addressed encrypted ChunkStore:
@@ -36,7 +59,7 @@ PutChunk(publication_reference, ChunkID, bytes, admission_proof)
 
 only after verifying:
 
-1. publication exists in canonical PoA-finalized history;
+1. publication is active in the latest canonical PoA-finalized state;
 2. Merkle proof authorizes ChunkID under that publication;
 3. BLAKE3(bytes) equals ChunkID;
 4. local capacity/policy allows storage.
@@ -86,7 +109,7 @@ justifies the extra protocol complexity.
 
 Placement is per ChunkID, not necessarily one provider set per file.
 
-StorageService selects independent eligible remote providers using secure
+StorageService selects eligible remote providers with distinct proven StorageIds using secure
 random selection over proven StorageIds.
 Providers return stored authorization proofs for audit and state rebuild.
 Placement records live in the Identity's encrypted rebuildable Application DB.
@@ -106,7 +129,7 @@ Block sync, candidate relay and Validation transport remain operational.
 ## Notarial object register and deterministic quotas
 
 The blockchain acts as the canonical Notarial Register for application content:
-- Tracks `RootPublication` metadata, Merkle roots, recipient capsules, and verified placements.
+- Tracks `RootPublication` metadata, Merkle roots, recipient capsules. Provider placements remain local encrypted metadata.
 - Remote storage allowances and admission rights are computed deterministically strictly from PoA-finalized state.
 - Local configuration declarations and off-chain vouchers convey zero authority. The network only respects what is notarized and finalized by PoA.
 
@@ -114,8 +137,8 @@ The blockchain acts as the canonical Notarial Register for application content:
 
 Every newly registered Identity receives an immediate **Onboarding Trust Credit of 5 GB** of remote storage in the network (DEC-269).
 - **Physical ratio (1:3)**: 1 GB of stored user data requires 2 remote replicas plus 1 local copy = 3 physical copies total.
-- **Reciprocal baseline**: Each Full Node allocates ~10–15 GB of local storage to house reciprocal chunks for other network peers.
-- Frictionless onboarding: new users immediately store files and send mail without waiting to accumulate reputation.
+- **Reciprocal baseline**: Target capacity/service reciprocity is not measured. Automatic allocation depends on free disk space and may be below 10–15 GB; see the allocation formula above.
+- Frictionless onboarding: the quota does not require prior reputation; publication still needs finality, relay work, fees, capacity and reachable providers before remote durability.
 
 ## AUTH resource ladder
 
@@ -137,7 +160,7 @@ chunk no other admitted publication still authorizes.
 
 ## Mutual proof of storage and uptime auditing
 
-Peers storing chunks for each other perform periodic mutual cryptographic audits (DEC-270):
+Frozen target, not implemented network behavior: peers would perform periodic mutual cryptographic audits (DEC-270):
 1. **Challenge**: Storing peer A sends a randomized challenge (byte offset, length, salt/nonce) to peer B holding its chunk.
 2. **Response**: Peer B computes a deterministic cryptographic proof over the exact stored chunk bytes and returns it (`StorageAuditChallenge`, `CreateStorageAuditProof`, `VerifyStorageAuditProof` in `src/cybou/storage_audit.h`).
 3. **Notarization & Reliability** (*Target architecture / Unimplemented*): Verified challenge proofs and uptime attestations are planned to be notarized in PoA blocks, feeding peer reliability coefficients and maintaining active storage allowances. (Currently, only the cryptographic audit primitive is implemented; P2P challenge relay, PoA notarization, and reliability state are not yet implemented).
@@ -145,6 +168,6 @@ Peers storing chunks for each other perform periodic mutual cryptographic audits
 ## State synthesis and object pruning
 
 Block finalization synthesizes transaction history into active state (`CybouState`) (DEC-271):
-- **Object deletion**: When a user deletes a file or mail, an authenticated `RevokePublication` operation is published and finalized.
-- **State compaction**: The active publication record is tombstoned and pruned from active state.
-- **Local garbage collection**: Storing peers observing publication revocation immediately purge the associated chunks from their local `ChunkStore`, freeing disk space and preventing dead storage accumulation.
+- **Object deletion**: Application deletion changes the encrypted catalog; eligible unreferenced own publications may subsequently be author-revoked and finalized.
+- **State compaction**: The active publication entry is removed; historical blocks and their capsules remain.
+- **Local garbage collection**: Compliant peers journal managed purge of chunks no other admitted publication authorizes. Failed unlink retains provider byte accounting and is retried at reopen and maintenance. Revocation frees canonical author quota before physical removal; no hidden-copy erasure is proved.

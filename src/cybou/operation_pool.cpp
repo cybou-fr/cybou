@@ -115,7 +115,7 @@ PoolAdmission OperationPool::Admit(const ProtocolOperation& operation, const uin
         if (!FitsPeerLimits(*source_peer, encoded->size())) return PoolAdmission::REJECTED;
     }
 
-    // Инкрементальное исполнение в O(1): проверяем операцию поверх уже накопленного
+    // Спекулятивное исполнение с копией candidate state: проверяем операцию поверх уже накопленного
     // контекста пула, не пересчитывая все предыдущие транзакции заново.
     auto test_executor = *m_working->executor;
     auto exec = test_executor.ApplyOperation(operation);

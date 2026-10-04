@@ -219,7 +219,7 @@
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-        <span data-i18n="badgeFrance">Souveraineté France (Hors Cloud Act US)</span>
+        <span data-i18n="badgeFrance">Réseau à admission IP française</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -588,7 +588,7 @@
     <div class="section-header">
       <div class="section-label" data-i18n="secLabel">Sécurité &amp; Transport</div>
       <h2 class="section-title" data-i18n="secTitle">Une forteresse numérique de bout en bout.</h2>
-      <p class="section-description" data-i18n="secDesc">De votre connexion Wi-Fi jusqu'au stockage de vos fichiers, découvrez pourquoi vos données sont réellement impénétrables.</p>
+      <p class="section-description" data-i18n="secDesc">Découvrez les protections de CYBOU et leurs limites, du transport au stockage chiffré.</p>
     </div>
 
     <div class="security-grid">
@@ -599,7 +599,7 @@
         </div>
         <div class="security-card-tag" data-i18n="secOpensslTag">Standard Mondial Audité</div>
         <h3 data-i18n="secOpensslTitle">Cryptographie Standard OpenSSL v3.5.2+ (Zéro crypto maison)</h3>
-        <p data-i18n="secOpensslDesc">La règle d'or en cybersécurité est formelle : ne jamais inventer sa propre cryptographie (« Don't roll your own crypto »). CYBOU n'utilise aucun algorithme expérimental fait maison. Tous les protocoles post-quantiques (ML-DSA-44, ML-DSA-65, ML-KEM-768) et symétriques sont fournis directement par la version officielle d'OpenSSL v3.5.2+, certifiée et conforme aux normes du NIST (FIPS 203 et FIPS 204).</p>
+        <p data-i18n="secOpensslDesc">CYBOU utilise les primitives ML-KEM et ML-DSA fournies par OpenSSL. Le profil hybride X-Wing reste expérimental ; sa conformité exacte et les compositions exigent une vérification. Aucune certification du produit ou du module FIPS n’est revendiquée.</p>
       </article>
 
       <!-- 2. TLS 1.3 Post-Quantum Transport -->
@@ -662,7 +662,7 @@
           <span class="compliance-status-good" data-i18n="compCardNis2Status">Mesures Art. 21</span>
         </div>
         <h3 data-i18n="compCardNis2Title">Directive NIS 2 — Résilience &amp; Chaîne d'Approvisionnement</h3>
-        <p data-i18n="compCardNis2Desc">Moteur cryptographique audité OpenSSL v3.5.2+ (sécurité de la supply chain logicielle). Résilience opérationnelle sans point unique de panne, auto-réparation du stockage et politique stricte de divulgation des vulnérabilités.</p>
+        <p data-i18n="compCardNis2Desc">La réplication et le remplacement de copies peuvent améliorer la disponibilité. La finalisation dépend d’un seul signataire PoA. Applicabilité NIS2, continuité, incidents et chaîne logicielle restent à évaluer.</p>
       </article>
 
       <!-- 3. HDS Santé -->
@@ -672,7 +672,7 @@
           <span class="compliance-status-good" data-i18n="compCardHdsStatus">Secret Médical &amp; HDS</span>
         </div>
         <h3 data-i18n="compCardHdsTitle">Secteur Médical — Secret Médical &amp; Données de Santé</h3>
-        <p data-i18n="compCardHdsDesc">Garantie mathématique d'inviolabilité pour le secret professionnel (Art. 226-13 CP). En cas d'externalisation chez un tiers commercial, exigence stricte de conformité des centres d'hébergement à la certification HDS et SecNumCloud.</p>
+        <p data-i18n="compCardHdsDesc">Le chiffrement protège le contenu sous les hypothèses documentées. Il ne garantit pas à lui seul le secret professionnel ou la conformité HDS ; les obligations dépendent du traitement et des prestataires.</p>
       </article>
 
       <!-- 4. ISO 27001 & CIA -->
@@ -898,7 +898,7 @@
 
         <div class="spec-item">
           <dt data-i18n="dtKeys">Rôles cryptographiques</dt>
-          <dd data-i18n="ddKeys">Identity recovery, Identity authorization, Identity KEM, PoA, Release Signing et Treasury sont des rôles séparés ; aucune signature de production classique seule.</dd>
+          <dd data-i18n="ddKeys">Les rôles Recovery, Authorization, KEM et PoA sont séparés. Les primitives OpenSSL et leurs compositions font l’objet de vérifications distinctes.</dd>
         </div>
 
         <div class="spec-item">
@@ -1014,7 +1014,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-openssl" aria-hidden="true">
-          <p data-i18n="faqAOpenssl">Absolument pas. La règle d'or de la sécurité est formelle : « Don't roll your own crypto » (ne réinventez jamais la cryptographie). CYBOU s'appuie exclusivement sur la bibliothèque officielle OpenSSL v3.5.2+, internationalement auditée et éprouvée. Les primitives post-quantiques intégrées sont les standards officiels du NIST : ML-KEM-768 (FIPS 203) et ML-DSA-44/65 (FIPS 204). Vous bénéficiez ainsi d'une robustesse mathématique vérifiable, sans aucune boîte noire ni algorithme expérimental fait maison.</p>
+          <p data-i18n="faqAOpenssl">CYBOU utilise les primitives OpenSSL et des compositions documentées. Les primitives ML-KEM et ML-DSA sont standardisées ; le profil X-Wing reste expérimental. Les tests ne constituent pas une certification.</p>
         </div>
       </article>
 

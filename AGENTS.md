@@ -261,6 +261,29 @@ There is no production network.
   transfer, DeviceAdd, or DeviceRevoke.
 - `.cybou` names use finalized commit/work/reveal and the active name rules.
 
+
+## Storage implementation evidence boundary
+
+The Beta target remains two independent remote full replicas; the current
+placement algorithm deduplicates proven StorageIds, which does not establish
+independent hosts, operators or failure domains. The 1:3 reciprocal baseline
+is a capacity/service objective, not measured proof of contribution: automatic
+local allocation varies with disk space and does not guarantee 10–15 GB.
+Finalized quotas govern entitlement, not evidence of actual remote service.
+
+Canonical state currently records publications, roots and recipient capsules,
+not provider placements or audit reliability. Mutual-audit transport, PoA
+notarization and canonical reliability coefficients are unimplemented target
+work requiring an evidence/privacy/accounting design before implementation.
+Current operational checks use GET plus ChunkID verification; no new consensus
+proof or receipt format is introduced here.
+
+Finalized revocation stops admission and releases the author's canonical quota.
+Compliant providers journal purge of unshared chunks, retaining physical byte
+accounting until unlink succeeds or absence is confirmed; maintenance/restart
+retry failures. This does not prove deletion of hidden copies or crypto-erasure.
+See `docs/cybou/DATA_ASSURANCE_AND_ERASURE.md` for scoped regression evidence.
+
 ## Documentation hierarchy and sources of truth
 
 Applicable French/EU legal obligations (including RGPD and NIS2 where applicable),
@@ -384,8 +407,9 @@ architecture that is absent from higher levels:
 - One `.cybou` name per Identity: NameCommit and NameReveal refuse an Identity that
   already owns a name or holds a pending commit.
 - Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB
-  remote storage in the network, grounded in the reciprocal 1:3 physical storage obligation
-  (storing 10–15 GB of foreign data locally on desktop).
+  remote publication quota, paired with a target reciprocal 1:3 capacity/service
+  objective. Automatic allocation does not guarantee 10–15 GB or measure actual
+  contribution.
 - Automatic AUTH penalties require objectively verifiable protocol evidence and
   are not frozen. Signed Validation of an operation that is invalid against its
   stated finalized base is evidence a future penalty rule may use.
@@ -395,15 +419,17 @@ architecture that is absent from higher levels:
 ## Notarial object storage register, mutual proofs, and pruning
 
 - The blockchain is the canonical Notarial Register: it records object publications,
-  Merkle roots, recipient capsules, and mutual storage proofs. Quotas, allowances,
+  Merkle roots and recipient capsules. Mutual storage proofs are an unimplemented
+  target. Quotas, allowances,
   and admission rights are derived deterministically strictly from PoA-finalized state.
   Local capacity declarations and off-chain vouchers convey zero authority.
-- Mutual Proof of Storage & Uptime: storing peers periodically challenge each other
-  with randomized byte-offset/nonce verification of stored chunks. Verified challenge
-  results are notarized in PoA blocks, establishing deterministic peer reliability coefficients.
+- Mutual Proof of Storage & Uptime: the target is for storing peers to periodically challenge each other
+  with randomized byte-offset/nonce verification of stored chunks. Target challenge
+  results would be notarized in PoA blocks; transport, notarization and canonical
+  reliability coefficients are not implemented and require an evidence/privacy design.
 - State Synthesis & Object Pruning: block finalization synthesizes history into state.
   When an object is deleted by its author (`RevokePublication`), its active state record
-  is retired/tombstoned, authorizing storing nodes to immediately purge the underlying chunks
+  is removed from the active publication register (historical blocks remain), initiating managed purge by compliant storing nodes of the underlying chunks
   from local ChunkStore, preventing storage bloat. `RevokePublication` is author-only,
   costs the payment fee from System Balance, earns no AUTH and frees its chunks from the
   author's quota; a revoked publication no longer authorizes chunk admission.
@@ -427,7 +453,7 @@ Authority is canonical, non-transferable AUTH and is excluded from CYBOU supply.
 The only node type is Full Node. Nodes announce no roles or capabilities.
 PoA authority is possession of the genesis-authorized private key; Validation
 is an eligible Identity signature checked against finalized state. Storage is
-intrinsic; StorageId proves replica independence only. Rendezvous is a known
+intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.
 

@@ -483,14 +483,13 @@ void EmailPage::deleteForever(const QStringList& ids)
     QString question = ids.size() == 1
         ? tr("Delete this message forever? It is removed from this mailbox and cannot be restored here.")
         : tr("Delete %1 messages forever? They are removed from this mailbox and cannot be restored here.").arg(ids.size());
-    // Own sent mail is revoked from the network (RevokePublication): storage is freed for everyone.
+    // Eligible own publications may be revoked; recipient copies are outside managed purge.
     const bool sent = std::any_of(ids.begin(), ids.end(), [this](const QString& id) {
         const auto* item = m_model->mailItem(id);
         return item && item->outgoing;
     });
     if (sent) {
-        question += QStringLiteral("\n\n") + tr("Messages you sent are also removed from the network and free your "
-            "storage. A recipient keeps only what their device already downloaded.");
+        question += QStringLiteral("\n\n") + tr("Eligible sent publications can be revoked after finalization, freeing publication quota and initiating managed purge. Recipients and other holders may retain copies.");
     }
     if (QMessageBox::question(this, tr("Delete forever"), question) != QMessageBox::Yes) return;
     if (ids.contains(m_current_id)) closeDetail();

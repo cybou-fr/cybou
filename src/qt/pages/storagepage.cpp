@@ -211,8 +211,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_empty_trash->hide();
     connect(m_empty_trash, &QPushButton::clicked, this, [this] {
         if (QMessageBox::question(this, tr("Empty Trash"),
-                tr("Permanently delete everything in Trash? This cannot be undone. Once the network confirms it, "
-                   "the content is removed from the network and its storage is freed.")) != QMessageBox::Yes) return;
+                tr("Delete everything in Trash from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.")) != QMessageBox::Yes) return;
         m_model->requestEmptyTrash();
         m_model->notify(tr("Emptying Trash. It is done once the network confirms it."));
     });
@@ -980,8 +979,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
         });
         menu.addAction(tr("Delete forever"), this, [this, ids] {
             if (QMessageBox::question(this, tr("Delete forever"),
-                    tr("Permanently delete? This cannot be undone. Once the network confirms it, the content is removed "
-                       "from the network and its storage is freed."))
+                    tr("Delete from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain."))
                 == QMessageBox::Yes) {
                 for (const auto& i : ids) m_model->requestDeleteFile(i);
             }
@@ -1117,7 +1115,7 @@ void StoragePage::rebuildDetails()
                 ? tr("%1 of %2 encrypted copies").arg(item->min_remote_replicas).arg(item->remote_replica_target)
                 : tr("%1 encrypted copies").arg(item->min_remote_replicas), m_details);
     }
-    DetailPair(layout, tr("Encryption"), tr("End-to-end, post-quantum; only you hold the keys"), m_details);
+    DetailPair(layout, tr("Encryption"), tr("Encrypted content; recovery capsules may preserve access"), m_details);
     const auto& status = m_model->status();
     DetailPair(layout, tr("Owner"), status.primary_name.isEmpty() ? tr("You") : status.primary_name, m_details);
     layout->addSpacing(8);
@@ -1151,8 +1149,7 @@ void StoragePage::rebuildDetails()
         forever->setProperty("cybouId", QStringLiteral("fileDeleteForever"));
         connect(forever, &QPushButton::clicked, this, [this, id = item->id] {
             if (QMessageBox::question(this, tr("Delete forever"),
-                    tr("Permanently delete this item? This cannot be undone. Once the network confirms it, the content "
-                       "is removed from the network and its storage is freed.")) != QMessageBox::Yes) return;
+                    tr("Delete this item from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.")) != QMessageBox::Yes) return;
             m_model->requestDeleteFile(id);
             showDetails({});
         });

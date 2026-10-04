@@ -77,6 +77,29 @@ transitions, and executes every candidate operation before relaying it.
 Validation signatures are pre-finalization evidence only; they never replace
 local or PoA execution and never change state.
 
+
+## Storage implementation evidence boundary
+
+The Beta target remains two independent remote full replicas; the current
+placement algorithm deduplicates proven StorageIds, which does not establish
+independent hosts, operators or failure domains. The 1:3 reciprocal baseline
+is a capacity/service objective, not measured proof of contribution: automatic
+local allocation varies with disk space and does not guarantee 10–15 GB.
+Finalized quotas govern entitlement, not evidence of actual remote service.
+
+Canonical state currently records publications, roots and recipient capsules,
+not provider placements or audit reliability. Mutual-audit transport, PoA
+notarization and canonical reliability coefficients are unimplemented target
+work requiring an evidence/privacy/accounting design before implementation.
+Current operational checks use GET plus ChunkID verification; no new consensus
+proof or receipt format is introduced here.
+
+Finalized revocation stops admission and releases the author's canonical quota.
+Compliant providers journal purge of unshared chunks, retaining physical byte
+accounting until unlink succeeds or absence is confirmed; maintenance/restart
+retry failures. This does not prove deletion of hidden copies or crypto-erasure.
+See `docs/cybou/DATA_ASSURANCE_AND_ERASURE.md` for scoped regression evidence.
+
 ## Documentation hierarchy
 
 Applicable law (RGPD and NIS2 where applicable), adopted ANSSI/ISO risk and
@@ -150,7 +173,8 @@ Mail and Files share the same encrypted content substrate.
 ChunkID is the full BLAKE3-256 digest of stored encrypted bytes.
 
 The blockchain functions as a canonical Notarial Register: it records object
-publications, Merkle roots, recipient capsules, and mutual storage proofs.
+publications, Merkle roots and recipient capsules. Mutual storage proofs remain
+a target, not a current canonical record.
 Resource quotas and storage admission rights are derived deterministically strictly
 from PoA-finalized state; local capacity declarations and off-chain vouchers convey zero authority.
 
@@ -163,12 +187,11 @@ Beta storage durability targets 2 independent remote full replicas plus 1 local
 physical copy (3 physical copies total); erasure coding is disabled.
 
 Users simply exchange storage space: each newly registered Identity receives an
-immediate Onboarding Trust Credit of 5 GB remote network storage, grounded in
-the reciprocal 1:3 physical storage obligation (allocating ~10–15 GB of local disk
-for peer chunks). Storing peers periodically audit each other through randomized
-byte-offset and nonce challenge-response proofs notarized in PoA blocks.
+immediate Onboarding Trust Credit of 5 GB remote network storage, paired with the target reciprocal 1:3 capacity/service objective. Automatic
+allocation does not guarantee 10–15 GB or measure actual contribution. The target mutual-audit protocol would use randomized byte-offset and nonce
+proofs notarized in PoA blocks; it is not implemented.
 When content is deleted by its author (`RevokePublication`), its active state
-record is tombstoned and pruned, authorizing storing nodes to immediately purge
+record is removed from the active publication register; historical blocks remain, initiating managed purge by compliant storing nodes of
 underlying chunks from local storage.
 
 ## Economics
@@ -186,7 +209,7 @@ See `18_ECONOMICS_FEES.md`.
 The only node type is Full Node. Nodes announce no roles or capabilities.
 PoA authority is possession of the genesis-authorized private key; Validation
 is an eligible Identity signature checked against finalized state. Storage is
-intrinsic; StorageId proves replica independence only. Rendezvous is a known
+intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.
 

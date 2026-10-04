@@ -134,7 +134,7 @@ public:
         const std::string& address, uint16_t port, const StorageId& storage_id,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
     /// \brief Разрывает все текущие соединения.
-    /// \post Frontier-knowledge для gossip сохраняется отдельно от live socket'ов.
+    /// \post Сессии и их gossip frontier удалены; новый HELLO восстановит frontier.
     void DisconnectAll();
 
     /// \brief Выполняет auto-discovery новых endpoint'ов через уже подключенных пиров.
