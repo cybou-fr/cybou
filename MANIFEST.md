@@ -22,13 +22,13 @@ editing an included file.
 | docs/cybou/09_CRYPTO_PQ.md | 29 | 5f99f8a8845ae474 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 98f3227719c0291a |
 | docs/cybou/18_ECONOMICS_FEES.md | 142 | 7d97f0a0b14103b5 |
-| docs/cybou/19_SECURITY_THREAT_MODEL.md | 100 | c2af60e8027936e4 |
+| docs/cybou/19_SECURITY_THREAT_MODEL.md | 104 | 15d7f4dc4e4c6192 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 68 | 08b4831d155d06d3 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 74 | 0824a1d2b458554c |
+| docs/cybou/22_ROADMAP.md | 74 | 35671584159fe745 |
 | docs/cybou/24_DECISIONS.md | 223 | 1d5eb0ce58c503ae |
-| docs/cybou/25_OPEN_QUESTIONS.md | 94 | e86a8a4aa4db11ef |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 153 | f485aca8d92321b4 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 98 | bbba8671e2a2cc23 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 175 | 94266d3cedc4a6fd |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | d3fc59e20cb63db1 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | cadd921838903857 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |

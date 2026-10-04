@@ -72,6 +72,10 @@ Storage economy (DEC-274–DEC-283) open items:
 - assignment proof: how PoA attests that paid providers were network-assigned
   from finalized randomness;
 - aggregation of off-chain evidence into StorageSettlement entries at the PoA;
+- Sybil splitting (M6): uniform selection gives a 15 TiB operator x73 more
+  replicas when split into 100 Identities; decide whether selection should
+  weight by payout account, cap per-account placements, or rely on a measured
+  AccountCreate PoW price before Beta;
 - StoragePayoutBinding format and its off-chain verification;
 - lease renewal UX before expiry (renewal after expiry already works);
 - Beta rate (5 CYBOU/GiB/day/replica) validation by shadow accounting;

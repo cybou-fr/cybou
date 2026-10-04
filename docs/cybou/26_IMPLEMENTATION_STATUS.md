@@ -66,6 +66,28 @@ implemented: aggregation of off-chain evidence into settlements, payout
 bindings, lease renewal UX. Because the state and genesis formats changed, the
 compiled DEVNET fails closed and main must not be deployed before M7.
 
+M6 adversarial evidence (`cybou_resource_limits_tests`,
+`cybou_storage_placement_simulation_tests`):
+- monetary conservation: a 400-block deterministic random walk over SystemLock,
+  publish-with-lease, StorageLease, RevokePublication and StorageSettlement keeps
+  `TotalCybou` exact and every state canonical;
+- payout attacks refused: unknown lease, missing payout account, self-payout,
+  over-cap or over-escrow payout, duplicate/unordered/zero entries, replayed or
+  gapped period, overflowing period start, foreign signer, missing PoA key,
+  oversized or overflowing lease extension;
+- storage failures: existing suites cover lost, corrupt and offline providers,
+  bit rot healing, repair without local cache and audit-detected wrong answers;
+- concentration (1000 nodes: 700x15 GiB, 200x150 GiB, 80x1 TiB, 20x20 TiB) under
+  the implemented uniform selection: at 5%/30%/70% demand the top 1% of nodes
+  hold 2.8%/11.9%/33.9% of replicas, the 5 largest 1.4%/6.0%/17.0% (gate < 70%),
+  effective provider count 678/161/43, and every home node receives work.
+  Capacity-weighted selection would give the top 1% ~39% and leave 60% of home
+  nodes idle at 5% demand;
+- Sybil: splitting one 15 TiB node into 100 Identities of 150 GiB raises its
+  replica share from 0.14% to 10.2% (x73) at 10% demand. Uniform per-StorageId
+  selection therefore rewards splitting; only AccountCreate PoW per Identity
+  prices it today (open question in `25_OPEN_QUESTIONS.md`).
+
 ## Evidence limits reviewed on 2026-10-04
 
 Committed code baseline: `a3f05aa`; local Windows headless verification passed

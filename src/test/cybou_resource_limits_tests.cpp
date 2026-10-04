@@ -11,6 +11,10 @@
 #include <boost/test/unit_test.hpp>
 
 #include <array>
+#include <limits>
+#include <optional>
+#include <random>
+#include <vector>
 
 using namespace cybou;
 
@@ -438,6 +442,141 @@ BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_tiered)
     BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{commit}, f.state), 18U + NAME_OPERATION_EXTRA_WORK_BITS);
     // AccountCreate and PoaAuthAdjustment carry their own protection.
     BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{PoaAuthAdjustment{}}, f.state), 0U);
+}
+
+// ---- M6: adversarial storage-economy tests (DEC-283 release gate) ----
+
+BOOST_AUTO_TEST_CASE(settlement_payout_attacks_are_refused)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0xB0, 3);
+    const auto id = *ComputeOperationId(publication);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    const auto total = TotalCybou(f.state);
+    constexpr uint64_t start{1'700'000'000};
+    uint64_t height{2};
+    const auto refused = [&](const ProtocolOperation& op) {
+        const auto result = f.Execute({op}, height);
+        BOOST_CHECK(!result);
+        BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+        return result.settlement_error;
+    };
+
+    cybou::Hash256 unknown{};
+    unknown.begin()[0] = 0xEE;
+    BOOST_CHECK(refused(f.Settle(start, {{unknown, f.other, 1}})) == StorageSettlementError::LEASE_NOT_FOUND);
+    cybou::Hash256 ghost_raw{};
+    ghost_raw.begin()[0] = 0xEF;
+    BOOST_CHECK(refused(f.Settle(start, {{id, AccountId{ghost_raw}, 1}})) == StorageSettlementError::PAYOUT_ACCOUNT_NOT_FOUND);
+    // Duplicate or unordered entries have no canonical encoding at all.
+    auto duplicate = std::get<StorageSettlement>(f.Settle(start, {}));
+    duplicate.entries = {{id, f.other, 1}, {id, f.other, 1}};
+    BOOST_CHECK(!ComputeStorageSettlementDigest(f.network, duplicate));
+    BOOST_CHECK(!SerializeProtocolOperation(ProtocolOperation{duplicate}));
+    // A zero payout is not a payout.
+    auto zero = std::get<StorageSettlement>(f.Settle(start, {}));
+    zero.entries = {{id, f.other, 0}};
+    BOOST_CHECK(!ComputeStorageSettlementDigest(f.network, zero));
+    // Period start arithmetic cannot overflow.
+    BOOST_CHECK(refused(f.Settle(std::numeric_limits<uint64_t>::max(), {})) == StorageSettlementError::INVALID_PAYLOAD);
+    // Another key cannot sign settlements, and an executor without the genesis PoA key refuses them.
+    auto foreign = std::get<StorageSettlement>(f.Settle(start, {}));
+    std::array<unsigned char, 32> foreign_seed{};
+    foreign_seed[0] = 0xB7;
+    foreign.poa_signature = *SignIdentityMessage(foreign_seed, IdentityKeyPurpose::POA_FINALIZER,
+        *ComputeStorageSettlementDigest(f.network, foreign));
+    BOOST_CHECK(refused(foreign) == StorageSettlementError::INVALID_SIGNATURE);
+    const auto keyless = ExecuteBlockOperations(f.state, {f.Settle(start, {})}, f.network, height, f.params);
+    BOOST_CHECK(keyless.settlement_error == StorageSettlementError::INVALID_SIGNATURE);
+
+    // A valid settlement cannot be replayed for the same period.
+    const auto good = f.Settle(start, {{id, f.other, 10}});
+    BOOST_REQUIRE(f.Execute({good}, height++));
+    BOOST_CHECK(refused(good) == StorageSettlementError::WRONG_PERIOD);
+    // Even across many periods a lease never pays out more than its escrow.
+    uint64_t paid{10};
+    for (uint64_t period{1}; period < 3; ++period) {
+        BOOST_REQUIRE(f.Execute({f.Settle(start + period * 86'400, {{id, f.other, 10}})}, height++));
+        paid += 10;
+    }
+    BOOST_CHECK_EQUAL(paid, 30U);
+    BOOST_CHECK(!f.state.leases.contains(id));
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+}
+
+BOOST_AUTO_TEST_CASE(lease_payload_and_extension_bounds_are_enforced)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0xC0, 1);
+    const auto id = *ComputeOperationId(publication);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    // Zero periods have no encoding; more than the genesis maximum is refused.
+    BOOST_CHECK(!SerializeStorageLeasePayload({id, 0}));
+    BOOST_CHECK(f.Execute({f.Lease(id, f.params.max_storage_lease_periods + 1)}, 2).lease_error ==
+        StorageLeaseError::INVALID_PAYLOAD);
+    f.nonce = f.state.identities.Find(f.account)->nonce;
+    // An extension that would overflow the period range is refused before any debit.
+    f.state.leases.at(id).end_period = std::numeric_limits<uint64_t>::max() - 1;
+    const auto system_before = f.state.accounts.at(f.account).system_balance;
+    BOOST_CHECK(f.Execute({f.Lease(id, 5)}, 2).lease_error == StorageLeaseError::ESCROW_OVERFLOW);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, system_before);
+}
+
+BOOST_AUTO_TEST_CASE(randomized_economy_conserves_cybou_and_valid_state)
+{
+    // Deterministic pseudo-random walk over every money-moving operation. Whatever succeeds
+    // or fails, TotalCybou never changes and every state stays canonical (DEC-277).
+    LimitsFixture f;
+    std::mt19937_64 rng{0xC1B0};
+    const auto total = TotalCybou(f.state);
+    std::vector<cybou::Hash256> publications;
+    uint64_t start{1'700'000'000};
+    unsigned successes{0};
+    for (uint64_t height{1}; height <= 400; ++height) {
+        std::optional<ProtocolOperation> op;
+        switch (rng() % 5) {
+        case 0: op = f.Lock(); break;
+        case 1: {
+            op = f.Publish(1 + static_cast<uint32_t>(rng() % 4096), static_cast<unsigned char>(rng()),
+                static_cast<uint32_t>(rng() % 4));
+            break;
+        }
+        case 2:
+            if (publications.empty()) continue;
+            op = f.Lease(publications[rng() % publications.size()], 1 + static_cast<uint32_t>(rng() % 3));
+            break;
+        case 3:
+            if (publications.empty()) continue;
+            op = f.Revoke(publications[rng() % publications.size()]);
+            break;
+        default: {
+            std::vector<StorageSettlementEntry> entries;
+            for (const auto& [id, lease] : f.state.leases) {
+                if (rng() % 2 == 0 || lease.first_period > f.state.settlement.next_period) continue;
+                entries.push_back({id, f.other, 1 + rng() % 12});
+            }
+            const auto period_start = f.state.settlement.next_period_start_utc == 0 ? start
+                : f.state.settlement.next_period_start_utc;
+            op = f.Settle(period_start, std::move(entries));
+        }
+        }
+        const auto id = ComputeOperationId(*op);
+        const auto result = f.Execute({*op}, height);
+        if (result) {
+            ++successes;
+            if (std::holds_alternative<AuthorizedRootPublication>(*op)) publications.push_back(*id);
+        }
+        // A refused identity operation did not consume its nonce.
+        f.nonce = f.state.identities.Find(f.account)->nonce;
+        BOOST_REQUIRE_EQUAL(TotalCybou(f.state), total);
+        BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
+        for (const auto& [lease_id, lease] : f.state.leases) {
+            BOOST_REQUIRE(f.state.accounts.at(lease.payer).onboarding_system_balance <=
+                f.state.accounts.at(lease.payer).system_balance);
+        }
+    }
+    BOOST_CHECK_GT(successes, 100U);
+    BOOST_CHECK_GT(f.state.settlement.next_period, 10U);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

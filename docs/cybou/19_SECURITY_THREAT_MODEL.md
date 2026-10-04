@@ -84,7 +84,11 @@ design proposal in [Data assurance and erasure](DATA_ASSURANCE_AND_ERASURE.md).
 - Fake service: compact filler or hash-only storage. Only unpredictable foreign
   ciphertext answered as exact bytes earns payment.
 - Concentration: large operators capturing placements. Mitigated by random
-  assignment without capacity weighting; measured by concentration simulation.
+  assignment without capacity weighting; the M6 simulation keeps the 5 largest
+  of 1000 mixed nodes below 17% of replicas up to 70% demand.
+- Sybil splitting: the same uniform selection pays an operator who splits one
+  large node into many Identities (x73 share in the M6 simulation). AccountCreate
+  PoW is the only current price; the selection rule is an open Beta gate.
 - PoA as aggregator: a dishonest PoA can misreport service; Beta accepts this
   explicit trust, bounded by escrow limits and conservation checks.
 

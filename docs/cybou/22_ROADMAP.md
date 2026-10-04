@@ -67,7 +67,7 @@ features and durability rather than reopening architecture cleanup.
   5 CYBOU rate; no CYBOU moved.
 - **M5 Consensus economics** (implemented; evidence aggregation pending): Treasury monetary base, 20,000 onboarding, StorageLease,
   StorageEscrow, StorageSettlement, AUTH storage quota removal.
-- **M6 Adversarial tests**: monetary conservation, payout abuse, storage failure,
+- **M6 Adversarial tests** (implemented; Sybil-splitting finding open): monetary conservation, payout abuse, storage failure,
   concentration and Sybil simulations as release gates.
 - **M7 New DEVNET**: new Network Root, NetworkID and signed genesis; VPS cutover;
   only under explicit operator authorization.
