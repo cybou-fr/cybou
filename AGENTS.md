@@ -201,12 +201,10 @@ No:
     per-audit blockchain records, Reed-Solomon
 ```
 
-Status: M1–M5 are implemented on main. The consensus format no longer decodes
-the compiled DEVNET: `RequireOfficialNetwork(DEVNET)` fails closed until M7
-provisions a new Network Root, NetworkID and signed genesis under explicit
-operator authorization (DEC-283). Never deploy main to the DEV VPS before M7;
-the running DEVNET keeps its previous binary. AUTH, Validation, AUTH operation
-tiers and all PoW are unchanged by this work.
+Status: M1–M6 are implemented and main compiles the new storage-economy DEVNET
+(NetworkBinding `6d202ccf…2d97`, provisioned 2026-10-04, M7 steps 1–3). The DEV
+VPS still runs the retired DEVNET until its cutover (runbook step 4). AUTH,
+Validation, AUTH operation tiers and all PoW are unchanged by this work.
 
 ## DEV VPS deployment — migration state
 
@@ -215,7 +213,8 @@ There is no production network.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
   `cybou node run` on the immutable current DEVNET, with state under
   `/var/lib/cybou/node/state` and the pre-storage-economy binary (automatic
-  storage allocation). Main is not deployable there until the M7 cutover.
+  storage allocation) on the retired DEVNET. Its M7 cutover (runbook
+  `docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md` step 4, `--capacity 40GiB`) is pending.
   The preceding network domain is retired under `/var/lib/cybou/node-retired-20261003-de-version`;
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.

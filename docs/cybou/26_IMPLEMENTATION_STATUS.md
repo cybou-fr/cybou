@@ -64,7 +64,10 @@ remains a safety bound. Providers admit chunks only under an active lease;
 PublicationService leases at publication and renews inactive leases. Not yet
 implemented: aggregation of off-chain evidence into settlements, payout
 bindings, lease renewal UX. Because the state and genesis formats changed, the
-compiled DEVNET fails closed and main must not be deployed before M7.
+previous compiled DEVNET was retired. M7 steps 1–3 are done: main compiles the
+new storage-economy DEVNET (NetworkBinding `6d202ccf…2d97`), `verify-devnet`
+passes and the compiled-DEVNET tests are restored. The DEV VPS and desktops
+still run the retired network until their cutover.
 
 M6 adversarial evidence (`cybou_resource_limits_tests`,
 `cybou_storage_placement_simulation_tests`):

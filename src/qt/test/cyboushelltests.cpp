@@ -1541,14 +1541,11 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QCOMPARE(failures.count(), 1);
     QVERIFY(!model.status().node_running);
 
-    // DEC-283: the compiled DEVNET predates the storage-economy state and fails closed, so the
-    // retry fails again instead of reinterpreting it. M7 provisions a new genesis and restores
-    // the successful retry here.
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     controller.start();
-    QCOMPARE(failures.count(), 2);
-    QVERIFY(!model.status().node_running);
+    QCOMPARE(failures.count(), 1);
+    QVERIFY(model.status().node_running);
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()

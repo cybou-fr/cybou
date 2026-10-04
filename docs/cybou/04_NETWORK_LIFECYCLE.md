@@ -58,15 +58,19 @@ network always has a new NetworkID. Private material stays only under gitignored
 (`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
 public Identity data, and signed genesis constants enter Git.
 
-The current DEVNET was provisioned offline on 2026-10-03 so that both genesis
-Identities start above the Validation threshold. Its NetworkBinding is
-`846e8f223054d5d1944c4e01a576ecbbbc5ef497654ae2fded57368ac6a4b311`
+The current DEVNET is the storage-economy network provisioned on 2026-10-04
+(DEC-283, M7). Its NetworkBinding is
+`6d202ccf07b41232ef36210927444b2d622bd079d59e242c8232a3ae868e2d97`
 and its signed genesis anchor is
-`5bd33c6c65462345bd5b40c297ecdfcf718029bc94cf743175bd3e73f9cea9f2`.
-Genesis allocations: `cybou` (Central Authority, PoA key unchanged from the
-previous DEVNET) 100,000,000 CYBOU and 10,000,001 AUTH; `bootstrap` (ordinary
-Identity of the bootstrap operator) 0 CYBOU and 10,000,001 AUTH. The AUTH is a
-genesis decision, never a property of the bootstrap role.
+`e0d3d6ee9cf90be3bce3650615069a6db20ff3b71eb36129bbfecc7358cac25f`.
+Genesis allocations: `cybou` (Central Treasury; `cybou.cybou` phrase and PoA key
+kept from the previous DEVNET) 100,000,000,000 CYBOU and 10,000,001 AUTH;
+`bootstrap` (ordinary Identity of the bootstrap operator, phrase kept) 0 CYBOU
+and 10,000,001 AUTH. The AUTH is a genesis decision, never a property of the
+bootstrap role. By operator decision this DEVNET Network Root was generated on
+a networked machine: DEVNET is disposable and re-provisioned often; MAINNET keys
+keep the strictly offline ceremony. The previous DEVNET
+(`846e8f22…b311`, anchor `5bd33c6c…a9f2`) is retired.
 The preceding NetworkIDs are permanently retired. No prior genesis was re-signed
 or replaced, and no prior network-bound state is imported.
 
