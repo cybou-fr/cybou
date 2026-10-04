@@ -84,3 +84,19 @@ The resource section (`usage`, then `publications`, each strictly ordered) is
 appended only when at least one of them is non-empty; an empty section is
 non-canonical. A state without resource records therefore keeps its exact bytes and
 state root, including the genesis state.
+
+## Storage-economy target (not implemented)
+
+At the DEC-283 cutover (new NetworkID and genesis) state changes as follows:
+
+- OnboardingPool is removed; the whole genesis monetary base is the `cybou`
+  Treasury allocation; AccountCreate transfers `onboarding_bonus` from Treasury
+  to the new System Balance.
+- `TotalSupply` becomes `TotalCybou` = unclaimed genesis Balances + Balances +
+  System Balances + StorageEscrow; every block preserves it exactly.
+- System Balance records its onboarding-origin portion (DEC-281).
+- New records: StorageLease (publication, payer, units, replicas, period, escrow
+  by origin, status ACTIVE/CLOSING/EXPIRED, rate remainder) and the last settled
+  StorageSettlement period.
+- `usage.stored_chunks` and AUTH storage quota checks are removed; the
+  publication register remains.

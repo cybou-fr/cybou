@@ -67,6 +67,15 @@ Still open:
 - scalable discovery after small-network fan-out;
 - measured provider independence for the two-replica Beta target.
 
+Storage economy (DEC-274–DEC-283) open items:
+
+- assignment proof: how PoA attests that paid providers were network-assigned
+  from finalized randomness;
+- onboarding-origin accounting layout in System Balance and escrow;
+- canonical rounding rule and grace period length for lease settlement;
+- Beta rate (5 CYBOU/GiB/day/replica) validation by shadow accounting;
+- MiCA and French qualification of transferable CYBOU earned for storage service.
+
 ## Data assurance and erasure assessment
 
 [`DATA_ASSURANCE_AND_ERASURE.md`](DATA_ASSURANCE_AND_ERASURE.md) records the

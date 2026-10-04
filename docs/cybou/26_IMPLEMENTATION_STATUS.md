@@ -30,6 +30,13 @@ define the target. The changes described here include committed local developmen
 | Operation routing | Uniform CYBOU P2P Full Node mesh | HELLO has no capability field. No PoA transport proof or special route. Sync completion is advisory. Storage is intrinsic; StorageId is challenged only for storage interaction. |
 | PoA | Sole independent canonical finalizer | Single-operator PoA re-executes every candidate through the node pool and finalizes with zero attestations; a multi-node CYBOU P2P test covers validator, ordinary node and PoA. |
 
+## Storage economy status (2026-10-04)
+
+DEC-274–DEC-283 are frozen as target architecture (M1). Nothing is implemented:
+the runtime still uses automatic capacity, AUTH storage quotas, the 5 GiB
+onboarding credit and OnboardingPool; no StorageLease, StorageEscrow,
+StorageSettlement, receipts or audit transport exist.
+
 ## Evidence limits reviewed on 2026-10-04
 
 Committed code baseline: `a3f05aa`; local Windows headless verification passed

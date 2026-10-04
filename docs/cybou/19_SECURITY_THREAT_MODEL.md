@@ -74,6 +74,20 @@ local ContentKey cannot establish irreversible per-object erasure. Mail recipien
 may retain delivered keys and plaintext. See the implementation assessment and
 design proposal in [Data assurance and erasure](DATA_ASSURANCE_AND_ERASURE.md).
 
+### Storage-economy threats (target, DEC-274–DEC-283)
+
+- Self-dealing: a payer routing rent to its own provider. Mitigated by
+  network assignment from finalized randomness and PoA-attested settlement.
+- Onboarding laundering: bots converting the 20,000 start budget into
+  transferable CYBOU. Mitigated by AccountCreate PoW and origin-restricted
+  payouts (DEC-281).
+- Fake service: compact filler or hash-only storage. Only unpredictable foreign
+  ciphertext answered as exact bytes earns payment.
+- Concentration: large operators capturing placements. Mitigated by random
+  assignment without capacity weighting; measured by concentration simulation.
+- PoA as aggregator: a dishonest PoA can misreport service; Beta accepts this
+  explicit trust, bounded by escrow limits and conservation checks.
+
 ## Simplified parser and signing boundaries
 
 Bounded typed binary readers reject invalid lengths before allocation, unknown

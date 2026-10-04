@@ -249,3 +249,16 @@ local_publication:
 private_application_schema:
   encoding: typed_fixed_order_binary
   types: {Mail: 1, Files: 2, RecoveryBridge: 3}
+
+storage_economy_target:  # DEC-274..DEC-283; replaces onboarding credit, quotas and tier storage columns at cutover
+  local_capacity_min_bytes: 16106127360  # 15 GiB, explicit, not consensus
+  provider_budget: floor_2V_over_3
+  auth_storage_quota: absent
+  entitlement: paid_storage_lease
+  billing_unit_bytes: 524288
+  replica_target: 2
+  provider_assignment: randomized_finalized_seed_poa_attested_never_payer_chosen
+  replica_distinctness: [StorageId, payout_AccountID]
+  evidence: off_chain_receipts_audits_full_get
+  canonical_service_record: StorageSettlement_daily_poa_signed
+  max_publication_chunks: safety_bound_only

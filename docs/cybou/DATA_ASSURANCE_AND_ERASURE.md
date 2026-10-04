@@ -177,6 +177,9 @@ by this assessment.
 
 ## Provider-signed receipt proposal (not active protocol)
 
+The frozen storage-economy target adopts an off-chain `StorageReceipt` as part
+of storage evidence (DEC-276); the constraints below still govern its design.
+
 A receipt would be portable evidence that the holder of a storage key accepted
 a specific encrypted chunk for a finalized publication. It would not establish
 physical independence, future availability, an honest disk write, or consensus

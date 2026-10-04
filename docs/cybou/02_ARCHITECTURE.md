@@ -127,7 +127,9 @@ cannot introduce protocol mechanics absent from higher levels:
 Every participant runs the same full-node core software.
 
 Storage admits and serves authorized encrypted chunks on every Full Node;
-its quota is local policy and is positive in production. Zero capacity is reserved
+its quota is local policy and is positive in production. Target (DEC-275): an
+explicit capacity `V >= 15 GiB`, with provider obligations bounded by `floor(2V/3)`
+inside the same ChunkBlobStore; `V` is never consensus state. Zero capacity is reserved
 for memory-only unit tests. Possession of the genesis-authorized
 PoA private key activates the independent block-production worker.
 
@@ -189,7 +191,10 @@ physical copy (3 physical copies total); erasure coding is disabled.
 Users simply exchange storage space: each newly registered Identity receives an
 immediate Onboarding Trust Credit of 5 GB remote network storage, paired with the target reciprocal 1:3 capacity/service objective. Automatic
 allocation does not guarantee 10–15 GB or measure actual contribution. The target mutual-audit protocol would use randomized byte-offset and nonce
-proofs notarized in PoA blocks; it is not implemented.
+proofs; it is not implemented. Under the storage-economy target audits stay
+off-chain and only daily PoA-signed StorageSettlement payouts become canonical;
+AUTH storage quotas and the onboarding storage credit are replaced by paid leases
+and a 20,000 CYBOU Treasury-funded System Balance start budget.
 When content is deleted by its author (`RevokePublication`), its active state
 record is removed from the active publication register; historical blocks remain, initiating managed purge by compliant storing nodes of
 underlying chunks from local storage.
@@ -200,8 +205,12 @@ underlying chunks from local storage.
 Balance to the Central Authority's spendable Balance (the unique genesis-granted `cybou`
 allocation before claim, and its ordinary claimant Balance afterwards). The DEV
 OnboardingPool begins at 100,000,000 CYBOU and only decreases through AccountCreate.
-There is no independent storage operator market or disk rental scheme; fees support
-network operation and software development. AUTH is excluded from supply.
+Current DEVNET has no storage operator market; fees support network operation and
+software development. AUTH is excluded from supply. The frozen storage-economy
+target adds paid storage: StorageLease rent moves from payer System Balance to
+StorageEscrow and is paid by PoA-signed StorageSettlement to providers with
+verified foreign storage service, while protocol fees still go to the Central
+Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.
 See `18_ECONOMICS_FEES.md`.
 
 ## Simplified implementation boundary

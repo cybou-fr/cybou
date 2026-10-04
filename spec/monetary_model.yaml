@@ -84,3 +84,28 @@ application_content:
   mail_specific_consensus_fee_model: false
   file_specific_consensus_fee_model: false
   generic_root_publication_fee_model: true
+
+storage_economy_target:  # DEC-274..DEC-283; frozen target, not implemented
+  status: frozen_target_new_network_only
+  max_supply: absent
+  onboarding_pool: absent
+  mint: false
+  burn: false
+  genesis_monetary_base: 100000000000
+  genesis_monetary_base_holder: cybou_treasury_allocation
+  conservation: TotalCybou_parent_equals_candidate
+  total_cybou_includes: [unclaimed_genesis_allocation_balances, Balance, SystemBalance, StorageEscrow]
+  onboarding_bonus: 20000
+  onboarding_source: Treasury
+  onboarding_destination: SystemBalance
+  onboarding_origin_transferable_via_storage: false
+  protocol_fees_destination: Treasury
+  storage_rent_destination: StorageEscrow_then_verified_providers
+  storage_rent_provider_percent: 100
+  storage_rate_cybou_per_gib_day_replica: 5
+  storage_billing_unit_bytes: 524288
+  storage_replica_target: 2
+  storage_settlement_period_seconds: 86400
+  lease_refund_destination: SystemBalance
+  stake: false
+  slashing: false

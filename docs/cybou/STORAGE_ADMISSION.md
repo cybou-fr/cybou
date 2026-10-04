@@ -171,3 +171,31 @@ Block finalization synthesizes transaction history into active state (`CybouStat
 - **Object deletion**: Application deletion changes the encrypted catalog; eligible unreferenced own publications may subsequently be author-revoked and finalized.
 - **State compaction**: The active publication entry is removed; historical blocks and their capsules remain.
 - **Local garbage collection**: Compliant peers journal managed purge of chunks no other admitted publication authorizes. Failed unlink retains provider byte accounting and is retried at reopen and maintenance. Revocation frees canonical author quota before physical removal; no hidden-copy erasure is proved.
+
+## Storage-economy target (frozen, not implemented)
+
+DEC-274–DEC-283 replace the AUTH resource ladder storage columns, the onboarding
+credit and automatic allocation:
+
+- **Local capacity**: explicit `V >= 15 GiB`; the ChunkBlobStore is bounded by
+  `V` and finalized provider obligations by `floor(2V/3)`. Nothing is physically
+  partitioned and `V` is not consensus state.
+- **Admission**: finality-first admission additionally requires an active funded
+  StorageLease and an assignment to this provider.
+- **Assignment**: secure random shuffle over eligible Full Nodes (valid recently
+  proven StorageId, reachable, budget available, acceptable recent behaviour),
+  taking the first that accepts, then the next distinct StorageId and payout
+  AccountID. The payer never chooses. No scores, top-k, capacity weighting or
+  storage-node role.
+- **Evidence**: durable obligation, signed StorageReceipt, frequent random-offset
+  audits and rarer full GET with ChunkID recomputation; bounded rolling evidence,
+  off-chain only.
+- **Settlement**: daily PoA-signed StorageSettlement pays verified providers
+  from escrow. Failed audit -> no payment, replica degraded, repair.
+- **Protected**: active publication + active funded lease + two remote
+  obligations at distinct storage/economic identities + fresh evidence;
+  otherwise `Securing`, `Needs renewal` or `Degraded`.
+- **Revocation**: lease CLOSING, final settlement, refund to System Balance,
+  managed purge. No quota exists to free.
+- **Release gates**: concentration simulation (top-1/top-10 share, effective
+  provider count) and Sybil simulation must pass before Beta.

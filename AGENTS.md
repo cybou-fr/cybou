@@ -159,6 +159,54 @@ No:
     BFT
 ```
 
+## Storage economy (frozen target, DEC-274–DEC-283)
+
+```text
+CYBOU STORAGE ECONOMY
+=====================
+
+ONE FULL NODE TYPE.
+Every production Full Node is storage-capable.
+Storage capacity is local policy, not a network role.
+
+Local capacity:
+    V >= 15 GiB, explicit (GUI default 15 GiB; headless --capacity)
+    one content-addressed ChunkBlobStore bounded by V
+    provider obligations <= floor(2V/3); the rest is local reserve
+    V is never consensus state and confers no monetary or storage right
+
+Money:
+    CYBOU is created only by genesis
+    every CYBOU originates from the cybou.cybou Central Treasury allocation
+    no MAX_SUPPLY, no OnboardingPool, no mint, no burn
+    TotalCybou(parent) == TotalCybou(candidate)
+    AccountCreate (PoW kept): Treasury -> 20,000 CYBOU -> new System Balance
+    protocol fees -> Central Treasury
+    storage rent  -> StorageEscrow -> verified providers (100%)
+    onboarding-origin CYBOU never becomes transferable through storage payouts
+
+Storage:
+    StorageLease per publication, 512 KiB billing unit, 2 remote replicas
+    payer never chooses paid providers; randomized assignment, PoA-attested
+    replicas at distinct StorageIds and distinct payout AccountIDs
+    provider revenue only from verified foreign storage service
+    off-chain receipts, audits and full-GET checks; PoA-signed daily
+    StorageSettlement is the only canonical record of service
+    No AUTH value determines storage entitlement
+
+No:
+    storage-node role, provider register, StorageVolume container
+    stake, slashing, auction, variable provider price
+    capacity-weighted or score-ranked provider winners
+    per-audit blockchain records, Reed-Solomon
+```
+
+The current DEVNET still enforces OnboardingPool, the 100B cap and DEC-272 AUTH
+storage quotas. Consensus parts arrive only at a new DEVNET (new Network Root,
+NetworkID and signed genesis) under explicit operator authorization (DEC-283).
+Local capacity, evidence and shadow accounting land first on the current DEVNET.
+AUTH, Validation, AUTH operation tiers and all PoW are unchanged by this work.
+
 ## DEV VPS deployment — migration state
 
 There is no production network.
@@ -215,8 +263,9 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
 - Production `cybou` has no provisioning command or Network Root derivation/signing.
   `cybou-provision` is a separate explicitly built offline tool (`BUILD_PROVISION_TOOL=ON`).
   Creation never overwrites existing private material or public constants; verification never signs.
-- Every production Full Node has a positive local storage allocation. Omitted capacity is
-  automatic; explicit zero is confined to memory-only unit tests. Low disk space rejects
+- Every production Full Node has a positive local storage allocation. Target (DEC-275):
+  explicit capacity `V >= 15 GiB` replaces the current automatic free-space policy;
+  explicit zero is confined to memory-only unit tests. Low disk space rejects
   new admission without changing node type, consensus authority, or mesh participation.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
   `BUILD_TESTS=ON`.
@@ -294,6 +343,8 @@ independent hosts, operators or failure domains. The 1:3 reciprocal baseline
 is a capacity/service objective, not measured proof of contribution: automatic
 local allocation varies with disk space and does not guarantee 10–15 GB.
 Finalized quotas govern entitlement, not evidence of actual remote service.
+The frozen target (DEC-274–DEC-283) replaces quotas with paid leases and
+PoA-settled payouts for verified service; it is not implemented.
 
 Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
@@ -416,7 +467,9 @@ architecture that is absent from higher levels:
   such an operation earns only the flat +1.
 - Authority > 10,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, and NO stake weight.
-- AUTH acts as the anti-spam and resource scaling governor (DEC-272). Block
+- AUTH acts as the anti-spam and resource scaling governor (DEC-272). Its storage
+  quota and largest-publication parts are removed at the storage-economy cutover
+  (DEC-274); operation-rate tiers remain. Block
   execution enforces, per Identity and against the parent finalized AUTH, a tier
   limit of metered operations per block and per epoch, a remote storage quota and a
   largest single publication (file). Quota is counted in 512 KiB chunks of the
@@ -430,10 +483,11 @@ architecture that is absent from higher levels:
   with the exact bytes until finalization and never enters a block.
 - One `.cybou` name per Identity: NameCommit and NameReveal refuse an Identity that
   already owns a name or holds a pending commit.
-- Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB
-  remote publication quota, paired with a target reciprocal 1:3 capacity/service
-  objective. Automatic allocation does not guarantee 10–15 GB or measure actual
-  contribution.
+- Current DEVNET: every newly created Identity receives an immediate Onboarding Trust
+  Credit of 5 GB remote publication quota, paired with a target reciprocal 1:3
+  capacity/service objective. Automatic allocation does not guarantee 10–15 GB or
+  measure actual contribution. Target: a 20,000 CYBOU Treasury-funded System Balance
+  start budget pays storage rent instead (DEC-277).
 - Automatic AUTH penalties require objectively verifiable protocol evidence and
   are not frozen. Signed Validation of an operation that is invalid against its
   stated finalized base is evidence a future penalty rule may use.
@@ -444,7 +498,8 @@ architecture that is absent from higher levels:
 
 - The blockchain is the canonical Notarial Register: it records object publications,
   Merkle roots and recipient capsules. Mutual storage proofs are an unimplemented
-  target. Quotas, allowances,
+  target; per the storage economy they stay off-chain and only PoA-signed
+  StorageSettlement payouts become canonical (DEC-276, DEC-282). Quotas, allowances,
   and admission rights are derived deterministically strictly from PoA-finalized state.
   Local capacity declarations and off-chain vouchers convey zero authority.
 - Mutual Proof of Storage & Uptime: the target is for storing peers to periodically challenge each other
@@ -459,6 +514,8 @@ architecture that is absent from higher levels:
   author's quota; a revoked publication no longer authorizes chunk admission.
 
 ## Economics
+
+Current DEVNET (target in the storage economy section above):
 
 ```text
 MAX_SUPPLY = 100,000,000,000 CYBOU
