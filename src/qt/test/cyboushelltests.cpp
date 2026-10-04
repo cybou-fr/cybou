@@ -674,6 +674,27 @@ void CybouShellTests::contactsComeFromMailAndPayments()
     for (const auto& contact : model.contacts()) names << contact.name;
     QCOMPARE(names, (QStringList{QStringLiteral("carol.cybou"), QStringLiteral("bobby.cybou"),
                                  QStringLiteral("alice.cybou")}));
+
+    const QString own = QString(64, QLatin1Char{'a'});
+    const QString peer = QStringLiteral("1822") + QString(56, QLatin1Char{'b'}) + QStringLiteral("1930");
+    model.setIdentityState(CybouIdentityState::Active, own, 1);
+    CybouMailItem unnamed;
+    unnamed.id = QStringLiteral("unnamed");
+    unnamed.from_address = peer;
+    unnamed.from_name = CybouProduct::shortId(peer);
+    unnamed.to_address = own;
+    unnamed.to_name = CybouProduct::shortId(own);
+    unnamed.time = now.addSecs(1);
+    model.setMailItems({received, sent, draft, unnamed});
+    QCOMPARE(model.contacts().first().name, peer);
+    QCOMPARE(model.contacts().first().display_name, CybouProduct::shortId(peer));
+    for (const auto& contact : model.contacts()) QVERIFY(contact.name != own);
+    MailCompose composer{&model};
+    CybouMailItem note;
+    note.to_name = model.contacts().first().name;
+    composer.start(note);
+    QCOMPARE(composer.findChild<QLineEdit*>(QStringLiteral("recipientEdit"))->text(), CybouProduct::shortId(peer));
+    QCOMPARE(composer.snapshotForRebuild().to_name, peer);
 }
 
 void CybouShellTests::walletLocksBalanceIntoSystemBalance()

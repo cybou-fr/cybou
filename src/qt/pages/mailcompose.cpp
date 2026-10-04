@@ -98,7 +98,9 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_completer->setCompletionMode(QCompleter::PopupCompletion);
     m_to->setCompleter(m_completer);
     connect(m_completer, qOverload<const QModelIndex&>(&QCompleter::activated), this, [this](const QModelIndex& index) {
-        m_to->setText(index.data(kNameRole).toString());
+        const QString address = index.data(kNameRole).toString();
+        m_reply_address = QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(address).hasMatch() ? address : QString{};
+        m_to->setText(m_reply_address.isEmpty() ? address : CybouProduct::shortId(address));
         updateGates();
     });
 
@@ -196,8 +198,10 @@ void MailCompose::rebuildCompleter()
     auto* model = static_cast<QStandardItemModel*>(m_completer->model());
     model->clear();
     for (const auto& contact : m_model->contacts()) {
-        auto* item = new QStandardItem{QStringLiteral("%1  ·  %2%3").arg(contact.display_name, contact.name,
-            contact.verified ? tr("  ·  Verified identity") : QString{})};
+        const QString label = contact.name.endsWith(QStringLiteral(".cybou")) ? contact.name : contact.display_name;
+        const QString text = contact.name.endsWith(QStringLiteral(".cybou"))
+            ? QStringLiteral("%1  ·  %2").arg(contact.display_name, label) : label;
+        auto* item = new QStandardItem{text + (contact.verified ? tr("  ·  Verified identity") : QString{})};
         item->setData(contact.name, kNameRole);
         model->appendRow(item);
     }

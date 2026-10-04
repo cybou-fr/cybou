@@ -943,19 +943,22 @@ std::optional<quint64> CybouDesktopModel::supportMailFee() const
 void CybouDesktopModel::rebuildContacts()
 {
     if (m_fixture_mode) return;
-    // Only finalized .cybou names appear here: senders and recipients come from
-    // finalized publications, payment counterparties from the name registry.
+    // Mail counterparties retain full routing addresses even without a name.
     QHash<QString, QDateTime> last_seen;
-    const auto seen = [&](const QString& raw, const QDateTime& when) {
-        const QString name = raw.trimmed().toLower();
-        if (!name.endsWith(QStringLiteral(".cybou")) || name == m_status.primary_name.toLower()) return;
+    const auto seen = [&](const QString& raw, const QDateTime& when, const QString& address = QString{}) {
+        QString name = raw.trimmed().toLower();
+        if (name == m_status.primary_name.toLower() || (!address.isEmpty() && address == m_status.account_id)) return;
+        if (!name.endsWith(QStringLiteral(".cybou"))) {
+            name = address.toLower();
+            if (!QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(name).hasMatch()) return;
+        }
         auto& latest = last_seen[name];
         if (!latest.isValid() || (when.isValid() && when > latest)) latest = when;
     };
     for (const auto& mail : m_mail) {
         if (mail.draft) continue;
-        seen(mail.from_name, mail.time);
-        seen(mail.to_name, mail.time);
+        seen(mail.from_name, mail.time, mail.from_address);
+        seen(mail.to_name, mail.time, mail.to_address);
     }
     for (const auto& entry : m_wallet_entries) {
         if (entry.kind == CybouWalletEntryKind::Sent || entry.kind == CybouWalletEntryKind::Received) {
@@ -979,7 +982,7 @@ void CybouDesktopModel::rebuildContacts()
         contacts.append({tr("CYBOU Support"), support, true});
     }
     for (const auto& [name, when] : ordered) {
-        if (name != support) contacts.append({name.chopped(6), name, true});
+        if (name != support) contacts.append({name.endsWith(QStringLiteral(".cybou")) ? name.chopped(6) : CybouProduct::shortId(name), name, true});
     }
     if (contacts.size() == m_contacts.size() && std::equal(contacts.begin(), contacts.end(), m_contacts.begin(),
             [](const CybouContact& a, const CybouContact& b) { return a.name == b.name; })) return;

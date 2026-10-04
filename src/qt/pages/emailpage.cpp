@@ -825,8 +825,9 @@ void EmailPage::rebuildContacts()
         button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         button->setIcon(QIcon{avatarPixmap(contact.name.left(1).toUpper(), PeerColor(contact.name), 22)});
         button->setIconSize({22, 22});
-        button->setText(contact.name);
-        button->setToolTip(tr("Write to %1").arg(contact.name));
+        const QString label = contact.name.endsWith(QStringLiteral(".cybou")) ? contact.name : contact.display_name;
+        button->setText(label);
+        button->setToolTip(tr("Write to %1").arg(label));
         button->setAutoRaise(true);
         button->setCursor(Qt::PointingHandCursor);
         button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
