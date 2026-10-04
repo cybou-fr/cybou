@@ -213,11 +213,13 @@ int main(int argc,char* argv[]) {
                 "cybou-loadgen --profile funder --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
                 " [--funder-name battlefunder] creates the funder Identity, claims its name and prints its balance;\n"
                 " send it CYBOU once from the Central Authority desktop.\n"
+                " [--pay-accounts FILE --fund-each N] then tops up every listed AccountID (hex per line) to N.\n"
+                "Every load run writes DATA-DIR/accounts.txt with its synthetic AccountIDs.\n"
                 "Financial profiles require pre-funded synthetic vaults; onboarding funds only System Balance.\n";
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name","pay-accounts"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
@@ -260,6 +262,34 @@ int main(int argc,char* argv[]) {
                 if (!claimed.success) throw std::runtime_error("funder name claim failed: "+claimed.message);
             }
             cybou::crypto::CleanseMemory(password.data(),password.size());
+            if (opts.Has("pay-accounts")) {
+                const auto fund=cybou::cli::Number(opts.Require("fund-each"),1,1'000'000'000);
+                std::ifstream list{opts.Get("pay-accounts")};
+                if (!list) throw std::runtime_error("cannot read --pay-accounts");
+                auto& runtime=funder.node->Runtime();
+                for (std::string line; std::getline(list,line);) {
+                    while (!line.empty() && (line.back()=='\r' || line.back()==' ')) line.pop_back();
+                    if (line.empty()) continue;
+                    const auto hash=cybou::Hash256::FromHex(line);
+                    if (!hash) throw std::runtime_error("invalid AccountID: "+line);
+                    const cybou::AccountId account{*hash};
+                    const auto deadline=Clock::now()+180s;
+                    // The account must be finalized before it can be paid.
+                    while (!stop && !runtime.GetAccountState(account)) {
+                        if (Clock::now()>deadline) throw std::runtime_error("account not finalized: "+line);
+                        std::this_thread::sleep_for(200ms);
+                    }
+                    const auto have=runtime.GetAccountState(account)->balance;
+                    if (have>=fund) continue;
+                    const auto result=funder.wallet->SendPayment(account,fund-have);
+                    if (!result) throw std::runtime_error("funding payment failed; send CYBOU to the funder first");
+                    while (!stop && runtime.GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED) {
+                        if (Clock::now()>deadline) throw std::runtime_error("funding finality timeout");
+                        std::this_thread::sleep_for(100ms);
+                    }
+                    std::cout << "funded " << line << " +" << fund-have << '\n';
+                }
+            }
             const auto [balance,system_balance]=funder.wallet->GetBalances();
             std::cout << "funder=" << label << ".cybou account=" << funder.identity->GetAccountId()->Value().GetHex()
                       << " balance=" << balance << " system_balance=" << system_balance << '\n';
@@ -271,6 +301,10 @@ int main(int argc,char* argv[]) {
         for (uint64_t i=0;i<count && !stop;++i) clients.push_back(std::make_unique<Client>(*net,std::filesystem::path{opts.Require("data-dir")}/("identity-"+std::to_string(i)),peer,password,target,profile=="recovery"));
         cybou::crypto::CleanseMemory(password.data(),password.size());
         if (clients.size()!=count) return 1;
+        {
+            std::ofstream accounts{std::filesystem::path{opts.Require("data-dir")}/"accounts.txt"};
+            for (const auto& client : clients) accounts << client->identity->GetAccountId()->Value().GetHex() << '\n';
+        }
         const auto accounts_deadline=std::chrono::steady_clock::now()+120s;
         bool accounts_ready=false;
         while (!stop && !accounts_ready) {
