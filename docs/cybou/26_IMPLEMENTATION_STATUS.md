@@ -66,8 +66,8 @@ implemented: aggregation of off-chain evidence into settlements, payout
 bindings, lease renewal UX. Because the state and genesis formats changed, the
 previous compiled DEVNET was retired. M7 steps 1–3 are done: main compiles the
 new storage-economy DEVNET (NetworkBinding `6d202ccf…2d97`), `verify-devnet`
-passes and the compiled-DEVNET tests are restored. The DEV VPS and desktops
-still run the retired network until their cutover.
+passes and the compiled-DEVNET tests are restored. The DEV VPS runs the new
+network since 2026-10-04 (`--capacity 40GiB`); desktops cut over on demand.
 
 M6 adversarial evidence (`cybou_resource_limits_tests`,
 `cybou_storage_placement_simulation_tests`):

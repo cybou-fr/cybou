@@ -2,7 +2,11 @@
 
 Status: steps 1–3 executed 2026-10-04 (NetworkBinding `6d202ccf…2d97`, genesis
 anchor `e0d3d6ee…c25f`, `verify-devnet` passed, phrases kept, Network Root generated
-on a networked machine by operator decision); steps 4–6 pending. VPS capacity: 40 GiB.
+on a networked machine by operator decision). Step 4 executed 2026-10-04: the VPS
+runs `--capacity 40GiB` at height 0 on the new genesis, SPKI pin unchanged, Geo
+data carried over, old state archived under
+`/var/lib/cybou/node-retired-20261004-pre-storage-economy`, operator CLI acceptance
+passed. Steps 5–6 (Central Authority desktop, live acceptance) pending.
 Every step that creates keys, signs
 genesis, touches `/private/`, commits constants or changes the DEV VPS needs the
 operator's explicit authorization at the time it is run (`AGENTS.md`, DEC-283).

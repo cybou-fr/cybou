@@ -69,6 +69,6 @@ features and durability rather than reopening architecture cleanup.
   StorageEscrow, StorageSettlement, AUTH storage quota removal.
 - **M6 Adversarial tests** (implemented; per-account selection added; Identity-splitting price open): monetary conservation, payout abuse, storage failure,
   concentration and Sybil simulations as release gates.
-- **M7 New DEVNET** (new genesis provisioned and compiled; VPS and desktop cutover pending): new Network Root, NetworkID and signed genesis; VPS cutover;
+- **M7 New DEVNET** (genesis provisioned, VPS cut over; desktop and live acceptance pending): new Network Root, NetworkID and signed genesis; VPS cutover;
   only under explicit operator authorization.
 - **M8 Product Beta**: GUI earnings, cost, lease and escrow; measured economics.

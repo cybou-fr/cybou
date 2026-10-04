@@ -203,7 +203,7 @@ No:
 
 Status: M1–M6 are implemented and main compiles the new storage-economy DEVNET
 (NetworkBinding `6d202ccf…2d97`, provisioned 2026-10-04, M7 steps 1–3). The DEV
-VPS still runs the retired DEVNET until its cutover (runbook step 4). AUTH,
+VPS runs it since its 2026-10-04 cutover; desktops cut over on demand. AUTH,
 Validation, AUTH operation tiers and all PoW are unchanged by this work.
 
 ## DEV VPS deployment — migration state
@@ -211,11 +211,10 @@ Validation, AUTH operation tiers and all PoW are unchanged by this work.
 There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
-  `cybou node run` on the immutable current DEVNET, with state under
-  `/var/lib/cybou/node/state` and the pre-storage-economy binary (automatic
-  storage allocation) on the retired DEVNET. Its M7 cutover (runbook
-  `docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md` step 4, `--capacity 40GiB`) is pending.
-  The preceding network domain is retired under `/var/lib/cybou/node-retired-20261003-de-version`;
+  `cybou node run --capacity 40GiB` on the storage-economy DEVNET (cut over
+  2026-10-04), with state under `/var/lib/cybou/node/state`. The pre-storage-economy
+  DEVNET state is retired under `/var/lib/cybou/node-retired-20261004-pre-storage-economy`;
+  the domain before it under `/var/lib/cybou/node-retired-20261003-de-version`;
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.
   TLS files remain under `/etc/cybou-bootstrap/tls/` for transport identity only.
