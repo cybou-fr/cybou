@@ -430,6 +430,8 @@ def cmd_cleanup(_: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    # The report uses non-ASCII characters; a Windows console code page cannot print them.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
     funder = sub.add_parser("funder")
