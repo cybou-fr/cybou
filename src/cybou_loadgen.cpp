@@ -28,6 +28,7 @@ namespace {
 std::atomic_bool stop{false};
 void Stop(int) { stop=true; }
 struct Client {
+    std::atomic_bool caught_up_known_peers{false};
     std::unique_ptr<cybou::CybouNodeService> node;
     std::unique_ptr<cybou::CybouIdentityService> identity;
     std::unique_ptr<cybou::PrivateApplicationStore> db;
@@ -56,20 +57,14 @@ struct Client {
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime=std::move(config),.genesis=net.genesis_state});
         node->Start();
-        node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
+        node->StartNetwork({.sync_interval=500ms},[&](const auto& result,const auto&,size_t){
+            caught_up_known_peers.store(result.IsConnected() && result.caught_up_with_known_peers);
+            return true;
+        });
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;
-        while (!stop && (!node->Runtime().ConnectedPeerCount() || !node->Runtime().GetFinalizedHeight().value_or(0))) {
+        while (!stop && !caught_up_known_peers.load()) {
             if (std::chrono::steady_clock::now()>ready_deadline) throw std::runtime_error("synthetic client initial sync timeout");
             std::this_thread::sleep_for(100ms);
-        }
-        // Height > 0 is not synced: AccountCreate work is stamped from the local
-        // height, so wait until sync only follows new blocks (<=2 per 3 s).
-        for (auto last=node->Runtime().GetFinalizedHeight().value_or(0); !stop;) {
-            if (std::chrono::steady_clock::now()>ready_deadline+600s) throw std::runtime_error("synthetic client initial sync timeout");
-            std::this_thread::sleep_for(3s);
-            const auto now=node->Runtime().GetFinalizedHeight().value_or(0);
-            if (now>0 && now-last<=2) break;
-            last=now;
         }
         if (stop) throw std::runtime_error("synthetic client startup interrupted");
         identity=std::make_unique<cybou::CybouIdentityService>(node->Runtime(),dir/"identity.vault");
