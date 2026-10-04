@@ -105,10 +105,10 @@ std::optional<std::vector<unsigned char>> Download(CybouServiceTestFixture& fixt
     return out;
 }
 
-/** Drops every locally cached chunk, so reads must come from remote providers. */
+/** Drops the specified locally cached chunks, so their reads require providers. */
 void EvictLocal(CybouServiceTestFixture& fixture, const std::vector<cybou::ChunkId>& chunks)
 {
-    for (const auto& id : chunks) fixture.runtime->GetChunkBlobStore().Remove(id);
+    for (const auto& id : chunks) BOOST_REQUIRE(fixture.runtime->GetChunkBlobStore().Remove(id));
 }
 
 cybou::MailMessage Message(const cybou::AccountId& to, const std::string& subject, const std::string& body)
@@ -330,7 +330,7 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     BOOST_REQUIRE(owner.storage->GetDurability(upload_operation));
     BOOST_CHECK(owner.storage->GetDurability(upload_operation)->state == cybou::DurabilityState::PROTECTED);
 
-    // Restart with no local DB and no local chunks: rebuild, then download.
+    // Restart with no local Application DB: rebuild the catalog and placement.
     owner.DestroyApplicationDb(fixture, network);
     BOOST_CHECK(owner.application->Scan().Complete());
     const auto own_publications = owner.db->Get("storage/owned-publications");
@@ -446,7 +446,26 @@ BOOST_AUTO_TEST_CASE(rotation_bridge_restores_pre_rotation_content_on_clean_mach
     BOOST_REQUIRE(owner.publication->ProcessDurability(*owner.storage).front().second.phase ==
         cybou::PublicationJobPhase::PROTECTED);
 
-    // New mnemonic: the bridge must be finalized, durable and verified first.
+    // A second independent publication must survive deletion of the first.
+    const auto upload_operation = owner.publication->GetJob("files-upload")->operation_id;
+    const auto upload_placement = owner.storage->DescribePlacement(upload_operation);
+    BOOST_REQUIRE(upload_placement);
+    const auto survivor_id = *cybou::NewPrivateItemId();
+    const std::vector<unsigned char> survivor_bytes(700 * 1024, 0x6b);
+    cybou::FilesMutationBatch survivor_upload;
+    survivor_upload.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, survivor_id,
+        cybou::FileItem{.item_id = survivor_id, .kind = cybou::FileItemKind::FILE, .name = "keep.bin"}});
+    std::vector<std::pair<std::size_t, cybou::NewContent>> survivor_content;
+    survivor_content.emplace_back(0, cybou::NewContent{BytesSource(survivor_bytes)});
+    BOOST_REQUIRE(owner.publication->PublishFiles("files-keep", survivor_upload, std::move(survivor_content)).phase ==
+        cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    for (const auto& [id, status] : owner.publication->ProcessDurability(*owner.storage)) {
+        BOOST_REQUIRE_MESSAGE(status.phase == cybou::PublicationJobPhase::PROTECTED, id);
+    }
+
+    // Both old-key publications need the same bridge after rotation. The bridge
+    // must be finalized, durable and verified before changing the mnemonic.
     auto next_entropy = cybou::GenerateRecoveryEntropy();
     BOOST_REQUIRE(next_entropy);
     const auto next_words = cybou::EncodeRecoveryWords(*next_entropy);
@@ -473,27 +492,112 @@ BOOST_AUTO_TEST_CASE(rotation_bridge_restores_pre_rotation_content_on_clean_mach
     network.Sync();
     const auto account = owner.Account();
 
-    // Machine B: fresh install, new mnemonic only, no local DB and no cached content.
+    // Machine B: separate full node, finalized history only, no cached chunks.
+    cybou::CybouNodeRuntime fresh_runtime{{.network_genesis = fixture.definition,
+        .data_dir = fixture.directory / "machine-b-node", .memory_only = true,
+        .wipe_data = true, .storage_capacity_bytes = 64ULL << 20, .operation_work_bits = 0}};
+    BOOST_REQUIRE(fresh_runtime.InitializeGenesis(fixture.genesis));
+    const auto finalized_height = fixture.runtime->GetFinalizedHeight().value();
+    for (std::uint64_t h{1}; h <= finalized_height; ++h) {
+        const auto block = fixture.runtime->GetBlockAtHeight(h);
+        BOOST_REQUIRE(block);
+        BOOST_REQUIRE(fresh_runtime.CommitBlock(*block));
+    }
+    BOOST_REQUIRE_EQUAL(fresh_runtime.GetChunkBlobStore().UsedBytes(), 0U);
+    // New mnemonic only: no original vault, coordinator or Application DB.
     const auto restored_path = fixture.directory / "machine-b.vault";
     fixture.vaults.push_back(restored_path);
-    cybou::CybouIdentityService restored{*fixture.runtime, restored_path};
+    cybou::CybouIdentityService restored{fresh_runtime, restored_path};
     const auto recovered = restored.RestoreIdentitySync(next_words, "another correct horse battery staple");
     BOOST_REQUIRE_MESSAGE(recovered.success, recovered.error_message);
     BOOST_CHECK(*restored.GetAccountId() == account);
     cybou::crypto::CleanseMemory(next_entropy->data(), next_entropy->size());
 
     cybou::PrivateApplicationStore db{restored.GetKeyStore(), fixture.directory / "machine-b-app"};
-    cybou::StorageService storage{*fixture.runtime, network, db, cybou::BETA_REMOTE_REPLICA_TARGET};
-    cybou::ApplicationService application{*fixture.runtime, restored.GetKeyStore(), db, storage};
+    cybou::StorageService storage{fresh_runtime, network, db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    cybou::ApplicationService application{fresh_runtime, restored.GetKeyStore(), db, storage};
+    network.SetAllOffline(true);
+    const auto unavailable = application.Scan();
+    BOOST_CHECK(!unavailable.Complete());
+    BOOST_CHECK(!application.GetFile(file_id));
+    BOOST_CHECK(application.RecoveryBridges().empty());
+    BOOST_CHECK_EQUAL(fresh_runtime.GetChunkBlobStore().UsedBytes(), 0U);
+    network.SetAllOffline(false);
     const auto progress = application.Scan();
     BOOST_CHECK(progress.Complete());
     BOOST_REQUIRE_EQUAL(application.RecoveryBridges().size(), 1U);
     const auto file = application.GetFile(file_id);
     BOOST_REQUIRE_MESSAGE(file, "pre-rotation file was not recovered");
-    EvictLocal(fixture, {*file->item.root_chunk_id});
+    BOOST_REQUIRE(file->item.root_chunk_id && file->item.content_key);
     const auto downloaded = Download(fixture, storage, *file->item.root_chunk_id, *file->item.content_key);
     BOOST_REQUIRE(downloaded);
     BOOST_CHECK(*downloaded == original);
+    BOOST_CHECK_EQUAL(fresh_runtime.GetFinalizedHeight().value(), finalized_height);
+    BOOST_CHECK_EQUAL(fixture.runtime->GetFinalizedHeight().value(), finalized_height);
+
+    // Author deletion and finalized revocation remove one object, not the bridge
+    // or the unrelated live object encrypted under the same historical KEM key.
+    // Rotation changes the Application DB encryption key: rebuild its contents
+    // instead of continuing to use the old-key DB from machine A.
+    owner.DestroyApplicationDb(fixture, network);
+    BOOST_REQUIRE(owner.application->Scan().Complete());
+    cybou::FilesMutationBatch deletion;
+    deletion.mutations.push_back({cybou::FileMutationKind::DELETE_ITEM, file_id, std::nullopt});
+    const auto delete_job = owner.publication->PublishFiles("files-delete", deletion);
+    BOOST_REQUIRE_MESSAGE(delete_job.phase == cybou::PublicationJobPhase::WAITING_FINALITY, delete_job.error);
+    Finalize(fixture, network);
+    for (const auto& [id, status] : owner.publication->ProcessDurability(*owner.storage)) {
+        BOOST_REQUIRE_MESSAGE(status.phase == cybou::PublicationJobPhase::PROTECTED, id);
+    }
+    BOOST_REQUIRE(owner.application->Scan().Complete());
+    BOOST_CHECK(!owner.application->GetFile(file_id));
+    // The original local publication job is gone; authorize revocation from
+    // the restored Identity directly, as the protocol allows.
+    const cybou::RevokePublicationPayload revoke_payload{upload_operation};
+    const auto revoke_commitment = cybou::ComputeRevokePublicationPayloadCommitment(revoke_payload);
+    BOOST_REQUIRE(revoke_commitment);
+    const auto revoking = owner.coordinator->Execute(cybou::IdentityOperationKind::REVOKE_PUBLICATION,
+        *revoke_commitment, [&](const cybou::IdentityOperationAuthorization& authorization)
+            -> std::optional<cybou::ProtocolOperation> {
+            return cybou::ProtocolOperation{cybou::AuthorizedRevokePublication{authorization, revoke_payload}};
+        });
+    BOOST_REQUIRE_MESSAGE(revoking, revoking.error);
+    Finalize(fixture, network);
+    BOOST_CHECK(!fixture.runtime->IsPublicationActive(upload_operation));
+    for (const auto& endpoint : network.Endpoints()) {
+        for (const auto& leaf : upload_placement->leaves) BOOST_CHECK(!network.Get(endpoint, leaf));
+    }
+
+    cybou::CybouNodeRuntime after_delete{{.network_genesis = fixture.definition,
+        .data_dir = fixture.directory / "machine-c-node", .memory_only = true,
+        .wipe_data = true, .storage_capacity_bytes = 64ULL << 20, .operation_work_bits = 0}};
+    BOOST_REQUIRE(after_delete.InitializeGenesis(fixture.genesis));
+    const auto deletion_height = fixture.runtime->GetFinalizedHeight().value();
+    for (std::uint64_t h{1}; h <= deletion_height; ++h) {
+        const auto block = fixture.runtime->GetBlockAtHeight(h);
+        BOOST_REQUIRE(block);
+        BOOST_REQUIRE(after_delete.CommitBlock(*block));
+    }
+    BOOST_REQUIRE_EQUAL(after_delete.GetChunkBlobStore().UsedBytes(), 0U);
+    const auto third_vault = fixture.directory / "machine-c.vault";
+    fixture.vaults.push_back(third_vault);
+    cybou::CybouIdentityService third_identity{after_delete, third_vault};
+    const auto third_restore = third_identity.RestoreIdentitySync(next_words, "third correct horse battery staple");
+    BOOST_REQUIRE_MESSAGE(third_restore.success, third_restore.error_message);
+    cybou::PrivateApplicationStore third_db{third_identity.GetKeyStore(), fixture.directory / "machine-c-app"};
+    cybou::StorageService third_storage{after_delete, network, third_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    cybou::ApplicationService third_app{after_delete, third_identity.GetKeyStore(), third_db, third_storage};
+    BOOST_REQUIRE(third_app.Scan().Complete());
+    BOOST_CHECK(!third_app.GetFile(file_id));
+    BOOST_REQUIRE_EQUAL(third_app.RecoveryBridges().size(), 1U);
+    const auto survivor = third_app.GetFile(survivor_id);
+    BOOST_REQUIRE(survivor);
+    BOOST_REQUIRE(survivor->item.root_chunk_id && survivor->item.content_key);
+    const auto survivor_download = Download(fixture, third_storage, *survivor->item.root_chunk_id, *survivor->item.content_key);
+    BOOST_REQUIRE(survivor_download);
+    BOOST_CHECK(*survivor_download == survivor_bytes);
+    BOOST_CHECK_EQUAL(after_delete.GetFinalizedHeight().value(), deletion_height);
+    BOOST_CHECK_EQUAL(fixture.runtime->GetFinalizedHeight().value(), deletion_height);
 }
 
 BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)

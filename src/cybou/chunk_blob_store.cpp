@@ -323,15 +323,16 @@ bool ChunkBlobStore::Remove(const ChunkId& id)
     std::lock_guard lock{m_mutex};
     if (m_memory_only) {
         const auto it = m_memory_blobs.find(id);
-        if (it == m_memory_blobs.end()) return false;
+        if (it == m_memory_blobs.end()) return true;
         m_used_bytes -= it->second.size();
         m_memory_blobs.erase(it);
         return true;
     }
     try {
         const auto path = BlobPath(m_root, id);
-        if (!std::filesystem::exists(path) || std::filesystem::is_symlink(path) ||
-            !std::filesystem::is_regular_file(path)) return false;
+        const auto status = std::filesystem::symlink_status(path);
+        if (status.type() == std::filesystem::file_type::not_found) return true;
+        if (!std::filesystem::is_regular_file(status)) return false;
         const auto size = std::filesystem::file_size(path);
         if (size > m_used_bytes || !std::filesystem::remove(path)) return false;
         m_used_bytes -= size;

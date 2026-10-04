@@ -17,9 +17,12 @@ experimental software, not a public mail or cloud-storage service.
   admission proofs, and CYBOU P2P block/chunk transport.
 - Mail and Files are not complete public services. Publication construction,
   discovery/indexing, retrieval, clean-machine restore, provider selection,
-  measured replication, audit and repair are integrated. Sustained soak and
+  replica tracking, GET/hash availability checks and repair attempts are integrated. Sustained soak and
   clean-install desktop Beta acceptance remain open. DEV requires one remote
-  replica; Beta requires two independent remote replicas; local cache is excluded.
+  replica; Beta targets two independent remote replicas; local cache is excluded.
+  Current placement distinguishes proven StorageIds, which do not establish
+  independent disks, hosts or operators. A successful GET/hash check establishes
+  availability of the checked chunk at that time, not continuous storage.
 - DEV pins the X-Wing / HPKE IETF draft-05 profile. This is DEV-only and is not
   an external security audit or production guarantee.
 
@@ -41,15 +44,23 @@ experimental software, not a public mail or cloud-storage service.
   operation, PoA-signed GRANT/BURN adjustments) and is never transferred. Every full node executes
   every candidate; identities with AUTH > 10,000,000 may add Validation signatures as
   evidence only. PoA re-executes everything and alone finalizes.
-- Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots,
-  recipient capsules, and mutual storage proofs. Storage quotas and admission eligibility
+- Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots
+  and recipient capsules. Mutual storage-proof notarization is a target, not implemented.
+  Storage quotas and admission eligibility
   are derived deterministically from finalized state; local declarations convey zero authority.
 - Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB remote
-  network storage, backed by the reciprocal 1:3 physical storage baseline (~10–15 GB local storage).
+  network storage, with a reciprocal 1:3 physical storage target (~10–15 GB local allocation).
+  Allocation does not prove actual reciprocal storage service.
 - Storage audit primitives (`StorageAuditChallenge`, `CreateStorageAuditProof`,
   `VerifyStorageAuditProof`) verify stored chunks via randomized offset and nonce proofs;
-  network periodic audit relay and block notarization are target architecture in development.
-  Publication revocation purges chunks locally.
+  network periodic audit relay and block notarization are not implemented.
+  Operational StorageService checks use full-chunk GET and BLAKE3 verification,
+  not that challenge-response primitive. Repair requires a valid surviving source
+  and an available admitting provider.
+  Finalized revocation stops new admission; compliant providers attempt managed
+  purge of chunks no other publication authorizes. Historical capsules remain:
+  local key deletion does not establish per-object crypto-erasure or remove
+  copies already retained by recipients.
   100% of protocol fees go to Central Authority for network maintenance and development.
 - Public P2P admission is France-only in production and DEV (inbound and outbound)
   using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local

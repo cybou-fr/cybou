@@ -88,7 +88,7 @@ public:
     bool Has(const ChunkId& id) const;
     /// \brief Удаляет blob после снятия всех локальных и provider-обязательств.
     /// \param id ChunkId удаляемого blob.
-    /// \return \c true, если локальный blob действительно удалён.
+    /// \return \c true, если локальный blob удалён или уже отсутствует.
     /// \pre Вызывающая сторона уже проверила, что blob не удерживается retention
     /// и не admit-нут в FinalizedChunkStore.
     /// \post При успехе `Has(id) == false`.

@@ -45,12 +45,17 @@ service d'un réseau privé d'entreprise.
   strictement de l'état finalisé par le PoA (aucune déclaration locale ni voucher
   hors-chaîne ne confère d'autorité). Chaque identité reçoit un crédit de confiance
   d'accueil immédiat de 5 Go de stockage réseau, adossé à une obligation physique
-  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs). Le mécanisme
+  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs).
+  L'allocation locale ne prouve pas une contribution effective de stockage 1:3.
+  Les contrôles opérationnels relisent les fragments via GET et vérifient BLAKE3 ;
+  la réparation est tentée depuis une copie valide vers un fournisseur disponible. Le mécanisme
   cryptographique d'audit de stockage (`StorageAuditChallenge`, `CreateStorageAuditProof`,
   `VerifyStorageAuditProof`) est implémenté ; le protocole réseau d'audit périodique
-  et sa notarisation sont en cours de développement. Lors de la révocation
-  d'un objet (`RevokePublication`), les blocs de données associés sont immédiatement
-  purgés par les nœuds hébergeurs. 100% des commissions de protocole reviennent à
+  et sa notarisation ne sont pas implémentés. Lors de la révocation finalisée
+  d'un objet (`RevokePublication`), les nœuds conformes tentent de purger les fragments
+  qu'aucune autre publication n'autorise. Cela ne prouve ni la disparition de copies
+  cachées ni la destruction des clés récupérables via les capsules historiques.
+  100% des commissions de protocole reviennent à
   l'opérateur pour la maintenance et le développement du réseau.
 - **Transport P2P.** CYBOU P2P utilise TLS 1.3 avec l'échange hybride
   `X25519MLKEM768`. Chaque nœud complet implémente le même protocole. L’identité de stockage
@@ -78,6 +83,9 @@ Les vues Mail et Files sont conservées dans une base applicative chiffrée
 propre à chaque identité et peuvent être reconstruites à partir des publications
 finalisées et des fournisseurs. Une copie locale en cache n'est pas comptée
 comme réplique distante.
+Le code distingue les fournisseurs par leur StorageId prouvé : des clés distinctes
+ne prouvent pas des disques, machines ou opérateurs indépendants. La cible Beta
+de deux répliques distantes indépendantes reste à vérifier au-delà de ce comptage.
 
 ## État du code
 

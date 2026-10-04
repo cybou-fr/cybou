@@ -11,9 +11,6 @@
 #include <cybou/secret_file.h>
 #include <cybou/hex.h>
 
-#include <openssl/rand.h>
-
-#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -64,18 +61,6 @@ std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t inde
     return ss.str();
 }
 
-/// \brief Генерирует ненулевой stable random AccountID.
-std::optional<AccountId> GenerateRandomAccountId()
-{
-    std::array<unsigned char, 32> acc_bytes{};
-    do {
-        if (RAND_bytes(acc_bytes.data(), static_cast<int>(acc_bytes.size())) != 1) {
-            return std::nullopt;
-        }
-    } while (std::all_of(acc_bytes.begin(), acc_bytes.end(), [](unsigned char b){ return b == 0; }));
-    return AccountId::FromBytes(acc_bytes);
-}
-
 } // namespace
 
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
@@ -102,12 +87,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
         if (!cybou_entropy) return std::nullopt;
         res.cybou_entropy = *cybou_entropy;
     }
-    // Stable non-zero random AccountID (DEC-165): AccountID intentionally does
-    // not derive from mnemonic material, so network identity and account naming
-    // stay decoupled; it is created upon initial network onboarding.
-    auto parsed_acc = GenerateRandomAccountId();
-    if (!parsed_acc) return std::nullopt;
-    res.cybou_account_id = *parsed_acc;
+    // AccountID is generated only during online Identity onboarding.
     res.cybou_words = EncodeRecoveryWords(res.cybou_entropy);
 
     auto cybou_rec = DeriveIdentityPublicKey(res.cybou_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
@@ -138,11 +118,9 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
     // 2b. bootstrap Identity: an ordinary Identity for the bootstrap locator's
     // operator. Its AUTH is a genesis decision, never a property of the role.
     auto bootstrap_entropy = GenerateRecoveryEntropy();
-    auto bootstrap_acc = GenerateRandomAccountId();
-    if (!bootstrap_entropy || !bootstrap_acc) return std::nullopt;
+    if (!bootstrap_entropy) return std::nullopt;
     res.bootstrap_entropy = *bootstrap_entropy;
     res.bootstrap_words = EncodeRecoveryWords(res.bootstrap_entropy);
-    res.bootstrap_account_id = *bootstrap_acc;
     const auto bootstrap_rec = DeriveIdentityPublicKey(res.bootstrap_entropy, IdentityKeyPurpose::RECOVERY_ROOT);
     const auto bootstrap_rec_id = bootstrap_rec ? ComputeRecoveryKeyId(*bootstrap_rec) : std::nullopt;
     if (!bootstrap_rec_id || *bootstrap_rec_id == res.cybou_recovery_key_id) return std::nullopt;
@@ -290,7 +268,6 @@ bool ProvisionDevnet(
            << "MNEMONIC_PHRASE:\n" << JoinWords(prov->cybou_words) << "\n\n"
            << "MNEMONIC_WORDS:\n" << FormatWordsNumbered(prov->cybou_words) << '\n'
            << "CYBOU_SEED_HEX: " << cybou::HexEncode(prov->cybou_entropy) << '\n'
-           << "ACCOUNT_ID_HEX: " << prov->cybou_account_id.Value().GetHex() << '\n'
            << "RECOVERY_KEY_ID_HEX: " << cybou::HexEncode(prov->cybou_recovery_key_id) << '\n'
            << "POA_FINALIZER_KEY_ID_HEX: " << cybou::HexEncode(prov->cybou_poa_key_id) << '\n'
            << "POA_ED25519_HEX: " << cybou::HexEncode(prov->cybou_poa_pub.ed25519) << '\n'
@@ -306,7 +283,6 @@ bool ProvisionDevnet(
            << "MNEMONIC_PHRASE:\n" << JoinWords(prov->bootstrap_words) << "\n\n"
            << "MNEMONIC_WORDS:\n" << FormatWordsNumbered(prov->bootstrap_words) << '\n'
            << "BOOTSTRAP_SEED_HEX: " << cybou::HexEncode(prov->bootstrap_entropy) << '\n'
-           << "ACCOUNT_ID_HEX: " << prov->bootstrap_account_id.Value().GetHex() << '\n'
            << "RECOVERY_KEY_ID_HEX: " << cybou::HexEncode(prov->bootstrap_recovery_key_id) << '\n';
         if (!write_secret("bootstrap_identity_secret.txt", ss.str())) return false;
     }
@@ -320,10 +296,8 @@ bool ProvisionDevnet(
            << "Network Public Key (NetworkID):\n  " << cybou::HexEncode(prov->network_id_bytes) << "\n\n"
            << "Genesis State Root:\n  " << prov->genesis_state_root.GetHex() << "\n\n"
            << "PoA Finalizer Key ID:\n  " << cybou::HexEncode(prov->cybou_poa_key_id) << "\n\n"
-           << "cybou.cybou Account ID:\n  " << prov->cybou_account_id.Value().GetHex() << "\n\n"
            << "cybou.cybou Recovery Key ID:\n  " << cybou::HexEncode(prov->cybou_recovery_key_id) << "\n"
            << "  Genesis allocation: 100,000,000 CYBOU, 10,000,001 AUTH, name cybou\n\n"
-           << "bootstrap Account ID:\n  " << prov->bootstrap_account_id.Value().GetHex() << "\n\n"
            << "bootstrap Recovery Key ID:\n  " << cybou::HexEncode(prov->bootstrap_recovery_key_id) << "\n"
            << "  Genesis allocation: 0 CYBOU, 10,000,001 AUTH, name bootstrap\n\n"
            << "Signed Genesis Size: " << prov->serialized_signed_genesis.size() << " bytes\n"
@@ -366,15 +340,11 @@ bool ProvisionDevnet(
           << "inline constexpr std::array<unsigned char, 32> GENESIS_STATE_ROOT_BYTES = {\n"
           << FormatByteArrayCpp(std::span<const unsigned char>{prov->genesis_state_root.data(), 32}, 4) << "\n};\n\n"
           << "// cybou.cybou Public Identity Constants\n"
-          << "inline constexpr std::array<unsigned char, 32> CYBOU_ACCOUNT_ID = {\n"
-          << FormatByteArrayCpp(std::span<const unsigned char>{prov->cybou_account_id.Value().data(), 32}, 4) << "\n};\n\n"
           << "inline constexpr std::array<unsigned char, 32> CYBOU_RECOVERY_KEY_ID = {\n"
           << FormatByteArrayCpp(prov->cybou_recovery_key_id, 4) << "\n};\n\n"
           << "inline constexpr std::array<unsigned char, 32> CYBOU_POA_KEY_ID = {\n"
           << FormatByteArrayCpp(prov->cybou_poa_key_id, 4) << "\n};\n\n"
           << "// bootstrap Public Identity Constants\n"
-          << "inline constexpr std::array<unsigned char, 32> BOOTSTRAP_ACCOUNT_ID = {\n"
-          << FormatByteArrayCpp(std::span<const unsigned char>{prov->bootstrap_account_id.Value().data(), 32}, 4) << "\n};\n\n"
           << "inline constexpr std::array<unsigned char, 32> BOOTSTRAP_RECOVERY_KEY_ID = {\n"
           << FormatByteArrayCpp(prov->bootstrap_recovery_key_id, 4) << "\n};\n\n"
           << "} // namespace cybou::devnet_constants\n\n"

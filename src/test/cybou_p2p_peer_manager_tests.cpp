@@ -1294,12 +1294,97 @@ BOOST_AUTO_TEST_CASE(manager_fans_out_finalized_block_without_duplicate_payload)
     }};
     cybou::p2p::PeerManager manager{*fixture.runtime};
     BOOST_REQUIRE(manager.Connect(loopback.to_string(), acceptor.local_endpoint().port()));
-    BOOST_CHECK_EQUAL(manager.FanoutRecentBlocks(), 1U);
-    BOOST_CHECK_EQUAL(manager.FanoutRecentBlocks(), 0U);
+    BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(), 1U);
+    BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(), 0U);
     server.join();
     BOOST_CHECK(served);
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(99), 1U);
     BOOST_CHECK(observer.GetFinalizedTip().value_or(cybou::Hash256{}) == block_id);
+}
+
+BOOST_AUTO_TEST_CASE(manager_catches_up_full_history_from_genesis_and_after_restart)
+{
+    CybouServiceTestFixture fixture;
+    constexpr uint64_t tip{40};
+    for (uint64_t h{0}; h < tip; ++h) BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+
+    const auto history_dir = fixture.directory / "persisted-fanout-history";
+    {
+        cybou::CybouNodeRuntime history{{.network_genesis = fixture.definition,
+            .data_dir = history_dir, .memory_only = false, .wipe_data = true,
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}};
+        BOOST_REQUIRE(history.InitializeGenesis(fixture.genesis));
+        for (uint64_t h{1}; h <= tip; ++h) {
+            const auto block = fixture.runtime->GetBlockAtHeight(h);
+            BOOST_REQUIRE(block);
+            BOOST_REQUIRE(history.CommitBlock(*block));
+        }
+    }
+    cybou::CybouNodeRuntime reopened{{.network_genesis = fixture.definition,
+        .data_dir = history_dir, .memory_only = false, .wipe_data = false,
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}};
+    BOOST_REQUIRE(reopened.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE_EQUAL(reopened.GetFinalizedHeight().value_or(0), tip);
+
+    for (bool after_restart : {false, true}) {
+        auto& source = after_restart ? reopened : *fixture.runtime;
+        for (bool push : {false, true}) {
+            for (uint64_t initial_height : {0ULL, 1ULL}) {
+                BOOST_TEST_CONTEXT("restart=" << after_restart << " push=" << push
+                    << " initial_height=" << initial_height) {
+                    cybou::CybouNodeRuntime observer{{.network_genesis = fixture.definition,
+                        .data_dir = fixture.directory / "history-observer", .memory_only = true,
+                        .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy(),
+                        .operation_work_bits = 0}};
+                    BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
+                    if (initial_height != 0) {
+                        const auto first = source.GetBlockAtHeight(1);
+                        BOOST_REQUIRE(first);
+                        BOOST_REQUIRE(observer.CommitBlock(*first));
+                    }
+                    boost::asio::io_context io;
+                    using boost::asio::ip::tcp;
+                    const auto loopback = boost::asio::ip::address_v4::loopback();
+                    tcp::acceptor acceptor{io, tcp::endpoint{loopback, 0}};
+                    auto& client_runtime = push ? source : observer;
+                    auto& server_runtime = push ? observer : source;
+                    bool handshaken{false};
+                    std::jthread server{[&] {
+                        tcp::socket socket{io};
+                        acceptor.accept(socket);
+                        cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+                        handshaken = fixture.HandshakeAsPeer(session, {
+                            .network_binding = source.GetNetworkBinding(),
+                            .finalized_height = server_runtime.GetFinalizedHeight().value(),
+                            .finalized_tip = server_runtime.GetFinalizedTip().value(), .nonce = 122});
+                        if (handshaken) while (session.ServeNext(server_runtime)) {}
+                    }};
+                    cybou::p2p::PeerManager manager{client_runtime};
+                    const auto address = loopback.to_string();
+                    const auto port = acceptor.local_endpoint().port();
+                    BOOST_REQUIRE(manager.Connect(address, port));
+                    BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(0), 0U);
+                    BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(33), 0U);
+                    uint64_t expected{initial_height};
+                    while (expected < tip) {
+                        const auto count = std::min<uint64_t>(3, tip - expected);
+                        if (push) {
+                            BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(3), count);
+                        } else {
+                            BOOST_CHECK_EQUAL(manager.SyncFromPeer(address, port, 3).blocks_applied, count);
+                        }
+                        expected += count;
+                        BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), expected);
+                    }
+                    if (push) BOOST_CHECK_EQUAL(manager.FanoutFinalizedBlocks(3), 0U);
+                    BOOST_CHECK(observer.GetFinalizedTip() == source.GetFinalizedTip());
+                    manager.DisconnectAll();
+                    server.join();
+                    BOOST_CHECK(handshaken);
+                }
+            }
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(manager_rejects_block_metadata_with_wrong_height)

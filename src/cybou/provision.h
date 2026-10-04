@@ -39,8 +39,6 @@ struct DevnetProvisionResult {
     RecoveryEntropy cybou_entropy{};
     /// \brief Мнемонические слова Identity `cybou.cybou`.
     RecoveryWords cybou_words{};
-    /// \brief Stable random AccountID Identity `cybou.cybou`.
-    AccountId cybou_account_id{};
     /// \brief Recovery public key `cybou.cybou`.
     IdentityHybridPublicKey cybou_recovery_key;
     /// \brief Recovery Key ID для genesis allocation и recovery flows.
@@ -59,8 +57,6 @@ struct DevnetProvisionResult {
     RecoveryEntropy bootstrap_entropy{};
     /// \brief Мнемонические слова Identity `bootstrap`.
     RecoveryWords bootstrap_words{};
-    /// \brief Stable random AccountID Identity `bootstrap`.
-    AccountId bootstrap_account_id{};
     /// \brief Recovery Key ID genesis allocation `bootstrap`.
     IdentityKeyId bootstrap_recovery_key_id{};
 

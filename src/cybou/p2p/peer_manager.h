@@ -107,9 +107,9 @@ public:
     PeerSubmitResult SubmitOperationToAny(
         const std::vector<std::pair<std::string, uint16_t>>& endpoints,
         const ProtocolOperation& operation, uint64_t work_nonce);
-    /// \brief Рассылает недавние финализованные блоки подключенным пирам.
+    /// \brief Последовательно рассылает finalized history от frontier каждого пира.
     /// \param max_per_peer Верхняя граница предложений `BLOCK_ANNOUNCE` на пир за один проход.
-    size_t FanoutRecentBlocks(size_t max_per_peer = 16);
+    size_t FanoutFinalizedBlocks(size_t max_per_peer = 16);
     /// \brief Запрашивает и обрабатывает новые relay-операции у подключенных пиров.
     size_t PollOperationRelays();
     /// \brief Запрашивает Validation-attestation'ы у relay-пиров и возвращает число принятых записей.
@@ -157,10 +157,7 @@ private:
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::optional<Endpoint> m_ping_cursor;
     std::optional<Endpoint> m_discovery_cursor;
-    std::map<Endpoint, std::set<cybou::Hash256>> m_announced_blocks;
-    // Храним последнюю финализованную высоту из `BLOCK_RESULT`, чтобы fanout
-    // помечал уже известные peer'у головы без расходования небольшого per-cycle
-    // бюджета на древнюю историю и быстрее доходил до реально нужного frontier.
+    // Latest session HELLO/BLOCK_RESULT height; only a bounded fanout scheduling hint.
     std::map<Endpoint, uint64_t> m_peer_finalized_heights;
     /// \brief Явно заданные оператором endpoint'ы в канонической форме `address:port`.
     std::set<Endpoint> m_explicit_endpoints;

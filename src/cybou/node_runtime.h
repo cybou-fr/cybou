@@ -334,10 +334,6 @@ public:
     /// \brief Просит все зарегистрированные coordinators повторить просроченные relay-попытки.
     /// \post Каждый известный coordinator получает шанс запланировать новый relay без удержания runtime lock во время callback.
     void RetryPendingIdentityOperations();
-    /// \brief Возвращает недавние finalized heads для gossip.
-    /// \return Копия bounded списка недавно финализованных блоков.
-    std::vector<FinalizedHead> RecentFinalizedBlocksForGossip() const;
-
     /// \brief Производит следующий finalized block, если локальный узел сейчас выполняет роль PoA finalizer.
     /// \param sync true просит синхронно коммитить новый блок в store.
     /// \return Finalized block или std::nullopt, если сейчас нельзя безопасно произвести блок.
@@ -589,7 +585,6 @@ private:
         std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
-    void RememberFinalizedBlockForGossip(const FinalizedBlock& block);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
     void RevalidateCandidates();
@@ -626,7 +621,6 @@ private:
     std::chrono::steady_clock::time_point m_next_peer_ping{};
     std::chrono::steady_clock::time_point m_next_peer_discovery{};
     mutable std::mutex m_mutex;
-    std::deque<FinalizedHead> m_recent_finalized_blocks;
     using Endpoint = std::pair<std::string, uint16_t>;
     p2p::IngressBudget m_ingress;
     std::set<Endpoint> m_discovered_peer_endpoints;

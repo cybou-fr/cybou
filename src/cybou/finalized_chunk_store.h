@@ -132,18 +132,16 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     bool RemoveUnlessAdmitted(const ChunkId& chunk_id);
-    /// \brief Принудительно удаляет admitted provider-реплику и её метаданные при отзыве/прюнинге объекта (DEC-271).
-    /// \param chunk_id ChunkId прюнимого чанка.
-    /// \return \c true только если чанк был учтён provider-store и успешно удалён.
-    /// \par Потокобезопасность
-    /// Потокобезопасен для конкурентных вызовов одного объекта.
-    bool PruneAdmittedChunk(const ChunkId& chunk_id);
     /// \brief Удаляет привязки отозванной публикации и chunk-и, которые больше никто не авторизует.
     /// \param publication_operation_id OperationID финализированно отозванной RootPublication.
-    /// \return Число физически удалённых chunk-ов.
+    /// \return Число завершённых purge-записей, включая уже отсутствующие blobs.
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     std::size_t PurgePublication(const cybou::Hash256& publication_operation_id);
+    /// Retry durable pending purges; quota is released only after deletion succeeds.
+    std::size_t RetryPendingPurges(std::size_t max_chunks = 128);
+    /// Reconcile persisted associations against authoritative finalized publications on startup.
+    void PurgeRevokedPublications(const FinalizedPublicationLookup& lookup);
     /// \brief Возвращает число байтов, занятых admitted provider-репликами.
     /// \return Учтённый объём admitted provider-реплик; при повреждении счётчика
     /// возвращается большое fail-closed значение.
@@ -157,6 +155,7 @@ public:
     std::uint64_t CapacityBytes() const { return m_capacity_bytes; }
 
 private:
+    std::size_t RetryPendingPurgesLocked(std::size_t max_chunks);
     std::optional<std::uint64_t> ReadCounter(const std::string& key) const;
 
     ChunkBlobStore& m_blobs;
@@ -165,6 +164,7 @@ private:
     const std::filesystem::path m_path;
     mutable std::mutex m_mutex;
     std::unique_ptr<KVStore> m_db;
+    std::optional<ChunkId> m_purge_cursor;
 };
 
 } // namespace cybou

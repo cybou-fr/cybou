@@ -194,12 +194,12 @@
             <tr>
               <td><strong>Art. 5.1(c)</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Minimisation des données</span></td>
               <td data-i18n="cRgpdArt5Req">Les données doivent être adéquates, pertinentes et limitées au strict nécessaire.</td>
-              <td data-i18n="cRgpdArt5Sol"><strong>Zéro donnée personnelle dans le consensus.</strong> Ni le registre PoA ni le réseau P2P ne connaissent les identités réelles, numéros de téléphone, adresses IP publiques persistantes, noms de fichiers ou objets de messages. Seuls des ChunkID opaques (BLAKE3-256) circulent.</td>
+              <td data-i18n="cRgpdArt5Sol"><strong>Contenu applicatif chiffré.</strong> Les noms de fichiers et le contenu Mail restent chiffrés. Le registre conserve des identifiants de comptes, des engagements de publication et des capsules ; les pairs observent les adresses IP et le trafic. Ces métadonnées nécessitent une analyse de protection des données.</td>
             </tr>
             <tr>
               <td><strong>Art. 17</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Droit à l'effacement (Oubli)</span></td>
               <td data-i18n="cRgpdArt17Req">Permettre l'effacement définitif et irréversible des données à caractère personnel.</td>
-              <td data-i18n="cRgpdArt17Sol"><strong>Destruction cryptographique (Crypto-shredding).</strong> La destruction de la clé symétrique locale contenue dans la capsule d'accès rend les fragments stockés mathématiquement indéchiffrables pour l'éternité, répondant pleinement aux critères de suppression du CEPD.</td>
+              <td data-i18n="cRgpdArt17Sol"><strong>Révocation et purge gérée.</strong> Une révocation finalisée retire l'autorisation de stockage. Les nœuds conformes tentent de supprimer les fragments qui ne sont plus autorisés par une autre publication. Les capsules historiques peuvent conserver un accès aux clés : la destruction cryptographique par objet n'est pas garantie.</td>
             </tr>
             <tr>
               <td><strong>Art. 20</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Portabilité des données</span></td>
@@ -246,7 +246,7 @@
           </li>
           <li>
             <strong data-i18n="cNis2Item3Title">Résilience, continuité d'activité et gestion des crises :</strong><br>
-            <span data-i18n="cNis2Item3Desc">L'architecture de stockage distribué CYBOU élimine tout point individuel de panne (SPOF). En cas de sinistre ou de défaillance d'un serveur fournisseur, le protocole déclenche des réparations d'intégrité autonomes entre répliques indépendantes.</span>
+            <span data-i18n="cNis2Item3Desc">Le stockage vise à limiter l'effet de la perte d'une réplique par des contrôles de disponibilité et des réparations depuis une copie valide. Des StorageId distincts ne prouvent pas des machines ou opérateurs indépendants. La réparation dépend de sources valides et de fournisseurs disponibles ; la finalité dépend du PoA unique.</span>
           </li>
           <li>
             <strong data-i18n="cNis2Item4Title">Notification et traitement des incidents de sécurité (SECURITY.md) :</strong><br>
@@ -353,7 +353,7 @@
             <tr>
               <td><strong>A.8.14</strong></td>
               <td data-i18n="cIsoA814Req">Redondance des moyens de traitement</td>
-              <td data-i18n="cIsoA814Sol">Multi-réplication automatique sur des nœuds de stockage géographiquement distincts avec vérification continue de disponibilité.</td>
+              <td data-i18n="cIsoA814Sol">Réplication vers des fournisseurs aux StorageId distincts, contrôles GET et BLAKE3, puis tentative de réparation. La diversité géographique et l'indépendance physique ne sont pas prouvées par ces identifiants.</td>
             </tr>
             <tr>
               <td><strong>A.8.20</strong></td>
@@ -392,16 +392,12 @@
 
           <div style="padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #fcfdfe;">
             <div style="font-size: 1.1rem; font-weight: 700; color: var(--brand-teal-dark); margin-bottom: 8px;" data-i18n="cCiaI">2. Intégrité (I)</div>
-            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaIDesc">
-              <strong>Inaltérabilité mathématique :</strong> Chaque fragment de fichier est identifié par son empreinte cryptographique BLAKE3-256. Les publications d'arbres de contenu sont scellées dans des preuves de Merkle vérifiées par consensus PoA avec journal anti-équivocation inviolable.
-            </p>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaIDesc"><strong>Intégrité vérifiable :</strong> Chaque fragment chiffré est identifié par son empreinte BLAKE3-256. Le client vérifie les données récupérées ; les nœuds vérifient les publications et transitions finalisées par le PoA. Le journal de signature refuse de signer en cas de conflit détecté.</p>
           </div>
 
           <div style="padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #fcfdfe;">
             <div style="font-size: 1.1rem; font-weight: 700; color: var(--brand-teal-dark); margin-bottom: 8px;" data-i18n="cCiaA">3. Disponibilité (D)</div>
-            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaADesc">
-              <strong>Résilience continue :</strong> Chaque fragment chiffré est répliqué sur des nœuds de stockage indépendants. Audits de santé périodiques, détection proactive de perte de réplique et réparation automatique sans interruption pour l'utilisateur.
-            </p>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaADesc"><strong>Disponibilité contrôlée :</strong> StorageService vérifie les répliques par téléchargement et contrôle BLAKE3, puis tente de réparer les pertes depuis une copie valide. Un contrôle réussi atteste la disponibilité au moment de la vérification, pas un stockage continu ni une récupération sans interruption.</p>
           </div>
 
         </div>

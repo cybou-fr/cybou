@@ -68,8 +68,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
             return false;
         }
         // Operator-configured or compiled rendezvous endpoint: evict an unprotected peer
-        // to make room. Frontier knowledge for the evicted endpoint is kept
-        // (its chain only grows, so the knowledge stays valid on reconnect).
+        // to make room. A new session obtains its frontier from HELLO.
         const auto victim = std::find_if(m_peers.begin(), m_peers.end(), [&](const auto& entry) {
             return !m_explicit_endpoints.contains(entry.first) &&
                 !m_runtime.PinnedSpki(entry.first.first, entry.first.second).has_value();
@@ -78,7 +77,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
             m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
             return false;
         }
-        m_announced_blocks.erase(victim->first);
+        m_peer_finalized_heights.erase(victim->first);
         m_peers.erase(victim);
     }
     const auto status = m_runtime.GetStatus();
@@ -123,10 +122,7 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
         return false;
     }
-    m_announced_blocks.erase(*endpoint);
-    // Frontier сеем из высоты рукопожатия. Это знание сохраняется через
-    // переподключения, потому что финализованная цепочка может только расти;
-    // стирание приводило бы к повторному fanout древней истории.
+    // Reconnect obtains a fresh frontier: an endpoint may now serve a different node.
     m_peer_finalized_heights[*endpoint] = peer->Peer()->finalized_height;
     m_peers.emplace(*endpoint, std::move(peer));
     m_last_connect_status = PeerConnectStatus::CONNECTED;
@@ -150,7 +146,7 @@ size_t PeerManager::PingAll()
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         const auto nonce = RandomNonce();
         if (!nonce || !it->second->Ping(*nonce)) {
-            m_announced_blocks.erase(it->first);
+            m_peer_finalized_heights.erase(it->first);
             it = m_peers.erase(it);
         } else {
             ++healthy;
@@ -181,7 +177,7 @@ size_t PeerManager::PingSome(const size_t max_peers)
         if (peer == m_peers.end()) continue;
         const auto nonce = RandomNonce();
         if (!nonce || !peer->second->Ping(*nonce)) {
-            m_announced_blocks.erase(endpoint);
+            m_peer_finalized_heights.erase(endpoint);
             m_peers.erase(peer);
         } else {
             ++healthy;
@@ -296,73 +292,46 @@ PeerSubmitResult PeerManager::SubmitOperationToAny(
     return result;
 }
 
-size_t PeerManager::FanoutRecentBlocks(size_t max_per_peer)
+size_t PeerManager::FanoutFinalizedBlocks(size_t max_per_peer)
 {
     if (max_per_peer == 0 || max_per_peer > 32) return 0;
-    for (auto it = m_announced_blocks.begin(); it != m_announced_blocks.end();) {
-        if (!m_peers.contains(it->first)) it = m_announced_blocks.erase(it);
-        else ++it;
-    }
-    const auto recent = m_runtime.RecentFinalizedBlocksForGossip();
-    std::set<cybou::Hash256> live_ids;
-    for (const auto& head : recent) live_ids.insert(head.block_id);
+    // Session heights are scheduling hints, never evidence of canonical truth.
+    std::erase_if(m_peer_finalized_heights, [&](const auto& entry) {
+        return !m_peers.contains(entry.first);
+    });
+    const auto tip = m_runtime.GetFinalizedHeight();
+    if (!tip) return 0;
     size_t delivered{0};
     for (auto it = m_peers.begin(); it != m_peers.end();) {
-        auto& announced = m_announced_blocks[it->first];
-        for (auto known = announced.begin(); known != announced.end();) {
-            if (!live_ids.contains(*known)) known = announced.erase(known);
-            else ++known;
-        }
         if (!it->second->Peer()) {
             ++it;
             continue;
         }
-        // Головы на высоте <= уже подтвержденной peer'ом помечаем сразу, не
-        // тратя маленький per-cycle budget: иначе после каждого сброса set'а
-        // fanout снова вязнет в древней истории и медленно доходит до frontier.
-        const uint64_t peer_frontier = m_peer_finalized_heights[it->first];
-        // A peer that lags behind the recent window (e.g. we restarted after
-        // committing blocks it never saw) only accepts its next height over an
-        // announce. Offer it the next blocks in order from local history, so a
-        // gap of any size closes instead of staying a GAP forever.
-        std::vector<FinalizedHead> heads = recent;
-        if (peer_frontier > 0 && !recent.empty() && recent.front().height > peer_frontier + 1) {
-            heads.clear();
-            const uint64_t tip = m_runtime.GetFinalizedHeight().value_or(0);
-            for (uint64_t h = peer_frontier + 1; h <= tip && heads.size() < max_per_peer; ++h) {
-                const auto block = m_runtime.GetBlockAtHeight(h);
-                if (!block) break;
-                heads.push_back({ComputeBlockId(block->block), h});
-            }
-        }
+        auto& frontier = m_peer_finalized_heights[it->first];
         bool disconnected{false};
-        size_t offered{0};
-        for (const auto& head : heads) {
-            if (offered >= max_per_peer) break;
-            if (announced.contains(head.block_id)) continue;
-            if (head.height <= peer_frontier) {
-                announced.insert(head.block_id);
-                continue;
-            }
-            const auto block = m_runtime.GetBlockAtHeight(head.height);
-            if (!block || ComputeBlockId(block->block) != head.block_id) continue;
-            ++offered;
+        for (size_t offered{0}; offered < max_per_peer && frontier < *tip; ++offered) {
+            // frontier < tip also prevents overflow at UINT64_MAX.
+            const uint64_t height = frontier + 1;
+            const auto block = m_runtime.GetBlockAtHeight(height);
+            if (!block) break;
             uint64_t peer_height{0};
-            const auto response = it->second->AdvertiseBlock({head.height, head.block_id}, *block, peer_height);
+            const auto response = it->second->AdvertiseBlock(
+                {height, ComputeBlockId(block->block)}, *block, peer_height);
             if (!response) {
                 disconnected = true;
                 break;
             }
-            if (peer_height > 0) m_peer_finalized_heights[it->first] = peer_height;
-            if (*response != BlockAnnounceResult::GAP) {
-                announced.insert(head.block_id);
-                ++delivered;
-            } else {
+            frontier = peer_height;
+            if (*response == BlockAnnounceResult::GAP) break;
+            // A success without advancement must not consume repeated payloads.
+            if (frontier < height) {
+                disconnected = true;
                 break;
             }
+            ++delivered;
         }
         if (disconnected) {
-            m_announced_blocks.erase(it->first);
+            m_peer_finalized_heights.erase(it->first);
             it = m_peers.erase(it);
         } else {
             ++it;
@@ -419,7 +388,7 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
     for (auto it = m_peers.begin(); it != m_peers.end();) {
         auto& session = it->second;
         if (!session->Peer()) {
-            m_announced_blocks.erase(it->first);
+            m_peer_finalized_heights.erase(it->first);
             it = m_peers.erase(it);
             continue;
         }
@@ -442,7 +411,7 @@ std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
     auto result = session->PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
     if (!result) {
         m_peers.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+        m_peer_finalized_heights.erase(endpoint);
     }
     return result;
 }
@@ -456,7 +425,7 @@ std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
     auto result = session->GetChunkById(chunk_id);
     if (!session->Peer()) {
         m_peers.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+        m_peer_finalized_heights.erase(endpoint);
     }
     return result;
 }
@@ -471,7 +440,7 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
     auto result = session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
     if (!session->Peer()) {
         m_peers.erase(endpoint);
-        m_announced_blocks.erase(endpoint);
+        m_peer_finalized_heights.erase(endpoint);
     }
     return result;
 }
@@ -484,7 +453,7 @@ PeerSession* PeerManager::FindStorageSession(
     const auto it = m_peers.find(*key);
     if (it == m_peers.end()) return nullptr;
     if (!it->second->Peer()) {
-        m_announced_blocks.erase(*key);
+        m_peer_finalized_heights.erase(*key);
         m_peers.erase(it);
         return nullptr;
     }
@@ -501,9 +470,7 @@ PeerSession* PeerManager::FindStorageSession(
 void PeerManager::DisconnectAll()
 {
     m_peers.clear();
-    // Преднамеренно сохраняем `m_announced_blocks`: знание о уже объявленной
-    // финализованной истории переживает конкретный сокет. Полная очистка
-    // заставила бы fanout снова начинать с самого старого recent набора.
+    m_peer_finalized_heights.clear();
 }
 
 size_t PeerManager::DiscoverPeers(const size_t max_sessions)

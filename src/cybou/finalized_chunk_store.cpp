@@ -122,6 +122,7 @@ FinalizedChunkStore::FinalizedChunkStore(ChunkBlobStore& blobs, const std::files
         m_db->Write(network_key, std::vector<unsigned char>{network_binding.begin(), network_binding.end()}, true);
     }
 
+    RetryPendingPurgesLocked(std::numeric_limits<std::size_t>::max());
     if (!m_blobs.MemoryOnly()) {
         const auto prefix = m_namespace + "/chunk/";
         const auto key_size = prefix.size() + 64;
@@ -225,6 +226,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
             batch.Write(chunk_key, static_cast<std::uint64_t>(stored_bytes.size()));
             batch.Write(storage_bytes_key, *storage_bytes + stored_bytes.size());
         }
+        batch.Erase(m_namespace + "/purge/" + Hex(chunk_id));
         batch.Write(publication_chunk_key, proof_metadata);
         m_db->WriteBatch(batch, true);
         return {ChunkAdmissionStatus::STORED};
@@ -287,27 +289,6 @@ bool FinalizedChunkStore::RemoveUnlessAdmitted(const ChunkId& chunk_id)
     return m_blobs.Remove(chunk_id);
 }
 
-bool FinalizedChunkStore::PruneAdmittedChunk(const ChunkId& chunk_id)
-{
-    if (chunk_id == ChunkId{}) return false;
-    std::lock_guard lock{m_mutex};
-    const auto chunk_key = ChunkKey(m_namespace, chunk_id);
-    std::uint64_t admitted_size{0};
-    if (!m_db->Read(chunk_key, admitted_size)) return false;
-
-    const auto storage_bytes_key = m_namespace + "/storage-bytes";
-    const auto current_storage = ReadCounter(storage_bytes_key).value_or(0);
-    const uint64_t updated_storage = current_storage > admitted_size ? current_storage - admitted_size : 0;
-
-    KVStore::Batch batch;
-    batch.Erase(chunk_key);
-    batch.Write(storage_bytes_key, updated_storage);
-    m_db->WriteBatch(batch, true);
-
-    (void)m_blobs.Remove(chunk_id);
-    return true;
-}
-
 std::uint64_t FinalizedChunkStore::UsedBytes() const
 {
     const auto bytes = ReadCounter(m_namespace + "/storage-bytes");
@@ -334,23 +315,80 @@ std::size_t FinalizedChunkStore::PurgePublication(const cybou::Hash256& publicat
         if (const auto id = ParseChunkId(std::string_view{key}.substr(key.size() - 2 * ChunkId{}.size()));
             id && revoked.contains(*id)) shared.insert(*id);
     });
-    const auto storage_bytes_key = m_namespace + "/storage-bytes";
-    uint64_t storage = ReadCounter(storage_bytes_key).value_or(0);
     KVStore::Batch batch;
-    std::vector<ChunkId> removed;
     for (const auto& chunk : chunks) {
         batch.Erase(PublicationChunkKey(m_namespace, publication_operation_id, chunk));
         if (shared.contains(chunk)) continue;
         std::uint64_t size{0};
         if (!m_db->Read(ChunkKey(m_namespace, chunk), size)) continue;
-        batch.Erase(ChunkKey(m_namespace, chunk));
-        storage = storage > size ? storage - size : 0;
-        removed.push_back(chunk);
+        // Keep the size and quota until physical deletion is confirmed.
+        batch.Write(m_namespace + "/purge/" + Hex(chunk), size);
     }
-    batch.Write(storage_bytes_key, storage);
     m_db->WriteBatch(batch, true);
-    for (const auto& chunk : removed) (void)m_blobs.Remove(chunk);
-    return removed.size();
+    return RetryPendingPurgesLocked(std::numeric_limits<std::size_t>::max());
+}
+
+std::size_t FinalizedChunkStore::RetryPendingPurges(const std::size_t max_chunks)
+{
+    std::lock_guard lock{m_mutex};
+    return RetryPendingPurgesLocked(max_chunks);
+}
+
+void FinalizedChunkStore::PurgeRevokedPublications(const FinalizedPublicationLookup& lookup)
+{
+    if (!lookup) throw std::invalid_argument{"missing finalized publication lookup"};
+    std::set<cybou::Hash256> publications;
+    {
+        std::lock_guard lock{m_mutex};
+        const auto prefix = m_namespace + "/publication-chunk/";
+        m_db->ForEachStringPrefixRaw(prefix, prefix.size() + 64 + 1 + 64,
+            [&](const std::string& key, const std::string&) {
+                const auto id = ParseChunkId(std::string_view{key}.substr(prefix.size(), 64));
+                if (!id) throw std::runtime_error{"corrupt publication association"};
+                publications.insert(cybou::Hash256{*id});
+            });
+    }
+    // No store lock across the canonical lookup: runtime admission uses the
+    // opposite lock order. Startup has no concurrent peer admission.
+    for (const auto& id : publications) if (!lookup(id)) (void)PurgePublication(id);
+}
+
+std::size_t FinalizedChunkStore::RetryPendingPurgesLocked(const std::size_t max_chunks)
+{
+    const auto prefix = m_namespace + "/purge/";
+    std::vector<ChunkId> pending;
+    const auto scan = [&](bool wrap) {
+        m_db->ForEachStringPrefixRaw(prefix, prefix.size() + 64, [&](const std::string& key, const std::string&) {
+            if (pending.size() >= max_chunks) return;
+            const auto id = ParseChunkId(std::string_view{key}.substr(prefix.size()));
+            if (!id) throw std::runtime_error{"corrupt purge chunk ID"};
+            if (m_purge_cursor && ((*id <= *m_purge_cursor) != wrap)) return;
+            pending.push_back(*id);
+        });
+    };
+    scan(false);
+    if (m_purge_cursor && pending.size() < max_chunks) scan(true);
+    std::size_t completed{0};
+    for (const auto& id : pending) {
+        m_purge_cursor = id; // Failed early blobs must not starve later retries.
+        uint64_t size{0}, expected{0};
+        const auto storage_key = m_namespace + "/storage-bytes";
+        const auto used = ReadCounter(storage_key);
+        if (!used || !m_db->Read(prefix + Hex(id), size) ||
+            !m_db->Read(ChunkKey(m_namespace, id), expected) || size != expected ||
+            size < ENCRYPTED_CHUNK_MIN_STORED_BYTES || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES || *used < size)
+            throw std::runtime_error{"corrupt pending purge metadata"};
+        // Remove is idempotent: a crash after unlink but before metadata commit
+        // resumes here with an already absent blob.
+        if (!m_blobs.Remove(id)) continue;
+        KVStore::Batch batch;
+        batch.Erase(prefix + Hex(id));
+        batch.Erase(ChunkKey(m_namespace, id));
+        batch.Write(storage_key, *used - size);
+        m_db->WriteBatch(batch, true);
+        ++completed;
+    }
+    return completed;
 }
 
 } // namespace cybou

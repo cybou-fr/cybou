@@ -173,6 +173,12 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
         std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
         *m_config.storage_capacity_bytes, m_config.wipe_data);
+    // Recover a crash between durable block commit and its local purge event.
+    const auto restored = m_store.LoadState();
+    if (restored.error == StateLoadError::NONE && restored.state) {
+        m_finalized_chunk_store->PurgeRevokedPublications(
+            [&](const cybou::Hash256& id) { return FindFinalizedRootPublication(id); });
+    }
     // The provider key is this node's stable storage identity across restarts.
     m_storage_secret = LoadOrCreateProviderSecret(m_config.memory_only ? std::filesystem::path{} :
         storage_path / "storage.key");
@@ -215,6 +221,7 @@ ChunkRetentionRegistry::CollectResult CybouNodeRuntime::CollectChunkGarbage(cons
 {
     // A freshly cached or released blob may be in active use by a download.
     constexpr std::uint64_t GRACE_MS{10 * 60 * 1000};
+    (void)m_finalized_chunk_store->RetryPendingPurges(max_removals);
     return m_chunk_retention->Collect(*m_chunk_blob_store, cache_budget_bytes, now_ms, GRACE_MS, max_removals,
         [&](const ChunkId& id) {
             return m_finalized_chunk_store->RemoveUnlessAdmitted(id);
@@ -699,22 +706,6 @@ void CybouNodeRuntime::RememberOperationStatus(const cybou::Hash256& id, Operati
     }
 }
 
-std::vector<FinalizedHead> CybouNodeRuntime::RecentFinalizedBlocksForGossip() const
-{
-    std::lock_guard lock(m_mutex);
-    return {m_recent_finalized_blocks.begin(), m_recent_finalized_blocks.end()};
-}
-
-void CybouNodeRuntime::RememberFinalizedBlockForGossip(const FinalizedBlock& block)
-{
-    const auto id = ComputeBlockId(block.block);
-    if (id.IsNull()) return;
-    if (!m_recent_finalized_blocks.empty() &&
-        m_recent_finalized_blocks.back().height >= block.block.height) return;
-    m_recent_finalized_blocks.push_back({id, block.block.height});
-    if (m_recent_finalized_blocks.size() > 32) m_recent_finalized_blocks.pop_front();
-}
-
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
     ProtocolOperation op, const uint64_t work_nonce, std::optional<std::string> source_peer)
 {
@@ -894,7 +885,6 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
         m_production_candidate.reset();
         m_production_finalized.reset();
         m_production_status = BlockProductionStatus::PRODUCED;
-        RememberFinalizedBlockForGossip(finalized);
         EmitFinalizedEvents(finalized, true);
         RevalidateCandidates();
         return finalized;
@@ -952,7 +942,6 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     }
     const auto result = m_store.CommitFinalizedBlock(block, sync);
     if (result) {
-        RememberFinalizedBlockForGossip(block);
         EmitFinalizedEvents(block, false);
         RevalidateCandidates();
     }
@@ -1133,6 +1122,7 @@ void CybouNodeRuntime::SchedulePeerRetry(
 
 SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_blocks)
 {
+    (void)m_finalized_chunk_store->RetryPendingPurges();
     if (!m_peer_manager) return {};
     RetryPendingIdentityOperations();
     std::lock_guard p2p_lock(m_p2p_mutex);
@@ -1244,7 +1234,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
     m_peer_manager->PollOperationRelays();
     m_peer_manager->PollValidationAttestations();
-    m_peer_manager->FanoutRecentBlocks();
+    m_peer_manager->FanoutFinalizedBlocks();
     return result;
 }
 

@@ -244,6 +244,84 @@ BOOST_AUTO_TEST_CASE(storage_loss_and_corruption_are_repaired)
     BOOST_CHECK(healed.state == cybou::DurabilityState::PROTECTED);
 }
 
+BOOST_AUTO_TEST_CASE(surviving_remote_copy_repairs_every_chunk_without_local_cache)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("repair-owner.cybou");
+    ProviderNetwork network{fixture, 4};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+    const auto endpoints = network.Endpoints();
+    network.offline.insert(endpoints.front());
+    std::map<cybou::ChunkId, std::vector<unsigned char>> expected;
+    for (const auto& leaf : content.leaves) {
+        const auto bytes = fixture.runtime->GetChunkBlobStore().Get(leaf);
+        BOOST_REQUIRE(bytes);
+        expected.emplace(leaf, *bytes);
+        BOOST_REQUIRE(fixture.runtime->GetChunkBlobStore().Remove(leaf));
+    }
+    const auto height = fixture.runtime->GetFinalizedHeight();
+    const auto repaired = storage.Audit(content.operation_id);
+    BOOST_REQUIRE(repaired.state == cybou::DurabilityState::PROTECTED);
+    for (const auto& [leaf, bytes] : expected) {
+        unsigned healthy{0};
+        for (const auto& endpoint : endpoints) {
+            const auto remote = network.Get(endpoint, leaf);
+            if (remote && *remote == bytes) ++healthy;
+        }
+        BOOST_CHECK_GE(healthy, 2U);
+        const auto fetched = storage.Fetch(leaf);
+        BOOST_REQUIRE(fetched);
+        BOOST_CHECK(*fetched == bytes);
+    }
+    BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
+}
+
+BOOST_AUTO_TEST_CASE(all_remote_unavailable_downgrades_and_fresh_placement_rebuild_recovers)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("rebuild-owner.cybou");
+    ProviderNetwork network{fixture};
+    const auto app_path = fixture.directory / "application";
+    PublishedContent content;
+    std::map<cybou::ChunkId, std::vector<unsigned char>> expected;
+    {
+        cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), app_path};
+        content = Publish(fixture, *identity, application_db, true);
+        network.Sync();
+        cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+        BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+        for (const auto& leaf : content.leaves) {
+            const auto bytes = fixture.runtime->GetChunkBlobStore().Get(leaf);
+            BOOST_REQUIRE(bytes);
+            expected.emplace(leaf, *bytes);
+            BOOST_REQUIRE(fixture.runtime->GetChunkBlobStore().Remove(leaf));
+        }
+        network.SetAllOffline(true);
+        const auto unavailable = storage.Audit(content.operation_id);
+        BOOST_CHECK(unavailable.state != cybou::DurabilityState::PROTECTED);
+        BOOST_CHECK_EQUAL(unavailable.min_replicas, 0U);
+        for (const auto& leaf : content.leaves) BOOST_CHECK(!storage.Fetch(leaf));
+    }
+    std::filesystem::remove_all(app_path);
+    cybou::PrivateApplicationStore fresh{identity->GetKeyStore(), app_path};
+    cybou::StorageService storage{*fixture.runtime, network, fresh, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_CHECK(!storage.GetDurability(content.operation_id));
+    BOOST_CHECK(storage.Rebuild(content.operation_id, content.leaves).state != cybou::DurabilityState::PROTECTED);
+    const auto height = fixture.runtime->GetFinalizedHeight();
+    network.SetAllOffline(false);
+    BOOST_REQUIRE(storage.Rebuild(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+    for (const auto& [leaf, bytes] : expected) {
+        const auto fetched = storage.Fetch(leaf);
+        BOOST_REQUIRE(fetched);
+        BOOST_CHECK(*fetched == bytes);
+    }
+    BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
+}
+
 BOOST_AUTO_TEST_CASE(fetch_uses_local_cache_then_verified_remote_copy)
 {
     CybouServiceTestFixture fixture;

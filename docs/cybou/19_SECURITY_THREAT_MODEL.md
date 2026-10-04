@@ -56,6 +56,24 @@ Development targets one remote full replica; Beta targets two independent
 remote full replicas (plus local copy = 3 physical copies total).
 A local cache does not count as a remote replica.
 
+This is the durability target, not proof of physical independence in the
+current implementation. Placement deduplicates proven StorageIds; separate
+keys can belong to one host, disk or operator. Admission ACKs are operational
+observations, not durable signed obligations. StorageService checks replica
+availability with full-chunk GET and BLAKE3 verification; bounded background
+passes cover only their selected chunks. The separate randomized audit
+primitive is not integrated into that path. A successful check is evidence
+for those bytes at that time, not continuous storage. Repair requires a valid
+surviving copy and an available destination; a lost final copy cannot be repaired.
+
+Finalized revocation removes admission authorization. Compliant providers
+attempt to purge unshared admitted chunks, but this is neither proof of remote
+physical deletion nor crypto-erasure. Historical capsules, KEM recovery seeds,
+bridges and retained backups can preserve a decryption path. Deleting the current
+local ContentKey cannot establish irreversible per-object erasure. Mail recipients
+may retain delivered keys and plaintext. See the implementation assessment and
+design proposal in [Data assurance and erasure](DATA_ASSURANCE_AND_ERASURE.md).
+
 ## Simplified parser and signing boundaries
 
 Bounded typed binary readers reject invalid lengths before allocation, unknown

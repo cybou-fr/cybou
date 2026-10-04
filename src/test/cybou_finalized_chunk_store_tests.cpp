@@ -5,6 +5,13 @@
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/storage_audit.h>
+#include <cybou/hex.h>
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 
 #include <boost/test/unit_test.hpp>
@@ -183,14 +190,129 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_prunes_admitted_chunk_on_object_revoc
     BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
 
     // Prune admitted chunk (DEC-271)
-    BOOST_CHECK(store.PruneAdmittedChunk(fixture.chunk_id));
+    BOOST_CHECK_EQUAL(store.PurgePublication(fixture.operation_id), 1U);
     BOOST_CHECK(!store.HasChunk(fixture.chunk_id));
     BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
     BOOST_CHECK(!blobs.Has(fixture.chunk_id));
 
     // Pruning an unknown or already pruned chunk returns false
-    BOOST_CHECK(!store.PruneAdmittedChunk(fixture.chunk_id));
+    BOOST_CHECK_EQUAL(store.PurgePublication(fixture.operation_id), 0U);
 }
+
+BOOST_AUTO_TEST_CASE(purge_preserves_shared_chunks_until_last_publication_is_revoked)
+{
+    AuthorizedFixture fixture;
+    const cybou::Hash256 other{uint8_t{2}};
+    const auto lookup = [&](const cybou::Hash256& id) -> std::optional<cybou::RootPublication> {
+        return id == fixture.operation_id || id == other ? std::optional{fixture.publication} : std::nullopt;
+    };
+    cybou::ChunkBlobStore blobs({}, true);
+    cybou::FinalizedChunkStore store(blobs, {}, fixture.network_binding, 4096);
+    BOOST_REQUIRE(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, lookup));
+    BOOST_REQUIRE(store.PutChunk(other, fixture.chunk_id, fixture.bytes, fixture.proof, lookup));
+    BOOST_CHECK_EQUAL(store.PurgePublication(fixture.operation_id), 0U);
+    BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
+    BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 0U);
+    BOOST_CHECK(store.GetChunkAuthorizationProof(other, fixture.chunk_id, lookup));
+    BOOST_CHECK_EQUAL(store.PurgePublication(other), 1U);
+    BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
+    BOOST_CHECK(!blobs.Has(fixture.chunk_id));
+    BOOST_CHECK_EQUAL(store.PurgePublication(other), 0U);
+}
+
+BOOST_AUTO_TEST_CASE(purge_recovers_unlink_before_metadata_commit_and_missed_revocation_event)
+{
+    AuthorizedFixture fixture;
+    const auto path = std::filesystem::temp_directory_path() / "cybou-purge-crash-recovery";
+    const auto ns = "chunk-store/" + cybou::HexEncode(fixture.network_binding);
+    const auto hex = cybou::HexEncode(fixture.chunk_id);
+    for (bool unlinked : {false, true}) {
+        {
+            cybou::ChunkBlobStore blobs(path / "chunks", false, true);
+            cybou::FinalizedChunkStore store(blobs, path, fixture.network_binding, 4096, true);
+            BOOST_REQUIRE(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, fixture.Lookup()));
+            if (unlinked) BOOST_REQUIRE(blobs.Remove(fixture.chunk_id));
+        }
+        if (unlinked) {
+            // Durable intent survived; process died after unlink, before its accounting commit.
+            cybou::KVStore db({.path = path / "metadata"});
+            cybou::KVStore::Batch batch;
+            batch.Erase(ns + "/publication-chunk/" + fixture.operation_id.GetHex() + "/" + hex);
+            batch.Write(ns + "/purge/" + hex, static_cast<uint64_t>(fixture.bytes.size()));
+            db.WriteBatch(batch, true);
+        }
+        {
+            cybou::ChunkBlobStore blobs(path / "chunks", false);
+            cybou::FinalizedChunkStore store(blobs, path, fixture.network_binding, 4096);
+            if (!unlinked) {
+                // Finalized revocation persisted, but its local event never ran.
+                store.PurgeRevokedPublications([](const cybou::Hash256&) -> std::optional<cybou::RootPublication> {
+                    return std::nullopt;
+                });
+            }
+            BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
+            BOOST_CHECK(!blobs.Has(fixture.chunk_id));
+            BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 0U);
+        }
+    }
+    std::filesystem::remove_all(path);
+}
+
+#ifdef _WIN32
+BOOST_AUTO_TEST_CASE(purge_keeps_quota_and_retries_locked_blob_across_restart)
+{
+    AuthorizedFixture fixture;
+    for (bool readmit : {false, true}) {
+        const auto path = std::filesystem::temp_directory_path() / "cybou-purge-locked-blob";
+        const auto hex = cybou::HexEncode(fixture.chunk_id);
+        const auto blob_path = path / "chunks" / hex.substr(0, 2) / hex.substr(2, 2) / hex;
+        cybou::ChunkBlobStore blobs(path / "chunks", false, true);
+        {
+            cybou::FinalizedChunkStore store(blobs, path, fixture.network_binding, 4096, true);
+            BOOST_REQUIRE(store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, fixture.Lookup()));
+        }
+        const HANDLE locked = CreateFileW(blob_path.c_str(), GENERIC_READ,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        BOOST_REQUIRE(locked != INVALID_HANDLE_VALUE);
+        struct CloseHandleOnExit {
+            HANDLE handle;
+            ~CloseHandleOnExit() { if (handle != INVALID_HANDLE_VALUE) CloseHandle(handle); }
+        } guard{locked};
+        {
+            cybou::FinalizedChunkStore store(blobs, path, fixture.network_binding, 4096);
+            BOOST_CHECK_EQUAL(store.PurgePublication(fixture.operation_id), 0U);
+            BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
+            BOOST_CHECK(blobs.Has(fixture.chunk_id));
+            BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 0U);
+        }
+        {
+            cybou::FinalizedChunkStore store(blobs, path, fixture.network_binding, 4096);
+            BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
+            const cybou::Hash256 other{uint8_t{2}};
+            if (readmit) {
+                const auto lookup = [&](const cybou::Hash256& id) -> std::optional<cybou::RootPublication> {
+                    return id == other ? std::optional{fixture.publication} : std::nullopt;
+                };
+                BOOST_REQUIRE(store.PutChunk(other, fixture.chunk_id, fixture.bytes, fixture.proof, lookup));
+                BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 0U);
+            }
+            BOOST_REQUIRE(CloseHandle(guard.handle));
+            guard.handle = INVALID_HANDLE_VALUE;
+            if (readmit) {
+                BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 0U);
+                BOOST_CHECK(store.HasChunk(fixture.chunk_id));
+                BOOST_CHECK_EQUAL(store.UsedBytes(), fixture.bytes.size());
+                BOOST_CHECK_EQUAL(store.PurgePublication(other), 1U);
+            } else {
+                BOOST_CHECK_EQUAL(store.RetryPendingPurges(), 1U);
+            }
+            BOOST_CHECK_EQUAL(store.UsedBytes(), 0U);
+            BOOST_CHECK(!blobs.Has(fixture.chunk_id));
+        }
+        std::filesystem::remove_all(path);
+    }
+}
+#endif
 
 BOOST_AUTO_TEST_CASE(storage_audit_challenge_and_proof_verification)
 {

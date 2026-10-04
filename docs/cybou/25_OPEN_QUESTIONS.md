@@ -47,3 +47,19 @@ Still open:
 - repair cadence and retry/backoff;
 - scalable discovery after small-network fan-out;
 - measured provider independence for the two-replica Beta target.
+
+## Data assurance and erasure assessment
+
+[`DATA_ASSURANCE_AND_ERASURE.md`](DATA_ASSURANCE_AND_ERASURE.md) records the
+current evidence limits and a proposed recovery/erasure design. It does not
+change frozen protocol decisions. Gates before implementing stronger claims:
+
+- reconcile mnemonic/self-capsule recovery with per-object erasure, including
+  retained envelopes, historical KEM seeds, recovery bridges and old backups;
+- specify recovery-store durability and rollback handling without treating a
+  compliant client's refusal to decrypt as cryptographic destruction;
+- distinguish remote admission ACKs, signed obligations, recent full-chunk
+  checks and physical/administrative replica independence;
+- verify managed purge under blob deletion failure, crashes and shared chunks;
+- justify any canonical storage obligation register by concrete accounting
+  transitions; commitments alone do not prove physical 1:3 contribution.
