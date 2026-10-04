@@ -144,18 +144,26 @@ void CybouActivityButton::showPopup()
     m_popup->show();
 }
 
-void CybouActivityButton::rebuildRows()
+namespace {
+/// Empties a layout at every depth. Row labels live in a nested layout, so a one-level
+/// clear left stale titles painted under the new rows; widgets are hidden at once because
+/// deleteLater() only removes them on the next event loop pass.
+void ClearRows(QLayout* layout)
 {
-    while (QLayoutItem* item = m_rows->takeAt(0)) {
-        if (item->layout()) {
-            while (QLayoutItem* inner = item->layout()->takeAt(0)) {
-                if (inner->widget()) inner->widget()->deleteLater();
-                delete inner;
-            }
+    while (QLayoutItem* item = layout->takeAt(0)) {
+        if (QLayout* inner = item->layout()) ClearRows(inner);
+        if (QWidget* widget = item->widget()) {
+            widget->hide();
+            widget->deleteLater();
         }
-        if (item->widget()) item->widget()->deleteLater();
         delete item;
     }
+}
+} // namespace
+
+void CybouActivityButton::rebuildRows()
+{
+    ClearRows(m_rows);
     QWidget* parent = m_rows->parentWidget();
     const auto operations = CybouActivityOperations(*m_model);
     for (qsizetype i = 0; i < operations.size() && i < 12; ++i) {

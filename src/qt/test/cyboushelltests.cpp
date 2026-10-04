@@ -632,6 +632,22 @@ void CybouShellTests::activityListsRunningAndFailedOperations()
 
     CybouActivityButton button{&model};
     QCOMPARE(button.text(), QStringLiteral("1 needs attention"));
+    // Refreshing an open popup must not leave stale row labels painted under the new ones.
+    button.click();
+    const auto popup = button.findChild<QFrame*>(QStringLiteral("activityPopup"));
+    QVERIFY(popup);
+    const auto visible_titles = [&] {
+        QCoreApplication::processEvents(); // new row widgets are shown on the next event loop pass
+        int count{0};
+        for (const auto* label : popup->findChildren<QLabel*>(QStringLiteral("rowTitle"))) count += label->isVisible();
+        return count;
+    };
+    QCOMPARE(visible_titles(), 2);
+    model.setFileItems({uploading, done});
+    QCOMPARE(visible_titles(), 1);
+    model.setFileItems({uploading, failed, done});
+    QCOMPARE(visible_titles(), 2);
+    popup->hide();
     model.setFileItems({done});
     QCOMPARE(button.text(), QStringLiteral("0 in progress"));
     QVERIFY(button.isHidden());
