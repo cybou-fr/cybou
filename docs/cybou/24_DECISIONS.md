@@ -1,10 +1,11 @@
 # 24 â€” Current product and protocol decisions
 
-## Security standards precedence
+## Security, privacy and resilience precedence
 
-Applicable current published security standards take precedence over frozen
-internal decisions for security acceptance and public claims, as required by
-`AGENTS.md`. [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) records primary
+Applicable law (RGPD and NIS2 where applicable), adopted ANSSI/ISO controls and
+CIA objectives take precedence over internal decisions under `AGENTS.md` and
+[`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md). Technical standards support
+this broader baseline. [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) records primary
 sources and implementation gaps. Resolve conflicts by revising decisions and
 planning compatibility before release; drafts remain experimental. This rule
 does not itself modify wire bytes, keys, cryptographic domains or genesis.

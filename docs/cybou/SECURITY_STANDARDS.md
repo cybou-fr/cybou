@@ -1,6 +1,7 @@
 # Security standards and evidence
 
-Reviewed: 2026-10-04. Authority: the standards-precedence rule in `AGENTS.md`.
+Reviewed: 2026-10-04. Supporting technical register under
+[`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) and `AGENTS.md`.
 Scope: cryptographic primitives, transport, key lifecycle and data deletion.
 This is an initial applicability register, not an exhaustive standards audit.
 

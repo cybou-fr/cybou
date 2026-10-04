@@ -4,6 +4,21 @@ This document is an engineering/compliance planning aid, not legal advice.
 
 CYBOU should obtain professional French/EU legal advice before public commercial launch.
 
+The governing design baseline is [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md):
+applicable RGPD/NIS2 obligations, ANSSI and ISO risk/control references, and CIA
+objectives take precedence over internal product and architecture decisions.
+This planning document records applicability work; it does not certify CYBOU.
+
+## NIS2 and security governance
+
+Determine CYBOU's relevant entity/service classification, size, jurisdiction and
+current French transposition duties before declaring NIS2 applicability. Use
+ANSSI's current information and ReCyF preparation material with their stated
+status. Maintain risk/control evidence, supply-chain and continuity plans, and
+incident-reporting responsibilities; distinguish these from GDPR breach duties.
+ISO/IEC 27001 is the intended ISMS reference and ISO/IEC 27002 informs control
+selection. Neither adoption nor software tests establish certification.
+
 ## 1. Cyber Resilience Act (CRA)
 
 CYBOU is software with security-sensitive network functionality.

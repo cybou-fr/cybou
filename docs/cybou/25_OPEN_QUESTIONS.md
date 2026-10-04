@@ -3,6 +3,15 @@
 These are implementation and integration questions inside the active architecture,
 not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
+## Governing security and privacy gates
+
+Apply [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) before narrowing work
+to technical primitives: establish processing/metadata inventory and roles,
+RGPD and NIS2 applicability, ANSSI risk scenarios, ISO control selection,
+CIA acceptance criteria, continuity objectives and incident/breach response.
+Assign owners and record scoped evidence; these are not completed compliance
+or certification claims.
+
 ## Network and cryptographic identity
 
 - apply the primary-source review gates in [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md), starting with the actual X-Wing construction/vectors and current TLS requirements;

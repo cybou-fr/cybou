@@ -79,9 +79,11 @@ local or PoA execution and never change state.
 
 ## Documentation hierarchy
 
-Applicable current published security standards are the highest technical
-acceptance criterion, above this architecture and frozen decisions. See
-[`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) for sources and evidence gaps.
+Applicable law (RGPD and NIS2 where applicable), adopted ANSSI/ISO risk and
+control requirements, and CIA objectives govern security/privacy acceptance
+above this architecture and frozen decisions. See
+[`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) for the governing baseline;
+[`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) supports technical acceptance.
 Conflicting internal requirements must be corrected with a documented migration
 plan; a citation does not certify the implementation or authorize a genesis reset.
 

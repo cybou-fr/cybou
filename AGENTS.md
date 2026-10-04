@@ -263,10 +263,14 @@ There is no production network.
 
 ## Documentation hierarchy and sources of truth
 
-Applicable current published security standards take precedence over every
-internal document, including this file and frozen decisions, for security
-acceptance and claims. `docs/cybou/SECURITY_STANDARDS.md` records dated primary
-sources, applicability, implementation evidence and unresolved gaps. Drafts
+Applicable French/EU legal obligations (including RGPD and NIS2 where applicable),
+adopted ANSSI/ISO risk and control requirements, and confidentiality, integrity
+and availability objectives take precedence over internal architecture and
+product decisions. `docs/cybou/SECURITY_GOVERNANCE.md` governs this baseline;
+`docs/cybou/SECURITY_STANDARDS.md` is its supporting technical register.
+Distinguish mandatory law, adopted guidance, analysis models and certification.
+Applicable published technical security standards govern acceptance within
+their scope, including over this file and frozen decisions. Drafts
 are explicitly experimental; using a standardized primitive does not certify
 its composition or the product. A conflict requires correcting the internal
 decision and documenting the compatibility/migration plan before release.
