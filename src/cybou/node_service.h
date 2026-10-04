@@ -34,7 +34,9 @@ struct CybouNodeServiceConfig {
 /// \brief Параметры фоновой сети: verified sync, listener и локальная PoA-периодика.
 struct CybouNetworkServiceConfig {
     /// \brief Пауза между sync-pass, если не было полного заполнения batch.
-    std::chrono::milliseconds sync_interval{3000};
+    /// \details Тот же такт, что у headless-узлов: PoA забирает кандидатов и рассылает новый
+    ///          блок на этом такте, поэтому 3 с давали до ~6 с задержки на каждую операцию.
+    std::chrono::milliseconds sync_interval{250};
     /// \brief Верхняя граница числа finalized blocks, запрашиваемых за один sync-pass.
     uint64_t sync_batch_size{64};
     /// \brief Целевой интервал локальной PoA-финализации, миллисекунды.
