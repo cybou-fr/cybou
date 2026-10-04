@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -63,7 +64,8 @@ public:
         uint64_t work_nonce, bool allow_seen_retry = false);
     /// \brief Возвращает текущую голову FIFO без резервирования для передачи.
     /// \return Копия головы очереди или std::nullopt, если очередь пуста.
-    std::optional<RelayedOperation> Peek() const;
+    std::optional<RelayedOperation> Peek(
+        const std::function<bool(const cybou::Hash256&)>& skip = {}) const;
     /// \brief Резервирует голову FIFO под одну активную передачу peer-to-peer.
     /// \return Копия головы очереди или std::nullopt, если очередь пуста либо уже есть активный claim.
     /// \post До Release()/Acknowledge() новый Claim() не выдаст другую операцию.

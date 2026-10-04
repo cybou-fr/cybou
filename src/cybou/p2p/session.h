@@ -318,6 +318,7 @@ private:
     cybou::Hash256 m_served_attestation_base;
     /// \brief Attestation'ы, уже выданные этому пиру на текущей финализованной базе, чтобы не дублировать gossip в пределах сеанса.
     std::set<ValidationPool::Key> m_served_attestations;
+    std::set<cybou::Hash256> m_served_operations;
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };
 

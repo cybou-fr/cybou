@@ -70,11 +70,14 @@ OperationRelayEnqueueStatus OperationRelay::Enqueue(
     return OperationRelayEnqueueStatus::QUEUED;
 }
 
-std::optional<RelayedOperation> OperationRelay::Peek() const
+std::optional<RelayedOperation> OperationRelay::Peek(
+    const std::function<bool(const cybou::Hash256&)>& skip) const
 {
     std::lock_guard lock{m_mutex};
-    if (m_queue.empty()) return std::nullopt;
-    return m_queue.front();
+    for (const auto& item : m_queue) {
+        if (!skip || !skip(item.operation_id)) return item;
+    }
+    return std::nullopt;
 }
 
 std::optional<RelayedOperation> OperationRelay::Claim()

@@ -96,7 +96,9 @@ int main(int argc, char* argv[])
 
         cybou::CybouIdentityService identity{runtime, work / "identity.vault"};
         const std::string password{"smoke test vault password"};
-        if (!identity.PrepareNewIdentity()) Fail("cannot prepare identity");
+        if (std::filesystem::exists(work / "identity.vault")) {
+            if (!identity.LoadVault(password)) Fail("cannot unlock existing smoke vault");
+        } else if (!identity.PrepareNewIdentity()) Fail("cannot prepare identity");
         const auto created = identity.CreateIdentitySync(password, nullptr, 120s);
         if (!created.success) Fail("identity creation: " + created.error_message);
         Step("IDENTITY finalized");

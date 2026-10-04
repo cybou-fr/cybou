@@ -394,6 +394,9 @@ public:
     /// \brief Резервирует голову relay-очереди для одной активной передачи.
     /// \return Exact bytes текущей головы relay-очереди или std::nullopt.
     std::optional<RelayedOperation> ClaimRelayedOperation();
+    /// Next locally valid relay candidate not already served to this session.
+    std::optional<RelayedOperation> NextRelayedOperation(
+        const std::function<bool(const cybou::Hash256&)>& skip) const;
     /// \brief Освобождает ранее зарезервированную relay-операцию после неуспешной отправки.
     /// \param operation_id OperationID, ранее возвращённый ClaimRelayedOperation().
     void ReleaseRelayedOperation(const cybou::Hash256& operation_id);

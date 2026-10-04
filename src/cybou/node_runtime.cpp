@@ -617,6 +617,12 @@ std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
     return m_operation_relay.Claim();
 }
 
+std::optional<RelayedOperation> CybouNodeRuntime::NextRelayedOperation(
+    const std::function<bool(const cybou::Hash256&)>& skip) const
+{
+    return m_operation_relay.Peek(skip);
+}
+
 void CybouNodeRuntime::ReleaseRelayedOperation(const cybou::Hash256& operation_id)
 {
     m_operation_relay.Release(operation_id);

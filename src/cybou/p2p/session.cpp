@@ -1206,17 +1206,16 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     }
     if (request->type == MessageType::OP_POLL) {
         if (!m_peer || !request->payload.empty()) return false;
-        const auto item = runtime.ClaimRelayedOperation();
+        std::erase_if(m_served_operations, [&](const auto& id) { return !runtime.HasRelayedOperation(id); });
+        const auto item = runtime.NextRelayedOperation(
+            [&](const auto& id) { return m_served_operations.contains(id); });
         const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
         if (!item) return SendOperation({}, 0, deadline);
-        if (!SendOperation(item->exact_bytes, item->work_nonce, deadline)) {
-            runtime.ReleaseRelayedOperation(item->operation_id);
-            return false;
-        }
+        if (!SendOperation(item->exact_bytes, item->work_nonce, deadline)) return false;
         const auto result = ReadOperationResult(item->operation_id, deadline);
-        if (result && static_cast<bool>(*result))
-            return runtime.AcknowledgeRelayedOperation(item->operation_id);
-        runtime.ReleaseRelayedOperation(item->operation_id);
+        // A transport ACK completes delivery to this session only. Other peers,
+        // including a later-connected PoA holder, still need the candidate.
+        if (result && static_cast<bool>(*result)) m_served_operations.insert(item->operation_id);
         return result.has_value();
     }
     if (request->type == MessageType::VALIDATION_ATTESTATION_POLL) {

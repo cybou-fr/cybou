@@ -541,6 +541,10 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     BOOST_CHECK(second_submitted.acknowledgment->status == cybou::OperationSubmitStatus::RELAY_QUEUED);
     BOOST_CHECK(second_submitted.acknowledgment->op_id == *second_client_operation_id);
 
+    // A returning author may poll before PoA. Its ACK must not consume the
+    // shared candidate or prevent any other session from receiving it.
+    BOOST_CHECK_EQUAL(client_peers.PollOperationRelays(), 1U);
+    BOOST_CHECK_EQUAL(client_peers.PollOperationRelays(), 0U);
     BOOST_CHECK_EQUAL(relay_mesh_peers.PollOperationRelays(), 1U);
     BOOST_CHECK_EQUAL(authority_peers.PollOperationRelays(), 2U);
     BOOST_REQUIRE(authority.IsPoaSignerActive());
