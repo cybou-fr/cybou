@@ -70,6 +70,12 @@ def vps(script: str, check: bool = True, timeout: int | None = None) -> str:
     return sh(["ssh", "-o", "BatchMode=yes", VPS, script], check, timeout)
 
 
+def wsl_spawn(command: str, log_file: str, pid_file: str) -> None:
+    """Starts a long-lived WSL process. A plain `cmd &` dies when wsl.exe returns, setsid -f survives."""
+    wsl(f"setsid -f bash -c 'echo $$ > {pid_file}; exec {command}' > {log_file} 2>&1 < /dev/null; "
+        f"for i in $(seq 25); do [ -s {pid_file} ] && break; sleep 0.2; done")
+
+
 def wsl_path(path: Path) -> str:
     """C:\\x\\y -> /mnt/c/x/y for WSL commands."""
     text = str(path).replace("\\", "/")
@@ -156,9 +162,10 @@ class Battle:
             node = f"{self.wsl_dir}/node-{i}"
             peers = "\\n".join(f"{a} {p}" for a, p in everyone if (a, p) != (address, port))
             wsl(f"mkdir -p {node} && cp -r {self.wsl_dir}/geo-seed {node}/geo 2>/dev/null; printf '{peers}\\n' > {node}/peers.txt; "
-                f"nohup {WSL_BIN}/cybou node run --network devnet --data-dir {node} --listen 0.0.0.0:{port} "
-                f"--advertise {address}:{port} --peers {node}/peers.txt --peer-admission france --capacity {capacity} "
-                f"--event-log {node}/events.jsonl > {node}/node.log 2>&1 & echo $! > {node}/pid")
+                f"true")
+            wsl_spawn(f"{WSL_BIN}/cybou node run --network devnet --data-dir {node} --listen 0.0.0.0:{port} "
+                      f"--advertise {address}:{port} --peers {node}/peers.txt --peer-admission france --capacity {capacity} "
+                      f"--event-log {node}/events.jsonl", f"{node}/node.log", f"{node}/pid")
         if eps["vps"]:
             vps(f"sudo nft add rule inet cybou_guard input tcp dport {VPS_PORT}-{VPS_PORT + len(eps['vps']) - 1} "
                 f"accept comment \\\"{NFT_COMMENT}\\\"")
@@ -215,8 +222,9 @@ class Battle:
         for path, peer in self.wsl_clients():
             seeds = " ".join(f"mkdir -p {path}/identity-{i}/node && cp -r {self.wsl_dir}/geo-seed {path}/identity-{i}/node/geo 2>/dev/null;"
                              for i in range(self.args.identities))
-            wsl(f"{seeds} nohup {WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {wsl_password} "
-                f"{' '.join(self.client_args('mail', '0s', None))} > {path}/prepare.log 2>&1 & echo $! > {path}/prepare.pid")
+            wsl(f"{seeds} true")
+            wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {wsl_password} "
+                      f"{' '.join(self.client_args('mail', '0s', None))}", f"{path}/prepare.log", f"{path}/prepare.pid")
         for process in waits:
             if process.wait(timeout=900) != 0:
                 raise RuntimeError("a Windows client failed to create its Identities; see prepare.log")
@@ -263,9 +271,9 @@ class Battle:
                                         self.client_args(self.args.profile, self.args.duration, str(path / "metrics.json")),
                                         path / "load.log"))
         for path, peer in self.wsl_clients():
-            wsl(f"nohup {WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {self.wsl_dir}/password.txt "
-                f"{' '.join(self.client_args(self.args.profile, self.args.duration, path + '/metrics.json'))} "
-                f"> {path}/load.log 2>&1 & echo $! > {path}/load.pid")
+            wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {self.wsl_dir}/password.txt "
+                      f"{' '.join(self.client_args(self.args.profile, self.args.duration, path + '/metrics.json'))}",
+                      f"{path}/load.log", f"{path}/load.pid")
         while any(p.poll() is None for p in processes) or self.wsl_load_running():
             self.sample()
             time.sleep(10)
