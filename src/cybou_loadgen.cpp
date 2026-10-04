@@ -341,6 +341,13 @@ int main(int argc,char* argv[]) {
                 }
             }
         }
+        if (profile=="payments" || profile=="system-locks" || profile=="mixed") {
+            // A restarted client node catches up on the funding blocks before its Balance shows it.
+            const auto funded_deadline=Clock::now()+120s;
+            for (const auto& client : clients)
+                while (!stop && client->wallet->GetBalances().first==0 && Clock::now()<funded_deadline)
+                    std::this_thread::sleep_for(500ms);
+        }
         if (profile=="payments" || profile=="system-locks" || profile=="mixed")
             for (const auto& client : clients) if (client->wallet->GetBalances().first==0)
                 throw std::runtime_error("financial profile requires pre-funded DEVNET identities; no test funding bypass exists");
