@@ -82,12 +82,18 @@ BOOST_AUTO_TEST_CASE(public_policy_fails_closed_for_unclassified_routes)
     const auto public_policy = cybou::p2p::PeerAdmissionPolicy::Public(dataset);
     BOOST_CHECK(public_policy.Ready());
     BOOST_CHECK(public_policy.Allows("198.51.100.42"));
-    BOOST_CHECK(!public_policy.Allows("127.0.0.1"));
+    BOOST_CHECK(!public_policy.Allows("203.0.113.7"));
     BOOST_CHECK(!cybou::p2p::PeerAdmissionPolicy::Public(nullptr).Ready());
     BOOST_CHECK(!cybou::p2p::PeerAdmissionPolicy::Public(nullptr).Allows("198.51.100.42"));
 
-    BOOST_CHECK(!public_policy.Allows("10.0.0.1"));
-    BOOST_CHECK(!public_policy.Allows("::1"));
+    // Local-network addresses are admitted without Geo data; France-only covers public IPs (DEC-285).
+    for (const auto* local : {"127.0.0.1", "10.0.0.1", "172.20.1.2", "192.168.1.10", "169.254.3.4",
+             "::1", "fd00::1", "fe80::1", "::ffff:192.168.1.10"}) {
+        BOOST_CHECK_MESSAGE(cybou::p2p::PeerAdmissionPolicy::Public(nullptr).Allows(local), local);
+    }
+    for (const auto* outside : {"172.32.0.1", "11.0.0.1", "192.169.0.1", "2001:db8::1", "not-an-ip"}) {
+        BOOST_CHECK_MESSAGE(!cybou::p2p::IsLocalNetworkAddress(outside), outside);
+    }
     std::filesystem::remove(path);
 }
 

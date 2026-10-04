@@ -26,6 +26,12 @@ allowed French endpoint. CYBOU makes no external GeoIP API calls. Production
 and DEV fail closed for public P2P when mandatory Geo data is absent, corrupt,
 or expired. Development follows the same France-only admission policy.
 
+The rule covers public addresses. Local-network addresses that are never
+publicly routed (loopback `127.0.0.0/8` and `::1`, RFC 1918 `10/8`,
+`172.16/12`, `192.168/16`, link-local `169.254/16` and `fe80::/10`, IPv6 ULA
+`fc00::/7`) are admitted without Geo data, so an operator's own machines, VMs
+and LAN peers form a mesh (DEC-285). Such peers gain no consensus authority.
+
 Known VPN/proxy/Tor filtering is an optional local protection using local
 classification data. It can reject only addresses present in that data and
 does not guarantee detection of unknown tunnels or relays. Its setting and

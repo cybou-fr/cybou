@@ -166,8 +166,30 @@ PeerAdmissionPolicy PeerAdmissionPolicy::PublicWithUpdater(std::shared_ptr<GeoDa
     return policy;
 }
 
+bool IsLocalNetworkAddress(const std::string_view numeric_address)
+{
+    boost::system::error_code ec;
+    auto address = boost::asio::ip::make_address(std::string{numeric_address}, ec);
+    if (ec) return false;
+    if (address.is_v6() && address.to_v6().is_v4_mapped()) {
+        address = boost::asio::ip::make_address_v4(boost::asio::ip::v4_mapped, address.to_v6());
+    }
+    if (address.is_v4()) {
+        const auto value = address.to_v4().to_uint();
+        return (value & 0xFF000000U) == 0x7F000000U || // 127.0.0.0/8
+            (value & 0xFF000000U) == 0x0A000000U ||    // 10.0.0.0/8
+            (value & 0xFFF00000U) == 0xAC100000U ||    // 172.16.0.0/12
+            (value & 0xFFFF0000U) == 0xC0A80000U ||    // 192.168.0.0/16
+            (value & 0xFFFF0000U) == 0xA9FE0000U;      // 169.254.0.0/16
+    }
+    const auto bytes = address.to_v6().to_bytes();
+    return address.is_loopback() || (bytes[0] & 0xFEU) == 0xFCU ||   // fc00::/7
+        (bytes[0] == 0xFEU && (bytes[1] & 0xC0U) == 0x80U);          // fe80::/10
+}
+
 bool PeerAdmissionPolicy::Allows(const std::string_view numeric_address) const
 {
+    if (IsLocalNetworkAddress(numeric_address)) return true;
     const auto dataset = m_dataset ? m_dataset : (m_updater ? m_updater->CurrentDataset() : nullptr);
     return dataset && dataset->IsFrench(numeric_address);
 }

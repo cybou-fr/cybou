@@ -196,8 +196,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
 
 bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) const
 {
-    return m_config.peer_admission_policy && m_config.peer_admission_policy->Ready() &&
-        m_config.peer_admission_policy->Allows(numeric_address);
+    // Allows() itself fails closed for public addresses without Geo data (DEC-285).
+    return m_config.peer_admission_policy && m_config.peer_admission_policy->Allows(numeric_address);
 }
 
 CybouNodeRuntime::~CybouNodeRuntime()

@@ -129,7 +129,9 @@ BOOST_AUTO_TEST_CASE(public_peer_policy_rejects_before_opening_socket)
     cybou::CybouNodeRuntime runtime{std::move(config)};
     BOOST_REQUIRE(runtime.InitializeGenesis(fixture.genesis));
     cybou::p2p::PeerManager peers{runtime};
-    BOOST_CHECK(!peers.Connect("127.0.0.1", 1));
+    // A public address without Geo data is refused before any socket; local ones are admitted (DEC-285).
+    BOOST_CHECK(runtime.AdmitPeerAddress("127.0.0.1"));
+    BOOST_CHECK(!peers.Connect("198.51.100.42", 1));
     BOOST_CHECK(peers.LastConnectStatus() == cybou::p2p::PeerConnectStatus::ADMISSION_REJECTED);
     BOOST_CHECK_EQUAL(peers.ConnectedCount(), 0);
 }

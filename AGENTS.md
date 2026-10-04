@@ -291,7 +291,9 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
   until they are finalized into blocks. A PoA node produces blocks from that same pool.
 - Public P2P admission is France-only in production/DEV, for inbound and
   outbound peers for every Full Node. Classification uses local Geo data;
-  unavailable/corrupt data fails closed. Development uses the same admission rule. Optional VPN/proxy/Tor filtering is local
+  unavailable/corrupt data fails closed. Development uses the same admission rule.
+  Local-network addresses (loopback, RFC 1918, link-local, IPv6 ULA) are not
+  public and are admitted without Geo data (DEC-285). Optional VPN/proxy/Tor filtering is local
   policy and never changes consensus or Identity.
 - Bootstrap nodes do not vote, form a quorum, or finalize. PoA remains
   single-operator finality under the active Authority key.

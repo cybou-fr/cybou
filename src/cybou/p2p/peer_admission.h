@@ -58,6 +58,10 @@ private:
 };
 
 /// \brief Локальная политика допуска, которая не влияет на консенсус, Identity и балансы.
+/// \brief true для loopback, RFC 1918, link-local и IPv6 ULA: адресов, которые не маршрутизируются публично.
+/// \details France-only Geo-правило относится к публичным адресам; локальная сеть оператора им не охвачена.
+bool IsLocalNetworkAddress(std::string_view numeric_address);
+
 class PeerAdmissionPolicy final {
 public:
     /// \brief Создает готовую политику из уже загруженного датасета.
@@ -67,9 +71,10 @@ public:
     /// \param updater Фоновый обновлятор кэша DB-IP Lite.
     static PeerAdmissionPolicy PublicWithUpdater(std::shared_ptr<GeoDatabaseUpdater> updater);
 
-    /// \brief Возвращает true, если адрес разрешен текущим локальным датасетом.
+    /// \brief Возвращает true для адреса локальной сети или французского публичного адреса (DEC-285).
     /// \param numeric_address Числовой IPv4/IPv6 адрес.
-    /// \return `false`, если датасет недоступен, адрес нечисловой или диапазон не французский.
+    /// \return Локальный (loopback, private, link-local, ULA) — всегда; публичный — только если датасет
+    ///         доступен и диапазон французский; нечисловой — `false`.
     bool Allows(std::string_view numeric_address) const;
     /// \brief Возвращает true, когда политика уже располагает пригодным датасетом.
     /// \return `true`, если ready-кэш уже загружен напрямую или доступен через updater.

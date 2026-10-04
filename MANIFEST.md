@@ -8,7 +8,7 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 486 | 8d2fd227d60ba15b |
+| AGENTS.md | 488 | 57356896ace9c0e2 |
 | CONTRIBUTING.md | 50 | cf30228b23288058 |
 | INSTALL.md | 37 | 21b5ef259577e6d2 |
 | README.md | 149 | e1325490ec086090 |
@@ -26,10 +26,10 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
-| docs/cybou/24_DECISIONS.md | 224 | fc256fdbbf2d481d |
+| docs/cybou/24_DECISIONS.md | 225 | beca3d61eaa4e34f |
 | docs/cybou/25_OPEN_QUESTIONS.md | 95 | 2b7f6636be348a45 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 181 | d7c845ca4672b7cd |
-| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | bae61bcfe18f39de |
+| docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 48 | 1e075f96cb806c7d |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
 | docs/cybou/40_REGULATORY_READINESS_FR_EU.md | 164 | 1c11845f8b35c1e0 |
