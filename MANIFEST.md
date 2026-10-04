@@ -25,7 +25,7 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 104 | 2cdd83fe7bd2c2f6 |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 68 | 08b4831d155d06d3 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
-| docs/cybou/22_ROADMAP.md | 74 | 2b17b61a963ff3eb |
+| docs/cybou/22_ROADMAP.md | 74 | f0b1dff0576087ac |
 | docs/cybou/24_DECISIONS.md | 223 | 52102f02183b60a0 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 97 | df66d206b657af4e |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 176 | 19b9d86286a7798d |
@@ -63,13 +63,14 @@ editing an included file.
 | docs/cybou/DATA_PROCESSING_INVENTORY.md | 76 | 0cc58d2327cf6eca |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |
 | docs/cybou/DEVNET_LIVE_ACCEPTANCE.md | 98 | 408b3d2fce69dcd3 |
+| docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 165 | c79478b1d6764e76 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
 | docs/cybou/P2P_TRANSPORT.md | 101 | 9d42e5852645726c |
 | docs/cybou/POA_FINALITY.md | 75 | c16c95f29dfa894a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
-| docs/cybou/README.md | 84 | 16c331edca637feb |
+| docs/cybou/README.md | 85 | 2c5ab7f15bdc1c4a |
 | docs/cybou/ROOT_PUBLICATION.md | 138 | 2e27b102ccf69528 |
 | docs/cybou/SECURITY_GOVERNANCE.md | 75 | a67a214a43175bd8 |
 | docs/cybou/SECURITY_STANDARDS.md | 65 | 76ee18509f85730c |

@@ -75,6 +75,7 @@ from or conflicting with higher levels:
 | [`ENCRYPTED_CHUNK_TREE.md`](ENCRYPTED_CHUNK_TREE.md) | Encrypted ROOT/INDEX/DATA chunk tree structure | Level 2 | Active |
 | [`IDENTITY_DISCOVERY_AND_RECOVERY.md`](IDENTITY_DISCOVERY_AND_RECOVERY.md) | Clean-machine identity restore and publication scanning | Level 2 | Active |
 | [`DEVNET_DEVELOPMENT.md`](DEVNET_DEVELOPMENT.md) | Existing DEVNET, operator commands and development checks | — | Active |
+| [`DEVNET_STORAGE_ECONOMY_CUTOVER.md`](DEVNET_STORAGE_ECONOMY_CUTOVER.md) | M7 runbook: new Network Root, NetworkID and genesis for the storage economy | — | Prepared, not executed |
 | [`POA_FINALITY.md`](POA_FINALITY.md) | Genesis-authorized single-operator PoA, anti-equivocation journal | Level 2 | Active |
 | [`POA_FINALITY_VECTORS.md`](POA_FINALITY_VECTORS.md) | PoA block and certificate test vectors | Level 2 | Active |
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
