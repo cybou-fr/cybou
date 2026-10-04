@@ -1,5 +1,12 @@
 # Post-quantum cryptography profile
 
+Applicable published standards take precedence under
+[`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md). ML-KEM and ML-DSA primitive
+references do not certify their hybrid compositions. The existing DEV X-Wing
+profile is experimental: current-draft equivalence is unverified, and existing
+vector tests cite earlier concrete-hybrid-KEM drafts. Preserve exact bytes
+until the construction/vector review and any required transition are specified.
+
 Identity key roles are derived from the 24-word recovery entropy with separate domain-separated derivation labels. Recovery uses Ed25519 + ML-DSA-65. Account authorization uses Ed25519 + ML-DSA-44. Recipient key agreement uses a separate X-Wing seed (ML-KEM-768 + X25519). Signing and KEM keys are never reused across roles.
 
 The DEV X-Wing publication profile pins draft-05 and is bound to AccountID and key_epoch by the finalized Identity state commitment. Beta and Mainnet remain disabled until separately approved. Mail must remain fail-closed until the vetted HPKE backend, exact envelope transcript, evidence verification, and desktop send/receive flow are integrated.

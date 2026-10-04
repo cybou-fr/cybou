@@ -5,6 +5,7 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Network and cryptographic identity
 
+- apply the primary-source review gates in [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md), starting with the actual X-Wing construction/vectors and current TLS requirements;
 - coordinated DEV VPS cutover to an ordinary headless `cybou` node on the re-provisioned DEVNET, serving a TLS certificate that matches the compiled SPKI pin (or a re-pinned locator);
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 

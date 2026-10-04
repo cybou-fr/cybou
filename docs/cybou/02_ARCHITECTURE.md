@@ -79,6 +79,12 @@ local or PoA execution and never change state.
 
 ## Documentation hierarchy
 
+Applicable current published security standards are the highest technical
+acceptance criterion, above this architecture and frozen decisions. See
+[`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) for sources and evidence gaps.
+Conflicting internal requirements must be corrected with a documented migration
+plan; a citation does not certify the implementation or authorize a genesis reset.
+
 CYBOU architecture adheres to a strict hierarchy of authority. Lower levels
 cannot introduce protocol mechanics absent from higher levels:
 - **Level 0 (Implementation authority)**: `AGENTS.md`

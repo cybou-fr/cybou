@@ -263,6 +263,17 @@ There is no production network.
 
 ## Documentation hierarchy and sources of truth
 
+Applicable current published security standards take precedence over every
+internal document, including this file and frozen decisions, for security
+acceptance and claims. `docs/cybou/SECURITY_STANDARDS.md` records dated primary
+sources, applicability, implementation evidence and unresolved gaps. Drafts
+are explicitly experimental; using a standardized primitive does not certify
+its composition or the product. A conflict requires correcting the internal
+decision and documenting the compatibility/migration plan before release.
+This priority does not silently change deployed wire bytes, cryptographic
+domains, keys or immutable genesis; provisioning and cutover still require
+their established authorization. Never claim conformity without evidence.
+
 The documentation has a strict hierarchy; lower levels cannot introduce
 architecture that is absent from higher levels:
 - LEVEL 0 — Implementation authority: `AGENTS.md`

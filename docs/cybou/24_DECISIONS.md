@@ -1,5 +1,14 @@
 # 24 â€” Current product and protocol decisions
 
+## Security standards precedence
+
+Applicable current published security standards take precedence over frozen
+internal decisions for security acceptance and public claims, as required by
+`AGENTS.md`. [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md) records primary
+sources and implementation gaps. Resolve conflicts by revising decisions and
+planning compatibility before release; drafts remain experimental. This rule
+does not itself modify wire bytes, keys, cryptographic domains or genesis.
+
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
