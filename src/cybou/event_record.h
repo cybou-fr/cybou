@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <cstdio>
 #include <map>
+#include <optional>
 #include <mutex>
 #include <string>
 #include <variant>
@@ -63,6 +64,8 @@ class EventWriter final {
     std::uint64_t m_sequence{0};
     std::mutex m_snapshot_mutex;
     std::map<std::string, PeerDiagnostics> m_peers;
+    std::optional<EventFields> m_last_status; ///< Последний записанный node_status.
+    bool m_last_halted{false};
 public:
     /// \brief Открывает event log и генерирует новый run id.
     /// \throws std::runtime_error, если файл нельзя безопасно открыть или невозможно получить случайный `run_id`.

@@ -90,6 +90,27 @@ BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
     BOOST_CHECK_EQUAL(snapshot.height,fixture.runtime->GetStatus().finalized_height);
 }
 
+BOOST_AUTO_TEST_CASE(event_writer_records_node_status_only_on_change)
+{
+    CybouServiceTestFixture fixture;
+    const auto path = fixture.directory / "status-events.jsonl";
+    {
+        cybou::EventWriter writer{path};
+        auto snapshot = fixture.runtime->GetDiagnostics();
+        for (int tick = 0; tick < 5; ++tick) writer.Observe(snapshot);
+        snapshot.height += 1;
+        writer.Observe(snapshot);
+        writer.Observe(snapshot);
+        BOOST_CHECK(writer.Good());
+    }
+    std::ifstream file{path};
+    size_t status_lines{0};
+    for (std::string line; std::getline(file, line);) {
+        if (line.find("\"event\":\"node_status\"") != std::string::npos) ++status_lines;
+    }
+    BOOST_CHECK_EQUAL(status_lines, 2U);
+}
+
 BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
 {
     CybouServiceTestFixture fixture;

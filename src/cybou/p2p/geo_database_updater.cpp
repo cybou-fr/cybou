@@ -273,6 +273,13 @@ GeoDatabaseUpdater::GeoDatabaseUpdater(std::filesystem::path data_directory)
 {
 }
 
+bool GeoDatabaseUpdater::WaitUntilReady(const std::chrono::milliseconds timeout)
+{
+    std::unique_lock lock{m_ready_mutex};
+    m_ready_changed.wait_for(lock, timeout, [this] { return m_first_cycle_done || Ready(); });
+    return Ready();
+}
+
 GeoDatabaseUpdater::~GeoDatabaseUpdater()
 {
     if (m_worker.joinable()) {
@@ -416,6 +423,7 @@ bool GeoDatabaseUpdater::RefreshWithRetries(const std::stop_token stop)
                       << (result == RefreshResult::UPDATED ? "updated" : "current") << '\n';
             return true;
         } catch (const std::exception& error) {
+            if (stop.stop_requested()) return false;
             std::clog << "DB-IP Geo update attempt " << attempt + 1 << "/5 failed: " << error.what() << '\n';
         } catch (...) {
             std::clog << "DB-IP Geo update attempt " << attempt + 1 << "/5 failed: unknown error\n";
@@ -448,6 +456,11 @@ void GeoDatabaseUpdater::Run(const std::stop_token stop)
 {
     while (!stop.stop_requested()) {
         const bool success = RefreshWithRetries(stop);
+        {
+            std::lock_guard lock{m_ready_mutex};
+            m_first_cycle_done = true;
+        }
+        m_ready_changed.notify_all();
         if (stop.stop_requested()) break;
         const auto next = NextRefreshDelay(success);
         if (!success) {

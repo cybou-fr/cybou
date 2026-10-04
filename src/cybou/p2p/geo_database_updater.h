@@ -70,6 +70,9 @@ public:
     std::shared_ptr<const FrenchIpDataset> CurrentDataset() const;
     /// \brief Возвращает true, когда сейчас доступен пригодный датасет.
     bool Ready() const { return static_cast<bool>(CurrentDataset()); }
+    /// \brief Ждёт пригодный датасет, но не дольше первого цикла попыток загрузки или `timeout`.
+    /// \return true, если датасет готов; false при исчерпании попыток, остановке или таймауте.
+    bool WaitUntilReady(std::chrono::milliseconds timeout);
 
 private:
     struct Snapshot {
@@ -97,6 +100,10 @@ private:
     std::atomic<std::shared_ptr<const Snapshot>> m_current;
     std::mutex m_wait_mutex;
     std::condition_variable_any m_wakeup;
+    /// \brief Сигнализирует ожидающим `WaitUntilReady` об окончании цикла попыток.
+    std::mutex m_ready_mutex;
+    std::condition_variable m_ready_changed;
+    bool m_first_cycle_done{false};
     std::jthread m_worker;
 #if defined(CYBOU_ENABLE_TEST_HOOKS)
     FetchForTest m_fetch_for_test;

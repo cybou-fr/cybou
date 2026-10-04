@@ -158,7 +158,10 @@ std::set<std::string> AllowedOptions(std::initializer_list<std::string> keys, co
     return allowed;
 }
 
-void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& data_directory)
+/// Однократные команды ждут первую загрузку Geo, иначе публичный P2P закрыт до её конца.
+constexpr std::chrono::seconds ONE_SHOT_GEO_WAIT{120};
+
+void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& data_directory, bool wait_for_geo = true)
 {
     const auto mode = opts.Require("peer-admission");
     if (mode != "france") throw std::invalid_argument("peer admission must be france");
@@ -169,6 +172,12 @@ void ConfigurePeerAdmission(const Options& opts, const std::filesystem::path& da
         // В онлайн-режиме CLI делегирует актуальность updater'у; пока готового
         // датасета нет, публичный P2P останется fail-closed по месту использования.
         auto updater = p2p::GeoDatabaseUpdater::Start(data_directory / "geo");
+        if (wait_for_geo && !updater->Ready()) {
+            std::cerr << "Downloading DB-IP Lite country data for France-only peer admission...\n";
+            if (!updater->WaitUntilReady(ONE_SHOT_GEO_WAIT)) {
+                throw std::runtime_error("France Geo data is unavailable; public P2P stays fail-closed");
+            }
+        }
         peer_admission_policy = std::make_shared<const p2p::PeerAdmissionPolicy>(
             p2p::PeerAdmissionPolicy::PublicWithUpdater(std::move(updater)));
         return;
@@ -513,7 +522,8 @@ int RunNode(const Options& opts)
         throw std::invalid_argument("--identity-vault and --identity-password-file go together");
     }
     if (opts.Has("advertise") && !opts.Has("listen")) throw std::invalid_argument("--advertise requires --listen");
-    ConfigurePeerAdmission(opts, opts.Require("data-dir"));
+    // Долгоживущий узел не ждёт Geo: публичный P2P откроется после первой загрузки.
+    ConfigurePeerAdmission(opts, opts.Require("data-dir"), false);
     StartEvents(opts, "Full Node");
     const auto& network = RequireOfficialNetwork(opts.Require("network"));
     const auto listen = opts.Has("listen") ? std::optional{ParseEndpoint(opts.Get("listen"))} : std::nullopt;
@@ -563,8 +573,10 @@ int RunNode(const Options& opts)
         node->Runtime().SetConfiguredPeerEndpoints(*peers);
     }
     std::atomic<std::uint64_t> last_height{0};
+    // Пишем только смену исхода синхронизации и применённые блоки: тик раз в 250 мс без пиров не событие.
+    std::optional<SyncPeerStatus> last_sync;
     node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval, .listen_endpoint = listen},
-        [&last_height, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
+        [&last_height, &last_sync, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
             if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH ||
                 status.runtime_state == NodeRuntimeState::CORRUPT) {
                 std::cerr << "node state unavailable" << std::endl;
@@ -578,8 +590,11 @@ int RunNode(const Options& opts)
             }
             if (events) {
                 const auto d = node->Runtime().GetDiagnostics();
-                events->Write(sync.IsConnected() ? NodeEvent::sync_progress : NodeEvent::sync_failed,
-                    {{"height", d.height}, {"error_code", std::uint64_t{static_cast<unsigned>(sync.status)}}});
+                if (last_sync != sync.status || sync.status == SyncPeerStatus::BLOCKS_APPLIED) {
+                    events->Write(sync.IsConnected() ? NodeEvent::sync_progress : NodeEvent::sync_failed,
+                        {{"height", d.height}, {"error_code", std::uint64_t{static_cast<unsigned>(sync.status)}}});
+                    last_sync = sync.status;
+                }
                 events->Observe(d);
                 if (!events->Good()) { stopping = true; return false; }
             }
@@ -783,6 +798,14 @@ int Run(int argc, char* argv[])
 #ifdef _WIN32
     std::signal(SIGBREAK, Stop);
 #endif
+    // Geo worker и event writer останавливаются до выхода из процесса, а не во время atexit OpenSSL.
+    struct ReleaseProcessResources {
+        ~ReleaseProcessResources()
+        {
+            peer_admission_policy.reset();
+            events.reset();
+        }
+    } release;
     try {
         if (argc < 2 || !IsCommand(argv[1])) throw std::invalid_argument("unknown command; use --help");
         return Dispatch(argc, argv);

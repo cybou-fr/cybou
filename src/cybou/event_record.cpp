@@ -56,11 +56,16 @@ void EventWriter::Observe(const NodeDiagnosticsSnapshot& d) {
         if (!peer.storage_id.empty()) Write(NodeEvent::storage_disconnected,{{"storage_id",peer.storage_id}});
     }
     m_peers = std::move(peers);
-    Write(NodeEvent::node_status,{{"network_binding",d.network_binding},{"node_type",d.node_type},
+    // node_status пишется только при изменении наблюдаемого состояния, а не на каждом тике.
+    const EventFields status{{"network_binding",d.network_binding},{"node_type",d.node_type},
         {"poa_signer_active",d.poa_signer_active},{"height",d.height},
         {"tip",d.tip},{"state_root",d.state_root},{"peers",std::uint64_t{d.peers.size()}},
-        {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}});
-    if (d.safety_halted) Write(NodeEvent::poa_safety_halt);
+        {"storage_used",d.storage_used},{"storage_capacity",d.storage_capacity},{"safety_halted",d.safety_halted}};
+    if (m_last_status && *m_last_status == status) return;
+    Write(NodeEvent::node_status,status);
+    if (d.safety_halted && !(m_last_status && m_last_halted)) Write(NodeEvent::poa_safety_halt);
+    m_last_status = status;
+    m_last_halted = d.safety_halted;
 }
 EventWriter::~EventWriter() { if(m_file)std::fclose(m_file); }
 bool EventWriter::Good() const { std::lock_guard lock{m_mutex}; return m_file && std::ferror(m_file)==0; }
