@@ -35,6 +35,7 @@ BOOST_AUTO_TEST_CASE(wallet_reads_finalized_balances_and_rejects_invalid_payment
     const auto entries = wallet.GetLedgerEntries();
     BOOST_REQUIRE_EQUAL(entries.size(), 1U);
     BOOST_CHECK(entries[0].kind == cybou::WalletEntryKind::ONBOARDING_BONUS);
+    BOOST_CHECK(!fixture.runtime->IsTreasuryClaimant(*alice_id));
     BOOST_CHECK(entries[0].finality == cybou::WalletEntryFinality::FINAL);
     BOOST_CHECK_EQUAL(entries[0].amount, static_cast<int64_t>(system_balance));
     BOOST_CHECK_EQUAL(wallet.SyncLedger(), 0U);

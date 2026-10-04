@@ -460,6 +460,17 @@ std::optional<AccountState> CybouNodeRuntime::GetAccountState(const AccountId& a
     return it->second;
 }
 
+bool CybouNodeRuntime::IsTreasuryClaimant(const AccountId& account_id) const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (!loaded || !loaded.state) return false;
+    return std::any_of(loaded.state->genesis_allocations.begin(), loaded.state->genesis_allocations.end(),
+        [&](const auto& entry) {
+            return entry.second.label == CENTRAL_AUTHORITY_NAME && entry.second.claimed_by == account_id;
+        });
+}
+
 std::optional<uint64_t> CybouNodeRuntime::PrepareOperationWork(const ProtocolOperation& op)
 {
     // The originating node does the relay proof-of-work (DEC-273) outside the

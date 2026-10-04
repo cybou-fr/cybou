@@ -279,7 +279,9 @@ size_t CybouWalletService::SyncLedger()
             std::visit([&](const auto& op) {
                 using T = std::decay_t<decltype(op)>;
                 if constexpr (std::is_same_v<T, AccountCreateOp>) {
-                    if (op.account_id == *my_account) {
+                    // The Treasury claimant receives no onboarding bonus (DEC-277).
+                    if (op.account_id == *my_account && params.onboarding_bonus > 0 &&
+                        !m_runtime.IsTreasuryClaimant(*my_account)) {
                         const auto it = std::find_if(working_entries.begin(), working_entries.end(), [&](const auto& e) {
                             return e.entry_id == op_id;
                         });

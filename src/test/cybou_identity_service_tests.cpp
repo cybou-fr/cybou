@@ -5,6 +5,7 @@
 #include <cybou/poa_finalizer.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/identity_service.h>
+#include <cybou/wallet_service.h>
 #include <cybou/identity_material.h>
 #include <cybou/network_genesis.h>
 #include <cybou/name_service.h>
@@ -567,6 +568,13 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_claim_e2e)
     BOOST_CHECK_EQUAL(it->second.balance, 100'000'000u);
     // Claiming the Treasury allocation `cybou` brings no onboarding bonus: it is its source (DEC-277).
     BOOST_CHECK_EQUAL(it->second.system_balance, 0u);
+    BOOST_CHECK(runtime.IsTreasuryClaimant(result.account_id));
+    // Its wallet history therefore shows no welcome credit.
+    cybou::CybouWalletService wallet{runtime, service.GetKeyStore()};
+    wallet.SyncLedger();
+    const auto ledger = wallet.GetLedgerEntries();
+    BOOST_CHECK(std::none_of(ledger.begin(), ledger.end(),
+        [](const auto& entry) { return entry.kind == cybou::WalletEntryKind::ONBOARDING_BONUS; }));
 
     const auto alloc_it = loaded.state->genesis_allocations.find(*recovery_id);
     BOOST_REQUIRE(alloc_it != loaded.state->genesis_allocations.end());

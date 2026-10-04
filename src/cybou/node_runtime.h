@@ -295,6 +295,9 @@ public:
     /// \param account_id Искомый AccountID.
     /// \return AccountState или std::nullopt, если state не инициализирован либо аккаунт отсутствует.
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
+    /// \brief true, если аккаунт заявил genesis-аллокацию Central Treasury (`cybou`).
+    /// \details Claimant Treasury не получает onboarding bonus: он его источник (DEC-277).
+    bool IsTreasuryClaimant(const AccountId& account_id) const;
     /// \brief true, пока финализированная RootPublication числится в регистре (не отозвана).
     bool IsPublicationActive(const cybou::Hash256& publication_id) const;
     /// \brief true, если финализированная аренда покрывает текущий несettled период (DEC-279).
