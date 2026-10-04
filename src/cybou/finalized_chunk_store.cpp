@@ -296,6 +296,29 @@ std::uint64_t FinalizedChunkStore::UsedBytes() const
     return bytes.value_or(std::numeric_limits<std::uint64_t>::max());
 }
 
+std::vector<FinalizedChunkStore::PublicationHolding> FinalizedChunkStore::Holdings() const
+{
+    std::lock_guard lock{m_mutex};
+    const std::string associations = m_namespace + "/publication-chunk/";
+    const size_t hex = 2 * ChunkId{}.size();
+    const size_t key_size = associations.size() + 64 + 1 + hex;
+    std::map<cybou::Hash256, PublicationHolding> holdings;
+    m_db->ForEachStringPrefixRaw(associations, key_size, [&](const std::string& key, const std::string&) {
+        const auto publication = cybou::Hash256::FromHex(std::string_view{key}.substr(associations.size(), 64));
+        const auto chunk = ParseChunkId(std::string_view{key}.substr(key.size() - hex));
+        if (!publication || !chunk) return;
+        std::uint64_t size{0};
+        if (!m_db->Read(ChunkKey(m_namespace, *chunk), size)) return;
+        auto& holding = holdings[*publication];
+        holding.publication_id = *publication;
+        ++holding.chunks;
+        holding.bytes += size;
+    });
+    std::vector<PublicationHolding> out;
+    for (auto& [_, holding] : holdings) out.push_back(holding);
+    return out;
+}
+
 std::size_t FinalizedChunkStore::PurgePublication(const cybou::Hash256& publication_operation_id)
 {
     if (publication_operation_id.IsNull()) return 0;

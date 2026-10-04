@@ -244,6 +244,19 @@ class Battle:
     def load(self) -> None:
         log(f"load: profile={self.args.profile} rate={self.args.rate}/s per client duration={self.args.duration}")
         processes = []
+        if self.args.desktop_mails:
+            # Letters with attachments to the desktop Identity: its chunks are then stored by battle nodes.
+            path = self.dir / "to-desktop"
+            path.mkdir(parents=True, exist_ok=True)
+            seed_geo(path / "identity-0" / "node")
+            peer = ("127.0.0.1", WIN_PORT) if self.args.win_nodes else BOOTSTRAP
+            args = self.client_args("mail", self.args.duration, str(path / "metrics.json"))
+            args[args.index("--identities") + 1] = "1"
+            processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
+                                         "--password-file", str(PASSWORD_FILE), "--recipient", self.args.desktop_name,
+                                         "--subject", "Battle test letter", "--body", "Battle test letter with an attachment",
+                                         "--attachment-size", self.args.attachment_size,
+                                         "--max-operations", str(self.args.desktop_mails)] + args, path / "load.log"))
         for path, peer in self.win_clients():
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
                                          "--password-file", str(PASSWORD_FILE)] +
@@ -277,12 +290,48 @@ class Battle:
         self.samples.append({"t": stamp, "windows": win,
                              "wsl": wsl(linux, check=False).split("\n"), "vps": vps(linux, check=False).split("\n")})
 
+    def collect_holdings(self) -> None:
+        """After the nodes stop: which owners' chunks every battle node stores."""
+        eps = self.endpoints()
+        rows: list[tuple[str, str]] = []
+        for i in range(len(eps["win"])):
+            rows.append((f"windows:node-{i}", sh([str(WIN_BIN / "cybou.exe"), "storage", "holdings", "--network", "devnet",
+                                                  "--data-dir", str(self.dir / f"win-node-{i}")], check=False)))
+        for i in range(len(eps["wsl"])):
+            rows.append((f"wsl:node-{i}", wsl(f"{WSL_BIN}/cybou storage holdings --network devnet --data-dir {self.wsl_dir}/node-{i}",
+                                              check=False)))
+        for i in range(len(eps["vps"])):
+            rows.append((f"vps:node-{i}", vps(f"{VPS_BIN} storage holdings --network devnet --data-dir {self.vps_dir}/node-{i}",
+                                              check=False)))
+        self.holdings = []
+        for node, text in rows:
+            for line in text.splitlines():
+                if line.startswith("owner="):
+                    fields = dict(part.split("=", 1) for part in line.split())
+                    self.holdings.append((node, fields["owner"], int(fields["chunks"]), int(fields["bytes"])))
+
+    def stop_nodes(self) -> None:
+        """Stops every battle process but keeps the data for collection."""
+        for process in self.processes:
+            if process.poll() is None:
+                process.terminate()
+        for process in self.processes:
+            try:
+                process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        wsl("pkill -f 'cybou-battle' || true; sleep 3", check=False)
+        vps("for u in $(systemctl list-units --plain --no-legend 'cybou-battle-*' | awk '{print $1}'); do sudo systemctl stop $u; done; "
+            "sleep 2", check=False)
+
     def report(self) -> None:
         metrics = []
         for path, _ in self.win_clients():
             file = path / "metrics.json"
             if file.exists():
                 metrics.append(("windows:" + path.name, json.loads(file.read_text())))
+        if (self.dir / "to-desktop" / "metrics.json").exists():
+            metrics.append(("windows:to-desktop", json.loads((self.dir / "to-desktop" / "metrics.json").read_text())))
         for path, _ in self.wsl_clients():
             text = wsl(f"cat {path}/metrics.json 2>/dev/null || true").strip()
             if text:
@@ -310,6 +359,22 @@ class Battle:
             lines.append(f"| {name} | {m['result']} | {m['operations']} | {m['operations_per_s']:.2f} | "
                          f"{w['p50_ms']:.0f} / {w['p95_ms']:.0f} | {f['p50_ms']:.0f} / {f['p95_ms']:.0f} | "
                          f"{p['p50_ms']:.0f} / {p['p95_ms']:.0f} | {m['failed']} |")
+        desktop_owner = self.args.desktop_name
+        mine = [h for h in getattr(self, "holdings", []) if h[1] == desktop_owner]
+        lines += ["", f"## Chunks stored for {desktop_owner}", ""]
+        if mine:
+            lines += ["| Node | Chunks | Bytes |", "|---|---:|---:|"]
+            lines += [f"| {node} | {chunks} | {size} |" for node, _, chunks, size in mine]
+        else:
+            lines.append(f"No battle node stores chunks of {desktop_owner}.")
+        others = {}
+        for node, owner, chunks, size in getattr(self, "holdings", []):
+            others.setdefault(node, [0, 0])
+            others[node][0] += chunks
+            others[node][1] += size
+        if others:
+            lines += ["", "All chunks stored per node:", "", "| Node | Chunks | Bytes |", "|---|---:|---:|"]
+            lines += [f"| {node} | {c} | {b} |" for node, (c, b) in sorted(others.items())]
         lines += ["", f"Peak memory of battle processes: Windows {peak['windows_mib']:.0f} MiB, "
                       f"WSL {peak['wsl_mib']:.0f} MiB, VPS {peak['vps_mib']:.0f} MiB.",
                   "", f"Raw data: `{self.dir}` (metrics.json, events.jsonl, node.log, samples.json)."]
@@ -317,14 +382,7 @@ class Battle:
         print("\n".join(lines))
 
     def stop(self) -> None:
-        for process in self.processes:
-            if process.poll() is None:
-                process.terminate()
-        for process in self.processes:
-            try:
-                process.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        self.stop_nodes()
         cleanup_remote()
 
 
@@ -345,6 +403,8 @@ def cmd_run(args: argparse.Namespace) -> None:
         time.sleep(args.warmup)
         battle.fund(battle.prepare_clients())
         battle.load()
+        battle.stop_nodes()
+        battle.collect_holdings()
         battle.report()
     finally:
         log("stopping battle processes")
@@ -384,6 +444,9 @@ def main() -> None:
     run.add_argument("--fund-each", type=int, default=100000)
     run.add_argument("--drain-timeout", default="10m")
     run.add_argument("--warmup", type=int, default=30, help="seconds for nodes to sync before clients start")
+    run.add_argument("--desktop-name", default="cybou.cybou", help="desktop Identity that receives letters")
+    run.add_argument("--desktop-mails", type=int, default=20, help="letters with attachments sent to the desktop")
+    run.add_argument("--attachment-size", default="512KiB")
     sub.add_parser("cleanup")
     args = parser.parse_args()
     {"funder": cmd_funder, "run": cmd_run, "cleanup": cmd_cleanup}[args.command](args)

@@ -306,6 +306,15 @@ public:
     std::optional<StorageLeaseRecord> GetStorageLease(const cybou::Hash256& publication_id) const;
     /// \brief Finalized курсор StorageSettlement (следующий период и его UTC-начало).
     std::optional<StorageSettlementCursor> GetStorageSettlementCursor() const;
+    /// \brief Chunks this node stores for others, per publication, with the finalized owner and name.
+    struct StorageHolding {
+        cybou::Hash256 publication_id;
+        std::optional<AccountId> owner;
+        std::optional<std::string> owner_name;
+        std::uint64_t chunks{0};
+        std::uint64_t bytes{0};
+    };
+    std::vector<StorageHolding> StorageHoldings() const;
 
     /// \brief Локально исполняет и подаёт операцию в candidate pool и/или relay.
     /// \param op Candidate operation; exact signed bytes будут восстановлены canonical serialization.

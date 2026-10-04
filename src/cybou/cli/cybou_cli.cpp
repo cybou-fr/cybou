@@ -76,6 +76,7 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
   doctor --network devnet --data-dir DIR [--listen IP:PORT] [--peers FILE] [--key-file FILE]
   storage status --event-log FILE
   storage verify --network devnet --data-dir DIR --chunk-id HEX [--peer IP:PORT]
+  storage holdings --network devnet --data-dir DIR   (chunks this node stores, by owner)
   storage placement --network devnet --data-dir DIR --vault FILE --password-file FILE
                     --operation-id HEX [--replicas 1|2]
 MAINNET is not provisioned and cannot start. Secrets are file inputs.
@@ -714,6 +715,22 @@ int StorageCommand(const std::string& action, const Options& opts)
     if (opts.Has("peer")) config.configured_peers.push_back({ParseEndpoint(opts.Get("peer")), std::nullopt});
     auto node = StartNode(network, std::move(config));
     auto& runtime = node->Runtime();
+    if (action == "holdings") {
+        // Diagnostics: which owners' chunks this node stores, from its own provider index.
+        std::map<std::string, std::pair<std::uint64_t, std::uint64_t>> by_owner;
+        for (const auto& holding : runtime.StorageHoldings()) {
+            const auto owner = holding.owner_name ? *holding.owner_name + ".cybou"
+                : holding.owner ? holding.owner->Value().GetHex() : std::string{"(revoked)"};
+            std::cout << "publication=" << holding.publication_id.GetHex() << " owner=" << owner
+                      << " chunks=" << holding.chunks << " bytes=" << holding.bytes << '\n';
+            by_owner[owner].first += holding.chunks;
+            by_owner[owner].second += holding.bytes;
+        }
+        for (const auto& [owner, total] : by_owner) {
+            std::cout << "owner=" << owner << " chunks=" << total.first << " bytes=" << total.second << '\n';
+        }
+        return 0;
+    }
     if (action == "verify") {
         // ChunkID uses displayed raw BLAKE3 bytes, not cybou::Hash256 display order.
         const auto text = opts.Require("chunk-id");

@@ -206,7 +206,7 @@ int main(int argc,char* argv[]) {
             std::cout << "cybou-loadgen --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
                 " [--identities 2] [--profile files|mail|root-publications|payments|system-locks|mixed|recovery]\n"
                 " [--expected-incoming-mail N] [--expected-files N] (recovery submits no operations)\n"
-                " [--recipient NAME.cybou --subject TEXT --body TEXT] (mail profile)\n"
+                " [--recipient NAME.cybou --subject TEXT --body TEXT] [--attachment-size 0] (mail profile)\n"
                 " [--operations-per-second 1] [--file-size 4MiB] [--duration 15m] [--replicas 2]\n"
                 " [--metrics FILE] (JSON: latencies p50/p95/max, throughput, failures)\n"
                 " [--funder DIR] [--fund-each N] (pay N CYBOU from the funder to each synthetic Identity)\n"
@@ -219,7 +219,7 @@ int main(int argc,char* argv[]) {
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name","pay-accounts"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name","pay-accounts","attachment-size"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
@@ -231,6 +231,8 @@ int main(int argc,char* argv[]) {
         const auto rate=cybou::cli::Number(opts.Get("operations-per-second","1"),1,1000);
         const auto maximum=cybou::cli::Number(opts.Get("max-operations","100000"),1,100000);
         const auto size=cybou::cli::Quantity(opts.Get("file-size","4MiB"));
+        const auto attachment_size=cybou::cli::Quantity(opts.Get("attachment-size","0"));
+        if (attachment_size>(64ULL<<20)) throw std::runtime_error("attachment bound exceeded");
         const auto duration=cybou::cli::Quantity(opts.Get("duration","15m"),true);
         if (size>(64ULL<<20) || duration>86400000) throw std::runtime_error("load bounds exceeded");
         const auto target=cybou::cli::Number(opts.Get("replicas","2"),1,2);
@@ -382,7 +384,21 @@ int main(int argc,char* argv[]) {
                     message.client_timestamp_ms=static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
                     message.subject=opts.Get("subject", "Synthetic DEVNET mail");
                     message.body=opts.Get("body", "Synthetic DEVNET payload");
-                    result=client.publication->PublishMail(job,message);
+                    std::vector<std::pair<size_t,cybou::NewContent>> attachments;
+                    if (attachment_size) {
+                        // Same deterministic byte pattern as synthetic files, so the recipient can verify it.
+                        message.attachments.push_back({.attachment_id=*cybou::NewPrivateItemId(),
+                            .filename="synthetic-attachment.bin",.logical_size=attachment_size,
+                            .media_type=std::string{"application/octet-stream"}});
+                        auto offset=std::make_shared<uint64_t>(0);
+                        attachments.emplace_back(0,cybou::NewContent{[offset,attachment_size](std::span<unsigned char> out)->std::optional<size_t> {
+                            auto n=std::min<uint64_t>(out.size(),attachment_size-*offset);
+                            for (size_t i=0;i<n;++i) out[i]=static_cast<unsigned char>((*offset+i)*131);
+                            *offset+=n; return n;
+                        }});
+                        metrics.bytes_published+=attachment_size;
+                    }
+                    result=client.publication->PublishMail(job,message,std::move(attachments));
                     if (recipient_name.empty()) clients[(submitted+1)%count]->expected_incoming_mail.push_back(message.message_id);
                 } else {
                     cybou::FilesMutationBatch batch;

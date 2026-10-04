@@ -513,6 +513,27 @@ std::optional<StorageLeaseRecord> CybouNodeRuntime::GetStorageLease(const cybou:
     return lease->second;
 }
 
+std::vector<CybouNodeRuntime::StorageHolding> CybouNodeRuntime::StorageHoldings() const
+{
+    std::vector<StorageHolding> out;
+    if (!m_finalized_chunk_store) return out;
+    const auto holdings = m_finalized_chunk_store->Holdings();
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    for (const auto& holding : holdings) {
+        StorageHolding item{.publication_id = holding.publication_id, .chunks = holding.chunks, .bytes = holding.bytes};
+        if (loaded && loaded.state) {
+            if (const auto record = loaded.state->publications.find(holding.publication_id);
+                record != loaded.state->publications.end()) {
+                item.owner = record->second.owner;
+                if (const auto* name = loaded.state->names.PrimaryName(record->second.owner)) item.owner_name = *name;
+            }
+        }
+        out.push_back(std::move(item));
+    }
+    return out;
+}
+
 std::optional<StorageSettlementCursor> CybouNodeRuntime::GetStorageSettlementCursor() const
 {
     std::lock_guard lock(m_mutex);

@@ -92,6 +92,12 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_is_content_addressed_idempotent_and_c
     const auto repeated = store.PutChunk(fixture.operation_id, fixture.chunk_id, fixture.bytes, fixture.proof, lookup);
     BOOST_CHECK(repeated.status == cybou::ChunkAdmissionStatus::ALREADY_STORED);
     BOOST_CHECK(store.UsedBytes() == fixture.bytes.size());
+    // The provider index reports one chunk of this publication, counted once.
+    const auto holdings = store.Holdings();
+    BOOST_REQUIRE_EQUAL(holdings.size(), 1U);
+    BOOST_CHECK(holdings[0].publication_id == fixture.operation_id);
+    BOOST_CHECK_EQUAL(holdings[0].chunks, 1U);
+    BOOST_CHECK_EQUAL(holdings[0].bytes, fixture.bytes.size());
 
     auto second_bytes = fixture.bytes;
     second_bytes[0] ^= 1;

@@ -141,6 +141,13 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     std::size_t PurgePublication(const cybou::Hash256& publication_operation_id);
+    /// \brief Admitted chunks и байты этого provider'а по публикациям (диагностика, не state).
+    struct PublicationHolding {
+        cybou::Hash256 publication_id;
+        std::uint64_t chunks{0};
+        std::uint64_t bytes{0};
+    };
+    std::vector<PublicationHolding> Holdings() const;
     /// Retry durable pending purges; quota is released only after deletion succeeds.
     std::size_t RetryPendingPurges(std::size_t max_chunks = 128);
     /// Reconcile persisted associations against authoritative finalized publications on startup.
