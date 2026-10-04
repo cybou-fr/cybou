@@ -11,6 +11,7 @@
 #include <cybou/storage_service.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/crypto/cleanse.h>
+#include <cybou/p2p/geo_database_updater.h>
 #include <boost/asio/ip/address.hpp>
 #include <algorithm>
 #include <atomic>
@@ -44,8 +45,15 @@ struct Client {
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target) {
         std::filesystem::create_directories(dir);
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
+        auto config=cybou::MakeNodeRuntimeConfig(net,dir/"node");
+        if (std::none_of(config.configured_peers.begin(),config.configured_peers.end(),
+                [&](const auto& configured){return configured.endpoint==peer;}))
+            config.configured_peers.push_back({peer,std::nullopt});
+        config.peer_admission_policy=std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(dir/"node"/"geo")));
+        config.event_writer=events;
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime={.network_genesis=net.genesis,.data_dir=dir/"node",.configured_peers={{peer}},.event_writer=events},.genesis=net.genesis_state});
+            .runtime=std::move(config),.genesis=net.genesis_state});
         node->Start();
         node->StartNetwork({.sync_interval=500ms},[](const auto&,const auto&,size_t){return true;});
         const auto ready_deadline = std::chrono::steady_clock::now()+120s;

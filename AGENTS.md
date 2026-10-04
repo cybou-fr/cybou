@@ -184,6 +184,30 @@ There is no production network.
 
 ## Executables and test networks
 
+### Explicit destructive DEVNET reset
+
+Before MAINNET, the operator may explicitly authorize a coordinated DEVNET reset
+to height zero while retaining the exact compiled genesis, Network Key, ordinary
+Identity key material, PoA key and bootstrap TLS identity. This is a destructive
+development exercise, not a new network, genesis replacement or production recovery.
+It overrides the ordinary requirement to retain active signing history only for
+this explicitly authorized DEVNET reset.
+
+Stop every participating signer and node first. Archive the prior chain, state,
+signing journal, safety evidence, vaults, application indexes, encrypted chunks,
+peer records and pending operations before clearing active network-bound data.
+Restart exactly one signer with a fresh DEVNET signing journal. Do not import old
+blocks or journals into the restarted exercise. Preserve all private key material
+and transport pins. No Network Root signing or provisioning is required.
+
+The protocol cannot distinguish old and new block histories under the same
+NetworkID and genesis. Old signed blocks remain cryptographically valid and can
+cause replay, conflicting history or a safety halt. This reset therefore requires
+control of the participating development nodes, is not a network isolation
+guarantee, and must never be represented as production-safe recovery. Keep normal
+signature, conflict detection and fail-closed journal checks enabled. MAINNET and
+ordinary DEVNET restarts retain the immutable history and durable signing rules.
+
 - `cybou` is the single production executable: without a command it is the
   desktop; `cybou node run` (optional `--poa-key-file`), `cybou network ...`,
   `cybou doctor`, `cybou operation ...` and `cybou storage ...` run headless.

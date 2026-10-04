@@ -23,6 +23,7 @@
 #include <cybou/storage_service.h>
 
 #include <chrono>
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -58,8 +59,9 @@ void WaitFor(const std::string& what, const std::function<bool()>& done, std::ch
 
 int main(int argc, char* argv[])
 {
-    if (argc != 5) {
-        std::cerr << "usage: cybou-storage-smoke devnet WORK_DIR FINALIZER_IP FINALIZER_P2P_PORT\n";
+    const bool recovery_only = argc == 6 && std::string_view{argv[5]} == "--remote-recovery-only";
+    if (argc != 5 && !recovery_only) {
+        std::cerr << "usage: cybou-storage-smoke devnet WORK_DIR PEER_IP PEER_P2P_PORT [--remote-recovery-only]\n";
         return 2;
     }
     try {
@@ -69,19 +71,27 @@ int main(int argc, char* argv[])
         const std::string finalizer_ip{argv[3]};
         const auto finalizer_port = static_cast<std::uint16_t>(std::stoul(argv[4]));
 
+        auto config = cybou::MakeNodeRuntimeConfig(*network, work / "client-db");
+        const auto endpoint = std::make_pair(finalizer_ip, finalizer_port);
+        if (std::none_of(config.configured_peers.begin(), config.configured_peers.end(),
+                [&](const auto& peer) { return peer.endpoint == endpoint; }))
+            config.configured_peers.push_back({endpoint, std::nullopt});
+        config.peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+            cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(work / "client-db" / "geo")));
+        std::atomic_bool caught_up{false};
         cybou::CybouNodeService node{{
-            .runtime = cybou::NodeRuntimeConfig{.network_genesis = network->genesis,
-                .data_dir = work / "client-db", .configured_peers = {{std::make_pair(finalizer_ip, finalizer_port)}},
-                .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
-                    cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(work / "client-db" / "geo"))), .operation_work_bits = 0},
+            .runtime = std::move(config),
             .genesis = network->genesis_state,
         }};
         node.Start();
         node.StartNetwork(cybou::CybouNetworkServiceConfig{.sync_interval = 500ms},
-            [](const cybou::SyncPeerResult&, const cybou::NodeRuntimeStatus&, std::size_t) { return true; });
+            [&](const cybou::SyncPeerResult& result, const cybou::NodeRuntimeStatus&, std::size_t) {
+                caught_up.store(result.IsConnected() && result.caught_up_with_known_peers);
+                return true;
+            });
         auto& runtime = node.Runtime();
         WaitFor("verified sync from the finalizer",
-            [&] { return runtime.GetFinalizedHeight().value_or(0) > 0; }, 60s);
+            [&] { return caught_up.load(); }, 120s);
         Step("SYNCED height=" + std::to_string(runtime.GetFinalizedHeight().value_or(0)));
 
         cybou::CybouIdentityService identity{runtime, work / "identity.vault"};
@@ -99,8 +109,8 @@ int main(int argc, char* argv[])
             runtime.GetIdentityOperationCoordinator(keystore)};
         cybou::ApplicationService application{runtime, keystore, db, storage};
 
-        WaitFor("two storage providers discovered through the finalizer",
-            [&] { return runtime.StorageEndpoints().size() >= 2; }, 120s);
+        WaitFor("storage providers discovered",
+            [&] { return runtime.StorageEndpoints().size() >= (recovery_only ? 1U : 2U); }, 120s);
         Step("PROVIDERS " + std::to_string(runtime.StorageEndpoints().size()));
 
         std::vector<unsigned char> original(700 * 1024);
@@ -134,6 +144,7 @@ int main(int argc, char* argv[])
         if (!placement || placement->replicas.empty() || placement->replicas.front().empty()) Fail("no placement");
         const auto holder = placement->replicas.front().front();
         Step("HOLDER " + holder.address + " " + std::to_string(holder.port));
+        if (!recovery_only) {
         WaitFor("the orchestrator to kill the holder", [&] { return std::filesystem::exists(work / "killed"); }, 120s);
 
         const auto first_audit = storage.AuditNextPlacement(64);
@@ -157,6 +168,7 @@ int main(int argc, char* argv[])
             return job_phase() == cybou::PublicationJobPhase::PROTECTED;
         }, 180s);
         Step("REPAIRED");
+        }
 
         // Evict every local encrypted chunk: the file must come back from a provider, exactly.
         placement = storage.DescribePlacement(operation);

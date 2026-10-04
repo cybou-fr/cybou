@@ -229,11 +229,15 @@ struct Services {
 std::unique_ptr<cybou::CybouNodeService> StartNode(const cybou::OfficialNetwork& network,
     const std::filesystem::path& data_dir, const std::string& ip, std::uint16_t port)
 {
+    auto config = cybou::MakeNodeRuntimeConfig(network, data_dir);
+    const auto endpoint = std::make_pair(ip, port);
+    if (std::none_of(config.configured_peers.begin(), config.configured_peers.end(),
+            [&](const auto& peer) { return peer.endpoint == endpoint; }))
+        config.configured_peers.push_back({endpoint, std::nullopt});
+    config.peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
+        cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(data_dir / "geo")));
     auto node = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-        .runtime = cybou::NodeRuntimeConfig{.network_genesis = network.genesis,
-            .data_dir = data_dir, .configured_peers = {{std::make_pair(ip, port)}},
-            .peer_admission_policy = std::make_shared<const cybou::p2p::PeerAdmissionPolicy>(
-                cybou::p2p::PeerAdmissionPolicy::PublicWithUpdater(cybou::p2p::GeoDatabaseUpdater::Start(data_dir / "geo"))), .operation_work_bits = 0},
+        .runtime = std::move(config),
         .genesis = network.genesis_state,
     });
     node->Start();

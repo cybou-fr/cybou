@@ -87,6 +87,17 @@ The VPS runs the ordinary Full Node at `51.255.46.58:29461`. Public peer admissi
 uses verified DB-IP Geo data and the compiled TLS pin. The earlier desktop/VPS
 network domains remain retired; this pass does not reset or import them.
 
+On 2026-10-04 the operator explicitly authorized a coordinated destructive
+DEVNET reset with the exact existing keys and genesis. The preceding active
+Windows state was archived under `CYBOU-retired-20261004-live-reset`, the VPS
+state under `/var/lib/cybou/node-retired-20261004-live-reset`, and local WSL live
+test state under `~/cybou-live-retired-20261004`. The height-2369 Windows chain
+had a height-zero PoA journal halted with `HISTORY_MISMATCH`; that evidence was
+archived rather than silently repaired. This is a development reset under the
+explicit `AGENTS.md` exception, not a production recovery claim. The NetworkID,
+genesis and TLS pin above remain unchanged. Historical blocks must not be imported
+into the restarted exercise; they remain cryptographically valid.
+
 See [DEVNET development](DEVNET_DEVELOPMENT.md) for commands and operator rules.
 
 Verification results must be attributed to the tested revision and build.

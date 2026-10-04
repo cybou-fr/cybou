@@ -64,7 +64,8 @@ std::string FormatByteArrayCpp(std::span<const unsigned char> bytes, size_t inde
 } // namespace
 
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
-    const std::optional<ExistingCentralAuthority>& central_authority)
+    const std::optional<ExistingCentralAuthority>& central_authority,
+    const std::optional<RecoveryEntropy>& bootstrap_identity)
 {
     DevnetProvisionResult res;
 
@@ -117,7 +118,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
 
     // 2b. bootstrap Identity: an ordinary Identity for the bootstrap locator's
     // operator. Its AUTH is a genesis decision, never a property of the role.
-    auto bootstrap_entropy = GenerateRecoveryEntropy();
+    auto bootstrap_entropy = bootstrap_identity ? bootstrap_identity : GenerateRecoveryEntropy();
     if (!bootstrap_entropy) return std::nullopt;
     res.bootstrap_entropy = *bootstrap_entropy;
     res.bootstrap_words = EncodeRecoveryWords(res.bootstrap_entropy);
@@ -188,7 +189,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
     const std::filesystem::path& constants_header_path,
-    const std::optional<ExistingCentralAuthority>& central_authority)
+    const std::optional<ExistingCentralAuthority>& central_authority,
+    const std::optional<RecoveryEntropy>& bootstrap_identity)
 {
     std::error_code ec;
     const auto private_root = std::filesystem::weakly_canonical(std::filesystem::current_path() / "private");
@@ -215,7 +217,7 @@ bool ProvisionDevnet(
         return false;
     }
 
-    auto prov = GenerateDevnetProvisioning(central_authority);
+    auto prov = GenerateDevnetProvisioning(central_authority, bootstrap_identity);
     if (!prov) {
         std::cerr << "Error generating DEVNET provisioning material\n";
         return false;

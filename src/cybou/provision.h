@@ -90,7 +90,8 @@ struct ExistingCentralAuthority {
 /// \post При успехе результат уже проходит round-trip и self-verification.
 /// \param central_authority Если задан, `cybou.cybou` сохраняет эту фразу (новая сеть, тот же PoA-ключ; AccountID создаётся при онбординге).
 std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
-    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt);
+    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt,
+    const std::optional<RecoveryEntropy>& bootstrap_identity = std::nullopt);
 
 /// \brief Выполняет одноразовое provisioning: private secrets и public constants header.
 /// \param private_dir Каталог под gitignored private material внутри repository private/.
@@ -101,7 +102,8 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
 bool ProvisionDevnet(
     const std::filesystem::path& private_dir,
     const std::filesystem::path& constants_header_path,
-    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt);
+    const std::optional<ExistingCentralAuthority>& central_authority = std::nullopt,
+    const std::optional<RecoveryEntropy>& bootstrap_identity = std::nullopt);
 
 } // namespace cybou
 

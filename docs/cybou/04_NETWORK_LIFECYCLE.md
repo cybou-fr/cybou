@@ -19,6 +19,13 @@ trust, creation, joining, Validation, and network replacement.
 
 ## Official networks
 
+Before MAINNET, an explicitly authorized destructive DEVNET exercise may reset
+all participating nodes to height zero using the same exact genesis and keys.
+Follow the coordinated stop/archive/clear/single-signer procedure in `AGENTS.md`.
+This changes no NetworkID or signed genesis. Historical signed blocks remain valid;
+their reintroduction can replay or conflict with the restarted exercise. It is
+not production recovery and does not disable normal signing safety or conflict checks.
+
 A standard CYBOU installation knows two official network profiles:
 - **DEVNET**: enabled official profile, bootstrap locator `51.255.46.58:29461`.
 - **MAINNET**: unprovisioned, no bootstrap locator, disabled in the GUI until

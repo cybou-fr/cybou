@@ -13,6 +13,12 @@ does not itself modify wire bytes, keys, cryptographic domains or genesis.
 
 ## Storage implementation evidence boundary
 
+Operator-authorized destructive DEVNET resets may retain the exact compiled
+genesis and keys under the bounded exception in `AGENTS.md`. Such an exercise
+archives and clears active network data, including signing journals, across all
+participants before starting one signer. Old signed histories remain valid and
+can cause replay or safety halts; no MAINNET or production recovery exception exists.
+
 The Beta target remains two independent remote full replicas; the current
 placement algorithm deduplicates proven StorageIds, which does not establish
 independent hosts, operators or failure domains. The 1:3 reciprocal baseline

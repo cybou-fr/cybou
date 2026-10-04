@@ -116,24 +116,36 @@ int main(int argc, char** argv)
 {
     try {
         if (argc == 3 && std::string_view{argv[1]} == "verify-devnet") { Verify(argv[2]); return 0; }
-        if (argc == 4 && std::string_view{argv[1]} == "create-devnet") {
-            return cybou::ProvisionDevnet(argv[2], argv[3]) ? 0 : 1;
-        }
-        if (argc == 6 && std::string_view{argv[1]} == "create-devnet" &&
-            std::string_view{argv[4]} == "--keep-central-authority") {
-            // A new network that keeps cybou.cybou's phrase and PoA key.
-            PrivateText identity{argv[5]};
-            const auto seed = Seed(identity.text, "CYBOU_SEED_HEX");
-            VerifyMnemonic(identity.text, seed);
-            cybou::ExistingCentralAuthority existing{};
-            std::copy(seed.Get().begin(), seed.Get().end(), existing.entropy.begin());
-            const bool ok = cybou::ProvisionDevnet(argv[2], argv[3], existing);
-            cybou::crypto::CleanseMemory(existing.entropy.data(), existing.entropy.size());
-            return ok ? 0 : 1;
+        if (argc >= 4 && argc <= 8 && argc % 2 == 0 && std::string_view{argv[1]} == "create-devnet") {
+            std::optional<cybou::ExistingCentralAuthority> authority;
+            std::optional<cybou::RecoveryEntropy> bootstrap;
+            struct Wipe {
+                decltype(authority)& a; decltype(bootstrap)& b;
+                ~Wipe() {
+                    if (a) cybou::crypto::CleanseMemory(a->entropy.data(), a->entropy.size());
+                    if (b) cybou::crypto::CleanseMemory(b->data(), b->size());
+                }
+            } wipe{authority, bootstrap};
+            for (int i = 4; i < argc; i += 2) {
+                const std::string_view option{argv[i]};
+                const bool central = option == "--keep-central-authority";
+                if ((!central && option != "--keep-bootstrap-identity") ||
+                    (central ? authority.has_value() : bootstrap.has_value()))
+                    throw std::runtime_error("invalid or duplicate preservation option");
+                PrivateText identity{argv[i + 1]};
+                const auto seed = Seed(identity.text, central ? "CYBOU_SEED_HEX" : "BOOTSTRAP_SEED_HEX");
+                VerifyMnemonic(identity.text, seed);
+                if (central) {
+                    authority.emplace();
+                    std::copy(seed.Get().begin(), seed.Get().end(), authority->entropy.begin());
+                } else bootstrap = seed.Get();
+            }
+            return cybou::ProvisionDevnet(argv[2], argv[3], authority, bootstrap) ? 0 : 1;
         }
         std::cerr << "Offline use only:\n  cybou-provision verify-devnet PRIVATE_DIR\n"
                      "  cybou-provision create-devnet NEW_PRIVATE_DIR NEW_CONSTANTS_HEADER"
-                     " [--keep-central-authority CYBOU_IDENTITY_SECRET]\n";
+                     " [--keep-central-authority CYBOU_IDENTITY_SECRET]"
+                     " [--keep-bootstrap-identity BOOTSTRAP_IDENTITY_SECRET]\n";
         return 2;
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }
