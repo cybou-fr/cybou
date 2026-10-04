@@ -1,32 +1,28 @@
 
 asset:
   symbol: CYBOU
-  max_supply: 100000000000
+  max_supply: absent  # genesis monetary base 100000000000, conserved (DEC-277)
+  genesis_monetary_base: 100000000000
   decimals: 0
   minimum_unit: 1
   perpetual_emission: false
 
-dev_genesis:
-  onboarding_pool:
-    amount: 100000000
-    replenished_by_fees: false
+genesis:  # storage economy (DEC-277); the deployed pre-M7 DEVNET still runs the superseded pool model
   central_authority_genesis_allocation:
-    balance: 100000000
+    balance: 100000000000
     authority: 10000001
     name: cybou
   bootstrap_genesis_allocation:
     balance: 0
     authority: 10000001
     name: bootstrap
-  issued_supply: 200000000
-  unissued_supply: 99800000000
-  official_provisioning: compiled_devnet
+  issued_supply: 100000000000
+  unissued_supply: 0
+  official_provisioning: new_devnet_at_m7
 
 onboarding_bonus:
-  dev_onboarding_bonus: 6000
-  beta_onboarding_bonus: TBD
-  mainnet_onboarding_bonus: TBD
-  source: OnboardingPool
+  onboarding_bonus: 20000
+  source: CentralTreasury
   destination: SystemBalance
   minted: false
 
@@ -61,8 +57,8 @@ auth:
   automatic_penalties: not_frozen
 
 cybou_supply:
-  max: 100000000000
-  includes: [Balance, SystemBalance, OnboardingPool, unclaimed_genesis_allocation_balances]
+  conservation: exact_per_block
+  includes: [Balance, SystemBalance, StorageEscrow, unclaimed_genesis_allocation_balances]
   excludes: [Authority]
 
 fees:
@@ -77,7 +73,7 @@ fees:
   burn_fraction: 0
   batching: false
   validator_rewards: false
-  storage_rewards: false
+  storage_rewards: false  # storage rent is not a fee: StorageEscrow -> providers
   atomic: true
 
 application_content:
@@ -86,7 +82,7 @@ application_content:
   generic_root_publication_fee_model: true
 
 storage_economy_target:  # DEC-274..DEC-283; frozen target, not implemented
-  status: frozen_target_new_network_only
+  status: implemented_m5_active_from_m7_genesis
   max_supply: absent
   onboarding_pool: absent
   mint: false

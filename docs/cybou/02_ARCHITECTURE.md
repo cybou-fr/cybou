@@ -84,8 +84,8 @@ The Beta target remains two independent remote full replicas; the current
 placement algorithm deduplicates proven StorageIds, which does not establish
 independent hosts, operators or failure domains. The 1:3 reciprocal baseline
 is a capacity/service objective, not measured proof of contribution: automatic
-local allocation varies with disk space and does not guarantee 10–15 GB.
-Finalized quotas govern entitlement, not evidence of actual remote service.
+local capacity is an explicit operator choice (`V >= 15 GiB`), not proof of service.
+Storage is paid by finalized leases; only PoA-signed settlements record service.
 
 Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
@@ -95,7 +95,7 @@ Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
 random-offset audits and periodic full GET plus ChunkID verification; none of
 it is consensus state or a canonical proof.
 
-Finalized revocation stops admission and releases the author's canonical quota.
+Finalized revocation stops admission and closes the author's lease after the current period.
 Compliant providers journal purge of unshared chunks, retaining physical byte
 accounting until unlink succeeds or absence is confirmed; maintenance/restart
 retry failures. This does not prove deletion of hidden copies or crypto-erasure.
@@ -178,7 +178,7 @@ ChunkID is the full BLAKE3-256 digest of stored encrypted bytes.
 The blockchain functions as a canonical Notarial Register: it records object
 publications, Merkle roots and recipient capsules. Mutual storage proofs remain
 a target, not a current canonical record.
-Resource quotas and storage admission rights are derived deterministically strictly
+Storage admission rights (an active finalized lease) are derived deterministically
 from PoA-finalized state; local capacity declarations and off-chain vouchers convey zero authority.
 
 Storage admission is finality-first: authorized chunks are admitted remotely
@@ -189,13 +189,11 @@ Recoverable owner content requires an application-layer self capsule.
 Beta storage durability targets 2 independent remote full replicas plus 1 local
 physical copy (3 physical copies total); erasure coding is disabled.
 
-Users simply exchange storage space: each newly registered Identity receives an
-immediate Onboarding Trust Credit of 5 GB remote network storage, paired with the target reciprocal 1:3 capacity/service objective. Automatic
-allocation does not guarantee 10–15 GB or measure actual contribution. The target mutual-audit protocol would use randomized byte-offset and nonce
+Users pay storage rent from System Balance and may earn it back by serving
+foreign storage; a node offering `2V/3` can roughly offset `V/3` of its own
+two-replica storage at full demand, which is an estimate, never a guarantee. The target mutual-audit protocol would use randomized byte-offset and nonce
 proofs; it is not implemented. Under the storage-economy target audits stay
-off-chain and only daily PoA-signed StorageSettlement payouts become canonical;
-AUTH storage quotas and the onboarding storage credit are replaced by paid leases
-and a 20,000 CYBOU Treasury-funded System Balance start budget.
+off-chain and only daily PoA-signed StorageSettlement payouts become canonical.
 When content is deleted by its author (`RevokePublication`), its active state
 record is removed from the active publication register; historical blocks remain, initiating managed purge by compliant storing nodes of
 underlying chunks from local storage.
@@ -204,11 +202,10 @@ underlying chunks from local storage.
 
 100% of every finalized protocol fee transfers atomically from the payer's System
 Balance to the Central Authority's spendable Balance (the unique genesis-granted `cybou`
-allocation before claim, and its ordinary claimant Balance afterwards). The DEV
-OnboardingPool begins at 100,000,000 CYBOU and only decreases through AccountCreate.
-Current DEVNET has no storage operator market; fees support network operation and
-software development. AUTH is excluded from supply. The frozen storage-economy
-target adds paid storage: StorageLease rent moves from payer System Balance to
+allocation before claim, and its ordinary claimant Balance afterwards). The whole
+100,000,000,000 CYBOU genesis monetary base belongs to that Central Treasury and is
+conserved; AccountCreate transfers the 20,000 CYBOU onboarding budget from it.
+AUTH is excluded from CYBOU. Storage is paid: StorageLease rent moves from payer System Balance to
 StorageEscrow and is paid by PoA-signed StorageSettlement to providers with
 verified foreign storage service, while protocol fees still go to the Central
 Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.

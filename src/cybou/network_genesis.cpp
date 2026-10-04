@@ -30,6 +30,16 @@ bool ValidateProtocolParameters(const CybouProtocolParameters& params)
     if (params.epoch_blocks == 0) {
         return false;
     }
+    // Storage rent (DEC-279): суточная ставка на максимальной аренде не должна переполнять uint64.
+    if (params.storage_rate_per_gib_day_replica == 0 || params.storage_replica_target == 0 ||
+        params.storage_replica_target > 16 || params.storage_settlement_period_seconds == 0 ||
+        params.storage_settlement_period_seconds > 366ULL * 86'400 ||
+        params.max_storage_lease_periods == 0 ||
+        params.storage_rate_per_gib_day_replica > std::numeric_limits<uint64_t>::max() /
+            (uint64_t{MAX_PUBLICATION_CHUNKS} * params.storage_replica_target * params.storage_settlement_period_seconds *
+             params.max_storage_lease_periods)) {
+        return false;
+    }
     const auto max_fee_kib = (ROOT_PUBLICATION_MAX_OPERATION_BYTES + 1023) / 1024;
     const auto per_kib = params.root_publication_fee_per_started_kib;
     const auto per_chunk = params.root_publication_fee_per_chunk;
@@ -68,12 +78,7 @@ cybou::Hash256 ComputeNetworkBinding(const IdentityHybridPublicKey& network_publ
 
 CybouState CreateDevGenesisState()
 {
-    return CybouState{
-        .onboarding_pool = DEV_ONBOARDING_POOL,
-        .accounts = {},
-        .identities = {},
-        .names = {},
-    };
+    return CybouState{};
 }
 
 namespace {
@@ -81,7 +86,7 @@ namespace {
 /// \brief Возвращает точный размер сериализации CybouProtocolParameters.
 size_t SerializedProtocolParametersSize()
 {
-    return 4 + 8 + 4 + 8 + 8 + 8 + 8 + 8 + 4 + 8 + 8 + 4 + 1;
+    return 4 + 8 + 4 + 8 + 8 + 8 + 8 + 8 + 4 + 8 + 8 + 4 + 1 + 8 + 1 + 8 + 4;
 }
 
 /// \brief Пишет uint8_t в canonical little-endian payload.
@@ -200,6 +205,10 @@ std::vector<unsigned char> SerializeNetworkGenesisPayload(const NetworkGenesis& 
     WriteU64LE(out, p.name_commit_max_lifetime);
     WriteU32LE(out, p.max_pending_name_commits);
     WriteU8(out, p.identity_kem_xwing_enabled ? 1 : 0);
+    WriteU64LE(out, p.storage_rate_per_gib_day_replica);
+    WriteU8(out, p.storage_replica_target);
+    WriteU64LE(out, p.storage_settlement_period_seconds);
+    WriteU32LE(out, p.max_storage_lease_periods);
 
     return out;
 }
@@ -297,9 +306,14 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     const auto name_max_life = read_u64le();
     const auto max_pending_names = read_u32le();
     const auto kem_xwing = read_u8();
+    const auto storage_rate = read_u64le();
+    const auto storage_replicas = read_u8();
+    const auto settlement_period = read_u64le();
+    const auto max_lease_periods = read_u32le();
     if (!work_bits || !epoch_lag || !max_creates || !onboarding_bonus || !epoch_blocks ||
         !payment_fee || !per_kib || !per_chunk || !name_work || !name_min_depth ||
-        !name_max_life || !max_pending_names || !kem_xwing || *kem_xwing > 1) return std::nullopt;
+        !name_max_life || !max_pending_names || !kem_xwing || *kem_xwing > 1 || !storage_rate ||
+        !storage_replicas || !settlement_period || !max_lease_periods) return std::nullopt;
 
     p.account_creation_work_bits = *work_bits;
     p.account_creation_epoch_lag = *epoch_lag;
@@ -314,6 +328,10 @@ std::optional<NetworkGenesis> DeserializeSignedNetworkGenesis(std::span<const un
     p.name_commit_max_lifetime = *name_max_life;
     p.max_pending_name_commits = *max_pending_names;
     p.identity_kem_xwing_enabled = (*kem_xwing == 1);
+    p.storage_rate_per_gib_day_replica = *storage_rate;
+    p.storage_replica_target = *storage_replicas;
+    p.storage_settlement_period_seconds = *settlement_period;
+    p.max_storage_lease_periods = *max_lease_periods;
 
     if (pos + 64 + 4 > bytes.size()) return std::nullopt;
     IdentityHybridSignature sig;

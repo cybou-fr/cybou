@@ -48,6 +48,9 @@ struct RootPublication {
     ChunkId root_chunk_id{}; ///< Корневой ChunkId опубликованного зашифрованного дерева.
     ChunkId chunk_authorization_root{}; ///< Merkle root авторизации chunk-ов для finality-first storage admission.
     std::uint32_t chunk_count{0}; ///< Число авторизованных chunk-ов.
+    /// \brief Settlement-периоды начальной аренды, оплачиваемой атомарно с публикацией (DEC-279);
+    ///        0 — без аренды: remote storage admission начнётся только после StorageLease.
+    std::uint32_t lease_periods{0};
     std::vector<RootRecipientCapsule> recipient_capsules; ///< Капсулы для получателей ContentKey.
 
     friend bool operator==(const RootPublication&, const RootPublication&) = default;

@@ -193,15 +193,15 @@ storage:
   revocation_operation: RevokePublication  # author only, payment fee, no AUTH
   quota_unit_bytes: 524288  # one authorized chunk
   publication_register: state.publications_keyed_by_root_publication_operation_id
-resource_tiers:  # DEC-272, enforced by block execution against parent finalized AUTH
+resource_tiers:  # DEC-272 operation rate only; storage is not an AUTH resource (DEC-274)
   metered_operations: [Payment, SystemLock, IdentityRotate, NameCommit, NameReveal, RootPublication, RevokePublication]
   epoch_blocks: 1024
   tiers:
-    - {name: T0, min_auth: 0, ops_per_block: 1, ops_per_epoch: 30, quota_gib: 5, max_file_gib: 1, work_bits: 22}
-    - {name: T1, min_auth: 10000, ops_per_block: 5, ops_per_epoch: 150, quota_gib: 25, max_file_gib: 4, work_bits: 21}
-    - {name: T2, min_auth: 100000, ops_per_block: 25, ops_per_epoch: 750, quota_gib: 100, max_file_gib: 16, work_bits: 20}
-    - {name: T3, min_auth: 1000000, ops_per_block: 100, ops_per_epoch: 3000, quota_gib: 500, max_file_gib: 64, work_bits: 19}
-    - {name: VALIDATOR, min_auth_exclusive: 10000000, ops_per_block: 1000, ops_per_epoch: 30000, quota_gib: 2048, max_file_gib: 256, work_bits: 18}
+    - {name: T0, min_auth: 0, ops_per_block: 1, ops_per_epoch: 30, work_bits: 22}
+    - {name: T1, min_auth: 10000, ops_per_block: 5, ops_per_epoch: 150, work_bits: 21}
+    - {name: T2, min_auth: 100000, ops_per_block: 25, ops_per_epoch: 750, work_bits: 20}
+    - {name: T3, min_auth: 1000000, ops_per_block: 100, ops_per_epoch: 3000, work_bits: 19}
+    - {name: VALIDATOR, min_auth_exclusive: 10000000, ops_per_block: 1000, ops_per_epoch: 30000, work_bits: 18}
   one_name_per_identity: true
 relay_proof_of_work:  # DEC-273
   hash: SHA-256(CYBOU/OP-WORK || NetworkBinding || OperationID || nonce_u64_le)
@@ -250,7 +250,7 @@ private_application_schema:
   encoding: typed_fixed_order_binary
   types: {Mail: 1, Files: 2, RecoveryBridge: 3}
 
-storage_economy_target:  # DEC-274..DEC-283; replaces onboarding credit, quotas and tier storage columns at cutover
+storage_economy:  # DEC-274..DEC-283; implemented in M5, active from the M7 genesis; supersedes the storage keys above
   local_capacity_min_bytes: 16106127360  # 15 GiB, explicit, not consensus
   provider_budget: floor_2V_over_3
   auth_storage_quota: absent

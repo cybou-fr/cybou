@@ -75,8 +75,8 @@ struct DevnetProvisionResult {
 
 /// \brief AUTH каждого genesis-выделения: строго выше порога Validation (10,000,000).
 inline constexpr uint64_t GENESIS_ALLOCATION_AUTHORITY{10'000'001};
-/// \brief Spendable CYBOU genesis-выделения Central Authority.
-inline constexpr uint64_t CENTRAL_AUTHORITY_GENESIS_BALANCE{100'000'000};
+/// \brief Central Treasury: весь genesis monetary base принадлежит allocation `cybou` (DEC-277).
+inline constexpr uint64_t CENTRAL_AUTHORITY_GENESIS_BALANCE{GENESIS_MONETARY_BASE};
 /// \brief Метка (и зарезервированное имя) genesis-выделения bootstrap Identity.
 inline constexpr std::string_view BOOTSTRAP_ALLOCATION_LABEL{"bootstrap"};
 

@@ -151,6 +151,16 @@ PoaSigningResult PoaFinalizer::SignFinality(const uint64_t finalized_height,
     };
 }
 
+bool PoaFinalizer::SignStorageSettlement(StorageSettlement& settlement) const
+{
+    const auto digest = ComputeStorageSettlementDigest(m_network_binding, settlement);
+    if (!digest || m_journal.SafetyHalted() || !m_signer) return false;
+    const auto signature = m_signer->Sign(*digest);
+    if (!signature || !VerifyIdentityMessage(m_public_key, *signature, *digest)) return false;
+    settlement.poa_signature = *signature;
+    return true;
+}
+
 bool PoaFinalizer::SignAuthAdjustment(PoaAuthAdjustment& adjustment) const
 {
     const auto digest = ComputePoaAuthAdjustmentDigest(m_network_binding, adjustment);

@@ -27,6 +27,9 @@ namespace cybou {
 struct AccountState {
     uint64_t balance{0};          ///< Spendable Balance в CYBOU.
     uint64_t system_balance{0};   ///< Непереводимый System Balance для сетевых комиссий и сервисного бюджета.
+    /// \brief Часть `system_balance` onboarding-происхождения (DEC-281): расходуется первой
+    ///        и через storage payouts никогда не становится spendable Balance.
+    uint64_t onboarding_system_balance{0};
     uint64_t authority{0};        ///< Канонический нетрансферабельный AUTH; не входит в total supply CYBOU.
     uint64_t creation_height{0};  ///< Высота блока, на которой аккаунт был финализирован через `AccountCreate`.
     uint64_t creation_epoch{0};   ///< Детерминированный epoch, вычисленный из `creation_height` и protocol params.
@@ -46,17 +49,16 @@ struct GenesisAllocation {
 
 inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
 
-/// \brief Детерминированный учёт ресурсов одной Identity для лимитов уровня AUTH (DEC-272).
+/// \brief Детерминированный учёт операций одной Identity для лимитов уровня AUTH (DEC-272).
 /// \details Запись существует только пока хотя бы один счётчик ненулевой; устаревшие окна
-///          блока и эпохи обнуляются в начале исполнения каждого блока.
+///          блока и эпохи обнуляются в начале исполнения каждого блока. Хранение AUTH не квотирует (DEC-274).
 struct AccountUsage {
-    uint64_t stored_chunks{0};    ///< Chunk-и всех действующих публикаций Identity (квота хранения).
     uint64_t epoch{0};            ///< Эпоха, к которой относится `epoch_operations`.
     uint32_t epoch_operations{0}; ///< Метрируемые операции в эпохе `epoch`.
     uint64_t block_height{0};     ///< Высота, к которой относится `block_operations`.
     uint32_t block_operations{0}; ///< Метрируемые операции в блоке `block_height`.
 
-    bool Empty() const { return stored_chunks == 0 && epoch_operations == 0 && block_operations == 0; }
+    bool Empty() const { return epoch_operations == 0 && block_operations == 0; }
     friend bool operator==(const AccountUsage&, const AccountUsage&) = default;
 };
 
@@ -64,15 +66,39 @@ struct AccountUsage {
 struct PublicationRecord {
     AccountId owner;                   ///< Авторизовавшая публикацию Identity.
     ChunkId chunk_authorization_root{}; ///< Merkle root авторизации chunk-ов для storage admission и purge.
-    uint32_t chunk_count{0};           ///< Учитываемый в квоте объём, chunk-и.
+    uint32_t chunk_count{0};           ///< Число authorized chunk-ов = billing units аренды (DEC-279).
     uint64_t height{0};                ///< Высота финализации.
 
     friend bool operator==(const PublicationRecord&, const PublicationRecord&) = default;
 };
 
+/// \brief Финализированная аренда хранения одной публикации (DEC-279).
+/// \details Покрывает settlement-периоды `[first_period, end_period)`. Escrow хранится раздельно по
+///          происхождению, чтобы onboarding-часть платилась providers только в System Balance (DEC-281).
+struct StorageLeaseRecord {
+    AccountId payer;                  ///< Владелец публикации, оплативший аренду.
+    uint32_t units{0};                ///< Billing units: authorized chunk-и публикации.
+    uint8_t replicas{0};              ///< Оплаченное число remote replicas.
+    uint64_t first_period{0};         ///< Первый покрытый settlement-период.
+    uint64_t end_period{0};           ///< Первый непокрытый период (исключительно).
+    uint64_t escrow_onboarding{0};    ///< Escrow onboarding-происхождения.
+    uint64_t escrow_locked{0};        ///< Escrow SystemLock-происхождения.
+
+    friend bool operator==(const StorageLeaseRecord&, const StorageLeaseRecord&) = default;
+};
+
+inline constexpr uint8_t MAX_STORAGE_LEASE_REPLICAS{16};
+
+/// \brief Курсор PoA-settlement: следующий ожидаемый период и его UTC-начало (DEC-282).
+struct StorageSettlementCursor {
+    uint64_t next_period{0};           ///< Номер следующего ожидаемого StorageSettlement.
+    uint64_t next_period_start_utc{0}; ///< UTC-начало следующего периода; 0 до первого settlement.
+
+    friend bool operator==(const StorageSettlementCursor&, const StorageSettlementCursor&) = default;
+};
+
 /// \brief Полный консенсусный снимок CYBOU, из которого вычисляется state root.
 struct CybouState {
-    uint64_t onboarding_pool{0};   ///< Остаток DEV OnboardingPool в CYBOU.
     std::map<AccountId, AccountState> accounts; ///< Канонические аккаунтные значения, отсортированные по `AccountId`.
     IdentityRegistry identities;   ///< Финализированный Identity registry, согласованный 1:1 с `accounts`.
     NameRegistry names;            ///< Реестр `.cybou` имён и pending commit-ов.
@@ -82,7 +108,19 @@ struct CybouState {
     std::map<AccountId, AccountUsage> usage;
     /// \brief Действующие публикации по OperationID их RootPublication (DEC-271).
     std::map<cybou::Hash256, PublicationRecord> publications;
+    /// \brief Курсор ежедневного StorageSettlement.
+    StorageSettlementCursor settlement;
+    /// \brief Аренды хранения по OperationID публикации; переживают revoke до финального settlement.
+    std::map<cybou::Hash256, StorageLeaseRecord> leases;
 };
+
+/// \brief Списывает \p amount из System Balance, расходуя onboarding-часть первой (DEC-281).
+/// \pre `account.system_balance >= amount`.
+/// \return Сколько из списанного было onboarding-происхождения.
+uint64_t DebitSystemBalance(AccountState& account, uint64_t amount);
+/// \brief Возвращает Balance Central Treasury: незаявленную allocation `cybou` или Balance её claimant'а.
+/// \return nullptr при неоднозначном или повреждённом месте учёта.
+uint64_t* TreasuryBalance(CybouState& state);
 
 /// \brief Ищет уникальное genesis-выделение Central Authority; дубликаты считаются некорректным состоянием.
 /// \param state Состояние для поиска.
@@ -111,7 +149,7 @@ enum class AccountCreateStateError : uint8_t {
     ACCOUNT_EXISTS,             ///< `account_id` уже присутствует в каноническом состоянии.
     RECOVERY_KEY_EXISTS,        ///< Recovery binding уже заявлен другим аккаунтом.
     ACCOUNT_LIMIT,              ///< Достигнут лимит числа аккаунтов в состоянии.
-    INSUFFICIENT_ONBOARDING_POOL, ///< В OnboardingPool недостаточно CYBOU для onboarding bonus.
+    INSUFFICIENT_TREASURY,      ///< Central Treasury не может выплатить onboarding bonus (DEC-277).
     INCONSISTENT_STATE,         ///< Нарушены внутренние инварианты `accounts`/`identities`/fee destination.
 };
 
@@ -123,8 +161,9 @@ enum class AccountCreateStateError : uint8_t {
 /// \param state Кандидатное состояние, модифицируемое только при успехе.
 /// \return Код причины отказа либо `NONE`.
 /// \pre `state` должно быть внутренне согласованным; функция не исправляет уже испорченное состояние.
-/// \post При успехе атомарно создаются Identity и AccountState, списывается onboarding bonus и,
-///       при наличии matching genesis allocation, она заявляется ровно один раз.
+/// \post При успехе атомарно создаются Identity и AccountState; onboarding bonus переводится из
+///       Central Treasury в System Balance (кроме claimant'а самой Treasury) и, при наличии
+///       matching genesis allocation, она заявляется ровно один раз.
 /// \note Детерминированно на всех Full Node; потокобезопасность не гарантируется для совместного доступа к `state`.
 AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     const cybou::Hash256& network_binding, uint64_t block_height,
@@ -156,7 +195,7 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
 
 /// \brief Результаты применения RevokePublication.
 enum class RevokePublicationError : uint8_t {
-    NONE,                        ///< Публикация отозвана, квота освобождена.
+    NONE,                        ///< Публикация отозвана; её аренда закрывается после текущего периода.
     INVALID_PAYLOAD,             ///< Payload неканоничен.
     INVALID_AUTHORIZATION,       ///< Identity authorization невалидна.
     SENDER_NOT_FOUND,            ///< Авторизующий аккаунт отсутствует.
@@ -164,15 +203,14 @@ enum class RevokePublicationError : uint8_t {
     NOT_OWNER,                   ///< Публикация принадлежит другой Identity.
     INSUFFICIENT_SYSTEM_BALANCE, ///< Недостаточно `System Balance` для комиссии.
     FEE_TRANSFER_FAILED,         ///< Комиссия не может быть безопасно зачислена.
-    INCONSISTENT_STATE,          ///< Учёт квоты расходится с регистром публикаций.
 };
 
 /// \brief Отзывает собственную публикацию; комиссия равна `payment_fee`.
 RevokePublicationError ApplyRevokePublication(const AuthorizedRevokePublication& op,
     const cybou::Hash256& network_binding, const CybouProtocolParameters& params, CybouState& state);
 
-/// \brief Регистрирует финализируемую RootPublication и учитывает её chunk-и в квоте автора.
-/// \return false, если запись уже существует или учёт переполнился (состояние не меняется).
+/// \brief Регистрирует финализируемую RootPublication в Notarial Register.
+/// \return false, если запись уже существует или владелец отсутствует (состояние не меняется).
 bool RecordPublication(CybouState& state, const cybou::Hash256& publication_id, const AccountId& owner,
     const ChunkId& chunk_authorization_root, uint32_t chunk_count, uint64_t height);
 
@@ -183,9 +221,10 @@ enum class StateValidationError : uint8_t {
     ACCOUNT_IDENTITY_COUNT_MISMATCH, ///< `accounts` и `identities` потеряли взаимно-однозначность.
     MISSING_IDENTITY,               ///< Для AccountState нет matching Identity record.
     DUPLICATE_RECOVERY_BINDING,     ///< RecoveryKeyId неоднозначен или не индексируется обратно.
-    BALANCE_OVERFLOW,               ///< TotalSupply переполнен либо превысил `MAX_SUPPLY`.
+    BALANCE_OVERFLOW,               ///< TotalCybou переполнен или onboarding-часть превышает System Balance.
     INVALID_NAME_REGISTRY,          ///< Нарушены правила имён, pending commit-ов или genesis-label binding.
-    INVALID_RESOURCE_USAGE,         ///< Учёт ресурсов или регистр публикаций неканоничен либо рассогласован.
+    INVALID_RESOURCE_USAGE,         ///< Учёт операций или регистр публикаций неканоничен.
+    INVALID_STORAGE_LEASE,          ///< Аренда хранения неканонична или ссылается на отсутствующий аккаунт.
 };
 
 /// \brief Проверяет внутренние инварианты консенсусного состояния.
@@ -193,13 +232,13 @@ enum class StateValidationError : uint8_t {
 /// \return Детализированный код ошибки; `NONE` только для канонически допустимого состояния.
 /// \post Состояние не изменяется.
 /// \note Потокобезопасно при неизменяемом доступе; детерминировано и fail-closed.
-StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_supply = nullptr);
-/// \brief Считает канонический total supply, исключая AUTH и обнаруживая переполнения.
+StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_cybou = nullptr);
+/// \brief Считает все существующие CYBOU, исключая AUTH и обнаруживая переполнения (DEC-277).
 /// \param state Полный снимок состояния.
-/// \return Сумма OnboardingPool + незаявленных genesis allocation + `Balance` + `System Balance`;
+/// \return Сумма незаявленных genesis allocation + `Balance` + `System Balance` + StorageEscrow;
 ///         при переполнении возвращает `std::numeric_limits<uint64_t>::max()`.
-/// \post AUTH сознательно не включается в вычисление в соответствии с `docs/cybou/57_IDENTITY_AUTHORITY.md`.
-uint64_t TotalSupply(const CybouState& state);
+/// \post Каждый финализированный блок сохраняет её точно: нет mint и нет burn.
+uint64_t TotalCybou(const CybouState& state);
 
 /// \brief Сериализует каноническое состояние в детерминированный бинарный формат.
 /// \param state Валидное каноническое состояние.

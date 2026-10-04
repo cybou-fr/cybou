@@ -583,7 +583,7 @@ BOOST_AUTO_TEST_CASE(runtime_rejects_foreign_genesis_and_block)
     std::array<unsigned char, 32> foreign_seed{};
     foreign_seed[0] = 0xBC;
     auto foreign_genesis = cybou::CreateTestGenesisState();
-    ++foreign_genesis.onboarding_pool;
+    ++foreign_genesis.settlement.next_period_start_utc;
     cybou::NodeRuntimeConfig config{
         .network_genesis = fixture.definition,
         .data_dir = fixture.directory / "foreign-observer",

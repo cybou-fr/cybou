@@ -14,6 +14,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/hex.h>
 #include <cybou/protocol_limits.h>
+#include <cybou/storage_economy.h>
 #include <cybou/support_mail.h>
 #include <cybou/validation_attestation.h>
 #include <cybou/wallet_service.h>
@@ -644,8 +645,9 @@ CybouAccountLimits cybouAccountLimits(quint64 authority)
     static constexpr quint64 kTiers[]{10'000, 100'000, 1'000'000, 10'000'001};
     const auto tier = cybou::ComputeAuthorityTierLimits(authority);
     CybouAccountLimits limits;
-    limits.storage_quota = tier.storage_quota_chunks * cybou::QUOTA_CHUNK_BYTES;
-    limits.max_file_bytes = quint64{tier.max_publication_chunks} * cybou::QUOTA_CHUNK_BYTES;
+    // Хранение оплачивается арендой, а не AUTH (DEC-274): квоты нет, файл ограничен safety bound.
+    limits.storage_quota = 0;
+    limits.max_file_bytes = quint64{cybou::MAX_PUBLICATION_CHUNKS} * cybou::STORAGE_BILLING_UNIT_BYTES;
     limits.operations_per_block = tier.operations_per_block;
     limits.operations_per_epoch = tier.operations_per_epoch;
     limits.work_bits = tier.operation_work_bits;
@@ -688,8 +690,8 @@ void CybouDesktopModel::setAuthority(quint64 authority)
 {
     if (m_status.authority == authority) return;
     m_status.authority = authority;
-    // The remote storage quota follows finalized AUTH (fixtures set their own).
-    if (!m_fixture_mode) m_status.storage_quota = cybouAccountLimits(authority).storage_quota;
+    // Хранение не квотируется AUTH (DEC-274); fixtures задают свои значения.
+    if (!m_fixture_mode) m_status.storage_quota = 0;
     Q_EMIT authorityChanged();
     Q_EMIT statusChanged();
 }

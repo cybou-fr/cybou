@@ -50,7 +50,7 @@ The wallet page renders a local ledger of protocol operations that move
 balances:
 
 ```text
-Onboarding bonus   OnboardingPool -> System Balance (AccountCreate)
+Onboarding bonus   Central Treasury -> System Balance (AccountCreate)
 Publication fee    deterministic size-aware fee, debited from System Balance
 Payment            user-authorized Balance transfer
 Lock to System     Balance -> System Balance (one-way)

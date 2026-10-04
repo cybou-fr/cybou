@@ -107,7 +107,7 @@ reconstruction.
 
 AUTH is a canonical network value attached to the Identity, read from the
 latest finalized state. It governs anti-abuse resource limits (DEC-272: bounded
-operations per block/epoch, storage quota, largest file, and relay PoW difficulty)
+operations per block/epoch and relay PoW difficulty; storage is paid by lease)
 and qualifies an Identity to sign Validation when `Authority > 10,000,000 AUTH`.
 Validation is shown as additional pre-finalization confidence, never as a quorum
 or BFT guarantee. AUTH confers no stake weight and no PoA finalization power,

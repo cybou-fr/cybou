@@ -6,6 +6,7 @@
 
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
+#include <cybou/storage_lease.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -16,7 +17,10 @@
 
 namespace cybou {
 namespace {
-constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
+constexpr size_t ACCOUNT_SIZE{32 + 8 * 6};
+constexpr size_t USAGE_SIZE{32 + 8 + 4 + 8 + 4};
+constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
+constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8};
 constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -112,20 +116,31 @@ size_t SerializedStateSize(const CybouState& state,
     const std::vector<unsigned char>& identities,
     const std::vector<unsigned char>& names)
 {
-    size_t total_size = 8 + 4 + state.accounts.size() * ACCOUNT_SIZE + 4 + identities.size() + 4 + names.size() + 4;
+    size_t total_size = 4 + state.accounts.size() * ACCOUNT_SIZE + 4 + identities.size() + 4 + names.size() + 4;
     for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
         static_cast<void>(recovery_id);
         total_size += GENESIS_ALLOCATION_BASE_SIZE + allocation.label.size();
         if (allocation.claimed_by) total_size += AccountId::SIZE;
     }
-    if (!state.usage.empty() || !state.publications.empty()) {
-        total_size += 4 + state.usage.size() * (AccountId::SIZE + 8 + 8 + 4 + 8 + 4);
-        total_size += 4 + state.publications.size() * (32 + AccountId::SIZE + 32 + 4 + 8);
-    }
+    total_size += 4 + state.usage.size() * USAGE_SIZE + 4 + state.publications.size() * PUBLICATION_SIZE;
+    total_size += 8 + 8 + 4 + state.leases.size() * LEASE_SIZE;
     return total_size;
 }
 
 } // namespace
+
+uint64_t* TreasuryBalance(CybouState& state)
+{
+    return const_cast<uint64_t*>(CentralAuthorityFeeBalance(std::as_const(state)));
+}
+
+uint64_t DebitSystemBalance(AccountState& account, const uint64_t amount)
+{
+    const uint64_t onboarding = std::min(account.onboarding_system_balance, amount);
+    account.onboarding_system_balance -= onboarding;
+    account.system_balance -= amount;
+    return onboarding;
+}
 
 bool CanCreditCentralAuthorityFee(const CybouState& state, uint64_t fee)
 {
@@ -154,7 +169,16 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     }
     if (state.accounts.size() >= MAX_IDENTITY_REGISTRY_ACCOUNTS) return AccountCreateStateError::ACCOUNT_LIMIT;
     if (state.accounts.contains(op.account_id)) return AccountCreateStateError::ACCOUNT_EXISTS;
-    if (state.onboarding_pool < params.onboarding_bonus) return AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL;
+    // Claimant самой Treasury не получает onboarding bonus: он и есть его источник (DEC-277).
+    const auto recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root);
+    const auto claim = recovery_id ? state.genesis_allocations.find(*recovery_id) : state.genesis_allocations.end();
+    const bool claims_allocation = claim != state.genesis_allocations.end() && !claim->second.claimed_by;
+    const bool claims_treasury = claims_allocation && claim->second.label == CENTRAL_AUTHORITY_NAME;
+    const uint64_t bonus = claims_treasury ? 0 : params.onboarding_bonus;
+    if (bonus) {
+        const auto* treasury = TreasuryBalance(state);
+        if (!treasury || *treasury < bonus) return AccountCreateStateError::INSUFFICIENT_TREASURY;
+    }
     const auto identity_result = state.identities.Register(op, network_binding, block_height, params);
     switch (identity_result) {
     case IdentityRegistryError::NONE: break;
@@ -162,26 +186,25 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     case IdentityRegistryError::RECOVERY_KEY_EXISTS: return AccountCreateStateError::RECOVERY_KEY_EXISTS;
     default: return AccountCreateStateError::INVALID_CREATE;
     }
-    state.onboarding_pool -= params.onboarding_bonus;
+    // Bonus списывается до claim: до него Treasury — сама allocation `cybou`.
+    if (bonus) *TreasuryBalance(state) -= bonus;
     uint64_t genesis_balance{0};
     uint64_t genesis_authority{0};
-    if (const auto recovery_id = ComputeRecoveryKeyId(op.authorization.recovery_root)) {
-        if (auto it = state.genesis_allocations.find(*recovery_id);
-            it != state.genesis_allocations.end() && !it->second.claimed_by) {
-            // Identity registry уже отверг повторное использование recovery key,
-            // поэтому соответствующая genesis allocation может быть заявлена только один раз.
-            genesis_balance = it->second.balance;
-            genesis_authority = it->second.authority;
-            it->second.claimed_by = op.account_id;
-            if (!it->second.label.empty()) {
-                state.names.names.emplace(it->second.label, op.account_id);
-                state.names.account_names.emplace(op.account_id, it->second.label);
-            }
+    if (claims_allocation) {
+        // Identity registry уже отверг повторное использование recovery key,
+        // поэтому соответствующая genesis allocation может быть заявлена только один раз.
+        genesis_balance = claim->second.balance;
+        genesis_authority = claim->second.authority;
+        claim->second.claimed_by = op.account_id;
+        if (!claim->second.label.empty()) {
+            state.names.names.emplace(claim->second.label, op.account_id);
+            state.names.account_names.emplace(op.account_id, claim->second.label);
         }
     }
     state.accounts.emplace(op.account_id, AccountState{
         .balance = genesis_balance,
-        .system_balance = params.onboarding_bonus,
+        .system_balance = bonus,
+        .onboarding_system_balance = bonus,
         .authority = genesis_authority,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
@@ -308,18 +331,32 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     const auto operation_bytes = SerializeProtocolOperation(ProtocolOperation{op});
     if (!operation_bytes) return RootPublicationError::INVALID_PAYLOAD;
     const auto fee = ComputeRootPublicationFee(params, operation_bytes->size(), op.publication.chunk_count);
-    if (!fee) return RootPublicationError::INVALID_PAYLOAD;
+    const auto publication_id = ComputeOperationId(*operation_bytes);
+    if (!fee || !publication_id || op.publication.lease_periods > params.max_storage_lease_periods) {
+        return RootPublicationError::INVALID_PAYLOAD;
+    }
+    // Начальная аренда оплачивается атомарно с публикацией: контент не бывает финализирован неоплаченным.
+    std::optional<uint64_t> escrow{0};
+    if (op.publication.lease_periods != 0) {
+        escrow = ComputeStorageLeaseEscrow(params, op.publication.chunk_count, params.storage_replica_target,
+            op.publication.lease_periods);
+    }
+    if (!escrow || *escrow > std::numeric_limits<uint64_t>::max() - *fee) return RootPublicationError::INVALID_PAYLOAD;
     auto sender = state.accounts.find(op.authorization.account_id);
     if (sender == state.accounts.end() || !state.identities.Find(op.authorization.account_id)) {
         return RootPublicationError::SENDER_NOT_FOUND;
     }
-    if (sender->second.system_balance < *fee) return RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE;
+    if (sender->second.system_balance < *fee + *escrow) return RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE;
     if (!CanCreditCentralAuthorityFee(state, *fee)) return RootPublicationError::FEE_TRANSFER_FAILED;
     if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return RootPublicationError::INVALID_AUTHORIZATION;
     }
-    sender->second.system_balance -= *fee;
+    DebitSystemBalance(sender->second, *fee);
     CreditCentralAuthorityFee(state, *fee);
+    if (*escrow != 0) {
+        FundStorageLease(state, *publication_id, op.authorization.account_id, op.publication.chunk_count,
+            params.storage_replica_target, op.publication.lease_periods, *escrow);
+    }
     return RootPublicationError::NONE;
 }
 
@@ -328,12 +365,6 @@ bool RecordPublication(CybouState& state, const cybou::Hash256& publication_id, 
 {
     if (publication_id.IsNull() || chunk_count == 0 || state.publications.contains(publication_id) ||
         !state.accounts.contains(owner)) return false;
-    auto& usage = state.usage[owner];
-    if (usage.stored_chunks > std::numeric_limits<uint64_t>::max() - chunk_count) {
-        if (usage.Empty()) state.usage.erase(owner);
-        return false;
-    }
-    usage.stored_chunks += chunk_count;
     state.publications.emplace(publication_id, PublicationRecord{.owner = owner,
         .chunk_authorization_root = chunk_authorization_root, .chunk_count = chunk_count, .height = height});
     return true;
@@ -355,24 +386,24 @@ RevokePublicationError ApplyRevokePublication(const AuthorizedRevokePublication&
     const auto record = state.publications.find(op.revoke.publication_id);
     if (record == state.publications.end()) return RevokePublicationError::PUBLICATION_NOT_FOUND;
     if (record->second.owner != account_id) return RevokePublicationError::NOT_OWNER;
-    const auto usage = state.usage.find(account_id);
-    if (usage == state.usage.end() || usage->second.stored_chunks < record->second.chunk_count) {
-        return RevokePublicationError::INCONSISTENT_STATE;
-    }
     if (sender->second.system_balance < params.payment_fee) return RevokePublicationError::INSUFFICIENT_SYSTEM_BALANCE;
     if (!CanCreditCentralAuthorityFee(state, params.payment_fee)) return RevokePublicationError::FEE_TRANSFER_FAILED;
     if (state.identities.AuthorizeOperation(op.authorization, network_binding) != IdentityRegistryError::NONE) {
         return RevokePublicationError::INVALID_AUTHORIZATION;
     }
-    usage->second.stored_chunks -= record->second.chunk_count;
-    if (usage->second.Empty()) state.usage.erase(usage);
+    // Аренда закрывается после текущего несettled периода: финальный settlement
+    // ещё оплатит уже оказанную услугу и вернёт остаток escrow плательщику.
+    if (auto lease = state.leases.find(op.revoke.publication_id); lease != state.leases.end()) {
+        lease->second.end_period = std::min(lease->second.end_period,
+            std::max(lease->second.first_period, state.settlement.next_period) + 1);
+    }
     state.publications.erase(record);
-    sender->second.system_balance -= params.payment_fee;
+    DebitSystemBalance(sender->second, params.payment_fee);
     CreditCentralAuthorityFee(state, params.payment_fee);
     return RevokePublicationError::NONE;
 }
 
-StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_supply)
+StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_cybou)
 {
     // Проверка состояния намеренно избыточна: state root может считаться только
     // после подтверждения всех взаимных индексов (`accounts`, `identities`, names,
@@ -381,6 +412,7 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
     if (state.accounts.size() != state.identities.Accounts().size()) return StateValidationError::ACCOUNT_IDENTITY_COUNT_MISMATCH;
     for (const auto& [id, account] : state.accounts) {
         if (id.IsNull() || !state.identities.Find(id)) return StateValidationError::MISSING_IDENTITY;
+        if (account.onboarding_system_balance > account.system_balance) return StateValidationError::BALANCE_OVERFLOW;
     }
     for (const auto& [id, record] : state.identities.Accounts()) {
         const auto root_id = ComputeRecoveryKeyId(record.recovery_key);
@@ -425,53 +457,51 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
         if (!committing_accounts.insert(record.account_id).second) return StateValidationError::INVALID_NAME_REGISTRY;
     }
     if (state.names.pending_commits.size() > DEFAULT_MAX_PENDING_NAME_COMMITS) return StateValidationError::INVALID_NAME_REGISTRY;
-    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
-    const uint64_t total = TotalSupply(state);
-    if (out_total_supply) *out_total_supply = total;
-    if (total > MAX_SUPPLY) return StateValidationError::BALANCE_OVERFLOW;
-    // Учёт ресурсов: только ненулевые записи существующих аккаунтов, и квота каждого
-    // автора точно равна сумме chunk-ов его действующих публикаций.
-    std::map<AccountId, uint64_t> published;
+    const uint64_t total = TotalCybou(state);
+    if (out_total_cybou) *out_total_cybou = total;
+    if (total == std::numeric_limits<uint64_t>::max()) return StateValidationError::BALANCE_OVERFLOW;
     for (const auto& [id, record] : state.publications) {
         if (id.IsNull() || record.chunk_count == 0 || !state.accounts.contains(record.owner)) {
             return StateValidationError::INVALID_RESOURCE_USAGE;
         }
-        auto& total = published[record.owner];
-        if (total > std::numeric_limits<uint64_t>::max() - record.chunk_count) return StateValidationError::INVALID_RESOURCE_USAGE;
-        total += record.chunk_count;
     }
     for (const auto& [id, usage] : state.usage) {
         if (usage.Empty() || !state.accounts.contains(id)) return StateValidationError::INVALID_RESOURCE_USAGE;
-        const auto found = published.find(id);
-        if (usage.stored_chunks != (found == published.end() ? 0 : found->second)) {
-            return StateValidationError::INVALID_RESOURCE_USAGE;
-        }
     }
-    for (const auto& [id, total] : published) {
-        const auto usage = state.usage.find(id);
-        if (usage == state.usage.end() || usage->second.stored_chunks != total) return StateValidationError::INVALID_RESOURCE_USAGE;
+    // Аренда: плательщик существует, период непуст и начинается не позже курсора settlement.
+    for (const auto& [id, lease] : state.leases) {
+        if (id.IsNull() || !state.accounts.contains(lease.payer) || lease.units == 0 || lease.replicas == 0 ||
+            lease.replicas > MAX_STORAGE_LEASE_REPLICAS || lease.first_period >= lease.end_period ||
+            lease.first_period > state.settlement.next_period) return StateValidationError::INVALID_STORAGE_LEASE;
+        const auto publication = state.publications.find(id);
+        if (publication != state.publications.end() &&
+            (publication->second.owner != lease.payer || publication->second.chunk_count != lease.units)) {
+            return StateValidationError::INVALID_STORAGE_LEASE;
+        }
     }
     return StateValidationError::NONE;
 }
 
-uint64_t TotalSupply(const CybouState& state)
+uint64_t TotalCybou(const CybouState& state)
 {
-    constexpr uint64_t MAX_SUPPLY{100'000'000'000};
+    constexpr uint64_t OVERFLOW{std::numeric_limits<uint64_t>::max()};
     uint64_t total{0};
-    // AUTH сознательно не участвует в supply: он учитывается отдельной метрикой
-    // authority и регулируется правилами docs/cybou/57_IDENTITY_AUTHORITY.md.
-    if (state.onboarding_pool > MAX_SUPPLY) return std::numeric_limits<uint64_t>::max();
-    total += state.onboarding_pool;
+    // Сумма строго меньше OVERFLOW: само значение OVERFLOW зарезервировано под переполнение.
+    const auto add = [&](uint64_t value) {
+        if (value >= OVERFLOW - total) return false;
+        total += value;
+        return true;
+    };
+    // AUTH сознательно не участвует: он не является CYBOU (57_IDENTITY_AUTHORITY.md).
     for (const auto& [id, allocation] : state.genesis_allocations) {
         if (allocation.claimed_by) continue; // counted in the claimant Balance
-        if (allocation.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
-        total += allocation.balance;
+        if (!add(allocation.balance)) return OVERFLOW;
     }
     for (const auto& [id, account] : state.accounts) {
-        if (account.balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
-        total += account.balance;
-        if (account.system_balance > MAX_SUPPLY - total) return std::numeric_limits<uint64_t>::max();
-        total += account.system_balance;
+        if (!add(account.balance) || !add(account.system_balance)) return OVERFLOW;
+    }
+    for (const auto& [id, lease] : state.leases) {
+        if (!add(lease.escrow_onboarding) || !add(lease.escrow_locked)) return OVERFLOW;
     }
     return total;
 }
@@ -485,13 +515,13 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     if (names.size() > std::numeric_limits<uint32_t>::max()) return std::nullopt;
     std::vector<unsigned char> out;
     out.reserve(SerializedStateSize(state, *identities, names));
-    Write64(out, state.onboarding_pool);
     Write32(out, static_cast<uint32_t>(state.accounts.size()));
     for (const auto& [id, account] : state.accounts) {
         if (id.IsNull() || !state.identities.Find(id)) return std::nullopt;
         out.insert(out.end(), id.Value().begin(), id.Value().end());
         Write64(out, account.balance);
         Write64(out, account.system_balance);
+        Write64(out, account.onboarding_system_balance);
         Write64(out, account.authority);
         Write64(out, account.creation_height);
         Write64(out, account.creation_epoch);
@@ -512,26 +542,34 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
             out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
         }
     }
-    // Ресурсный раздел пишется только когда он непуст: пустое состояние (в том числе
-    // genesis) сохраняет те же байты и тот же state root.
-    if (!state.usage.empty() || !state.publications.empty()) {
-        Write32(out, static_cast<uint32_t>(state.usage.size()));
-        for (const auto& [id, usage] : state.usage) {
-            out.insert(out.end(), id.Value().begin(), id.Value().end());
-            Write64(out, usage.stored_chunks);
-            Write64(out, usage.epoch);
-            Write32(out, usage.epoch_operations);
-            Write64(out, usage.block_height);
-            Write32(out, usage.block_operations);
-        }
-        Write32(out, static_cast<uint32_t>(state.publications.size()));
-        for (const auto& [id, record] : state.publications) {
-            out.insert(out.end(), id.begin(), id.end());
-            out.insert(out.end(), record.owner.Value().begin(), record.owner.Value().end());
-            out.insert(out.end(), record.chunk_authorization_root.begin(), record.chunk_authorization_root.end());
-            Write32(out, record.chunk_count);
-            Write64(out, record.height);
-        }
+    Write32(out, static_cast<uint32_t>(state.usage.size()));
+    for (const auto& [id, usage] : state.usage) {
+        out.insert(out.end(), id.Value().begin(), id.Value().end());
+        Write64(out, usage.epoch);
+        Write32(out, usage.epoch_operations);
+        Write64(out, usage.block_height);
+        Write32(out, usage.block_operations);
+    }
+    Write32(out, static_cast<uint32_t>(state.publications.size()));
+    for (const auto& [id, record] : state.publications) {
+        out.insert(out.end(), id.begin(), id.end());
+        out.insert(out.end(), record.owner.Value().begin(), record.owner.Value().end());
+        out.insert(out.end(), record.chunk_authorization_root.begin(), record.chunk_authorization_root.end());
+        Write32(out, record.chunk_count);
+        Write64(out, record.height);
+    }
+    Write64(out, state.settlement.next_period);
+    Write64(out, state.settlement.next_period_start_utc);
+    Write32(out, static_cast<uint32_t>(state.leases.size()));
+    for (const auto& [id, lease] : state.leases) {
+        out.insert(out.end(), id.begin(), id.end());
+        out.insert(out.end(), lease.payer.Value().begin(), lease.payer.Value().end());
+        Write32(out, lease.units);
+        out.push_back(lease.replicas);
+        Write64(out, lease.first_period);
+        Write64(out, lease.end_period);
+        Write64(out, lease.escrow_onboarding);
+        Write64(out, lease.escrow_locked);
     }
     return out;
 }
@@ -539,12 +577,9 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
 std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> bytes)
 {
     Reader reader{bytes};
-    const auto onboarding = reader.U64();
     const auto count = reader.U32();
-    if (!onboarding ||
-        !count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
+    if (!count || *count > MAX_IDENTITY_REGISTRY_ACCOUNTS || *count > reader.Remaining() / ACCOUNT_SIZE) return std::nullopt;
     CybouState state{};
-    state.onboarding_pool = *onboarding;
     std::optional<AccountId> prior;
     for (uint32_t i{0}; i < *count; ++i) {
         const auto id_bytes = reader.Bytes(AccountId::SIZE);
@@ -552,15 +587,17 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         const auto id = AccountId::FromBytes(*id_bytes);
         const auto balance = reader.U64();
         const auto system = reader.U64();
+        const auto onboarding = reader.U64();
         const auto authority = reader.U64();
         const auto height = reader.U64();
         const auto epoch = reader.U64();
         // Map-ключи должны приходить уже в строгом порядке: это закрепляет одну
         // каноническую сериализацию и исключает множественные байтовые представления
         // одного и того же логического состояния.
-        if (!id || (prior && !(*prior < *id)) || !balance || !system || !authority || !height || !epoch) return std::nullopt;
+        if (!id || (prior && !(*prior < *id)) || !balance || !system || !onboarding || !authority || !height ||
+            !epoch) return std::nullopt;
         prior = *id;
-        state.accounts.emplace(*id, AccountState{*balance, *system, *authority, *height, *epoch});
+        state.accounts.emplace(*id, AccountState{*balance, *system, *onboarding, *authority, *height, *epoch});
     }
     const auto identity_size = reader.U32();
     if (!identity_size) return std::nullopt;
@@ -605,24 +642,21 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         }
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
     }
-    if (reader.Remaining()) {
-        constexpr size_t USAGE_SIZE{32 + 8 + 8 + 4 + 8 + 4};
-        constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
+    {
         const auto usage_count = reader.U32();
         if (!usage_count || *usage_count > reader.Remaining() / USAGE_SIZE) return std::nullopt;
         std::optional<AccountId> prior_usage;
         for (uint32_t i{0}; i < *usage_count; ++i) {
             const auto id_bytes = reader.Bytes(AccountId::SIZE);
             const auto id = id_bytes ? AccountId::FromBytes(*id_bytes) : std::nullopt;
-            const auto stored = reader.U64();
             const auto epoch = reader.U64();
             const auto epoch_ops = reader.U32();
             const auto block_height = reader.U64();
             const auto block_ops = reader.U32();
-            if (!id || !stored || !epoch || !epoch_ops || !block_height || !block_ops ||
+            if (!id || !epoch || !epoch_ops || !block_height || !block_ops ||
                 (prior_usage && !(*prior_usage < *id))) return std::nullopt;
             prior_usage = *id;
-            state.usage.emplace(*id, AccountUsage{*stored, *epoch, *epoch_ops, *block_height, *block_ops});
+            state.usage.emplace(*id, AccountUsage{*epoch, *epoch_ops, *block_height, *block_ops});
         }
         const auto publication_count = reader.U32();
         if (!publication_count || *publication_count > reader.Remaining() / PUBLICATION_SIZE) return std::nullopt;
@@ -643,8 +677,33 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
             std::copy(root_bytes->begin(), root_bytes->end(), record.chunk_authorization_root.begin());
             state.publications.emplace(id, record);
         }
-        // Пустой ресурсный раздел неканоничен: он должен быть опущен целиком.
-        if (state.usage.empty() && state.publications.empty()) return std::nullopt;
+    }
+    const auto next_period = reader.U64();
+    const auto next_start = reader.U64();
+    const auto lease_count = reader.U32();
+    if (!next_period || !next_start || !lease_count || *lease_count > reader.Remaining() / LEASE_SIZE) return std::nullopt;
+    state.settlement = {.next_period = *next_period, .next_period_start_utc = *next_start};
+    std::optional<cybou::Hash256> prior_lease;
+    for (uint32_t i{0}; i < *lease_count; ++i) {
+        const auto id_bytes = reader.Bytes(32);
+        const auto payer_bytes = reader.Bytes(AccountId::SIZE);
+        const auto payer = payer_bytes ? AccountId::FromBytes(*payer_bytes) : std::nullopt;
+        const auto units = reader.U32();
+        const auto replicas = reader.U8();
+        const auto first = reader.U64();
+        const auto end = reader.U64();
+        const auto escrow_onboarding = reader.U64();
+        const auto escrow_locked = reader.U64();
+        if (!id_bytes || !payer || !units || !replicas || !first || !end || !escrow_onboarding || !escrow_locked) {
+            return std::nullopt;
+        }
+        cybou::Hash256 id;
+        std::copy(id_bytes->begin(), id_bytes->end(), id.begin());
+        if (prior_lease && !(*prior_lease < id)) return std::nullopt;
+        prior_lease = id;
+        state.leases.emplace(id, StorageLeaseRecord{.payer = *payer, .units = *units, .replicas = *replicas,
+            .first_period = *first, .end_period = *end, .escrow_onboarding = *escrow_onboarding,
+            .escrow_locked = *escrow_locked});
     }
     if (reader.Remaining()) return std::nullopt;
     // Окончательная валидация после чтения всех доменов не допускает частично

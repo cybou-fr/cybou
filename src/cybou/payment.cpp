@@ -73,7 +73,7 @@ PaymentError ApplyPayment(const AuthorizedPayment& operation,
     }
     if (state.identities.AuthorizeOperation(operation.authorization, network_binding) != IdentityRegistryError::NONE) return PaymentError::INVALID_AUTHORIZATION;
     sender->second.balance -= operation.payment.amount;
-    sender->second.system_balance -= params.payment_fee;
+    DebitSystemBalance(sender->second, params.payment_fee);
     recipient->second.balance += operation.payment.amount;
     CreditCentralAuthorityFee(state, params.payment_fee);
     return PaymentError::NONE;

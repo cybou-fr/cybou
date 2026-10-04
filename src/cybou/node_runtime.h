@@ -318,6 +318,8 @@ public:
     std::optional<AccountState> GetAccountState(const AccountId& account_id) const;
     /// \brief true, пока финализированная RootPublication числится в регистре (не отозвана).
     bool IsPublicationActive(const cybou::Hash256& publication_id) const;
+    /// \brief true, если финализированная аренда покрывает текущий несettled период (DEC-279).
+    bool IsStorageLeaseActive(const cybou::Hash256& publication_id) const;
     /// \brief Сколько метрируемых операций аккаунт ещё может сделать в окне следующего блока (DEC-272).
     uint32_t RemainingEpochOperations(const AccountId& account_id) const;
 
@@ -336,6 +338,11 @@ public:
     /// \return Итог локальной подготовки и подачи candidate operation.
     /// \pre Локальный PoA signer уже включён и проходит safety checks.
     OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
+    /// \brief Только для PoA signer: подписывает и ставит в pool StorageSettlement следующего периода.
+    /// \param period_start_utc UTC-начало периода; после первого settlement обязано совпасть с курсором.
+    /// \param entries Выплаты providers, строго упорядоченные по (publication, payout account).
+    /// \return Итог локальной подготовки; невалидный против finalized state settlement отвергается pool.
+    OperationSubmitResult SubmitStorageSettlement(uint64_t period_start_utc, std::vector<StorageSettlementEntry> entries);
     /// \brief Возвращает локально известный статус операции.
     /// \param op_id Искомый OperationID.
     /// \return Snapshot локального знания о candidate/finalized состоянии этой операции.

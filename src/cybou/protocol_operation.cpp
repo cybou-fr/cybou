@@ -7,6 +7,7 @@
 #include <cybou/protocol_operation.h>
 #include <cybou/crypto/sha256.h>
 #include <cybou/identity_kem.h>
+#include <cybou/protocol_limits.h>
 
 #include <algorithm>
 #include <string_view>
@@ -176,6 +177,24 @@ std::optional<std::vector<unsigned char>> SerializeRevokePublicationOperation(co
         ComputeRevokePublicationPayloadCommitment, SerializeRevokePublicationPayload);
 }
 
+std::optional<std::vector<unsigned char>> SerializeStorageLeaseOperation(const AuthorizedStorageLease& op)
+{
+    return SerializeAuthorizedPayload(op.authorization, IdentityOperationKind::STORAGE_LEASE, op.lease,
+        ComputeStorageLeasePayloadCommitment, SerializeStorageLeasePayload);
+}
+
+std::optional<AuthorizedStorageLease> DeserializeStorageLeaseOperation(std::span<const unsigned char> bytes)
+{
+    if (bytes.size() != AUTHORIZED_STORAGE_LEASE_SIZE) return std::nullopt;
+    const auto auth = DeserializeIdentityOperationAuthorization(bytes.first(IDENTITY_OPERATION_AUTH_SIZE),
+        IdentityOperationKind::STORAGE_LEASE);
+    const auto payload = DeserializeStorageLeasePayload(bytes.subspan(IDENTITY_OPERATION_AUTH_SIZE));
+    if (!auth || !payload || ComputeStorageLeasePayloadCommitment(*payload) != auth->payload_commitment) {
+        return std::nullopt;
+    }
+    return AuthorizedStorageLease{.authorization = *auth, .lease = *payload};
+}
+
 std::optional<AuthorizedRevokePublication> DeserializeRevokePublicationOperation(std::span<const unsigned char> bytes)
 {
     if (bytes.size() != AUTHORIZED_REVOKE_PUBLICATION_SIZE) return std::nullopt;
@@ -311,6 +330,14 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         const auto body = SerializeRevokePublicationOperation(*revoke);
         if (!body) return std::nullopt;
         return TaggedOperationBytes(ProtocolOperationKind::REVOKE_PUBLICATION, *body);
+    } else if (const auto* lease = std::get_if<AuthorizedStorageLease>(&operation)) {
+        const auto body = SerializeStorageLeaseOperation(*lease);
+        if (!body) return std::nullopt;
+        return TaggedOperationBytes(ProtocolOperationKind::STORAGE_LEASE, *body);
+    } else if (const auto* settlement = std::get_if<StorageSettlement>(&operation)) {
+        const auto body = SerializeStorageSettlement(*settlement);
+        if (!body) return std::nullopt;
+        return TaggedOperationBytes(ProtocolOperationKind::STORAGE_SETTLEMENT, *body);
     } else {
         return std::nullopt;
     }
@@ -369,6 +396,16 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
         const auto op = DeserializeRevokePublicationOperation(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
+    case ProtocolOperationKind::STORAGE_LEASE: {
+        if (bytes.size() != 1 + AUTHORIZED_STORAGE_LEASE_SIZE) return std::nullopt;
+        const auto op = DeserializeStorageLeaseOperation(bytes.subspan(1));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
+    }
+    case ProtocolOperationKind::STORAGE_SETTLEMENT: {
+        if (bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
+        const auto op = DeserializeStorageSettlement(bytes.subspan(1));
+        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
+    }
     default: return std::nullopt;
     }
 }
@@ -377,7 +414,8 @@ std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
 {
     return std::visit([](const auto& op) -> std::optional<AccountId> {
         using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, AccountCreateOp> || std::is_same_v<T, PoaAuthAdjustment>) {
+        if constexpr (std::is_same_v<T, AccountCreateOp> || std::is_same_v<T, PoaAuthAdjustment> ||
+                      std::is_same_v<T, StorageSettlement>) {
             return std::nullopt;
         } else if constexpr (std::is_same_v<T, IdentityRotate>) {
             return op.account_id;
@@ -448,8 +486,8 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
                 VerifyIdentityMessage(record->recovery_key, op.old_recovery_signature, *digest) &&
                 VerifyIdentityMessage(op.new_recovery_key, op.new_recovery_pop, *digest) &&
                 VerifyIdentityMessage(op.new_authorization_key, op.new_authorization_pop, *digest);
-        } else if constexpr (std::is_same_v<T, PoaAuthAdjustment>) {
-            // PoAAuthAdjustment не является mesh-relay операцией: её создаёт PoA
+        } else if constexpr (std::is_same_v<T, PoaAuthAdjustment> || std::is_same_v<T, StorageSettlement>) {
+            // PoA-подписанные операции не являются mesh-relay: их создаёт PoA
             // для собственного следующего блока после локального решения finality.
             return false;
         } else {
@@ -475,6 +513,9 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
             } else if constexpr (std::is_same_v<T, AuthorizedRevokePublication>) {
                 expected_kind = IdentityOperationKind::REVOKE_PUBLICATION;
                 payload_commitment = ComputeRevokePublicationPayloadCommitment(op.revoke);
+            } else if constexpr (std::is_same_v<T, AuthorizedStorageLease>) {
+                expected_kind = IdentityOperationKind::STORAGE_LEASE;
+                payload_commitment = ComputeStorageLeasePayloadCommitment(op.lease);
             }
             const auto digest = ComputeIdentityOperationDigest(network_binding, op.authorization);
             return payload_commitment && op.authorization.kind == expected_kind &&

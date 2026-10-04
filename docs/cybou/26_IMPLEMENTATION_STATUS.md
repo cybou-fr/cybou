@@ -17,7 +17,7 @@ define the target. The changes described here include committed local developmen
 | Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Every process uses the same Full Node network lifecycle; signer activation does not reconnect peers. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS runs the ordinary `cybou node run` command on current current DEVNET. |
 | Geo updater | France-only admission with a valid local dataset; fail closed otherwise | HTTPS and published archive SHA-1 verification, bounded gzip decode, SHA-256 CSV cache and validated atomic installation. Each failed attempt re-fetches metadata and archive; five attempts use interruptible 0/2/5/15/60s delays. Exhaustion retains valid cache and retries in 1h, or retries in 5m without a valid dataset. Successful/current checks use 14 days. Test-only fetch/wait hooks cover publication mismatch, rejected candidates, cache retention, strict temporary cleanup and cancellation without network access. |
 | Consensus bootstrap state | No grants, roster, or network-role announcements | Removed. |
-| Consensus state | Unified current state format | State with canonical AUTH and only OnboardingPool; older decoders removed. |
+| Consensus state | Unified current state format | State with canonical AUTH, Treasury monetary base, onboarding-origin System Balance, settlement cursor and storage leases (M5); no OnboardingPool; older decoders removed. The compiled DEVNET no longer decodes and fails closed until M7. |
 | AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state root commits it. Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |
 | AUTH transitions | Current utility-bound earning; PoA-signed `PoaAuthAdjustment` GRANT / BURN | Implemented: utility operations RootPublication and SystemLock earn flat +1, capped at +1 per account per finalized block (`59ada0b`); AccountCreate, maintenance, payments and adjustments earn nothing. `PoaAuthAdjustment` (`4a393fd`) is signed by the genesis PoA key, bound to one block height, once per block, verified by every node; never relayed. No CLI/GUI action yet issues adjustments. |
 | Relay proof-of-work | Every user operation carries tier PoW checked by every Full Node and the PoA (DEC-273) | Implemented: `operation_work.h` (`CYBOU/OP-WORK`), `OperationPool::Admit` and revalidation check it against finalized state; `OP_META` carries `size u32 + nonce u64`; `CybouNodeRuntime::PrepareOperationWork` solves outside the runtime lock and caches; CLI `operation submit` solves before sending. Never stored in blocks. Component tests set `NodeRuntimeConfig.operation_work_bits = 0`. Wire change: every DEVNET node, the VPS included, must run this build. |
@@ -38,9 +38,7 @@ DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:
 --capacity`), `ChunkBlobStore` rejects new blobs beyond `V` with
 `CAPACITY_EXCEEDED`, and `FinalizedChunkStore` receives the provider budget
 `ProviderBudgetBytes(V) = floor(2V/3)`; diagnostics report local and provider
-usage separately. The runtime still uses AUTH storage quotas, the 5 GiB
-onboarding credit and OnboardingPool; no StorageLease, StorageEscrow,
-StorageSettlement exist. The desktop has no capacity picker yet and uses the
+usage separately. The desktop has no capacity picker yet and uses the
 15 GiB default. M3 is implemented: successful admissions return a signed
 `StorageReceipt` (P2P `CHUNK_ADMISSION_RESULT`), StorageService counts a replica
 only with a receipt from that StorageId and keeps it in the encrypted
@@ -55,6 +53,18 @@ capped at 24 h, failure or restart closes it), accrues a shadow reward per
 provider, persists evidence in the encrypted Application DB and reports
 `EstimatedDailyRent()`. Diagnostics show a provider-side estimate. No CYBOU
 moves; measured DEVNET numbers will validate the rate before M5.
+M5 consensus economics is implemented in `state.cpp`, `storage_lease.h/.cpp`
+and `block_executor.cpp`: no MAX_SUPPLY or OnboardingPool, `TotalCybou`
+conservation, Treasury-funded 20,000 onboarding, onboarding-origin tracking,
+`RootPublication.lease_periods` (initial lease paid atomically), `StorageLease`
+(operation kind 10) and PoA-signed `StorageSettlement` (kind 11, contiguous
+86,400 s periods, per-lease period cap, no self-payout, origin-preserving
+payouts and refunds). AUTH storage quotas are removed; `MAX_PUBLICATION_CHUNKS`
+remains a safety bound. Providers admit chunks only under an active lease;
+PublicationService leases at publication and renews inactive leases. Not yet
+implemented: aggregation of off-chain evidence into settlements, payout
+bindings, lease renewal UX. Because the state and genesis formats changed, the
+compiled DEVNET fails closed and main must not be deployed before M7.
 
 ## Evidence limits reviewed on 2026-10-04
 

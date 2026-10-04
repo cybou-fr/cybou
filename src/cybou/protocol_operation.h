@@ -13,6 +13,7 @@
 #include <cybou/poa_auth_adjustment.h>
 #include <cybou/root_publication.h>
 #include <cybou/identity_registry.h>
+#include <cybou/storage_lease.h>
 
 #include <optional>
 #include <span>
@@ -48,6 +49,8 @@ inline constexpr size_t AUTHORIZED_SYSTEM_LOCK_SIZE{IDENTITY_OPERATION_AUTH_SIZE
 
 /// \brief Размер канонической сериализации AuthorizedRevokePublication.
 inline constexpr size_t AUTHORIZED_REVOKE_PUBLICATION_SIZE{IDENTITY_OPERATION_AUTH_SIZE + REVOKE_PUBLICATION_PAYLOAD_SIZE};
+/// \brief Размер канонической сериализации AuthorizedStorageLease.
+inline constexpr size_t AUTHORIZED_STORAGE_LEASE_SIZE{IDENTITY_OPERATION_AUTH_SIZE + STORAGE_LEASE_PAYLOAD_SIZE};
 
 /// \brief Дискриминатор канонического бинарного формата ProtocolOperation.
 enum class ProtocolOperationKind : uint8_t {
@@ -60,6 +63,8 @@ enum class ProtocolOperationKind : uint8_t {
     ROOT_PUBLICATION = 7,    ///< Payload: `AuthorizedRootPublication`, единственная кандидат-операция публикации контента.
     POA_AUTH_ADJUSTMENT = 8, ///< Payload: `PoaAuthAdjustment`, PoA-подписанная корректировка AUTH для следующего блока.
     REVOKE_PUBLICATION = 9,  ///< Payload: `AuthorizedRevokePublication`, отзыв собственной публикации автором.
+    STORAGE_LEASE = 10,      ///< Payload: `AuthorizedStorageLease`, аренда хранения через StorageEscrow.
+    STORAGE_SETTLEMENT = 11, ///< Payload: `StorageSettlement`, PoA-подписанные выплаты providers за период.
 };
 
 /// \brief Канонический tagged union всех операций, попадающих в блок.
@@ -72,7 +77,9 @@ using ProtocolOperation = std::variant<
     AuthorizedNameReveal,
     AuthorizedRootPublication,
     PoaAuthAdjustment,
-    AuthorizedRevokePublication>;
+    AuthorizedRevokePublication,
+    AuthorizedStorageLease,
+    StorageSettlement>;
 
 /// \brief Сериализует tagged union операции в канонический бинарный формат.
 /// \param operation Операция в одном из поддерживаемых вариантов `ProtocolOperation`.

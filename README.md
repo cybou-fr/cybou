@@ -41,12 +41,11 @@ service d'un réseau privé d'entreprise.
   des données applicatives privées.
 - **Stockage vérifiable.** La blockchain agit comme un registre notarié
   déterministe : elle consigne les métadonnées de `RootPublication`, les racines Merkle
-  et les capsules de destinataires. Les quotas et droits de stockage sont déduits
-  strictement de l'état finalisé par le PoA (aucune déclaration locale ni voucher
-  hors-chaîne ne confère d'autorité). Chaque identité reçoit un crédit de confiance
-  d'accueil immédiat de 5 Go de stockage réseau, adossé à une obligation physique
-  réciproque de 1:3 (~10–15 Go alloués sur disque local pour les pairs).
-  L'allocation locale ne prouve pas une contribution effective de stockage 1:3.
+  et les capsules de destinataires. Le stockage réseau se paie par un bail
+  (`StorageLease`) depuis le System Balance vers un séquestre, versé aux nœuds qui
+  prouvent un service de stockage via un règlement quotidien signé par le PoA
+  (aucune déclaration locale ni voucher hors-chaîne ne confère d'autorité). Chaque
+  nœud choisit une capacité locale d'au moins 15 Gio, dont au plus 2/3 pour autrui.
   Les contrôles opérationnels relisent les fragments via GET et vérifient BLAKE3 ;
   la réparation est tentée depuis une copie valide vers un fournisseur disponible. Le mécanisme
   cryptographique d'audit de stockage (`StorageAuditChallenge`, `CreateStorageAuditProof`,
@@ -72,8 +71,8 @@ service d'un réseau privé d'entreprise.
   Chaque nœud complet exécute lui-même chaque opération candidate. Une identité
   dont l'AUTH finalisée dépasse 10 000 000 peut y ajouter une signature de
   Validation, simple preuve pré-finalisation. L'AUTH est stockée dans l'état du
-  compte, non transférable et exclue des 100 milliards de CYBOU ; elle gouverne
-  également l'échelle anti-spam des quotas d'opérations et de stockage. Le PoA
+  compte, non transférable et ne fait pas partie des CYBOU ; elle gouverne
+  également l'échelle anti-spam du débit d'opérations, mais plus le stockage. Le PoA
   ré-exécute tout et reste seul à finaliser.
 - **Admission réseau.** Les commandes réseau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP

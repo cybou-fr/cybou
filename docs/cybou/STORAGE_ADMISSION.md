@@ -9,8 +9,8 @@ The Beta target remains two independent remote full replicas; the current
 placement algorithm deduplicates proven StorageIds, which does not establish
 independent hosts, operators or failure domains. The 1:3 reciprocal baseline
 is a capacity/service objective, not measured proof of contribution: automatic
-local allocation varies with disk space and does not guarantee 10–15 GB.
-Finalized quotas govern entitlement, not evidence of actual remote service.
+local capacity is an explicit operator choice (`V >= 15 GiB`), not proof of service.
+Storage is paid by finalized leases; only PoA-signed settlements record service.
 
 Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
@@ -20,7 +20,7 @@ Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
 random-offset audits and periodic full GET plus ChunkID verification; none of
 it is consensus state or a canonical proof.
 
-Finalized revocation stops admission and releases the author's canonical quota.
+Finalized revocation stops admission and closes the author's lease after the current period.
 Compliant providers journal purge of unshared chunks, retaining physical byte
 accounting until unlink succeeds or absence is confirmed; maintenance/restart
 retry failures. This does not prove deletion of hidden copies or crypto-erasure.
@@ -60,7 +60,8 @@ PutChunk(publication_reference, ChunkID, bytes, admission_proof)
 
 only after verifying:
 
-1. publication is active in the latest canonical PoA-finalized state;
+1. publication is active in the latest canonical PoA-finalized state and its
+   StorageLease covers the current settlement period (DEC-279);
 2. Merkle proof authorizes ChunkID under that publication;
 3. BLAKE3(bytes) equals ChunkID;
 4. local capacity/policy allows storage.
@@ -136,14 +137,19 @@ The blockchain acts as the canonical Notarial Register for application content:
 - Remote storage allowances and admission rights are computed deterministically strictly from PoA-finalized state.
 - Local configuration declarations and off-chain vouchers convey zero authority. The network only respects what is notarized and finalized by PoA.
 
-## Onboarding trust credit and 1:3 reciprocal ratio
+## Superseded: onboarding trust credit and AUTH resource ladder
+
+The two sections below describe the pre-M5 model still run by the deployed
+DEVNET binary until M7. Code on main implements paid leases instead.
+
+### Onboarding trust credit and 1:3 reciprocal ratio
 
 Every newly registered Identity receives an immediate **Onboarding Trust Credit of 5 GB** of remote storage in the network (DEC-269).
 - **Physical ratio (1:3)**: 1 GB of stored user data requires 2 remote replicas plus 1 local copy = 3 physical copies total.
 - **Reciprocal baseline**: Target capacity/service reciprocity is not measured. Automatic allocation depends on free disk space and may be below 10–15 GB; see the allocation formula above.
 - Frictionless onboarding: the quota does not require prior reputation; publication still needs finality, relay work, fees, capacity and reachable providers before remote durability.
 
-## AUTH resource ladder
+### AUTH resource ladder
 
 Remote storage allowances scale according to finalized Identity Authority (DEC-268, DEC-272).
 Block execution refuses a RootPublication whose `chunk_count` exceeds the author's largest
@@ -175,7 +181,7 @@ Block finalization synthesizes transaction history into active state (`CybouStat
 - **State compaction**: The active publication entry is removed; historical blocks and their capsules remain.
 - **Local garbage collection**: Compliant peers journal managed purge of chunks no other admitted publication authorizes. Failed unlink retains provider byte accounting and is retried at reopen and maintenance. Revocation frees canonical author quota before physical removal; no hidden-copy erasure is proved.
 
-## Storage-economy target (frozen, not implemented)
+## Storage economy (implemented in M5; active from the M7 genesis)
 
 DEC-274–DEC-283 replace the AUTH resource ladder storage columns, the onboarding
 credit and automatic allocation:
@@ -183,8 +189,8 @@ credit and automatic allocation:
 - **Local capacity** (implemented, M2): explicit `V >= 15 GiB`; the
   ChunkBlobStore is bounded by `V` and finalized provider obligations by
   `floor(2V/3)`. Nothing is physically partitioned and `V` is not consensus state.
-- **Admission**: finality-first admission additionally requires an active funded
-  StorageLease and an assignment to this provider.
+- **Admission** (implemented): finality-first admission additionally requires an
+  active funded StorageLease. Assignment attestation is PoA's off-chain duty.
 - **Assignment**: secure random shuffle over eligible Full Nodes (valid recently
   proven StorageId, reachable, budget available, acceptable recent behaviour),
   taking the first that accepts, then the next distinct StorageId and payout
@@ -196,8 +202,10 @@ credit and automatic allocation:
   off-chain only. Since M4, evidence persists in the encrypted Application DB
   and credits shadow billing-unit-seconds between consecutive successful
   checks (gap capped at 24 h); estimated rent and provider reward move no CYBOU.
-- **Settlement**: daily PoA-signed StorageSettlement pays verified providers
-  from escrow. Failed audit -> no payment, replica degraded, repair.
+- **Settlement** (consensus implemented): daily PoA-signed StorageSettlement
+  pays providers from escrow, at most one period's rent and `replicas` payouts per
+  lease, never the payer. Failed audit -> no payment, replica degraded, repair.
+  Off-chain evidence aggregation into settlements is not implemented yet.
 - **Protected**: active publication + active funded lease + two remote
   obligations at distinct storage/economic identities + fresh evidence;
   otherwise `Securing`, `Needs renewal` or `Degraded`.

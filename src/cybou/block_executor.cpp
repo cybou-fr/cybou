@@ -30,7 +30,7 @@ BlockExecutor::BlockExecutor(const CybouState& parent,
         m_init_error = BlockExecutionError::INVALID_STATE;
         return;
     }
-    m_initial_supply = TotalSupply(parent);
+    m_initial_supply = TotalCybou(parent);
     if (m_params.name_commit_max_lifetime > 0) {
         // Истечение pending commit-ов является частью детерминированного block execution:
         // одинаковая высота должна давать одинаковый реестр имён даже при пустом блоке.
@@ -64,6 +64,7 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
 
     // Лимиты уровня считаются по AUTH финализированного родителя: одно и то же
     // решение для пула, Validation и PoA. AccountCreate и PoaAuthAdjustment не метрируются.
+    // Хранение не квотируется AUTH (DEC-274): оно оплачивается арендой.
     const auto metered = AuthorizingAccount(operation);
     const auto* publication_op = std::get_if<AuthorizedRootPublication>(&operation);
     if (metered) {
@@ -75,16 +76,6 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
         if (usage.block_operations >= limits.operations_per_block ||
             usage.epoch_operations >= limits.operations_per_epoch) {
             return fail(BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-        }
-        if (publication_op) {
-            const uint32_t chunks = publication_op->publication.chunk_count;
-            if (chunks > limits.max_publication_chunks) {
-                return fail(BlockExecutionError::PUBLICATION_TOO_LARGE);
-            }
-            if (usage.stored_chunks > limits.storage_quota_chunks ||
-                chunks > limits.storage_quota_chunks - usage.stored_chunks) {
-                return fail(BlockExecutionError::STORAGE_QUOTA_EXCEEDED);
-            }
         }
     }
 
@@ -160,6 +151,21 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
             return failure;
         }
         adjustment_digest = digest;
+    } else if (const auto* lease = std::get_if<AuthorizedStorageLease>(&operation)) {
+        const auto result = ApplyStorageLease(*lease, m_network_binding, m_params, m_candidate);
+        if (result != StorageLeaseError::NONE) {
+            auto failure = fail(BlockExecutionError::INVALID_STORAGE_LEASE);
+            failure.lease_error = result;
+            return failure;
+        }
+    } else if (const auto* settlement = std::get_if<StorageSettlement>(&operation)) {
+        const auto result = !m_poa_key ? StorageSettlementError::INVALID_SIGNATURE
+            : ApplyStorageSettlement(*settlement, m_network_binding, m_params, *m_poa_key, m_candidate);
+        if (result != StorageSettlementError::NONE) {
+            auto failure = fail(BlockExecutionError::INVALID_STORAGE_SETTLEMENT);
+            failure.settlement_error = result;
+            return failure;
+        }
     }
 
     if (publication_op) {

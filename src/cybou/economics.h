@@ -16,7 +16,8 @@ namespace cybou {
 inline constexpr std::string_view CENTRAL_AUTHORITY_NAME{"cybou"};
 /// \brief Начальный размер DEV onboarding pool в spendable CYBOU.
 /// \details Единица измерения — целые CYBOU без дробной части; 100 000 000 используется только как стартовый размер пула DEVNET.
-inline constexpr uint64_t DEV_ONBOARDING_POOL{100'000'000};
+/// \brief Весь genesis monetary base: целиком у Central Treasury `cybou`, без mint и burn (DEC-277).
+inline constexpr uint64_t GENESIS_MONETARY_BASE{100'000'000'000};
 } // namespace cybou
 
 #endif // CYBOU_ECONOMICS_H

@@ -10,14 +10,16 @@ objects.
 - Identity registry: stable AccountID, Recovery/Authorization capabilities,
   current KEM commitment, nonce and key epoch;
 - `.cybou` name registry;
-- OnboardingPool and direct protocol fee transfers to Central Authority;
+- Central Treasury (the `cybou` allocation or its claimant) funding onboarding and receiving protocol fees;
 - genesis allocations containing initial CYBOU and AUTH; the unique `cybou`
   allocation also accumulates protocol fees before its one-time claim;
 - immutable network parameters bound to the active network definition;
-- resource accounting (DEC-272): per-Identity `usage` (stored chunks, operations in
-  the current epoch and block) and the publication register `publications`
-  (RootPublication OperationID -> owner, chunk authorization root, chunk count,
-  height). Records exist only while non-empty.
+- operation accounting (DEC-272): per-Identity `usage` (operations in the current
+  epoch and block) and the publication register `publications` (RootPublication
+  OperationID -> owner, chunk authorization root, chunk count, height);
+- storage economy (DEC-277..DEC-282): per-account onboarding-origin System
+  Balance, `settlement` cursor (next period, its UTC start) and `leases`
+  (publication -> payer, units, replicas, period range, escrow by origin).
 
 Bootstrap is an ordinary CYBOU full peer and has no consensus grants, roles, or
 separate state registry. The active network definition and genesis are signed
@@ -77,17 +79,16 @@ Historical blocks remain immutable, but active consensus state does not accumula
 State is the sole canonical encoding. Allocations
 are immutable except for their one-time claimed_by and the pre-claim Balance
 of the unique Central Authority allocation. After claim its allocation Balance
-stays fixed; new fees credit the claimant account Balance. TotalSupply counts
-OnboardingPool, unclaimed allocation Balances, account Balances and System
-Balances, with checked integer arithmetic. Every finalized block preserves it.
-The resource section (`usage`, then `publications`, each strictly ordered) is
-appended only when at least one of them is non-empty; an empty section is
-non-canonical. A state without resource records therefore keeps its exact bytes and
-state root, including the genesis state.
+stays fixed; new fees credit the claimant account Balance. TotalCybou counts
+unclaimed allocation Balances, account Balances, System Balances and lease
+escrow, with checked integer arithmetic; every finalized block preserves it
+exactly. All sections are always encoded, in order: accounts, identities, names,
+allocations, `usage`, `publications`, settlement cursor, `leases`; maps strictly
+ordered, no trailing bytes.
 
-## Storage-economy target (not implemented)
+## Storage economy (implemented in M5; active from the M7 genesis)
 
-At the DEC-283 cutover (new NetworkID and genesis) state changes as follows:
+Compared with the superseded DEVNET state:
 
 - OnboardingPool is removed; the whole genesis monetary base is the `cybou`
   Treasury allocation; AccountCreate transfers `onboarding_bonus` from Treasury

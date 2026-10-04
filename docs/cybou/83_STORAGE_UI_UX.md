@@ -504,8 +504,8 @@ transfer peers
 
 Storage is intrinsic to every Full Node: each node has an explicit local CYBOU
 capacity `V >= 15 GiB` (default 15 GiB), of which at most `floor(2V/3)` serves
-provider obligations and the rest is a local reserve (DEC-275). On the current
-DEVNET the user's 5 GB Onboarding Trust Credit still applies (DEC-269). Inspecting local storage allocation,
+provider obligations and the rest is a local reserve (DEC-275). Network storage
+is paid by lease from System Balance (DEC-279). Inspecting local storage allocation,
 uptime, and mutual audit health is an advanced setting, not part of normal file browsing.
 
 Suggested path:
@@ -518,11 +518,11 @@ Settings
 It may show:
 
 ```text
-Local storage allocated (e.g. 15 GB baseline)
-Storage used by peer chunks
-Reciprocal obligation ratio (1:3)
-Mutual audit health & uptime score
-Network notarial quota (e.g. 5 GB)
+Local storage capacity (e.g. 15 GiB, minimum)
+Storage held for others (up to 2/3 of capacity)
+Storage audit health & uptime
+Storage lease cost and paid-until date
+Estimated storage service value
 ```
 
 Ordinary users who simply store files and send mail do not need to understand

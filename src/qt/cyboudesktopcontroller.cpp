@@ -16,6 +16,7 @@
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/poa_auth_adjustment.h>
 #include <cybou/protocol_limits.h>
+#include <cybou/storage_economy.h>
 #include <cybou/validation_attestation.h>
 #include <cybou/wallet_service.h>
 
@@ -389,7 +390,9 @@ void CybouDesktopController::publishNetworkAuthority()
                 status.total_authority += account.authority;
                 if (account.authority > cybou::VALIDATION_AUTHORITY_THRESHOLD) ++status.validators;
             }
-            status.onboarding_pool = state.onboarding_pool;
+            for (const auto& [id, lease] : state.leases) {
+                status.storage_escrow += lease.escrow_onboarding + lease.escrow_locked;
+            }
         }
     }
     QMetaObject::invokeMethod(m_model, [model = m_model, status] { model->setNetworkAuthority(status); },
@@ -477,8 +480,11 @@ void CybouDesktopController::publishAuthority()
         if (params.epoch_blocks > 0) blocks_left = (epoch + 1) * params.epoch_blocks - next_height;
         const auto loaded = runtime.GetStore().LoadState();
         if (loaded && loaded.state) {
+            // Сетевое хранение — billing units действующих публикаций (DEC-279), не AUTH-квота.
+            for (const auto& [id, publication] : loaded.state->publications) {
+                if (publication.owner == *account) quota_used += publication.chunk_count * cybou::STORAGE_BILLING_UNIT_BYTES;
+            }
             if (const auto usage = loaded.state->usage.find(*account); usage != loaded.state->usage.end()) {
-                quota_used = usage->second.stored_chunks * cybou::QUOTA_CHUNK_BYTES;
                 if (usage->second.epoch == epoch) epoch_operations = usage->second.epoch_operations;
             }
         }

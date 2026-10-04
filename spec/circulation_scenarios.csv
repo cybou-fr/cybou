@@ -1,2 +1,2 @@
-scenario,onboarding_pool,onboarding_bonus,full_account_creates,pool_remainder,fee_replenishment
-DEV,100000000,6000,16666,4000,0
+scenario,treasury_genesis_balance,onboarding_bonus,full_account_creates,treasury_remainder_before_fees
+STORAGE_ECONOMY,100000000000,20000,5000000,0

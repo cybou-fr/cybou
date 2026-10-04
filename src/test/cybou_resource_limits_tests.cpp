@@ -82,9 +82,10 @@ struct LimitsFixture {
         return AuthorizedSystemLock{Authorize(IdentityOperationKind::SYSTEM_LOCK, *ComputeSystemLockPayloadCommitment(lock)), lock};
     }
 
-    ProtocolOperation Publish(uint32_t chunks, unsigned char tag)
+    ProtocolOperation Publish(uint32_t chunks, unsigned char tag, uint32_t lease_periods = 0)
     {
         RootPublication publication;
+        publication.lease_periods = lease_periods;
         publication.root_chunk_id.fill(tag);
         publication.chunk_authorization_root.fill(static_cast<unsigned char>(tag + 1));
         publication.chunk_count = chunks;
@@ -103,15 +104,33 @@ struct LimitsFixture {
             *ComputeRevokePublicationPayloadCommitment(revoke)), revoke};
     }
 
+    ProtocolOperation Lease(const cybou::Hash256& publication_id, uint32_t periods)
+    {
+        const StorageLeasePayload lease{publication_id, periods};
+        return AuthorizedStorageLease{Authorize(IdentityOperationKind::STORAGE_LEASE,
+            *ComputeStorageLeasePayloadCommitment(lease)), lease};
+    }
+
+    /// PoA-signed settlement for the next period, signed by the test PoA key.
+    ProtocolOperation Settle(uint64_t start_utc, std::vector<StorageSettlementEntry> entries)
+    {
+        StorageSettlement settlement{.period = state.settlement.next_period, .period_start_utc = start_utc,
+            .entries = std::move(entries)};
+        std::array<unsigned char, 32> poa_seed{};
+        poa_seed[0] = 0xA7;
+        settlement.poa_signature = *SignIdentityMessage(poa_seed, IdentityKeyPurpose::POA_FINALIZER,
+            *ComputeStorageSettlementDigest(network, settlement));
+        return settlement;
+    }
+
     BlockExecutionResult Execute(const std::vector<ProtocolOperation>& operations, uint64_t height)
     {
-        auto result = ExecuteBlockOperations(state, operations, network, height, params);
+        const auto poa_key = TestPoaFinalizerPublicKey();
+        auto result = ExecuteBlockOperations(state, operations, network, height, params, &poa_key);
         if (result) state = *result.state;
         return result;
     }
 };
-
-constexpr uint32_t GIB_CHUNKS{static_cast<uint32_t>(1024ULL * 1024ULL * 1024ULL / QUOTA_CHUNK_BYTES)};
 
 } // namespace
 
@@ -129,13 +148,8 @@ BOOST_AUTO_TEST_CASE(tier_table_is_monotonic_and_bounded)
         const auto upper = ComputeAuthorityTierLimits(tiers[i]);
         BOOST_CHECK_GT(upper.operations_per_block, lower.operations_per_block);
         BOOST_CHECK_GT(upper.operations_per_epoch, lower.operations_per_epoch);
-        BOOST_CHECK_GT(upper.storage_quota_chunks, lower.storage_quota_chunks);
-        BOOST_CHECK_GT(upper.max_publication_chunks, lower.max_publication_chunks);
         BOOST_CHECK_LT(upper.operation_work_bits, lower.operation_work_bits);
-        // A single file never takes more than a fifth of the tier's quota.
-        BOOST_CHECK_LE(uint64_t{upper.max_publication_chunks} * 5, upper.storage_quota_chunks);
     }
-    BOOST_CHECK_EQUAL(ComputeAuthorityTierLimits(0).max_publication_chunks, GIB_CHUNKS);
 }
 
 BOOST_AUTO_TEST_CASE(t0_identity_gets_one_operation_per_block)
@@ -169,23 +183,15 @@ BOOST_AUTO_TEST_CASE(epoch_limit_resets_in_the_next_epoch)
     BOOST_CHECK_EQUAL(f.state.usage.at(f.account).epoch_operations, 1U);
 }
 
-BOOST_AUTO_TEST_CASE(publication_size_and_quota_follow_the_tier)
+BOOST_AUTO_TEST_CASE(publications_are_not_limited_by_auth)
 {
+    // DEC-274: a T0 Identity publishes beyond the former 5 GiB credit; only the safety bound applies.
     LimitsFixture f;
-    const auto t0 = ComputeAuthorityTierLimits(0);
-    BOOST_CHECK(f.Execute({f.Publish(t0.max_publication_chunks + 1, 0x10)}, 1).error ==
-        BlockExecutionError::PUBLICATION_TOO_LARGE);
-    --f.nonce; // the refused operation never consumed its nonce
-    // Five 1 GiB files fill the 5 GiB onboarding credit exactly; the sixth is refused.
     uint64_t height{1};
-    for (unsigned char i{0}; i < 5; ++i) BOOST_REQUIRE(f.Execute({f.Publish(t0.max_publication_chunks, 0x20 + 2 * i)}, height++));
-    BOOST_CHECK_EQUAL(f.state.usage.at(f.account).stored_chunks, t0.storage_quota_chunks);
-    BOOST_CHECK_EQUAL(f.state.publications.size(), 5U);
-    BOOST_CHECK(f.Execute({f.Publish(1, 0x40)}, height).error == BlockExecutionError::STORAGE_QUOTA_EXCEEDED);
-    --f.nonce;
-    // Reaching T1 raises both limits.
-    f.state.accounts.at(f.account).authority = 10'000;
-    BOOST_CHECK(f.Execute({f.Publish(t0.max_publication_chunks + 1, 0x42)}, height));
+    for (unsigned char i{0}; i < 6; ++i) BOOST_REQUIRE(f.Execute({f.Publish(2048, 0x20 + 2 * i)}, height++));
+    BOOST_CHECK_EQUAL(f.state.publications.size(), 6U);
+    const auto oversized = f.Execute({f.Publish(MAX_PUBLICATION_CHUNKS + 1, 0x40)}, height);
+    BOOST_CHECK(oversized.root_publication_error == RootPublicationError::INVALID_PAYLOAD);
 }
 
 BOOST_AUTO_TEST_CASE(revoke_publication_frees_quota_and_is_owner_only)
@@ -196,7 +202,6 @@ BOOST_AUTO_TEST_CASE(revoke_publication_frees_quota_and_is_owner_only)
     BOOST_REQUIRE(f.Execute({publication}, 1));
     BOOST_REQUIRE(f.state.publications.contains(publication_id));
     BOOST_CHECK(f.state.publications.at(publication_id).owner == f.account);
-    BOOST_CHECK_EQUAL(f.state.usage.at(f.account).stored_chunks, 100U);
 
     cybou::Hash256 unknown{};
     unknown.begin()[0] = 0x99;
@@ -229,18 +234,19 @@ BOOST_AUTO_TEST_CASE(revoke_publication_frees_quota_and_is_owner_only)
     BOOST_CHECK(f.Execute({f.Revoke(publication_id)}, 3).revoke_error == RevokePublicationError::PUBLICATION_NOT_FOUND);
 }
 
-BOOST_AUTO_TEST_CASE(resource_section_keeps_empty_state_root_and_roundtrips)
+BOOST_AUTO_TEST_CASE(resource_and_storage_sections_roundtrip_exactly)
 {
     LimitsFixture f;
     const auto empty = SerializeCybouState(f.state);
     BOOST_REQUIRE(empty);
-    // No resource record: the bytes are the same as before resource accounting existed.
-    BOOST_CHECK(f.state.usage.empty() && f.state.publications.empty());
-    auto with_empty_section = *empty;
-    with_empty_section.insert(with_empty_section.end(), 8, 0);
-    BOOST_CHECK(!DeserializeCybouState(with_empty_section));
+    auto trailing = *empty;
+    trailing.push_back(0);
+    BOOST_CHECK(!DeserializeCybouState(trailing));
 
     BOOST_REQUIRE(f.Execute({f.Publish(7, 0x60)}, 5));
+    const auto published = *ComputeOperationId(f.Publish(7, 0x60));
+    --f.nonce;
+    (void)published;
     const auto bytes = SerializeCybouState(f.state);
     BOOST_REQUIRE(bytes);
     const auto decoded = DeserializeCybouState(*bytes);
@@ -248,11 +254,166 @@ BOOST_AUTO_TEST_CASE(resource_section_keeps_empty_state_root_and_roundtrips)
     BOOST_CHECK(decoded->usage == f.state.usage);
     BOOST_CHECK(decoded->publications == f.state.publications);
     BOOST_CHECK(CybouStateHash(*decoded) == CybouStateHash(f.state));
+}
 
-    // Quota must equal the register: a mismatch is an invalid state.
-    auto broken = f.state;
-    broken.usage.at(f.account).stored_chunks += 1;
-    BOOST_CHECK(ValidateCybouState(broken) == StateValidationError::INVALID_RESOURCE_USAGE);
+// ---- Storage economy (DEC-274..DEC-283) ----
+
+BOOST_AUTO_TEST_CASE(account_create_moves_onboarding_bonus_from_treasury_without_minting)
+{
+    LimitsFixture f;
+    // Both fixture accounts were onboarded from the 100,000,000 Treasury allocation.
+    const auto* treasury = FindCentralAuthorityAllocation(f.state);
+    BOOST_REQUIRE(treasury);
+    BOOST_CHECK_EQUAL(treasury->balance, 100'000'000U - 2 * ONBOARDING_BONUS);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.other).system_balance, ONBOARDING_BONUS);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.other).onboarding_system_balance, ONBOARDING_BONUS);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.other).balance, 0U);
+}
+
+BOOST_AUTO_TEST_CASE(onboarding_origin_is_spent_first)
+{
+    AccountState account{.system_balance = 100, .onboarding_system_balance = 30};
+    BOOST_CHECK_EQUAL(DebitSystemBalance(account, 20), 20U);
+    BOOST_CHECK_EQUAL(account.onboarding_system_balance, 10U);
+    BOOST_CHECK_EQUAL(DebitSystemBalance(account, 50), 10U);
+    BOOST_CHECK_EQUAL(account.onboarding_system_balance, 0U);
+    BOOST_CHECK_EQUAL(account.system_balance, 30U);
+}
+
+BOOST_AUTO_TEST_CASE(storage_lease_locks_rent_in_escrow_and_conserves_cybou)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0x70); // 1 GiB
+    const auto publication_id = *ComputeOperationId(publication);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    const auto total = TotalCybou(f.state);
+    const auto system_before = f.state.accounts.at(f.account).system_balance;
+    const auto* treasury = FindCentralAuthorityAllocation(f.state);
+    const auto treasury_before = treasury->balance;
+
+    BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 3)}, 2));
+    // 1 GiB x 2 replicas x 5 CYBOU x 3 days = 30 CYBOU in escrow, plus the ordinary fee to Treasury.
+    const auto& lease = f.state.leases.at(publication_id);
+    BOOST_CHECK_EQUAL(lease.escrow_onboarding + lease.escrow_locked, 30U);
+    BOOST_CHECK_EQUAL(lease.units, 2048U);
+    BOOST_CHECK_EQUAL(lease.replicas, 2U);
+    BOOST_CHECK_EQUAL(lease.first_period, 0U);
+    BOOST_CHECK_EQUAL(lease.end_period, 3U);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, system_before - 30 - f.params.payment_fee);
+    BOOST_CHECK_EQUAL(FindCentralAuthorityAllocation(f.state)->balance, treasury_before + f.params.payment_fee);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+    // Onboarding-origin CYBOU went first into escrow and keeps its origin.
+    BOOST_CHECK_EQUAL(lease.escrow_onboarding, 30U);
+
+    // A second lease extends the same record.
+    BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 2)}, 3));
+    BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).end_period, 5U);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+
+    // Only the owner can lease, and only a live publication.
+    cybou::Hash256 unknown{};
+    unknown.begin()[0] = 0x77;
+    BOOST_CHECK(f.Execute({f.Lease(unknown, 1)}, 4).lease_error == StorageLeaseError::PUBLICATION_NOT_FOUND);
+    --f.nonce;
+
+    // Wire round-trip.
+    const auto op = f.Lease(publication_id, 1);
+    const auto bytes = SerializeProtocolOperation(op);
+    BOOST_REQUIRE(bytes);
+    BOOST_CHECK_EQUAL(bytes->size(), 1 + AUTHORIZED_STORAGE_LEASE_SIZE);
+    BOOST_CHECK(DeserializeProtocolOperation(*bytes) == std::optional<ProtocolOperation>{op});
+}
+
+BOOST_AUTO_TEST_CASE(settlement_pays_providers_by_origin_and_refunds_expired_escrow)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0x80);
+    const auto publication_id = *ComputeOperationId(publication);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    // Spend the onboarding origin first so the escrow mixes both origins: 20,000 - fees.
+    auto& owner = f.state.accounts.at(f.account);
+    owner.onboarding_system_balance = 5; // 5 onboarding + rest SystemLock origin
+    BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 2)}, 2));
+    const auto total = TotalCybou(f.state);
+    BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).escrow_onboarding, 4U); // fee took 1 first
+
+    const auto provider_before = f.state.accounts.at(f.other);
+    // Period cap: one day of 1 GiB x 2 replicas = 10 CYBOU.
+    BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 11}})}, 3).settlement_error ==
+        StorageSettlementError::PAYOUT_EXCEEDS_ESCROW);
+    // The payer is never paid for its own lease.
+    BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.account, 1}})}, 3).settlement_error ==
+        StorageSettlementError::SELF_PAYOUT);
+    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 10}})}, 3));
+    const auto& provider = f.state.accounts.at(f.other);
+    // 4 onboarding-origin CYBOU credit System Balance; the 6 SystemLock-origin ones become spendable.
+    BOOST_CHECK_EQUAL(provider.system_balance, provider_before.system_balance + 4);
+    BOOST_CHECK_EQUAL(provider.onboarding_system_balance, provider_before.onboarding_system_balance + 4);
+    BOOST_CHECK_EQUAL(provider.balance, provider_before.balance + 6);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+    BOOST_CHECK_EQUAL(f.state.settlement.next_period, 1U);
+    BOOST_CHECK_EQUAL(f.state.settlement.next_period_start_utc, 1'700'000'000U + 86'400);
+
+    // Periods are contiguous: a replay or a gap is refused.
+    BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {})}, 4).settlement_error == StorageSettlementError::WRONG_PERIOD_START);
+    // The last period pays nothing here; the lease ends and its escrow returns to the payer's System Balance.
+    const auto payer_before = f.state.accounts.at(f.account).system_balance;
+    BOOST_REQUIRE(f.Execute({f.Settle(1'700'086'400, {})}, 4));
+    BOOST_CHECK(!f.state.leases.contains(publication_id));
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 10);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+
+    // A settlement without the genesis PoA signature is refused.
+    auto forged = std::get<StorageSettlement>(f.Settle(1'700'172'800, {}));
+    forged.poa_signature.ed25519[0] ^= 1;
+    BOOST_CHECK(f.Execute({forged}, 5).settlement_error == StorageSettlementError::INVALID_SIGNATURE);
+
+    // Wire round-trip.
+    const auto op = f.Settle(1'700'172'800, {});
+    const auto bytes = SerializeProtocolOperation(op);
+    BOOST_REQUIRE(bytes);
+    BOOST_CHECK(DeserializeProtocolOperation(*bytes) == std::optional<ProtocolOperation>{op});
+}
+
+BOOST_AUTO_TEST_CASE(publication_pays_its_initial_lease_atomically)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0xA0, 7);
+    const auto publication_id = *ComputeOperationId(publication);
+    const auto total = TotalCybou(f.state);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    // 1 GiB x 2 replicas x 5 CYBOU x 7 days = 70 CYBOU escrowed in the same block as the publication.
+    const auto& lease = f.state.leases.at(publication_id);
+    BOOST_CHECK_EQUAL(lease.escrow_onboarding + lease.escrow_locked, 70U);
+    BOOST_CHECK_EQUAL(lease.end_period, 7U);
+    BOOST_CHECK(lease.payer == f.account);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
+    // With the fee covered but one CYBOU of escrow missing, the publication is refused whole.
+    const auto next = f.Publish(2048, 0xA2, 7);
+    const auto fee = *ComputeRootPublicationFee(f.params, SerializeProtocolOperation(next)->size(), 2048);
+    f.state.accounts.at(f.account).system_balance = fee + 69;
+    f.state.accounts.at(f.account).onboarding_system_balance = 0;
+    const auto poor = f.Execute({next}, 2);
+    BOOST_CHECK(poor.root_publication_error == RootPublicationError::INSUFFICIENT_SYSTEM_BALANCE);
+    BOOST_CHECK(!f.state.leases.contains(*ComputeOperationId(next)));
+}
+
+BOOST_AUTO_TEST_CASE(revoked_publication_closes_its_lease_after_the_current_period)
+{
+    LimitsFixture f;
+    const auto publication = f.Publish(2048, 0x90);
+    const auto publication_id = *ComputeOperationId(publication);
+    BOOST_REQUIRE(f.Execute({publication}, 1));
+    BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 30)}, 2));
+    const auto total = TotalCybou(f.state);
+    BOOST_REQUIRE(f.Execute({f.Revoke(publication_id)}, 3));
+    BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).end_period, 1U);
+    const auto payer_before = f.state.accounts.at(f.account).system_balance;
+    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 10}})}, 4));
+    BOOST_CHECK(!f.state.leases.contains(publication_id));
+    // 30 days were escrowed, one served day paid: 290 CYBOU come back.
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 290);
+    BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
 }
 
 BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_tiered)

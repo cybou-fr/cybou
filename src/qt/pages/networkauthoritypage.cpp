@@ -318,7 +318,7 @@ void NetworkAuthorityPage::refresh()
     Row(m_totals, tr("Spendable Balance"), cybouAmountText(a.total_balance));
     Row(m_totals, tr("System Balance"), cybouAmountText(a.total_system_balance));
     Row(m_totals, tr("Authority"), cybouAuthorityText(a.total_authority));
-    Row(m_totals, tr("Onboarding pool"), cybouAmountText(a.onboarding_pool));
+    Row(m_totals, tr("Storage escrow"), cybouAmountText(a.storage_escrow));
     Row(m_totals, tr(".cybou names"), tr("%1  ·  %2 commits pending")
         .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
 

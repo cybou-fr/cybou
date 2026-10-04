@@ -82,11 +82,10 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus;
     state.genesis_allocations.emplace(*recovery_id,
         GenesisAllocation{.balance = 100'000'000, .authority = 1'000'001, .label = "cybou"});
     BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
-    const uint64_t supply = TotalSupply(state);
+    const uint64_t supply = TotalCybou(state);
     const auto genesis_bytes = SerializeCybouState(state);
     BOOST_REQUIRE(genesis_bytes);
     const auto genesis_restored = DeserializeCybouState(*genesis_bytes);
@@ -94,11 +93,13 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 1, params, state) == AccountCreateStateError::NONE);
     BOOST_CHECK_EQUAL(state.accounts.at(account).balance, 100'000'000u);
+    // The Treasury claimant receives no onboarding bonus: it is the bonus source (DEC-277).
+    BOOST_CHECK_EQUAL(state.accounts.at(account).system_balance, 0u);
     BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 1'000'001u);
     BOOST_CHECK(state.genesis_allocations.at(*recovery_id).claimed_by == account);
     BOOST_REQUIRE(state.names.PrimaryName(account));
     BOOST_CHECK_EQUAL(*state.names.PrimaryName(account), "cybou");
-    BOOST_CHECK_EQUAL(TotalSupply(state), supply);
+    BOOST_CHECK_EQUAL(TotalCybou(state), supply);
     BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
     const auto bytes = SerializeCybouState(state);
     BOOST_REQUIRE(bytes);
@@ -111,11 +112,11 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     // AUTH is committed by the state root but excluded from CYBOU supply.
     auto more_auth = state;
     ++more_auth.accounts.at(account).authority;
-    BOOST_CHECK_EQUAL(TotalSupply(more_auth), TotalSupply(state));
+    BOOST_CHECK_EQUAL(TotalCybou(more_auth), TotalCybou(state));
     BOOST_CHECK(CybouStateHash(more_auth) != CybouStateHash(state));
     auto more_genesis_auth = state;
     ++more_genesis_auth.genesis_allocations.at(*recovery_id).authority;
-    BOOST_CHECK_EQUAL(TotalSupply(more_genesis_auth), TotalSupply(state));
+    BOOST_CHECK_EQUAL(TotalCybou(more_genesis_auth), TotalCybou(state));
     BOOST_CHECK(CybouStateHash(more_genesis_auth) != CybouStateHash(state));
     auto trailing = *bytes;
     trailing.push_back(0);
@@ -155,17 +156,18 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus;
+    FundTestTreasury(state, params.onboarding_bonus);
 
     auto damaged_create = create;
     damaged_create.authorization_pop.ed25519[0] ^= 1;
     BOOST_CHECK(ApplyAccountCreate(damaged_create, network_binding, 0, params, state) == AccountCreateStateError::INVALID_CREATE);
     BOOST_CHECK(state.accounts.empty());
     BOOST_CHECK(state.identities.Accounts().empty());
-    BOOST_CHECK(state.onboarding_pool == params.onboarding_bonus);
+    BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == params.onboarding_bonus);
     BOOST_CHECK(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
-    BOOST_CHECK(state.onboarding_pool == 0);
+    BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == 0);
     BOOST_CHECK(state.accounts.at(account).system_balance == params.onboarding_bonus);
+    BOOST_CHECK(state.accounts.at(account).onboarding_system_balance == params.onboarding_bonus);
     BOOST_CHECK(state.accounts.at(account).balance == 0);
     BOOST_CHECK(state.identities.Find(account) != nullptr);
     const auto bytes = SerializeCybouState(state);
@@ -179,14 +181,14 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(ApplyAccountCreate(create, network_binding, 1, params, state) == AccountCreateStateError::ACCOUNT_EXISTS);
     BOOST_CHECK(SerializeCybouState(state) == bytes);
     auto damaged = *bytes;
-    damaged[8] = 0xff;
+    damaged[3] = 0xff;
     BOOST_CHECK(!DeserializeCybouState(damaged));
     damaged = *bytes;
     damaged.push_back(0);
     BOOST_CHECK(!DeserializeCybouState(damaged));
     BOOST_CHECK(!DeserializeCybouState(std::span{*bytes}.first(bytes->size() - 1)));
     damaged = *bytes;
-    damaged[1 + 8 + 4] ^= 1; // monetary AccountID no longer matches identity registry
+    damaged[1 + 4] ^= 1; // monetary AccountID no longer matches identity registry
     BOOST_CHECK(!DeserializeCybouState(damaged));
 
     std::array<unsigned char, 32> other_root_seed{}, other_device_seed{};
@@ -206,7 +208,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     const AccountCreateOp other_create{other_account, other_auth, other_binding.package,
         {.network_binding = network_binding, .account_id = other_account, .authorization_commitment = other_binding.authorization_commitment},
         *other_root_pop, *other_authorization_pop};
-    state.onboarding_pool = params.onboarding_bonus;
+    FundTestTreasury(state, params.onboarding_bonus);
     BOOST_REQUIRE(ApplyAccountCreate(other_create, network_binding, 1, params, state) == AccountCreateStateError::NONE);
     state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.label = std::string{CENTRAL_AUTHORITY_NAME}});
     state.accounts.at(account).balance = 10; // funded fixture; no mint operation in this test
@@ -274,7 +276,7 @@ BOOST_AUTO_TEST_CASE(account_create_funds_system_balance_and_roundtrips_state)
     BOOST_CHECK(block_result.state->accounts.at(account).balance == 6);
     BOOST_CHECK(block_result.state->accounts.at(other_account).balance == 4);
     BOOST_CHECK(FindCentralAuthorityAllocation(*block_result.state)->balance == 2 * params.payment_fee);
-    BOOST_CHECK(block_result.state->onboarding_pool == state.onboarding_pool);
+    BOOST_CHECK_EQUAL(TotalCybou(*block_result.state), TotalCybou(state));
     BOOST_CHECK(state.accounts.at(account).balance == 7);
     BOOST_CHECK(FindCentralAuthorityAllocation(state)->balance == params.payment_fee);
     const auto replay_block = ExecuteBlockOperations(*block_result.state,
@@ -308,8 +310,8 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
         *root_pop, *authorization_pop};
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
-    CybouState state = CreateTestGenesisState();
-    state.onboarding_pool = params.onboarding_bonus;
+    CybouState state{};
+    FundTestTreasury(state, params.onboarding_bonus);
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
 
@@ -345,14 +347,14 @@ BOOST_AUTO_TEST_CASE(root_publication_is_identity_authorized_and_pays_determinis
     BOOST_CHECK(ApplyRootPublication(operation, network_binding, params, state) == RootPublicationError::INVALID_AUTHORIZATION);
 }
 
-BOOST_AUTO_TEST_CASE(insufficient_pool_does_not_register_identity)
+BOOST_AUTO_TEST_CASE(insufficient_treasury_does_not_register_identity)
 {
     using namespace cybou;
     CybouState state{};
     auto params = DevProtocolParameters();
     params.onboarding_bonus = 1;
     const AccountCreateOp empty{};
-    BOOST_CHECK(ApplyAccountCreate(empty, cybou::Hash256{}, 0, params, state) == AccountCreateStateError::INSUFFICIENT_ONBOARDING_POOL);
+    BOOST_CHECK(ApplyAccountCreate(empty, cybou::Hash256{}, 0, params, state) == AccountCreateStateError::INSUFFICIENT_TREASURY);
     BOOST_CHECK(state.accounts.empty());
     BOOST_CHECK(state.identities.Accounts().empty());
 }
@@ -389,7 +391,7 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus;
+    FundTestTreasury(state, params.onboarding_bonus);
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
     BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 0U);
@@ -472,7 +474,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     auto params = DevProtocolParameters();
     params.account_creation_work_bits = 0;
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus;
+    FundTestTreasury(state, params.onboarding_bonus);
 
     // A finalized AccountCreate earns no AUTH.
     const auto created = ExecuteBlockOperations(state, {ProtocolOperation{create}}, network_binding, 0, params);
@@ -529,7 +531,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_CHECK(block_res.state->identities.Find(account)->nonce == 1);
     // A finalized SystemLock earns a flat +1 AUTH regardless of the locked amount.
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).authority, 1U);
-    BOOST_CHECK_EQUAL(TotalSupply(*block_res.state), TotalSupply(state));
+    BOOST_CHECK_EQUAL(TotalCybou(*block_res.state), TotalCybou(state));
     auto saturated = state;
     saturated.accounts.at(account).authority = std::numeric_limits<uint64_t>::max();
     const auto saturated_res = ExecuteBlockOperations(saturated, {lock_op}, network_binding, 1, params);
@@ -556,9 +558,9 @@ BOOST_AUTO_TEST_CASE(state_validation_invariants)
     state.accounts.emplace(acc, AccountState{.balance = 10});
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::ACCOUNT_IDENTITY_COUNT_MISMATCH);
 
-    // Balance overflow
+    // Balance overflow: the sum of all CYBOU must fit below the reserved overflow marker.
     state.accounts.clear();
-    state.onboarding_pool = 100'000'000'001ULL;
+    state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.balance = std::numeric_limits<uint64_t>::max()});
     BOOST_CHECK(ValidateCybouState(state) == StateValidationError::BALANCE_OVERFLOW);
 }
 
@@ -615,7 +617,7 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     params.name_commit_min_depth = 1;
     params.name_commit_max_lifetime = 100;
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus;
+    FundTestTreasury(state, params.onboarding_bonus);
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
 
@@ -792,7 +794,7 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
 
     // Build unversioned CybouState
     CybouState state{};
-    state.onboarding_pool = params.onboarding_bonus * 5;
+    FundTestTreasury(state, params.onboarding_bonus * 5);
 
     cybou::Hash256 network_binding{};
     network_binding.begin()[0] = 0xAA;
@@ -853,13 +855,13 @@ BOOST_AUTO_TEST_CASE(unversioned_canonical_api_workflow)
 
     // Execute block with parent state
     CybouState parent{};
-    parent.onboarding_pool = params.onboarding_bonus * 5;
+    FundTestTreasury(parent, params.onboarding_bonus * 5);
 
     const auto block_res = ExecuteBlockOperations(parent, {*decoded_proto}, network_binding, 0, params);
     BOOST_REQUIRE(block_res);
     BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).system_balance, params.onboarding_bonus);
     BOOST_CHECK(*block_res.state_root == *state_hash);
-    BOOST_CHECK_EQUAL(TotalSupply(*block_res.state), TotalSupply(parent));
+    BOOST_CHECK_EQUAL(TotalCybou(*block_res.state), TotalCybou(parent));
 }
 
 BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
@@ -867,7 +869,6 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
     using namespace cybou;
 
     CybouState state{};
-    state.onboarding_pool = 1'000'000;
     state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.balance = 2'000'000});
 
     cybou::Hash256 acc_raw{};
@@ -878,14 +879,18 @@ BOOST_AUTO_TEST_CASE(supply_conservation_invariant_check)
         .system_balance = 500'000,
     });
 
-    // Total supply calculation
-    BOOST_CHECK_EQUAL(TotalSupply(state), 1'000'000ULL + 2'000'000ULL + 3'000'000ULL + 500'000ULL);
+    // TotalCybou counts unclaimed allocations, Balance, System Balance and StorageEscrow.
+    BOOST_CHECK_EQUAL(TotalCybou(state), 2'000'000ULL + 3'000'000ULL + 500'000ULL);
+    cybou::Hash256 lease_id{};
+    lease_id.begin()[0] = 0x51;
+    state.leases.emplace(lease_id, StorageLeaseRecord{.payer = acc, .units = 1, .replicas = 2, .first_period = 0,
+        .end_period = 1, .escrow_onboarding = 7, .escrow_locked = 3});
+    BOOST_CHECK_EQUAL(TotalCybou(state), 2'000'000ULL + 3'000'000ULL + 500'000ULL + 10ULL);
 
-    // Over-supply check (with valid zero-account state and valid zero-account state)
-    CybouState overflow_state{};
-
-    overflow_state.onboarding_pool = 100'000'000'001ULL;
-    BOOST_CHECK(ValidateCybouState(overflow_state) == StateValidationError::BALANCE_OVERFLOW);
+    // No MAX_SUPPLY: only arithmetic overflow is invalid.
+    CybouState large_state{};
+    large_state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{.balance = 100'000'000'001ULL});
+    BOOST_CHECK(ValidateCybouState(large_state) == StateValidationError::NONE);
 }
 
 
@@ -918,12 +923,14 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     const auto authority = authority_create.account_id;
     const auto recovery_id = *ComputeRecoveryKeyId(authority_create.authorization.recovery_root);
     auto state = CreateDevGenesisState();
-    BOOST_CHECK_EQUAL(state.onboarding_pool, 100'000'000U);
     state.genesis_allocations.emplace(recovery_id, GenesisAllocation{
         .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
-    const auto initial_supply = TotalSupply(state);
+    const auto initial_supply = TotalCybou(state);
     BOOST_REQUIRE(ApplyAccountCreate(sender_create, network, 0, params, state) == AccountCreateStateError::NONE);
-    BOOST_CHECK_EQUAL(state.onboarding_pool, DEV_ONBOARDING_POOL - params.onboarding_bonus);
+    // Onboarding is a Treasury transfer, not issuance (DEC-277).
+    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, 100'000'000 - params.onboarding_bonus);
+    BOOST_CHECK_EQUAL(TotalCybou(state), initial_supply);
+    const uint64_t treasury_start = 100'000'000 - params.onboarding_bonus;
     RootPublication publication;
     publication.root_chunk_id[0] = 1;
     publication.chunk_authorization_root[0] = 2;
@@ -943,12 +950,10 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
         const auto accounts = damaged.accounts;
         const auto allocations = damaged.genesis_allocations;
         const auto identities = SerializeIdentityRegistry(damaged.identities);
-        const auto pool = damaged.onboarding_pool;
         BOOST_CHECK(ApplyRootPublication(op, network, params, damaged) == expected);
         BOOST_CHECK(damaged.accounts == accounts);
         BOOST_CHECK(damaged.genesis_allocations == allocations);
         BOOST_CHECK(SerializeIdentityRegistry(damaged.identities) == identities);
-        BOOST_CHECK_EQUAL(damaged.onboarding_pool, pool);
     };
     auto damaged = state;
     damaged.accounts.at(sender).system_balance = fee - 1;
@@ -966,19 +971,17 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     damaged.genesis_allocations.at(recovery_id).claimed_by = authority;
     assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
 
-    const auto pool = state.onboarding_pool;
     const auto payer_budget = state.accounts.at(sender).system_balance;
     const auto finalized = ExecuteBlockOperations(state, {ProtocolOperation{op}}, network, 1, params);
     BOOST_REQUIRE(finalized);
     state = *finalized.state;
-    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, 100'000'000 + fee);
+    BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, treasury_start + fee);
     BOOST_CHECK_EQUAL(state.accounts.at(sender).system_balance, payer_budget - fee);
-    BOOST_CHECK_EQUAL(state.onboarding_pool, pool);
-    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    BOOST_CHECK_EQUAL(TotalCybou(state), initial_supply);
     BOOST_REQUIRE(ApplyAccountCreate(authority_create, network, 2, params, state) == AccountCreateStateError::NONE);
-    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, 100'000'000 + fee);
-    BOOST_CHECK_EQUAL(state.onboarding_pool, pool - params.onboarding_bonus);
-    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, treasury_start + fee);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).system_balance, 0U);
+    BOOST_CHECK_EQUAL(TotalCybou(state), initial_supply);
     const auto claimed_allocation_balance = state.genesis_allocations.at(recovery_id).balance;
     op.authorization.nonce = 1;
     sign_publication();
@@ -989,10 +992,9 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     damaged.names.names.erase(std::string{CENTRAL_AUTHORITY_NAME});
     assert_rejected_unchanged(damaged, RootPublicationError::FEE_TRANSFER_FAILED);
     BOOST_REQUIRE(ApplyRootPublication(op, network, params, state) == RootPublicationError::NONE);
-    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, 100'000'000 + 2 * fee);
+    BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, treasury_start + 2 * fee);
     BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, claimed_allocation_balance);
-    BOOST_CHECK_EQUAL(state.onboarding_pool, pool - params.onboarding_bonus);
-    BOOST_CHECK_EQUAL(TotalSupply(state), initial_supply);
+    BOOST_CHECK_EQUAL(TotalCybou(state), initial_supply);
     const auto bytes = SerializeCybouState(state);
     BOOST_REQUIRE(bytes);
     const auto restored = DeserializeCybouState(*bytes);
@@ -1000,8 +1002,7 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);
     BOOST_CHECK(CybouStateHash(*restored) == CybouStateHash(state));
     auto malformed = *bytes;
-    malformed[0] = 0xff;
-    malformed.insert(malformed.begin() + 9, 16, 0); // invalid pool layout
+    malformed[3] = 0xff; // impossible account count
     BOOST_CHECK(!DeserializeCybouState(malformed));
 
     // Payment to Central Authority credits both the amount and its entire fee.
@@ -1017,11 +1018,11 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_CHECK(ApplyPayment(payment, network, params, damaged) == PaymentError::FEE_TRANSFER_FAILED);
     BOOST_CHECK(damaged.accounts == previous_accounts);
     BOOST_CHECK(SerializeIdentityRegistry(damaged.identities) == previous_identities);
-    const auto payment_supply = TotalSupply(state);
+    const auto payment_supply = TotalCybou(state);
     const auto ca_balance = state.accounts.at(authority).balance;
     BOOST_REQUIRE(ApplyPayment(payment, network, params, state) == PaymentError::NONE);
     BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, ca_balance + 5 + params.payment_fee);
-    BOOST_CHECK_EQUAL(TotalSupply(state), payment_supply);
+    BOOST_CHECK_EQUAL(TotalCybou(state), payment_supply);
     BOOST_CHECK_EQUAL(state.genesis_allocations.at(recovery_id).balance, claimed_allocation_balance);
 
     // When Central Authority pays, its own protocol fee still returns to Balance.
@@ -1031,13 +1032,16 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     ca_seed[0] = 0x42;
     return_payment.authorization.signature = *SignIdentityMessage(ca_seed, IdentityKeyPurpose::AUTHORIZATION,
         *ComputeIdentityOperationDigest(network, return_payment.authorization));
+    // The Treasury claimant locks its own service budget; it received no onboarding bonus.
+    state.accounts.at(authority).balance -= 10;
+    state.accounts.at(authority).system_balance += 10;
     const auto previous_ca_balance = state.accounts.at(authority).balance;
     const auto previous_ca_budget = state.accounts.at(authority).system_balance;
-    const auto previous_supply = TotalSupply(state);
+    const auto previous_supply = TotalCybou(state);
     BOOST_REQUIRE(ApplyPayment(return_payment, network, params, state) == PaymentError::NONE);
     BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, previous_ca_balance - 5 + params.payment_fee);
     BOOST_CHECK_EQUAL(state.accounts.at(authority).system_balance, previous_ca_budget - params.payment_fee);
-    BOOST_CHECK_EQUAL(TotalSupply(state), previous_supply);
+    BOOST_CHECK_EQUAL(TotalCybou(state), previous_supply);
 }
 
 BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)

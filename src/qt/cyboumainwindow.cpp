@@ -878,7 +878,7 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         authority.total_balance = 12'480'300;
         authority.total_system_balance = 3'902'144;
         authority.total_authority = 21'640'882;
-        authority.onboarding_pool = 87'159'000;
+        authority.storage_escrow = 1'204'500;
         model->setNetworkAuthority(authority);
         showPage(CybouPage::NetworkAuthority);
         save(QStringLiteral("network-authority"));

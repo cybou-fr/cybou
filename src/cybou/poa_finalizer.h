@@ -71,6 +71,9 @@ public:
     /// \brief Заполняет PoA-подпись domain-separated AUTH adjustment.
     /// \return `true`, если подпись выпущена и локально самопроверена; `false` при любом сомнении.
     bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
+    /// \brief Заполняет PoA-подпись StorageSettlement одного периода (DEC-282).
+    /// \return `true`, если подпись выпущена и локально самопроверена.
+    bool SignStorageSettlement(StorageSettlement& settlement) const;
 
 private:
     const cybou::Hash256 m_network_binding;

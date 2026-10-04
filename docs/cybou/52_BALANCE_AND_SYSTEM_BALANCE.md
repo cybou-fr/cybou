@@ -13,7 +13,7 @@ CYBOU is one indivisible native asset:
 ```text
 1 CYBOU = minimum unit
 decimals = 0
-MAX_SUPPLY = 100,000,000,000
+genesis monetary base = 100,000,000,000, conserved (no mint, no burn)
 ```
 
 ## Balance
@@ -55,9 +55,9 @@ leaves AUTH unchanged, and no CYBOU amount (locked, held or spent) scales AUTH. 
 [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md). Finalized AUTH above
 10,000,000 enables Validation signatures, never PoA finalization.
 
-## Storage-economy target (not implemented)
+## Storage economy (implemented in M5; active from the M7 genesis)
 
-At the DEC-283 cutover `MAX_SUPPLY` is removed: the genesis monetary base
+`MAX_SUPPLY` is removed: the genesis monetary base
 (100,000,000,000 CYBOU) belongs entirely to the `cybou.cybou` Treasury and is
 conserved forever; no mint and no burn. New Identities receive a 20,000 CYBOU
 System Balance start budget from Treasury. System Balance also funds storage rent

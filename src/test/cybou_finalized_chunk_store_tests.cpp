@@ -353,24 +353,9 @@ BOOST_AUTO_TEST_CASE(storage_audit_challenge_and_proof_verification)
     BOOST_CHECK(!cybou::CreateStorageAuditProof(invalid_challenge, data).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(canonical_resource_ladder_and_storage_quotas)
+BOOST_AUTO_TEST_CASE(canonical_operation_ladder)
 {
-    // Onboarding baseline: 0 AUTH -> 5 GiB remote storage, 15 GiB local reciprocal (DEC-269)
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(0), 5ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ONBOARDING_STORAGE_CREDIT_BYTES, 5ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::RECIPROCAL_STORAGE_RATIO, 3U);
-    BOOST_CHECK_EQUAL(cybou::LOCAL_ONBOARDING_STORAGE_BASELINE_BYTES, 15ULL * 1024 * 1024 * 1024);
-
-    // Progressive scale (DEC-268)
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000), 25ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000), 100ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(1'000'000), 500ULL * 1024 * 1024 * 1024);
-    // Validator tier (AUTH > 10M): high but finite; exactly 10M stays T3
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'000), 500ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(10'000'001), 2048ULL * 1024 * 1024 * 1024);
-    BOOST_CHECK_EQUAL(cybou::ComputeStorageQuotaBytes(100'000'000), 2048ULL * 1024 * 1024 * 1024);
-
-    // Operation limits per block (DEC-268)
+    // Storage is paid by lease (DEC-274); AUTH only governs operation rate (DEC-268).
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(0), 1U);
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000), 5U);
     BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(100'000), 25U);

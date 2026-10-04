@@ -54,7 +54,7 @@ from or conflicting with higher levels:
 | [`56_OWNER_OPERATOR_AND_RESILIENCE.md`](56_OWNER_OPERATOR_AND_RESILIENCE.md) | Operational resilience and operator key handling | Level 6 | Active |
 | [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Canonical AUTH account value, issuance/burn and Validation eligibility | Level 2 | Active |
 | [`68_OPERATOR_KEY_SEPARATION.md`](68_OPERATOR_KEY_SEPARATION.md) | PoA and operator key role custody | Level 2 | Active |
-| [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and OnboardingPool | Level 2 | Active |
+| [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and Treasury-funded onboarding | Level 2 | Active |
 | [`71_WINDOWS_MINGW_BUILD.md`](71_WINDOWS_MINGW_BUILD.md) | Local Windows MinGW + vcpkg build procedure | — | Active |
 | [`72_DESKTOP_WALLET_UI.md`](72_DESKTOP_WALLET_UI.md) | Desktop wallet presentation contract | Level 5 | Product target |
 | [`73_CORE_DESKTOP_CONTRACT.md`](73_CORE_DESKTOP_CONTRACT.md) | Contract between native NodeRuntime and desktop client | Level 5 | Active |

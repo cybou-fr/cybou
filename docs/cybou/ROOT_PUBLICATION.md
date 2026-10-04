@@ -11,6 +11,7 @@ RootPublication {
     root_chunk_id
     chunk_authorization_root
     chunk_count
+    lease_periods
     recipient_capsules[]
 }
 ```
@@ -21,6 +22,7 @@ The current wire layout is fixed-order binary:
 root_chunk_id:32
 chunk_authorization_root:32
 chunk_count:u32 LE
+lease_periods:u32 LE (initial StorageLease periods; 0 = none)
 capsule_count:u16 LE (1..32)
 repeat capsule_count:
     kem_profile:u16 LE
@@ -127,3 +129,10 @@ durability
 
 The publisher retains retryable encrypted local content until StorageService
 reports the required remote durability state.
+
+## Initial storage lease
+
+`lease_periods` makes publication and payment one atomic operation (DEC-279):
+the author pays the fee to Treasury and `ceil(chunk_count x replicas x rate x
+periods / 2048)` CYBOU into StorageEscrow from System Balance, or the whole
+publication is rejected. Providers admit chunks only while the lease is active.

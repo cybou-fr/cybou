@@ -55,6 +55,12 @@ constexpr std::string_view JOB_INDEX_KEY{"publication/jobs"};
 /// In-flight RevokePublication of an own publication (DEC-271).
 constexpr std::string_view REVOKING_KEY{"publication/revoking"};
 
+/// In-flight StorageLease одной публикации: OperationID аренды (DEC-279).
+std::string LeasingKey(const std::string_view id)
+{
+    return "publication/leasing/" + std::string{id};
+}
+
 /// Leaves сохраняются отдельно, чтобы StorageService позже воспроизвёл ровно тот же authorization order.
 std::string LeavesKey(const std::string_view id)
 {
@@ -277,6 +283,8 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     publication.root_chunk_id = bundle.root_chunk_id;
     publication.chunk_authorization_root = bundle.chunk_authorization_root;
     publication.chunk_count = bundle.chunk_count;
+    // Публикация сразу оплачивает начальную аренду хранения (DEC-279).
+    publication.lease_periods = DEFAULT_STORAGE_LEASE_PERIODS;
     if (recipient && *recipient != *account) {
         const auto* recipient_record = loaded.state->identities.Find(*recipient);
         if (!recipient_record) return Failure("Recipient Identity is not finalized");
@@ -690,6 +698,33 @@ std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const Publi
     return std::nullopt;
 }
 
+bool PublicationService::EnsureStorageLease(const std::string_view local_job_id, const cybou::Hash256& publication_id)
+{
+    if (m_runtime.IsStorageLeaseActive(publication_id)) {
+        (void)m_application_db.Erase(LeasingKey(local_job_id));
+        return true;
+    }
+    // Одна аренда в полёте на публикацию: ждём её финализации, пока runtime не знает об отказе.
+    if (const auto pending = m_application_db.Get(LeasingKey(local_job_id)); pending && pending->size() == 32) {
+        cybou::Hash256 lease_op;
+        std::copy(pending->begin(), pending->end(), lease_op.begin());
+        const auto kind = m_runtime.GetOperationStatus(lease_op).kind;
+        if (kind != OperationStatusKind::REJECTED_KNOWN && kind != OperationStatusKind::FINALIZED) return false;
+    }
+    const StorageLeasePayload payload{.publication_id = publication_id, .periods = DEFAULT_STORAGE_LEASE_PERIODS};
+    const auto commitment = ComputeStorageLeasePayloadCommitment(payload);
+    if (!commitment) return false;
+    const auto result = m_coordinator.Execute(IdentityOperationKind::STORAGE_LEASE, *commitment,
+        [&](const IdentityOperationAuthorization& authorization) -> std::optional<ProtocolOperation> {
+            return ProtocolOperation{AuthorizedStorageLease{authorization, payload}};
+        });
+    if (result) {
+        (void)m_application_db.Put(LeasingKey(local_job_id),
+            std::span<const unsigned char>{result.op_id.begin(), result.op_id.size()});
+    }
+    return false;
+}
+
 std::optional<std::vector<ChunkId>> PublicationService::LoadLeaves(const std::string_view local_job_id) const
 {
     const auto encoded = m_application_db.Get(LeavesKey(local_job_id));
@@ -897,7 +932,9 @@ std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::Pr
     for (const auto& id : Jobs()) {
         auto status = GetJob(id);
         if (!status) continue;
-        if (status->phase == PublicationJobPhase::SECURING) {
+        if (status->phase == PublicationJobPhase::SECURING && !EnsureStorageLease(id, status->operation_id)) {
+            status->error = "Waiting for a finalized storage lease";
+        } else if (status->phase == PublicationJobPhase::SECURING) {
             if (const auto leaves = LoadLeaves(id)) {
                 const auto durability = storage.Secure(status->operation_id, *leaves);
                 status->durability_percent = durability.ProgressPercent(storage.RemoteReplicaTarget());

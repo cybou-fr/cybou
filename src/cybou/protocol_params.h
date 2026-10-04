@@ -14,7 +14,16 @@
 namespace cybou {
 
 /// \brief DEV onboarding credit в spendable CYBOU на одно успешное создание аккаунта.
-inline constexpr uint64_t DEV_ONBOARDING_BONUS{6000};
+/// \brief Start service budget новой Identity из Central Treasury в System Balance (DEC-277).
+inline constexpr uint64_t ONBOARDING_BONUS{20'000};
+/// \brief Beta storage rent: CYBOU за GiB за сутки за одну remote replica (DEC-279).
+inline constexpr uint64_t DEFAULT_STORAGE_RATE_PER_GIB_DAY_REPLICA{5};
+/// \brief Оплачиваемые remote replicas одной аренды.
+inline constexpr uint8_t DEFAULT_STORAGE_REPLICA_TARGET{2};
+/// \brief Длина одного StorageSettlement-периода, секунд.
+inline constexpr uint64_t DEFAULT_STORAGE_SETTLEMENT_PERIOD_SECONDS{86'400};
+/// \brief Максимум периодов одной StorageLease-операции (~10 лет).
+inline constexpr uint32_t DEFAULT_MAX_STORAGE_LEASE_PERIODS{3650};
 /// \brief Максимум AccountCreate в одном finalized block, шт.
 inline constexpr uint32_t DEFAULT_MAX_ACCOUNT_CREATES_PER_BLOCK{100};
 /// \brief Требуемая сложность PoW для AccountCreate, в leading zero bits хэша работы.
@@ -47,7 +56,7 @@ struct CybouProtocolParameters {
     /// \brief Максимум AccountCreate на один finalized block.
     uint32_t max_account_creates_per_block{DEFAULT_MAX_ACCOUNT_CREATES_PER_BLOCK};
     /// \brief Начальный spendable credit после успешного AccountCreate, в CYBOU.
-    uint64_t onboarding_bonus{DEV_ONBOARDING_BONUS};
+    uint64_t onboarding_bonus{ONBOARDING_BONUS};
     /// \brief Длина эпохи в finalized blocks.
     uint64_t epoch_blocks{DEFAULT_EPOCH_BLOCKS};
     /// \brief Фиксированная комиссия Payment, в CYBOU.
@@ -66,6 +75,14 @@ struct CybouProtocolParameters {
     uint32_t max_pending_name_commits{DEFAULT_MAX_PENDING_NAME_COMMITS};
     /// \brief Разрешает XWing KEM в протоколе Identity этой сети.
     bool identity_kem_xwing_enabled{false};
+    /// \brief Storage rent: CYBOU за GiB за сутки за одну remote replica.
+    uint64_t storage_rate_per_gib_day_replica{DEFAULT_STORAGE_RATE_PER_GIB_DAY_REPLICA};
+    /// \brief Оплачиваемые remote replicas одной аренды.
+    uint8_t storage_replica_target{DEFAULT_STORAGE_REPLICA_TARGET};
+    /// \brief Длина StorageSettlement-периода, секунд.
+    uint64_t storage_settlement_period_seconds{DEFAULT_STORAGE_SETTLEMENT_PERIOD_SECONDS};
+    /// \brief Максимум периодов одной StorageLease-операции.
+    uint32_t max_storage_lease_periods{DEFAULT_MAX_STORAGE_LEASE_PERIODS};
 
     friend bool operator==(const CybouProtocolParameters&, const CybouProtocolParameters&) = default;
 };

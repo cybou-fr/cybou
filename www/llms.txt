@@ -46,11 +46,12 @@ experimental software, not a public mail or cloud-storage service.
   evidence only. PoA re-executes everything and alone finalizes.
 - Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots
   and recipient capsules. Mutual storage-proof notarization is a target, not implemented.
-  Storage quotas and admission eligibility
-  are derived deterministically from finalized state; local declarations convey zero authority.
-- Every newly created Identity receives an immediate Onboarding Trust Credit of 5 GB remote
-  network storage, with a reciprocal 1:3 physical storage target (~10–15 GB local allocation).
-  Allocation does not prove actual reciprocal storage service.
+  Storage admission requires an active finalized StorageLease paid from System Balance
+  into escrow; local declarations convey zero authority.
+- Every newly created Identity receives a 20,000 CYBOU System Balance start budget from the
+  Central Treasury. All CYBOU exist from genesis in the Treasury; there is no mint or burn.
+- Each Full Node chooses a local capacity of at least 15 GiB and serves at most 2/3 of it to
+  others; verified service is paid from escrow by a daily PoA-signed settlement.
 - Storage audit primitives (`StorageAuditChallenge`, `CreateStorageAuditProof`,
   `VerifyStorageAuditProof`) verify stored chunks via randomized offset and nonce proofs;
   network periodic audit relay and block notarization are not implemented.

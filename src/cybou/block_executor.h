@@ -64,9 +64,9 @@ enum class BlockExecutionError : uint8_t {
     INVALID_POA_AUTH_ADJUSTMENT, ///< Одна из операций `PoaAuthAdjustment` отвергнута.
     INVALID_REVOKE_PUBLICATION,  ///< Одна из операций `RevokePublication` отвергнута.
     OPERATION_LIMIT_EXCEEDED,    ///< Identity превысила лимит операций своего уровня AUTH на блок или эпоху.
-    PUBLICATION_TOO_LARGE,       ///< RootPublication больше максимального файла уровня AUTH автора.
-    STORAGE_QUOTA_EXCEEDED,      ///< RootPublication превысила квоту хранения уровня AUTH автора.
-    SUPPLY_CHANGED,              ///< Исполнение нарушило инвариант total supply из `docs/cybou/05_CHAIN_STATE.md`.
+    INVALID_STORAGE_LEASE,       ///< Одна из операций `StorageLease` отвергнута.
+    INVALID_STORAGE_SETTLEMENT,  ///< `StorageSettlement` отвергнут.
+    SUPPLY_CHANGED,              ///< Исполнение изменило TotalCybou: mint и burn запрещены (DEC-277).
     INVALID_STATE,               ///< Родительское или итоговое состояние нарушает канонические инварианты.
 };
 
@@ -83,6 +83,8 @@ struct BlockExecutionResult {
     RootPublicationError root_publication_error{RootPublicationError::NONE}; ///< Детализация для `INVALID_ROOT_PUBLICATION`.
     PoaAuthAdjustmentError poa_auth_error{PoaAuthAdjustmentError::NONE}; ///< Детализация для `INVALID_POA_AUTH_ADJUSTMENT`.
     RevokePublicationError revoke_error{RevokePublicationError::NONE}; ///< Детализация для `INVALID_REVOKE_PUBLICATION`.
+    StorageLeaseError lease_error{StorageLeaseError::NONE}; ///< Детализация для `INVALID_STORAGE_LEASE`.
+    StorageSettlementError settlement_error{StorageSettlementError::NONE}; ///< Детализация для `INVALID_STORAGE_SETTLEMENT`.
     std::optional<CybouState> state; ///< Кандидатное итоговое состояние при успехе.
     std::optional<cybou::Hash256> state_root; ///< Детерминированный `state root` итогового состояния.
 

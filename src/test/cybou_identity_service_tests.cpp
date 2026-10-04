@@ -567,7 +567,8 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_claim_e2e)
     BOOST_REQUIRE(it != loaded.state->accounts.end());
     BOOST_CHECK_EQUAL(it->second.authority, 10'000'001u);
     BOOST_CHECK_EQUAL(it->second.balance, 100'000'000u);
-    BOOST_CHECK_EQUAL(it->second.system_balance, fixture.definition.GetProtocolParameters().onboarding_bonus);
+    // Claiming the Treasury allocation `cybou` brings no onboarding bonus: it is its source (DEC-277).
+    BOOST_CHECK_EQUAL(it->second.system_balance, 0u);
 
     const auto alloc_it = loaded.state->genesis_allocations.find(*recovery_id);
     BOOST_REQUIRE(alloc_it != loaded.state->genesis_allocations.end());

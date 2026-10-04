@@ -46,6 +46,7 @@ std::optional<std::vector<unsigned char>> SerializeRootPublication(const RootPub
         writer.Fixed(publication.root_chunk_id);
         writer.Fixed(publication.chunk_authorization_root);
         writer.U32(publication.chunk_count);
+        writer.U32(publication.lease_periods);
         writer.U16(static_cast<std::uint16_t>(publication.recipient_capsules.size()));
         for (const auto& capsule : publication.recipient_capsules) {
             writer.U16(capsule.kem_profile);
@@ -65,6 +66,7 @@ std::optional<RootPublication> DeserializeRootPublication(std::span<const unsign
         publication.root_chunk_id = reader.Fixed<ChunkId>();
         publication.chunk_authorization_root = reader.Fixed<ChunkId>();
         publication.chunk_count = reader.U32();
+        publication.lease_periods = reader.U32();
         const auto count = reader.U16();
         if (count == 0 || count > ROOT_PUBLICATION_MAX_CAPSULES) return std::nullopt;
         publication.recipient_capsules.reserve(count);

@@ -964,15 +964,15 @@ void CybouShellTests::walletShowsAuthorityLimits()
 {
     constexpr quint64 GIB{1024ULL * 1024 * 1024};
     const auto base = cybouAccountLimits(0);
-    QCOMPARE(base.storage_quota, 5 * GIB);
-    QCOMPARE(base.max_file_bytes, 1 * GIB);
+    QCOMPARE(base.storage_quota, quint64{0});
+    QCOMPARE(base.max_file_bytes, 512 * GIB);
     QCOMPARE(base.operations_per_block, quint32{1});
     QCOMPARE(base.operations_per_epoch, quint32{30});
     QCOMPARE(base.work_bits, quint32{22});
     QVERIFY(!base.validation_eligible);
     QCOMPARE(base.next_tier_authority.value_or(0), quint64{10'000});
     const auto top = cybouAccountLimits(10'000'001);
-    QCOMPARE(top.storage_quota, 2048 * GIB);
+    QCOMPARE(top.storage_quota, quint64{0});
     QCOMPARE(top.operations_per_block, quint32{1'000});
     QVERIFY(top.validation_eligible);
     QVERIFY(!top.next_tier_authority);
@@ -980,7 +980,7 @@ void CybouShellTests::walletShowsAuthorityLimits()
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
     model.setAuthority(12'000);
     model.setResourceUsage(3 * GIB, 7, 600);
-    QCOMPARE(model.status().storage_quota, 25 * GIB);
+    QCOMPARE(model.status().storage_quota, quint64{0});
     WalletPage page{&model};
     QLabel* authority = nullptr;
     for (auto* label : page.findChildren<QLabel*>()) {
@@ -994,7 +994,8 @@ void CybouShellTests::walletShowsAuthorityLimits()
     };
     QVERIFY(shows(QStringLiteral("7 of 150 in this window")));
     QVERIFY(shows(QStringLiteral("up to 5 per block")));
-    QVERIFY(shows(CybouProduct::sizeText(4 * GIB)));
+    // No AUTH file-size tier any more: only the safety bound (DEC-274).
+    QVERIFY(shows(CybouProduct::sizeText(512 * GIB)));
 }
 
 void CybouShellTests::networkPageReflectsModel()
@@ -1540,11 +1541,14 @@ void CybouShellTests::runtimeStartupFailureCanBeRetried()
     QCOMPARE(failures.count(), 1);
     QVERIFY(!model.status().node_running);
 
+    // DEC-283: the compiled DEVNET predates the storage-economy state and fails closed, so the
+    // retry fails again instead of reinterpreting it. M7 provisions a new genesis and restores
+    // the successful retry here.
     ScopedEnvironment p2p_host{"CYBOU_DEV_P2P_HOST", "127.0.0.1"};
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     controller.start();
-    QCOMPARE(failures.count(), 1);
-    QVERIFY(model.status().node_running);
+    QCOMPARE(failures.count(), 2);
+    QVERIFY(!model.status().node_running);
 }
 
 void CybouShellTests::runtimeRejectsStateFromAnotherNetwork()

@@ -385,10 +385,10 @@ void WalletPage::refresh()
     const QLocale locale;
     const auto limits = cybouAccountLimits(status.authority);
     m_authority->setText(cybouAuthorityText(status.authority));
-    // Finalized quota use in live mode; fixtures only know the files they show.
+    // Finalized network storage in live mode; fixtures only know the files they show.
+    // Storage is paid by lease from System Balance, not limited by AUTH (DEC-274).
     const quint64 quota_used = m_model->fixtureMode() ? status.storage_used : status.quota_used;
-    m_limit_storage->setText(tr("%1 used of %2").arg(CybouProduct::sizeText(quota_used),
-        CybouProduct::sizeText(limits.storage_quota)));
+    m_limit_storage->setText(tr("%1 stored  ·  paid by storage lease").arg(CybouProduct::sizeText(quota_used)));
     // One block is about a second, so blocks left are seconds left.
     const quint64 minutes = (status.epoch_blocks_left + 59) / 60;
     m_limit_operations->setText(tr("%1 of %2 in this window  ·  up to %3 per block")

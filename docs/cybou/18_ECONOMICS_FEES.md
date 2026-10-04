@@ -5,7 +5,7 @@
 ```text
 CYBOU
 decimals = 0
-MAX_SUPPLY = 100,000,000,000
+genesis monetary base = 100,000,000,000 (all in the Central Treasury; conserved)
 ```
 
 There is no perpetual base emission.
@@ -28,18 +28,16 @@ There is no user-initiated unlock from System Balance back to Balance.
 
 Protocol service fees are paid from System Balance.
 
-## OnboardingPool
+## Onboarding
 
-DEV genesis funds OnboardingPool with exactly 100,000,000 CYBOU.
-AccountCreate transfers the configured onboarding bonus:
+AccountCreate transfers the configured onboarding bonus (20,000 CYBOU):
 
 ```text
-OnboardingPool -> new Identity System Balance
+Central Treasury Balance -> new Identity System Balance (onboarding origin)
 ```
 
-The DEV bonus remains 6,000 CYBOU. The pool only decreases; fees never replenish
-it. AccountCreate does not mint CYBOU and earns no AUTH (a genesis allocation
-may grant initial AUTH).
+The claimant of the Treasury allocation itself receives no bonus. AccountCreate
+does not mint CYBOU and earns no AUTH (a genesis allocation may grant initial AUTH).
 
 ## Protocol fees
 
@@ -56,7 +54,8 @@ ordinary AccountState Balance; the allocation Balance no longer changes.
 
 Missing or duplicate allocations, invalid claimants and recipient overflow
 reject the operation without changing balances or authorization nonce. There
-is no batching, fee burn, priority bidding, validator reward or provider reward.
+is no batching, fee burn, priority bidding or validator reward. Storage rent is
+not a fee: it goes through StorageEscrow to providers (below).
 
 Payment uses the existing configured payment_fee. RootPublication uses:
 
@@ -65,15 +64,13 @@ Payment uses the existing configured payment_fee. RootPublication uses:
 ```
 
 Each paid operation performs its own transfer. Block execution checks that
-TotalSupply is unchanged; it performs no later fee distribution.
+TotalCybou is unchanged; it performs no later fee distribution.
 
 ## Supply and AUTH
 
-TotalSupply counts OnboardingPool, unclaimed genesis allocation Balances,
-account Balances and account System Balances. The 100 billion cap is not a
-promise that all units are issued: the proposed DEV genesis issues 200 million
-(100 million onboarding and 100 million Central Authority), leaving 99.8 billion
-unissued. There are no virtual reserves for that remainder.
+TotalCybou counts unclaimed genesis allocation Balances, account Balances,
+account System Balances and StorageEscrow. The genesis monetary base exists in
+full from genesis; there is no cap, no unissued remainder and no virtual reserve.
 
 AUTH is non-transferable, excluded from CYBOU supply, and changes through the
 finalized rules in `57_IDENTITY_AUTHORITY.md`. Fee amounts do not scale AUTH.
@@ -85,9 +82,10 @@ and therefore a new NetworkID, followed by a clean network-bound state reset.
 Current compiled DEVNET has its new NetworkID and immutable genesis; the
 former DEVNET is retired. MAINNET remains unprovisioned. Development uses DEVNET. Existing genesis is never re-signed or replaced.
 
-## Storage-economy target (frozen, not implemented)
+## Storage economy (implemented in M5; active from the M7 genesis)
 
-Applies only from the DEC-283 cutover to a new DEVNET NetworkID and genesis.
+The code implements the rules below; they take effect on the network with the
+new DEVNET NetworkID and genesis (DEC-283).
 
 ### Monetary base
 

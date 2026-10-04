@@ -239,8 +239,12 @@ ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
+    // Provider принимает только оплаченное хранение: финализированная публикация с активной арендой (DEC-279).
     auto result = m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
-        [this](const cybou::Hash256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+        [this](const cybou::Hash256& operation_id) -> std::optional<RootPublication> {
+            if (!IsStorageLeaseActive(operation_id)) return std::nullopt;
+            return FindFinalizedRootPublication(operation_id);
+        });
     // Receipt подписывается только после durable admission; без подписи admission не подтверждается.
     if (result) {
         auto receipt = SignStorageProof(StorageReceiptMessage(m_network_binding, publication_operation_id, chunk_id,
@@ -450,6 +454,17 @@ bool CybouNodeRuntime::IsPublicationActive(const cybou::Hash256& publication_id)
     return loaded && loaded.state && loaded.state->publications.contains(publication_id);
 }
 
+bool CybouNodeRuntime::IsStorageLeaseActive(const cybou::Hash256& publication_id) const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (!loaded || !loaded.state || !loaded.state->publications.contains(publication_id)) return false;
+    const auto lease = loaded.state->leases.find(publication_id);
+    const auto period = loaded.state->settlement.next_period;
+    return lease != loaded.state->leases.end() && lease->second.first_period <= period &&
+        period < lease->second.end_period;
+}
+
 uint32_t CybouNodeRuntime::RemainingEpochOperations(const AccountId& account_id) const
 {
     std::lock_guard lock(m_mutex);
@@ -470,6 +485,34 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
     if (!nonce) return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED,
         .op_id = ComputeOperationId(op).value_or(cybou::Hash256{})};
     return SubmitOperationInternal(std::move(op), *nonce, std::nullopt);
+}
+
+OperationSubmitResult CybouNodeRuntime::SubmitStorageSettlement(const uint64_t period_start_utc,
+    std::vector<StorageSettlementEntry> entries)
+{
+    std::lock_guard lock(m_mutex);
+    if (!m_poa_finalizer || !m_poa_finalizer->SignerEnabled() || m_store.PoaSafetyHalted()) {
+        return {.status = OperationSubmitStatus::POA_SIGNER_UNAVAILABLE};
+    }
+    const auto loaded = m_store.LoadState();
+    if (loaded.error != StateLoadError::NONE || !loaded.state || m_poa_finalizer->SafetyHalted()) return {};
+    StorageSettlement settlement{.period = loaded.state->settlement.next_period,
+        .period_start_utc = period_start_utc, .entries = std::move(entries)};
+    if (!m_poa_finalizer->SignStorageSettlement(settlement)) return {};
+    const ProtocolOperation operation{std::move(settlement)};
+    OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
+    // Signed by the genesis PoA key: its own protection, no relay PoW.
+    switch (m_operation_pool.Admit(operation, 0)) {
+    case PoolAdmission::ACCEPTED: status = OperationSubmitStatus::ACCEPTED; break;
+    case PoolAdmission::ALREADY_PENDING: status = OperationSubmitStatus::ALREADY_PENDING; break;
+    case PoolAdmission::ALREADY_FINALIZED: status = OperationSubmitStatus::ALREADY_FINALIZED; break;
+    case PoolAdmission::REJECTED: break;
+    }
+    const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(cybou::Hash256{})};
+    if (result.status == OperationSubmitStatus::ACCEPTED) {
+        RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
+    }
+    return result;
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(

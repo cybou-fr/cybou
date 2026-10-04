@@ -109,37 +109,24 @@ BOOST_AUTO_TEST_CASE(signed_genesis_rejects_noncanonical_encoding)
     truncated.pop_back();
     BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(truncated));
     auto noncanonical = bytes;
-    noncanonical[cybou::SerializeNetworkGenesisPayload(spec).size() - 1] = 2;
+    // The XWing flag byte precedes the storage parameters (8 + 1 + 8 + 4 bytes).
+    noncanonical[cybou::SerializeNetworkGenesisPayload(spec).size() - 1 - (8 + 1 + 8 + 4)] = 2;
     BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(noncanonical));
 }
 
-BOOST_AUTO_TEST_CASE(compiled_devnet_is_the_only_official_startup_source)
+BOOST_AUTO_TEST_CASE(compiled_devnet_fails_closed_until_the_storage_economy_cutover)
 {
-    // The compiled signed genesis verifies under the compiled Network Public Key
-    // and its compiled initial state matches the signed state root.
-    const auto& devnet = cybou::RequireOfficialNetwork("devnet");
-    const auto network_binding = devnet.genesis.GetNetworkId();
-    BOOST_CHECK(std::equal(network_binding.begin(), network_binding.end(),
-        cybou::devnet_constants::NETWORK_ID_BYTES.begin(), cybou::devnet_constants::NETWORK_ID_BYTES.end()));
-    BOOST_CHECK(devnet.kind == cybou::NetworkKind::DEVNET);
-    BOOST_CHECK(cybou::CybouStateHash(devnet.genesis_state) == devnet.genesis.GetGenesisStateRoot());
-    BOOST_CHECK(devnet.genesis.GetPoaPublicKey() == devnet.genesis.GetPoaPublicKey());
-    BOOST_CHECK(&cybou::RequireOfficialNetwork("DEVNET") == &devnet);
+    // DEC-283: the storage-economy state and genesis parameters cannot decode the current
+    // compiled DEVNET. Startup must refuse it rather than reinterpret it; M7 provisions a new
+    // Network Root, NetworkID and signed genesis and restores the compiled-DEVNET checks.
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("devnet"), std::runtime_error);
+    BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(cybou::NetworkKind::DEVNET), std::runtime_error);
+    BOOST_CHECK(!cybou::DeserializeSignedNetworkGenesis(cybou::devnet_constants::SIGNED_GENESIS_BYTES) ||
+        !cybou::DeserializeCybouState(cybou::devnet_constants::GENESIS_STATE_BYTES));
 
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("mainnet"), std::runtime_error);
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork("network.bin"), std::runtime_error);
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(""), std::runtime_error);
-}
-
-BOOST_AUTO_TEST_CASE(official_bootstrap_locator_is_an_ordinary_rendezvous_peer)
-{
-    const auto& devnet = cybou::RequireOfficialNetwork(cybou::NetworkKind::DEVNET);
-    BOOST_CHECK_EQUAL(devnet.name, "DEVNET");
-    BOOST_REQUIRE_EQUAL(devnet.rendezvous_locators.size(), 1U);
-    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].host, "51.255.46.58");
-    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].port, 29461);
-    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].tls_spki_sha256[0], 0xd8);
-    BOOST_CHECK_EQUAL(devnet.rendezvous_locators[0].tls_spki_sha256[31], 0xdb);
     BOOST_CHECK_THROW(cybou::RequireOfficialNetwork(cybou::NetworkKind::MAINNET), std::runtime_error);
 }
 

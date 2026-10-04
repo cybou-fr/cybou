@@ -201,11 +201,12 @@ No:
     per-audit blockchain records, Reed-Solomon
 ```
 
-The current DEVNET still enforces OnboardingPool, the 100B cap and DEC-272 AUTH
-storage quotas. Consensus parts arrive only at a new DEVNET (new Network Root,
-NetworkID and signed genesis) under explicit operator authorization (DEC-283).
-Local capacity, evidence and shadow accounting land first on the current DEVNET.
-AUTH, Validation, AUTH operation tiers and all PoW are unchanged by this work.
+Status: M1–M5 are implemented on main. The consensus format no longer decodes
+the compiled DEVNET: `RequireOfficialNetwork(DEVNET)` fails closed until M7
+provisions a new Network Root, NetworkID and signed genesis under explicit
+operator authorization (DEC-283). Never deploy main to the DEV VPS before M7;
+the running DEVNET keeps its previous binary. AUTH, Validation, AUTH operation
+tiers and all PoW are unchanged by this work.
 
 ## DEV VPS deployment — migration state
 
@@ -213,7 +214,8 @@ There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
   `cybou node run` on the immutable current DEVNET, with state under
-  `/var/lib/cybou/node/state` and the default 15 GiB local storage capacity.
+  `/var/lib/cybou/node/state` and the pre-storage-economy binary (automatic
+  storage allocation). Main is not deployable there until the M7 cutover.
   The preceding network domain is retired under `/var/lib/cybou/node-retired-20261003-de-version`;
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.
@@ -342,10 +344,8 @@ The Beta target remains two independent remote full replicas; the current
 placement algorithm deduplicates proven StorageIds, which does not establish
 independent hosts, operators or failure domains. The 1:3 reciprocal baseline
 is a capacity/service objective, not measured proof of contribution: automatic
-local allocation varies with disk space and does not guarantee 10–15 GB.
-Finalized quotas govern entitlement, not evidence of actual remote service.
-The frozen target (DEC-274–DEC-283) replaces quotas with paid leases and
-PoA-settled payouts for verified service; it is not implemented.
+local capacity is an explicit operator choice (`V >= 15 GiB`), not proof of service.
+Storage is paid by finalized leases; only PoA-signed settlements record service.
 
 Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
@@ -355,7 +355,7 @@ Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
 random-offset audits and periodic full GET plus ChunkID verification; none of
 it is consensus state or a canonical proof.
 
-Finalized revocation stops admission and releases the author's canonical quota.
+Finalized revocation stops admission and closes the author's lease after the current period.
 Compliant providers journal purge of unshared chunks, retaining physical byte
 accounting until unlink succeeds or absence is confirmed; maintenance/restart
 retry failures. This does not prove deletion of hidden copies or crypto-erasure.
@@ -469,13 +469,11 @@ architecture that is absent from higher levels:
   such an operation earns only the flat +1.
 - Authority > 10,000,000 AUTH qualifies an Identity to sign Validation.
 - Authority grants NO PoA finalization power, NO consensus voting rights, and NO stake weight.
-- AUTH acts as the anti-spam and resource scaling governor (DEC-272). Its storage
-  quota and largest-publication parts are removed at the storage-economy cutover
-  (DEC-274); operation-rate tiers remain. Block
-  execution enforces, per Identity and against the parent finalized AUTH, a tier
-  limit of metered operations per block and per epoch, a remote storage quota and a
-  largest single publication (file). Quota is counted in 512 KiB chunks of the
-  finalized publication register. Limits expand with AUTH up to the Validator tier
+- AUTH acts as the anti-spam operation-rate governor (DEC-272). It no longer
+  governs storage (DEC-274): storage is paid by lease, and `MAX_PUBLICATION_CHUNKS`
+  is only a safety bound. Block execution enforces, per Identity and against the
+  parent finalized AUTH, a tier limit of metered operations per block and per
+  epoch. Limits expand with AUTH up to the Validator tier
   (AUTH > 10,000,000), whose limits are high but finite: one Identity can never
   take a whole block. AccountCreate and PoaAuthAdjustment are not metered.
 - Every user operation carries relay proof-of-work (DEC-273): SHA-256 of
@@ -485,11 +483,9 @@ architecture that is absent from higher levels:
   with the exact bytes until finalization and never enters a block.
 - One `.cybou` name per Identity: NameCommit and NameReveal refuse an Identity that
   already owns a name or holds a pending commit.
-- Current DEVNET: every newly created Identity receives an immediate Onboarding Trust
-  Credit of 5 GB remote publication quota, paired with a target reciprocal 1:3
-  capacity/service objective. Automatic allocation does not guarantee 10–15 GB or
-  measure actual contribution. Target: a 20,000 CYBOU Treasury-funded System Balance
-  start budget pays storage rent instead (DEC-277).
+- Every newly created Identity receives a 20,000 CYBOU System Balance start
+  budget transferred from the Central Treasury (DEC-277); it pays fees and storage
+  rent. Onboarding-origin CYBOU never becomes spendable through storage payouts.
 - Automatic AUTH penalties require objectively verifiable protocol evidence and
   are not frozen. Signed Validation of an operation that is invalid against its
   stated finalized base is evidence a future penalty rule may use.
@@ -517,15 +513,15 @@ architecture that is absent from higher levels:
 
 ## Economics
 
-Current DEVNET (target in the storage economy section above):
-
 ```text
-MAX_SUPPLY = 100,000,000,000 CYBOU
 decimals = 0
-DEV OnboardingPool = 100,000,000 CYBOU (genesis only; never replenished by fees)
-100% protocol fee: payer System Balance -> Central Authority spendable Balance
-Before claim: fees accumulate in the unique genesis allocation labelled cybou.
-After claim: fees credit that allocation claimant's ordinary AccountState Balance.
+Genesis monetary base = 100,000,000,000 CYBOU, all in the cybou.cybou Treasury allocation
+No MAX_SUPPLY, no OnboardingPool, no mint, no burn; TotalCybou is conserved
+AccountCreate: Treasury -> 20,000 CYBOU -> new System Balance (Treasury claimant excluded)
+100% protocol fee: payer System Balance -> Central Treasury Balance
+Storage rent: payer System Balance -> StorageEscrow -> verified providers (100%)
+Before claim: Treasury and fees live in the unique genesis allocation labelled cybou.
+After claim: they are that claimant's ordinary AccountState Balance.
 ```
 
 Balance is spendable CYBOU. System Balance is an irreversible CYBOU service budget.

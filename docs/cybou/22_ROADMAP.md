@@ -65,7 +65,7 @@ features and durability rather than reopening architecture cleanup.
   spot checks, rolling statistics; no money.
 - **M4 Shadow economy** (implemented; DEVNET measurement pending): estimated rent and rewards on the live DEVNET; validate the
   5 CYBOU rate; no CYBOU moved.
-- **M5 Consensus economics**: Treasury monetary base, 20,000 onboarding, StorageLease,
+- **M5 Consensus economics** (implemented; evidence aggregation pending): Treasury monetary base, 20,000 onboarding, StorageLease,
   StorageEscrow, StorageSettlement, AUTH storage quota removal.
 - **M6 Adversarial tests**: monetary conservation, payout abuse, storage failure,
   concentration and Sybil simulations as release gates.

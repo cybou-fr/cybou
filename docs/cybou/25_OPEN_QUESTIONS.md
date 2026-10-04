@@ -71,8 +71,9 @@ Storage economy (DEC-274–DEC-283) open items:
 
 - assignment proof: how PoA attests that paid providers were network-assigned
   from finalized randomness;
-- onboarding-origin accounting layout in System Balance and escrow;
-- canonical rounding rule and grace period length for lease settlement;
+- aggregation of off-chain evidence into StorageSettlement entries at the PoA;
+- StoragePayoutBinding format and its off-chain verification;
+- lease renewal UX before expiry (renewal after expiry already works);
 - Beta rate (5 CYBOU/GiB/day/replica) validation by shadow accounting;
 - MiCA and French qualification of transferable CYBOU earned for storage service.
 

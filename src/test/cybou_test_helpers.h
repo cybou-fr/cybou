@@ -61,8 +61,20 @@ inline CybouState CreateTestGenesisState()
     IdentityKeyId recovery_id{};
     recovery_id[0] = 0xCA;
     state.genesis_allocations.emplace(recovery_id,
-        GenesisAllocation{.label = std::string{CENTRAL_AUTHORITY_NAME}, .claimed_by = std::nullopt});
+        GenesisAllocation{.balance = GENESIS_MONETARY_BASE, .label = std::string{CENTRAL_AUTHORITY_NAME},
+            .claimed_by = std::nullopt});
     return state;
+}
+
+/** Credits (creating if needed) the Treasury `cybou` allocation so a test can onboard Identities (DEC-277). */
+inline void FundTestTreasury(CybouState& state, uint64_t amount)
+{
+    if (auto* treasury = FindCentralAuthorityAllocation(state)) {
+        treasury->balance += amount;
+        return;
+    }
+    state.genesis_allocations.emplace(IdentityKeyId{},
+        GenesisAllocation{.balance = amount, .label = std::string{CENTRAL_AUTHORITY_NAME}});
 }
 
 inline std::map<std::array<unsigned char, 32>, std::array<unsigned char, 32>>& TestNetworkSecrets()

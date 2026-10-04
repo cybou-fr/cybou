@@ -26,6 +26,9 @@ namespace cybou {
 class CybouNodeRuntime;
 class StorageService;
 
+/// \brief Settlement-периоды (сутки), оплачиваемые одной автоматической StorageLease публикации.
+inline constexpr std::uint32_t DEFAULT_STORAGE_LEASE_PERIODS{30};
+
 /// \brief Уже подготовленный локальный bundle для RootPublication.
 struct PreparedPublicationBundle {
     /// \brief ChunkId корневого ROOT-чанка документа.
@@ -238,6 +241,9 @@ private:
     std::optional<Staged> Stage(std::string_view local_job_id, std::vector<NewContent>& children,
         const BuildMetadata& build_metadata, std::string& error);
     std::optional<std::vector<ChunkId>> LoadLeaves(std::string_view local_job_id) const;
+    /// Обеспечивает финализированную аренду перед placement; подаёт StorageLease не более одного в полёте.
+    /// \return true, только если аренда уже активна в finalized state.
+    bool EnsureStorageLease(std::string_view local_job_id, const cybou::Hash256& publication_id);
     /// \brief Удаляет локальную job после финализированного отзыва её публикации.
     bool ForgetRevokedJob(std::string_view local_job_id);
 

@@ -128,7 +128,8 @@ std::optional<IdentityOperationAuthorization> AuthorizationOf(const ProtocolOper
         if constexpr (std::is_same_v<T, AuthorizedPayment> || std::is_same_v<T, AuthorizedSystemLock> ||
             std::is_same_v<T, AuthorizedNameCommit> || std::is_same_v<T, AuthorizedNameReveal> ||
             std::is_same_v<T, AuthorizedRootPublication> ||
-            std::is_same_v<T, AuthorizedRevokePublication>) return value.authorization;
+            std::is_same_v<T, AuthorizedRevokePublication> ||
+            std::is_same_v<T, AuthorizedStorageLease>) return value.authorization;
         return std::nullopt;
     }, operation);
 }

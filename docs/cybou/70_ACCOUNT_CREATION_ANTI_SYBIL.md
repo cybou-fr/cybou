@@ -14,15 +14,15 @@ The work serialization is 113 bytes and binds NetworkID, AccountID, authorizatio
 
 ## Verification and state transition
 
-Full nodes check canonical encoding, network and account bindings, authorization commitment, work difficulty, valid epoch range, both proofs of possession, duplicate accounts and recovery keys, the per-block creation limit, and OnboardingPool solvency. Consensus uses block height and immutable network parameters, never local wall-clock time.
+Full nodes check canonical encoding, network and account bindings, authorization commitment, work difficulty, valid epoch range, both proofs of possession, duplicate accounts and recovery keys, the per-block creation limit, and Central Treasury solvency. Consensus uses block height and immutable network parameters, never local wall-clock time.
 
-A successful operation atomically registers the Identity, debits the network onboarding bonus from OnboardingPool, and creates the monetary account with zero spendable Balance and the bonus in System Balance. The state change becomes durable only after the currently authorized PoA finalizer signs the block and each full node verifies the deterministic transition.
+A successful operation atomically registers the Identity, transfers the network onboarding bonus from the Central Treasury, and creates the monetary account with zero spendable Balance and the bonus in System Balance. The state change becomes durable only after the currently authorized PoA finalizer signs the block and each full node verifies the deterministic transition.
 
 ## Onboarding and Authority interaction
 
 Account creation remains permissionless and protocol-native. `AccountCreateOp` uses anti-Sybil work bound to NetworkID and AccountID. There is no voucher, operator approval, or central activation.
 
-A successful AccountCreate registers the Identity and monetary account and transfers the configured onboarding value from OnboardingPool to System Balance. It does not mint supply.
+A successful AccountCreate registers the Identity and monetary account and transfers the configured onboarding value from the Central Treasury to System Balance. It does not mint CYBOU (DEC-277).
 
 Automatic onboarding credit earns no Authority. Authority policy does not change the account-creation or monetary transition.
 

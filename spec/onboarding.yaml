@@ -5,12 +5,11 @@ onboarding:
   operator_approval_required: false
 
 economics:
-  dev_onboarding_bonus: 6000
-  beta_onboarding_bonus: TBD
-  mainnet_onboarding_bonus: TBD
-
-  source: OnboardingPool
+  onboarding_bonus: 20000
+  source: CentralTreasury
   destination: SystemBalance
+  origin_tracked: onboarding_system_balance
+  treasury_claimant_bonus: false
   minted: false
 
 account_creation:
@@ -22,9 +21,8 @@ account_creation:
     target: protocol_parameter
 
 storage_onboarding:
-  trust_credit_bytes: 5368709120  # 5 GiB remote network storage
-  reciprocal_storage_ratio: 3
-  local_baseline_bytes: 16106127360  # 15 GiB local storage obligation
+  remote_storage: paid_storage_lease  # DEC-274; no AUTH trust credit
+  local_capacity_min_bytes: 16106127360  # 15 GiB explicit local capacity
 
 anti_sybil:
   account_creation_work: true
