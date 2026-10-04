@@ -21,7 +21,7 @@ account_creation:
     target: protocol_parameter
 
 storage_onboarding:
-  remote_storage: paid_storage_lease  # DEC-274; no AUTH trust credit
+  remote_storage: paid_storage_lease  # DEC-274
   local_capacity_min_bytes: 16106127360  # 15 GiB explicit local capacity
 
 anti_sybil:

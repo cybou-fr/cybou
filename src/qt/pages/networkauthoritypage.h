@@ -21,7 +21,7 @@ class QVBoxLayout;
  *
  * The operator sees the local finalizer state and controls it (pause,
  * resume, finalize one block), sees the candidates waiting for the next
- * block, signs PoaAuthAdjustment GRANT/BURN, and reads network totals from
+ * block, and reads network totals from
  * this node's own independently validated finalized state.
  */
 class NetworkAuthorityPage : public QWidget
@@ -44,15 +44,10 @@ private:
     QLabel* m_candidates{nullptr};
     QLabel* m_peers{nullptr};
     QLabel* m_identities{nullptr};
-    QLabel* m_validators{nullptr};
+    QLabel* m_escrow{nullptr};
 
     QVBoxLayout* m_queue{nullptr};
     QVBoxLayout* m_recent{nullptr};
-    QLineEdit* m_auth_target{nullptr};
-    QLineEdit* m_auth_amount{nullptr};
-    QPushButton* m_grant{nullptr};
-    QPushButton* m_burn{nullptr};
-    QLabel* m_auth_status{nullptr};
     QVBoxLayout* m_totals{nullptr};
     QVBoxLayout* m_peer_rows{nullptr};
     QVBoxLayout* m_chain{nullptr};
@@ -62,8 +57,6 @@ private:
     bool m_height_advanced_in_view{false};
 
     void refresh();
-    void updateAuthButtons();
-    void confirmAuthAdjustment(bool grant);
 };
 
 #endif // CYBOU_QT_PAGES_NETWORKAUTHORITYPAGE_H

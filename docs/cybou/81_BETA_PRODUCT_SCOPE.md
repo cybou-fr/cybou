@@ -51,7 +51,6 @@ prepare/encrypt locally
 -> Sent / Protected
 ```
 
-Validation signatures never trigger remote placement.
 Remote durability (`Protected`) always requires verified PoA finality.
 
 ## Beta durability
@@ -103,12 +102,7 @@ RecoveryBridge flow.
 Large file/attachment DATA may be fetched on demand after metadata/index
 reconstruction.
 
-## Authority
+## Anti-abuse
 
-AUTH is a canonical network value attached to the Identity, read from the
-latest finalized state. It governs anti-abuse resource limits (DEC-272: bounded
-operations per block/epoch and relay PoW difficulty; storage is paid by lease)
-and qualifies an Identity to sign Validation when `Authority > 10,000,000 AUTH`.
-Validation is shown as additional pre-finalization confidence, never as a quorum
-or BFT guarantee. AUTH confers no stake weight and no PoA finalization power,
-and is not a gamified social score.
+There is no AUTH, reputation score or Validation (DEC-284). Abuse is priced by
+protocol fees and storage rent in CYBOU and by a flat relay proof-of-work.

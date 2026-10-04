@@ -64,7 +64,7 @@ const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
            [--capacity 15GiB] [--poa-key-file FILE] [--block-interval 1000ms]
            [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
            [--event-log FILE] [--event-log-mode minimal|detailed]
-           [--identity-vault FILE --identity-password-file FILE]   (sign Validation as this Identity)
+           [--identity-vault FILE --identity-password-file FILE]   (storage payout account)
   identity restore --network devnet --data-dir DIR --vault NEW_FILE --phrase-file FILE
                    --password-file FILE [--peer IP:PORT] [--timeout 600s]
   network info --network devnet          (NetworkID, binding, genesis and bootstrap locators)
@@ -545,8 +545,8 @@ int RunNode(const Options& opts)
     const auto interval = Quantity(opts.Get("block-interval", "1000ms"), true);
     if (interval == 0 || interval > 60000) throw std::invalid_argument("invalid block interval");
     auto node = StartNode(network, std::move(config));
-    // An ordinary Identity of this node's operator: it signs Validation while
-    // its finalized AUTH is above the threshold. It never finalizes.
+    // An ordinary Identity of this node's operator: it binds this node's StorageId
+    // to its payout account (DEC-282). It never finalizes.
     std::unique_ptr<CybouIdentityService> identity;
     if (opts.Has("identity-vault")) {
         identity = std::make_unique<CybouIdentityService>(node->Runtime(), opts.Require("identity-vault"));
@@ -554,11 +554,9 @@ int RunNode(const Options& opts)
         PasswordWiper wipe_password{password};
         const bool unlocked = identity->LoadVault(password);
         if (!unlocked || !identity->GetAccountId()) throw std::runtime_error("cannot unlock the Identity vault");
-        node->Runtime().SetValidationSigner(std::make_shared<CybouKeyStoreValidationSigner>(identity->GetKeyStore()));
-        const auto account_state = identity->GetFinalizedAccountState();
-        const bool eligible = account_state && account_state->authority > VALIDATION_AUTHORITY_THRESHOLD;
+        node->Runtime().SetIdentitySigner(std::make_shared<CybouKeyStoreIdentitySigner>(identity->GetKeyStore()));
         std::cout << "identity=" << identity->GetAccountId()->Value().GetHex()
-                  << " validation signer configured (eligible=" << (eligible ? "yes" : "no") << ")" << std::endl;
+                  << " storage payout account configured" << std::endl;
     }
     if (auto peers = PeerList(opts)) {
         if (opts.Has("peer")) peers->insert(peers->begin(), ParseEndpoint(opts.Get("peer")));
@@ -590,7 +588,7 @@ int RunNode(const Options& opts)
     while (!stopping.load()) std::this_thread::sleep_for(std::chrono::milliseconds{250});
     node->StopNetwork();
     // The signer references the vault's key store: never let it outlive it.
-    node->Runtime().SetValidationSigner(nullptr);
+    node->Runtime().SetIdentitySigner(nullptr);
     const auto final_status = node->Runtime().GetStatus();
     return final_status.runtime_state != NodeRuntimeState::READY || (events && !events->Good()) ? 2 : 0;
 }

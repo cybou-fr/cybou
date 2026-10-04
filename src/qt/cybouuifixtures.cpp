@@ -94,7 +94,7 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     model.setKeyEpoch(1);
     model.setNames({{QStringLiteral("stan.cybou"), true}});
     model.setBalances(5820, 4621);
-    model.setStorageUsage(13314398618ULL, 500ULL * 1024 * MB); // AUTH 1,200,000 tier
+    model.setStorageUsage(13314398618ULL, 500ULL * 1024 * MB);
 
     CybouFeatureAvailability caps;
     caps.account_creation = true;
@@ -102,8 +102,6 @@ void ApplyIdentity(CybouDesktopModel& model, CybouIdentityState state)
     caps.mail = true;
     caps.files = true;
     model.setFeatureAvailability(caps);
-
-    model.setAuthority(1'200'000);
 
     model.setPaymentFee(1);
     model.setContacts({
@@ -160,15 +158,15 @@ QVector<CybouMailItem> FixtureMail()
         CybouContentState::Securing)};
     securing.attachments.first().progress_percent = 42;
     mail.append(securing);
-    // Outgoing message validated by the network but not yet PoA-finalized.
-    auto validated = Mail(QStringLiteral("m-sent-validated"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
+    // Outgoing message submitted to the network but not yet PoA-finalized.
+    auto submitted = Mail(QStringLiteral("m-sent-submitted"), CybouMailFolder::Sent, QStringLiteral("stan.cybou"),
         QStringLiteral("carol.cybou"), QStringLiteral("Contract questions"),
         QStringLiteral("Two small questions about section 3 before I sign."), At(0, 10, 38));
-    validated.state = CybouContentState::Local;
-    validated.operation_state = CybouOperationState::Validated;
-    validated.operation_id = QStringLiteral("op-m-sent-validated");
-    validated.finalized_height = 0;
-    mail.append(validated);
+    submitted.state = CybouContentState::Local;
+    submitted.operation_state = CybouOperationState::Submitted;
+    submitted.operation_id = QStringLiteral("op-m-sent-submitted");
+    submitted.finalized_height = 0;
+    mail.append(submitted);
     mail.append(Mail(QStringLiteral("m-draft-1"), CybouMailFolder::Drafts, QStringLiteral("stan.cybou"),
         QStringLiteral("bobby.cybou"), QStringLiteral("Weekend plans"),
         QStringLiteral("Hey Bob, about Saturday —"), At(0, 8, 2)));
@@ -239,12 +237,9 @@ void ApplyWallet(CybouDesktopModel& model)
         item.finalized_height = state == CybouOperationState::Finalized ? 1180 + static_cast<quint64>(qHash(id) % 60) : 0;
         return item;
     };
-    // One payment of each operation state: Submitted, Validated, Finalized.
+    // One payment of each operation state: Submitted, Finalized.
     entries.append(entry(QStringLiteral("w-submitted"), CybouWalletEntryKind::Sent, -40, false, QStringLiteral("carol.cybou"),
         At(0, 10, 40), CybouOperationState::Submitted));
-    entries.append(entry(QStringLiteral("w-validated"), CybouWalletEntryKind::Sent, -75, false, QStringLiteral("alice.cybou"),
-        At(0, 10, 35), CybouOperationState::Validated));
-    entries.back().validation_signatures = 2;
     entries.append(entry(QStringLiteral("w1"), CybouWalletEntryKind::Received, 250, false, QStringLiteral("alice.cybou"), At(0, 9, 30)));
     entries.append(entry(QStringLiteral("w2"), CybouWalletEntryKind::Sent, -100, false, QStringLiteral("bobby.cybou"), At(1, 17, 44)));
     entries.append(entry(QStringLiteral("w3"), CybouWalletEntryKind::NetworkServiceFee, -4, true, {}, At(1, 12, 20)));

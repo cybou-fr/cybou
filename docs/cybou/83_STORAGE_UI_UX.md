@@ -28,7 +28,6 @@ Files uses the same shared lifecycle as Mail (`82_MAIL_UI_UX.md` §0):
 file selected
 -> chunk/encrypt locally
 -> private Files catalog/root prepared locally
--> [optional Validation signatures: evidence only]
 -> RootPublication finalized by PoA
 -> finalized-authorized chunks uploaded to storage providers
 -> durability threshold reached (2 independent remote replicas)
@@ -42,7 +41,6 @@ chunks with a valid finalized-publication admission proof.
 Status terms are distinct and must never share one indicator:
 
 ```text
-Validated    = locally valid and signed by at least one eligible Identity (evidence only)
 Finalized    = the RootPublication is part of canonical PoA history
 Authorized   = its ChunkIDs are admitted for storage by that finalized publication
 Available    = the chunks can actually be retrieved from the network
@@ -51,8 +49,7 @@ Retrievable  = this client has fetched and verified the content
 ```
 
 `Finalized` is not `Protected`; finality only authorizes storage admission.
-`Validated` displays informational confirmation only; durability (`Protected`)
-always requires verified PoA finality.
+Durability (`Protected`) always requires verified PoA finality.
 
 See also:
 

@@ -24,7 +24,7 @@
 #include <cybou/storage_audit.h>
 #include <cybou/operation_relay.h>
 #include <cybou/secret32.h>
-#include <cybou/validation_pool.h>
+#include <cybou/identity_signer.h>
 
 #include <array>
 #include <chrono>
@@ -104,7 +104,7 @@ struct NodeRuntimeConfig {
     /// \brief Локальная policy-проверка адресов для всех публичных P2P sockets.
     std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
     /// \brief Только для component tests: фиксированная сложность relay-PoW (DEC-273).
-    /// \details nullopt (production) = сложность уровня AUTH автора операции.
+    /// \details nullopt (production) = единая сложность `RequiredOperationWorkBits`.
     std::optional<uint32_t> operation_work_bits;
 };
 
@@ -234,31 +234,10 @@ enum class OperationStatusKind : uint8_t {
     HISTORY_UNAVAILABLE,
 };
 
-/// \brief Локально наблюдаемый статус операции и число удерживаемых Validation-attestations.
+/// \brief Локально наблюдаемый статус операции.
 struct OperationStatus {
     OperationStatusKind kind{OperationStatusKind::UNKNOWN};
     uint64_t finalized_height{0};
-    /// \brief Число verified eligible attestations для локально валидного, но ещё не finalized кандидата.
-    uint32_t validation_signatures{0};
-
-    /// \brief true, если кандидат локально валиден и имеет хотя бы одну eligible attestation; state не меняется.
-    bool IsValidated() const { return kind != OperationStatusKind::FINALIZED && validation_signatures > 0; }
-};
-
-/// \brief Итог приёма peer Validation-attestation для уже исполненного локального кандидата.
-enum class ValidationAcceptStatus : uint8_t {
-    /// \brief Attestation проверена и добавлена в sidecar.
-    ADDED,
-    /// \brief Та же пара (OperationID, validator AccountID) уже была сохранена.
-    DUPLICATE,
-    /// \brief Узел не держит локально валидный candidate с данным OperationID.
-    NOT_CANDIDATE,
-    /// \brief Attestation ссылается на другой finalized base.
-    STALE_BASE,
-    /// \brief Формат, eligibility или подпись attestation не прошли локальную проверку.
-    INVALID,
-    /// \brief Sidecar достиг лимитов RAM.
-    FULL,
 };
 
 /// \brief Унифицированный потокобезопасный runtime для headless и desktop Full Node.
@@ -320,24 +299,15 @@ public:
     bool IsPublicationActive(const cybou::Hash256& publication_id) const;
     /// \brief true, если финализированная аренда покрывает текущий несettled период (DEC-279).
     bool IsStorageLeaseActive(const cybou::Hash256& publication_id) const;
-    /// \brief Сколько метрируемых операций аккаунт ещё может сделать в окне следующего блока (DEC-272).
-    uint32_t RemainingEpochOperations(const AccountId& account_id) const;
 
     /// \brief Локально исполняет и подаёт операцию в candidate pool и/или relay.
     /// \param op Candidate operation; exact signed bytes будут восстановлены canonical serialization.
     /// \return Итог локального исполнения и/или relay.
     /// \post При ACCEPTED/ALREADY_PENDING/RELAY_QUEUED операция остаётся известной runtime до finalization или вытеснения.
     OperationSubmitResult SubmitOperation(ProtocolOperation op);
-    /// \brief Решает relay-PoW операции для уровня AUTH её автора (DEC-273); кэширует результат.
+    /// \brief Решает relay-PoW операции (DEC-273, DEC-284); кэширует результат.
     /// \return Nonce или std::nullopt, если операция не сериализуется.
     std::optional<uint64_t> PrepareOperationWork(const ProtocolOperation& op);
-    /// \brief Только для PoA signer: подписывает AUTH GRANT/BURN, валидный лишь для следующего блока.
-    /// \param action Вид PoaAuthAdjustment: GRANT или BURN.
-    /// \param target Target AccountID изменения AUTH.
-    /// \param amount Величина изменения AUTH.
-    /// \return Итог локальной подготовки и подачи candidate operation.
-    /// \pre Локальный PoA signer уже включён и проходит safety checks.
-    OperationSubmitResult SubmitPoaAuthAdjustment(PoaAuthAction action, const AccountId& target, uint64_t amount);
     /// \brief Только для PoA signer: подписывает и ставит в pool StorageSettlement следующего периода.
     /// \param period_start_utc UTC-начало периода; после первого settlement обязано совпасть с курсором.
     /// \param entries Выплаты providers, строго упорядоченные по (publication, payout account).
@@ -383,27 +353,8 @@ public:
     /// \pre exact_bytes должны кодировать ту же операцию, которую этот Full Node готов исполнить сам.
     OperationRelayEnqueueStatus EnqueueRelayedOperation(std::span<const unsigned char> exact_bytes,
         uint64_t work_nonce, bool allow_seen_retry = false, std::optional<std::string> source_peer = std::nullopt);
-    /// \brief Настраивает локальную Identity для attestation кандидатов; nullptr очищает signer.
-    /// \param signer Новый signer или nullptr для полного отключения локального Validation.
-    /// \post При новом signer runtime немедленно пытается аттестовать все текущие локальные кандидаты.
-    void SetValidationSigner(ValidationSignerRef signer);
-    /// \brief Проверяет право локального signer'а подписывать Validation в текущем finalized state.
-    /// \return true только если signer установлен, AccountID существует и имеет finalized AUTH > 10 000 000.
-    bool IsLocalValidationEligible() const;
-    /// \brief Проверяет peer-attestation только против локального кандидата и собственного finalized state.
-    /// \param attestation Peer Validation-attestation.
-    /// \return Итог приёма attestation в локальный sidecar.
-    /// \pre Узел уже должен удерживать локально валидную candidate operation с тем же OperationID.
-    ValidationAcceptStatus AcceptValidationAttestation(const ValidationAttestation& attestation);
-    /// \brief Возвращает удерживаемые attestations для одной локальной candidate operation.
-    /// \param operation_id Искомый OperationID.
-    /// \return Копия известных attestation-ов; пустой список, если sidecar ничего не знает.
-    std::vector<ValidationAttestation> GetValidationAttestations(const cybou::Hash256& operation_id) const;
-    /// \brief Возвращает следующую attestation, ещё неизвестную вызывающей стороне.
-    /// \param skip Предикат для пропуска уже известных пар (OperationID, AccountID).
-    /// \return Первая подходящая attestation или std::nullopt.
-    std::optional<ValidationAttestation> NextValidationAttestation(
-        const std::function<bool(const ValidationPool::Key&)>& skip) const;
+    /// \brief Настраивает разблокированную Identity узла для payout binding; nullptr очищает signer.
+    void SetIdentitySigner(IdentitySignerRef signer);
     /// \brief Число локально исполненных, но ещё не finalized кандидатов.
     /// \return Размер candidate pool.
     size_t CandidateOperationCount() const;
@@ -433,7 +384,7 @@ public:
     /// \param block Финализованный блок с PoA certificate.
     /// \param sync true просит синхронно сбросить commit в backing store.
     /// \return Итог verified commit.
-    /// \post При успехе candidate pool и Validation sidecar приведены к новому finalized head.
+    /// \post При успехе candidate pool приведён к новому finalized head.
     BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
 
     /// \brief Читает finalized block по высоте из локальной canonical history.
@@ -624,8 +575,6 @@ private:
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
     void RevalidateCandidates();
-    /// \brief Подписывает одну локально принятую candidate operation на текущем finalized base, если signer eligible.
-    void AttestCandidate(const cybou::Hash256& operation_id);
     NodeRuntimeConfig m_config;
     cybou::Hash256 m_network_binding;
     std::unique_ptr<KVStore> m_db;
@@ -645,8 +594,7 @@ private:
     BlockProductionStatus m_production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};
     std::optional<CybouBlock> m_production_candidate;
     std::optional<FinalizedBlock> m_production_finalized;
-    ValidationPool m_validation_pool;
-    ValidationSignerRef m_validation_signer;
+    IdentitySignerRef m_identity_signer;
     OperationRelay m_operation_relay;
     std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
     std::map<cybou::Hash256, OperationStatus> m_recent_operation_status;

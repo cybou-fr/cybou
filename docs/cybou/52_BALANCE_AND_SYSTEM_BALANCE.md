@@ -1,12 +1,13 @@
-# 52 — Balance, System Balance and AUTH
+# 52 — Balance and System Balance
 
-Every AccountState holds three values:
+Every AccountState holds two values:
 
 ```text
 Balance         transferable CYBOU
 System Balance  non-transferable CYBOU, pays protocol services
-AUTH            non-transferable separate unit, Validation eligibility
 ```
+
+There is no AUTH or other non-CYBOU account unit (DEC-284).
 
 CYBOU is one indivisible native asset:
 
@@ -45,15 +46,7 @@ SystemLock:
 ```text
 Balance        -= X
 System Balance += X
-AUTH           += 1   (flat finalized-operation reward, independent of X)
 ```
-
-## AUTH
-
-AUTH is not CYBOU and is excluded from CYBOU supply. Onboarding credit
-leaves AUTH unchanged, and no CYBOU amount (locked, held or spent) scales AUTH. AUTH issuance and burn are defined in
-[`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md). Finalized AUTH above
-10,000,000 enables Validation signatures, never PoA finalization.
 
 ## Storage economy (implemented in M5; active from the M7 genesis)
 

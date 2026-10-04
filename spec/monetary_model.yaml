@@ -35,31 +35,10 @@ balances:
     transferable: false
     reversible_to_balance: false
     pays_protocol_services: true
-  Authority:
-    unit: AUTH
-    transferable: false
-    canonical_state: AccountState.authority
-    fixed_supply: false
-    included_in_cybou_supply: false
-    validation_threshold_exclusive: 10000000
-    poa_power: false
-
-auth:
-  validation_threshold_exclusive: 10000000
-  genesis_allocation: true
-  finalized_identity_operation_reward: 1
-  account_create_rewarded: false
-  poa_adjustment_operation: PoaAuthAdjustment
-  poa_adjustment_actions: [GRANT, BURN]
-  poa_adjustment_rewarded: false
-  burn_floor: 0
-  transfer: false
-  automatic_penalties: not_frozen
 
 cybou_supply:
   conservation: exact_per_block
   includes: [Balance, SystemBalance, StorageEscrow, unclaimed_genesis_allocation_balances]
-  excludes: [Authority]
 
 fees:
   source: SystemBalance
@@ -72,7 +51,6 @@ fees:
   priority_fee: false
   burn_fraction: 0
   batching: false
-  validator_rewards: false
   storage_rewards: false  # storage rent is not a fee: StorageEscrow -> providers
   atomic: true
 

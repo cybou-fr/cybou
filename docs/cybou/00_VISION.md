@@ -20,7 +20,7 @@ The product contracts are `82_MAIL_UI_UX.md`, `83_STORAGE_UI_UX.md`,
 
 CYBOU is commercially operated. The active protocol has one offline Network Key
 owning the signed genesis, one genesis-authorized Central Authority PoA finalizer,
-optional advisory Validation by eligible Identities, and independently validating full nodes.
+and independently validating full nodes.
 This is a centralized finality trust model; CYBOU does not claim Byzantine fault
 tolerance. The client verifies finalized history rather than trusting a hosted
 gateway.

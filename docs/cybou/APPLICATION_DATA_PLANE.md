@@ -59,8 +59,7 @@ capsule, persists the exact publication intent in the Application DB before
 signing, and submits through `IdentityOperationCoordinator`. Resume never
 builds a replacement operation while the recorded one is unresolved. Job
 phases are WAITING_FINALITY, SECURING (finalized, awaiting remote durability),
-PROTECTED, and NEEDS_ATTENTION. A `Validated` indicator may accompany
-WAITING_FINALITY as evidence only; it changes no phase or storage behavior.
+PROTECTED, and NEEDS_ATTENTION.
 
 ### StorageService
 
@@ -80,7 +79,7 @@ No separate user-visible provider layer exists.
 
 `StorageService` places only finalized publications: the ordered chunk list
 must reproduce the publication's chunk-authorization root, and per-chunk proofs
-are rebuilt from it. Validation never triggers placement.
+are rebuilt from it.
 Each chunk goes to distinct CSPRNG-selected CYBOU P2P storage providers until the remote
 target is met (1 in development, 2 in Beta; plus local copy = 3 physical copies total);
 STORED and ALREADY_STORED both count, the local copy never does.

@@ -524,7 +524,7 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_p2p)
         providers.push_back(std::move(provider));
     }
     // A provider whose node runs an Identity binds its StorageId to that account (DEC-282).
-    providers[0]->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(identity->GetKeyStore()));
+    providers[0]->SetIdentitySigner(std::make_shared<cybou::CybouKeyStoreIdentitySigner>(identity->GetKeyStore()));
     for (auto& server : servers) listeners.emplace_back([&stopping, s = server.get()] { s->Run(stopping); });
     {
         // A Full Node whose runtime reaches providers only through CYBOU P2P.

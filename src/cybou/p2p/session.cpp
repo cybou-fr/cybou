@@ -304,8 +304,6 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::GET_CHUNK_AUTHORIZATION_PROOF:
     case MessageType::CHUNK_AUTHORIZATION_PROOF:
     case MessageType::OP_POLL:
-    case MessageType::VALIDATION_ATTESTATION_POLL:
-    case MessageType::VALIDATION_ATTESTATION:
     case MessageType::STORAGE_AUDIT_CHALLENGE:
     case MessageType::STORAGE_AUDIT_RESPONSE:
         return true;
@@ -998,21 +996,6 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
     return result && SendOperationResult(*result, deadline) && static_cast<bool>(*result);
 }
 
-bool PeerSession::PollValidationAttestation(CybouNodeRuntime& runtime)
-{
-    if (!m_peer) return false;
-    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
-    if (!Write(Frame{MessageType::VALIDATION_ATTESTATION_POLL, {}}, deadline)) return false;
-    const auto response = Read(deadline);
-    if (!response || response->type != MessageType::VALIDATION_ATTESTATION || response->payload.empty()) return false;
-    const auto attestation = DeserializeValidationAttestation(response->payload);
-    if (!attestation) return false;
-    // Stored (and offered onward) only if this node executed the operation
-    // itself and the signer is eligible in this node's finalized state.
-    (void)runtime.AcceptValidationAttestation(*attestation);
-    return true;
-}
-
 std::vector<std::pair<std::string, uint16_t>> PeerSession::RequestPeers(std::chrono::steady_clock::time_point deadline)
 {
     if (!m_peer) return {};
@@ -1292,24 +1275,6 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         // including a later-connected PoA holder, still need the candidate.
         if (result && static_cast<bool>(*result)) m_served_operations.insert(item->operation_id);
         return result.has_value();
-    }
-    if (request->type == MessageType::VALIDATION_ATTESTATION_POLL) {
-        if (!m_peer || !request->payload.empty()) return false;
-        if (const auto tip = runtime.GetFinalizedTip(); tip && *tip != m_served_attestation_base) {
-            m_served_attestation_base = *tip;
-            m_served_attestations.clear();
-        }
-        std::vector<unsigned char> payload;
-        const auto next = runtime.NextValidationAttestation([&](const ValidationPool::Key& key) {
-            return m_served_attestations.contains(key);
-        });
-        if (next) {
-            if (const auto bytes = SerializeValidationAttestation(*next)) {
-                payload = *bytes;
-                m_served_attestations.insert({next->operation_id, next->validator_account_id});
-            }
-        }
-        return Write(Frame{MessageType::VALIDATION_ATTESTATION, std::move(payload)});
     }
     if (request->type == MessageType::PING) {
         return request->payload.size() == 8 && Write(Frame{MessageType::PONG, request->payload});

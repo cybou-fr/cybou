@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     params.account_creation_work_bits = 0;
     CybouState state{};
     state.genesis_allocations.emplace(*recovery_id,
-        GenesisAllocation{.balance = 100'000'000, .authority = 1'000'001, .label = "cybou"});
+        GenesisAllocation{.balance = 100'000'000, .label = "cybou"});
     BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
     const uint64_t supply = TotalCybou(state);
     const auto genesis_bytes = SerializeCybouState(state);
@@ -95,7 +95,6 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     BOOST_CHECK_EQUAL(state.accounts.at(account).balance, 100'000'000u);
     // The Treasury claimant receives no onboarding bonus: it is the bonus source (DEC-277).
     BOOST_CHECK_EQUAL(state.accounts.at(account).system_balance, 0u);
-    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 1'000'001u);
     BOOST_CHECK(state.genesis_allocations.at(*recovery_id).claimed_by == account);
     BOOST_REQUIRE(state.names.PrimaryName(account));
     BOOST_CHECK_EQUAL(*state.names.PrimaryName(account), "cybou");
@@ -106,25 +105,12 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_is_claimed_once_by_its_recovery_key)
     const auto restored = DeserializeCybouState(*bytes);
     BOOST_REQUIRE(restored);
     BOOST_CHECK(SerializeCybouState(*restored) == bytes);
-    BOOST_CHECK_EQUAL(restored->accounts.at(account).authority, 1'000'001u);
-    BOOST_CHECK_EQUAL(restored->genesis_allocations.at(*recovery_id).authority, 1'000'001u);
-
-    // AUTH is committed by the state root but excluded from CYBOU supply.
-    auto more_auth = state;
-    ++more_auth.accounts.at(account).authority;
-    BOOST_CHECK_EQUAL(TotalCybou(more_auth), TotalCybou(state));
-    BOOST_CHECK(CybouStateHash(more_auth) != CybouStateHash(state));
-    auto more_genesis_auth = state;
-    ++more_genesis_auth.genesis_allocations.at(*recovery_id).authority;
-    BOOST_CHECK_EQUAL(TotalCybou(more_genesis_auth), TotalCybou(state));
-    BOOST_CHECK(CybouStateHash(more_genesis_auth) != CybouStateHash(state));
     auto trailing = *bytes;
     trailing.push_back(0);
     BOOST_CHECK(!DeserializeCybouState(trailing));
 
-    // A second AccountCreate never claims the same genesis AUTH again.
+    // A second AccountCreate never claims the same genesis allocation again.
     BOOST_CHECK(ApplyAccountCreate(create, network_binding, 2, params, state) != AccountCreateStateError::NONE);
-    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 1'000'001u);
 
     // A reserved label never validates without its genesis grant.
     auto forged = state;
@@ -394,8 +380,6 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     FundTestTreasury(state, params.onboarding_bonus);
 
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
-    BOOST_CHECK_EQUAL(state.accounts.at(account).authority, 0U);
-    state.accounts.at(account).authority = 1'000'001;
 
     const IdentityAuthorization next_auth{*new_recovery, *new_authorization};
     const auto account_bytes = account.Value();
@@ -442,8 +426,6 @@ BOOST_AUTO_TEST_CASE(identity_rotate_wire_and_block_execution)
     const auto new_recovery_id = ComputeRecoveryKeyId(*new_recovery);
     BOOST_REQUIRE(new_recovery_id);
     BOOST_CHECK(rotated.state->identities.FindByRecoveryKeyId(*new_recovery_id) == account);
-    // IdentityRotate preserves the account's AUTH and earns 0 AUTH (security maintenance).
-    BOOST_CHECK_EQUAL(rotated.state->accounts.at(account).authority, 1'000'001U);
     const auto replay = ExecuteBlockOperations(*rotated.state, {operation}, network_binding, 2, params);
     BOOST_CHECK(replay.error == BlockExecutionError::INVALID_IDENTITY_ROTATE);
 }
@@ -479,7 +461,6 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     // A finalized AccountCreate earns no AUTH.
     const auto created = ExecuteBlockOperations(state, {ProtocolOperation{create}}, network_binding, 0, params);
     BOOST_REQUIRE(created);
-    BOOST_CHECK_EQUAL(created.state->accounts.at(account).authority, 0U);
     BOOST_REQUIRE(ApplyAccountCreate(create, network_binding, 0, params, state) == AccountCreateStateError::NONE);
 
     // Fund account balance
@@ -529,14 +510,7 @@ BOOST_AUTO_TEST_CASE(system_lock_wire_and_execution)
     BOOST_CHECK(block_res.state->accounts.at(account).balance == 30);
     BOOST_CHECK(block_res.state->accounts.at(account).system_balance == params.onboarding_bonus + 20);
     BOOST_CHECK(block_res.state->identities.Find(account)->nonce == 1);
-    // A finalized SystemLock earns a flat +1 AUTH regardless of the locked amount.
-    BOOST_CHECK_EQUAL(block_res.state->accounts.at(account).authority, 1U);
     BOOST_CHECK_EQUAL(TotalCybou(*block_res.state), TotalCybou(state));
-    auto saturated = state;
-    saturated.accounts.at(account).authority = std::numeric_limits<uint64_t>::max();
-    const auto saturated_res = ExecuteBlockOperations(saturated, {lock_op}, network_binding, 1, params);
-    BOOST_REQUIRE(saturated_res);
-    BOOST_CHECK_EQUAL(saturated_res.state->accounts.at(account).authority, std::numeric_limits<uint64_t>::max());
 
     // Replay stale nonce fails
     const auto replay = ExecuteBlockOperations(*block_res.state, {lock_op}, network_binding, 2, params);
@@ -693,14 +667,8 @@ BOOST_AUTO_TEST_CASE(name_registry_validation_and_lifecycle)
     BOOST_CHECK(std::holds_alternative<AuthorizedNameReveal>(*decoded_reveal_wire));
     BOOST_CHECK(ComputeOperationId(*decoded_reveal_wire) == ComputeOperationId(reveal_proto_op));
 
-    // Adversarial: a T0 Identity gets one operation per block, so a reveal in the commit block
-    // is refused by the tier limit before any name rule (DEC-272).
-    const auto same_block_res = ExecuteBlockOperations(*commit_block.state, {reveal_proto_op}, network_binding, 10, params);
-    BOOST_CHECK(same_block_res.error == BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-    // Premature reveal at height 10 (needs min depth 1 -> height >= 11) for a T1 Identity.
-    auto t1_state = *commit_block.state;
-    t1_state.accounts.at(reveal_op.authorization.account_id).authority = 10'000;
-    const auto premature_res = ExecuteBlockOperations(t1_state, {reveal_proto_op}, network_binding, 10, params);
+    // Premature reveal at height 10 (needs min depth 1 -> height >= 11).
+    const auto premature_res = ExecuteBlockOperations(*commit_block.state, {reveal_proto_op}, network_binding, 10, params);
     BOOST_CHECK(premature_res.error == BlockExecutionError::INVALID_NAME_REVEAL);
     BOOST_CHECK(premature_res.name_reveal_error == NameRevealError::INSUFFICIENT_COMMIT_DEPTH);
 
@@ -924,7 +892,7 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     const auto recovery_id = *ComputeRecoveryKeyId(authority_create.authorization.recovery_root);
     auto state = CreateDevGenesisState();
     state.genesis_allocations.emplace(recovery_id, GenesisAllocation{
-        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
+        .balance = 100'000'000, .label = std::string{CENTRAL_AUTHORITY_NAME}});
     const auto initial_supply = TotalCybou(state);
     BOOST_REQUIRE(ApplyAccountCreate(sender_create, network, 0, params, state) == AccountCreateStateError::NONE);
     // Onboarding is a Treasury transfer, not issuance (DEC-277).
@@ -1042,104 +1010,6 @@ BOOST_AUTO_TEST_CASE(central_authority_fee_lifecycle_and_atomic_failures)
     BOOST_CHECK_EQUAL(state.accounts.at(authority).balance, previous_ca_balance - 5 + params.payment_fee);
     BOOST_CHECK_EQUAL(state.accounts.at(authority).system_balance, previous_ca_budget - params.payment_fee);
     BOOST_CHECK_EQUAL(TotalCybou(state), previous_supply);
-}
-
-BOOST_AUTO_TEST_CASE(authority_earning_utility_bound_and_velocity_capped)
-{
-    using namespace cybou;
-    cybou::Hash256 network{};
-    network.begin()[0] = 0x11;
-    auto params = DevProtocolParameters();
-    params.account_creation_work_bits = 0;
-
-    const auto make_account = [&](unsigned char seed_byte) {
-        std::array<unsigned char, 32> recovery{}, authorization{};
-        recovery[0] = seed_byte;
-        authorization[0] = static_cast<unsigned char>(seed_byte + 1);
-        cybou::Hash256 raw{};
-        raw.begin()[0] = seed_byte;
-        const AccountId account{raw};
-        const IdentityAuthorization keys{
-            *DeriveIdentityPublicKey(recovery, IdentityKeyPurpose::RECOVERY_ROOT),
-            *DeriveIdentityPublicKey(authorization, IdentityKeyPurpose::AUTHORIZATION)};
-        const auto binding = test::MakeIdentityKemBinding(network, account, keys);
-        AccountCreateOp create{account, keys, binding.package,
-            {.network_binding = network, .account_id = account, .authorization_commitment = binding.authorization_commitment},
-            *SignIdentityMessage(recovery, IdentityKeyPurpose::RECOVERY_ROOT, binding.pop_digest),
-            *SignIdentityMessage(authorization, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest)};
-        return std::make_pair(create, authorization);
-    };
-
-    const auto [sender_create, sender_auth_seed] = make_account(0x51);
-    const auto [recipient_create, recipient_auth_seed] = make_account(0x61);
-    const auto account_id = sender_create.account_id;
-    const auto recipient_id = recipient_create.account_id;
-
-    auto state = CreateDevGenesisState();
-    state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{
-        .balance = 100'000'000, .authority = 1'000'001, .label = std::string{CENTRAL_AUTHORITY_NAME}});
-    BOOST_REQUIRE(ApplyAccountCreate(sender_create, network, 0, params, state) == AccountCreateStateError::NONE);
-    BOOST_REQUIRE(ApplyAccountCreate(recipient_create, network, 0, params, state) == AccountCreateStateError::NONE);
-
-    state.accounts.at(account_id).balance = 1000;
-    state.accounts.at(recipient_id).balance = 100;
-
-    // 1. Payment does NOT earn AUTH
-    AuthorizedPayment payment{
-        {.account_id = account_id, .nonce = 0, .kind = IdentityOperationKind::PAYMENT},
-        {recipient_id, 10}
-    };
-    payment.authorization.payload_commitment = *ComputePaymentPayloadCommitment(payment.payment);
-    payment.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
-        *ComputeIdentityOperationDigest(network, payment.authorization));
-
-    const auto payment_res = ExecuteBlockOperations(state, {payment}, network, 1, params);
-    BOOST_REQUIRE(payment_res);
-    BOOST_CHECK_EQUAL(payment_res.state->accounts.at(account_id).authority, 0U);
-
-    // 2. Velocity limit: two SystemLock operations by the same account in the SAME block
-    AuthorizedSystemLock lock1{
-        {.account_id = account_id, .nonce = 1, .kind = IdentityOperationKind::SYSTEM_LOCK},
-        SystemLockPayload{5}
-    };
-    lock1.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock1.lock);
-    lock1.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
-        *ComputeIdentityOperationDigest(network, lock1.authorization));
-
-    AuthorizedSystemLock lock2{
-        {.account_id = account_id, .nonce = 2, .kind = IdentityOperationKind::SYSTEM_LOCK},
-        SystemLockPayload{5}
-    };
-    lock2.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock2.lock);
-    lock2.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
-        *ComputeIdentityOperationDigest(network, lock2.authorization));
-
-    // A T0 Identity may not even place two operations in one block (DEC-272).
-    BOOST_CHECK(ExecuteBlockOperations(*payment_res.state, {lock1, lock2}, network, 2, params).error ==
-        BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-    // At T1 (5 per block) both locks fit: authority must increase by only +1 (not +2)
-    auto t1_state = *payment_res.state;
-    t1_state.accounts.at(account_id).authority = 10'000;
-    const auto double_lock_res = ExecuteBlockOperations(t1_state, {lock1, lock2}, network, 2, params);
-    BOOST_REQUIRE(double_lock_res);
-    BOOST_CHECK_EQUAL(double_lock_res.state->accounts.at(account_id).authority, 10'001U);
-
-    // 3. In the next block, another SystemLock grants +1 AUTH
-    AuthorizedSystemLock lock3{
-        {.account_id = account_id, .nonce = 3, .kind = IdentityOperationKind::SYSTEM_LOCK},
-        SystemLockPayload{5}
-    };
-    lock3.authorization.payload_commitment = *ComputeSystemLockPayloadCommitment(lock3.lock);
-    lock3.authorization.signature = *SignIdentityMessage(sender_auth_seed, IdentityKeyPurpose::AUTHORIZATION,
-        *ComputeIdentityOperationDigest(network, lock3.authorization));
-
-    const auto next_block_res = ExecuteBlockOperations(*double_lock_res.state, {lock3}, network, 3, params);
-    BOOST_REQUIRE(next_block_res);
-    BOOST_CHECK_EQUAL(next_block_res.state->accounts.at(account_id).authority, 10'002U);
-
-    // 4. Verify AuthorityEarningAccount behavior across op types
-    BOOST_CHECK(!AuthorityEarningAccount(payment));
-    BOOST_CHECK(AuthorityEarningAccount(lock1) == account_id);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

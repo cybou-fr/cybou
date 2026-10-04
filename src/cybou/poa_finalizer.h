@@ -11,7 +11,6 @@
 #include <cybou/poa_signing_journal.h>
 #include <cybou/recovery_phrase.h>
 #include <cybou/block.h>
-#include <cybou/poa_auth_adjustment.h>
 #include <cybou/poa_signer.h>
 
 namespace cybou {
@@ -68,9 +67,6 @@ public:
     /// \post Без успешного `PrepareToSign` подпись не выпускается.
     PoaSigningResult SignFinality(uint64_t finalized_height, const cybou::Hash256& finalized_tip,
         const CybouBlock& block);
-    /// \brief Заполняет PoA-подпись domain-separated AUTH adjustment.
-    /// \return `true`, если подпись выпущена и локально самопроверена; `false` при любом сомнении.
-    bool SignAuthAdjustment(PoaAuthAdjustment& adjustment) const;
     /// \brief Заполняет PoA-подпись StorageSettlement одного периода (DEC-282).
     /// \return `true`, если подпись выпущена и локально самопроверена.
     bool SignStorageSettlement(StorageSettlement& settlement) const;

@@ -61,9 +61,7 @@ enum class BlockExecutionError : uint8_t {
     INVALID_NAME_COMMIT,         ///< Одна из операций `NameCommit` отвергнута.
     INVALID_NAME_REVEAL,         ///< Одна из операций `NameReveal` отвергнута.
     INVALID_ROOT_PUBLICATION,    ///< Одна из операций `RootPublication` отвергнута.
-    INVALID_POA_AUTH_ADJUSTMENT, ///< Одна из операций `PoaAuthAdjustment` отвергнута.
     INVALID_REVOKE_PUBLICATION,  ///< Одна из операций `RevokePublication` отвергнута.
-    OPERATION_LIMIT_EXCEEDED,    ///< Identity превысила лимит операций своего уровня AUTH на блок или эпоху.
     INVALID_STORAGE_LEASE,       ///< Одна из операций `StorageLease` отвергнута.
     INVALID_STORAGE_SETTLEMENT,  ///< `StorageSettlement` отвергнут.
     SUPPLY_CHANGED,              ///< Исполнение изменило TotalCybou: mint и burn запрещены (DEC-277).
@@ -81,7 +79,6 @@ struct BlockExecutionResult {
     NameCommitError name_commit_error{NameCommitError::NONE}; ///< Детализация для `INVALID_NAME_COMMIT`.
     NameRevealError name_reveal_error{NameRevealError::NONE}; ///< Детализация для `INVALID_NAME_REVEAL`.
     RootPublicationError root_publication_error{RootPublicationError::NONE}; ///< Детализация для `INVALID_ROOT_PUBLICATION`.
-    PoaAuthAdjustmentError poa_auth_error{PoaAuthAdjustmentError::NONE}; ///< Детализация для `INVALID_POA_AUTH_ADJUSTMENT`.
     RevokePublicationError revoke_error{RevokePublicationError::NONE}; ///< Детализация для `INVALID_REVOKE_PUBLICATION`.
     StorageLeaseError lease_error{StorageLeaseError::NONE}; ///< Детализация для `INVALID_STORAGE_LEASE`.
     StorageSettlementError settlement_error{StorageSettlementError::NONE}; ///< Детализация для `INVALID_STORAGE_SETTLEMENT`.
@@ -93,11 +90,6 @@ struct BlockExecutionResult {
 
     explicit operator bool() const { return error == BlockExecutionError::NONE && state.has_value() && state_root.has_value(); }
 };
-
-/// \brief Плоская награда AUTH за один финализированный utility-оператор в пределах блока.
-/// \details Значение зафиксировано правилами `docs/cybou/57_IDENTITY_AUTHORITY.md`: utility даёт +1 AUTH,
-/// а velocity limit применяет не более одного начисления на аккаунт за блок.
-inline constexpr uint64_t AUTH_PER_FINALIZED_OPERATION{1};
 
 /// \brief Инкрементальное применение операций блока поверх неизменяемого родительского состояния.
 class BlockExecutor {
@@ -139,24 +131,21 @@ private:
     CybouState m_candidate;
     cybou::Hash256 m_network_binding;
     uint64_t m_block_height{0};
-    uint64_t m_epoch{0};
     uint64_t m_initial_supply{0};
     size_t m_account_creates{0};
     CybouProtocolParameters m_params;
     const IdentityHybridPublicKey* m_poa_key{nullptr};
-    std::unordered_set<std::array<unsigned char, 32>, ByteArray32Hasher> m_adjustment_digests;
-    std::unordered_set<AccountId, AccountIdHasher> m_auth_credited_accounts;
     bool m_valid{false};
     BlockExecutionError m_init_error{BlockExecutionError::NONE};
 };
 
-/// \brief Выполняет операции блока, сохраняя консенсусные инварианты supply, AUTH и `state root`.
+/// \brief Выполняет операции блока, сохраняя консенсусные инварианты TotalCybou и `state root`.
 /// \param parent Финализированное родительское состояние.
 /// \param operations Упорядоченный список кандидат-операций блока.
 /// \param network_binding Привязка активной сети.
 /// \param block_height Высота исполняемого блока.
 /// \param params Активные protocol parameters.
-/// \param poa_key Genesis-authorized PoA key для проверки `PoaAuthAdjustment`; `nullptr` запрещает такие операции.
+/// \param poa_key Genesis-authorized PoA key для проверки `StorageSettlement`; `nullptr` запрещает такие операции.
 /// \return Полный результат исполнения с первым детализированным отказом либо итоговым состоянием.
 /// \pre `parent` должно быть канонически валидным.
 /// \post При неуспехе не публикуется частично изменённое состояние; вызывающая сторона получает только диагностический код.

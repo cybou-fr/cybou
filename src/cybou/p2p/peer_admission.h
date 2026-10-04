@@ -57,7 +57,7 @@ private:
     std::vector<Range> m_ranges;
 };
 
-/// \brief Локальная политика допуска, которая не влияет на консенсус, Identity и AUTH.
+/// \brief Локальная политика допуска, которая не влияет на консенсус, Identity и балансы.
 class PeerAdmissionPolicy final {
 public:
     /// \brief Создает готовую политику из уже загруженного датасета.

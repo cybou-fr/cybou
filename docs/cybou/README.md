@@ -50,9 +50,8 @@ from or conflicting with higher levels:
 | [`43_STRATEGIC_SOURCE_REGISTER.md`](43_STRATEGIC_SOURCE_REGISTER.md) | Register of authoritative sources and references | Level 6 | Active |
 | [`46_COPYRIGHT_ATTRIBUTION_POLICY.md`](46_COPYRIGHT_ATTRIBUTION_POLICY.md) | IP, attribution, and license compliance | Level 6 | Active |
 | [`50_EMAIL_SECURITY_MODEL.md`](50_EMAIL_SECURITY_MODEL.md) | End-to-end encrypted email privacy model | Level 5 | Product target |
-| [`52_BALANCE_AND_SYSTEM_BALANCE.md`](52_BALANCE_AND_SYSTEM_BALANCE.md) | Balance and System Balance semantics | Level 2 | Active |
+| [`52_BALANCE_AND_SYSTEM_BALANCE.md`](52_BALANCE_AND_SYSTEM_BALANCE.md) | Balance and System Balance semantics (no AUTH) | Level 2 | Active |
 | [`56_OWNER_OPERATOR_AND_RESILIENCE.md`](56_OWNER_OPERATOR_AND_RESILIENCE.md) | Operational resilience and operator key handling | Level 6 | Active |
-| [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md) | Canonical AUTH account value, issuance/burn and Validation eligibility | Level 2 | Active |
 | [`68_OPERATOR_KEY_SEPARATION.md`](68_OPERATOR_KEY_SEPARATION.md) | PoA and operator key role custody | Level 2 | Active |
 | [`70_ACCOUNT_CREATION_ANTI_SYBIL.md`](70_ACCOUNT_CREATION_ANTI_SYBIL.md) | Permissionless AccountCreate, anti-Sybil work, and Treasury-funded onboarding | Level 2 | Active |
 | [`71_WINDOWS_MINGW_BUILD.md`](71_WINDOWS_MINGW_BUILD.md) | Local Windows MinGW + vcpkg build procedure | — | Active |
@@ -81,5 +80,3 @@ from or conflicting with higher levels:
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
 | [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |
-| [`VALIDATION.md`](VALIDATION.md) | Validation signatures after independent execution, eligibility (> 10M AUTH) | Level 2 | Active |
-| [`future/VALIDATION.md`](future/VALIDATION.md) | Archived historical note on early advisory validation design | Future | Historical |

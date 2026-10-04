@@ -637,8 +637,6 @@ bool PublicationService::ForgetRevokedJob(const std::string_view local_job_id)
 
 std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const PublicationNeeded& needed)
 {
-    // Leave room for what the user does next: revocation is housekeeping.
-    constexpr std::uint32_t RESERVED_OPERATIONS{5};
     std::lock_guard lock{m_mutex};
     if (!m_application_db.IsUnlocked() || !needed) return std::nullopt;
     const auto me = m_identity.GetAccountId();
@@ -658,7 +656,6 @@ std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const Publi
         m_application_db.Erase(REVOKING_KEY); // refused (e.g. window full): try again later
         return std::nullopt;
     }
-    if (m_runtime.RemainingEpochOperations(*me) <= RESERVED_OPERATIONS) return std::nullopt;
     // Work still on its way may reuse content of a finalized publication (a mail
     // attaching a file): decide only once every own job is finalized.
     const auto all_jobs = Jobs();

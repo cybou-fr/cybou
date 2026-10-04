@@ -68,12 +68,10 @@ service d'un réseau privé d'entreprise.
   initial et adresses bootstrap) doivent être compilées dans le client, sans
   fichier réseau officiel chargé à l'exécution. La clé PoA autorisée par la
   genèse est un rôle distinct de l'identité ordinaire `cybou.cybou` et signe les blocs.
-  Chaque nœud complet exécute lui-même chaque opération candidate. Une identité
-  dont l'AUTH finalisée dépasse 10 000 000 peut y ajouter une signature de
-  Validation, simple preuve pré-finalisation. L'AUTH est stockée dans l'état du
-  compte, non transférable et ne fait pas partie des CYBOU ; elle gouverne
-  également l'échelle anti-spam du débit d'opérations, mais plus le stockage. Le PoA
-  ré-exécute tout et reste seul à finaliser.
+  Chaque nœud complet exécute lui-même chaque opération candidate. Il n'existe
+  ni AUTH ni Validation : le spam est payé en CYBOU (frais, loyer de stockage)
+  et par une preuve de travail de relais unique. Le PoA ré-exécute tout et reste
+  seul à finaliser.
 - **Admission réseau.** Les commandes réseau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
   validée ; le développement utilise DEVNET avec les mêmes règles d’admission.

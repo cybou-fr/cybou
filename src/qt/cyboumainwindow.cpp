@@ -812,10 +812,6 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         save(QStringLiteral("home-active"));
         showPage(CybouPage::Identity);
         save(QStringLiteral("identity-active"));
-        auto* identity = static_cast<IdentityPage*>(page(CybouPage::Identity));
-        identity->showAuthorityDetails(true);
-        save(QStringLiteral("identity-authority"));
-        identity->showAuthorityDetails(false);
 
         showPage(CybouPage::Mail);
         mail->setView(EmailPage::View::Inbox);
@@ -858,7 +854,7 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
 
         showPage(CybouPage::Wallet);
         save(QStringLiteral("wallet"));
-        save(QStringLiteral("wallet-validated")); // fixture activity: Waiting / Validated / Finalized
+        save(QStringLiteral("wallet-pending")); // fixture activity: Waiting / Finalized
         showPage(CybouPage::Diagnostics);
         save(QStringLiteral("diagnostics"));
         showPage(CybouPage::Settings);
@@ -872,12 +868,10 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         authority.finalized_height = 48'213;
         authority.candidates = 4;
         authority.identities = 1'284;
-        authority.validators = 2;
         authority.names = 911;
         authority.pending_name_commits = 7;
         authority.total_balance = 12'480'300;
         authority.total_system_balance = 3'902'144;
-        authority.total_authority = 21'640'882;
         authority.storage_escrow = 1'204'500;
         model->setNetworkAuthority(authority);
         showPage(CybouPage::NetworkAuthority);

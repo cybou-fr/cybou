@@ -97,16 +97,14 @@ void Verify(const std::filesystem::path& dir)
     const auto allocation = network.genesis_state.genesis_allocations.find(*recovery_id);
     Require(allocation != network.genesis_state.genesis_allocations.end());
     Require(allocation->second.label == CENTRAL_AUTHORITY_NAME &&
-        allocation->second.balance == CENTRAL_AUTHORITY_GENESIS_BALANCE &&
-        allocation->second.authority == GENESIS_ALLOCATION_AUTHORITY);
+        allocation->second.balance == CENTRAL_AUTHORITY_GENESIS_BALANCE);
     const auto bootstrap_recovery = DeriveIdentityPublicKey(bootstrap_seed.Get(), IdentityKeyPurpose::RECOVERY_ROOT);
     const auto bootstrap_id = bootstrap_recovery ? ComputeRecoveryKeyId(*bootstrap_recovery) : std::nullopt;
     Require(bootstrap_id && *bootstrap_id == devnet_constants::BOOTSTRAP_RECOVERY_KEY_ID);
     const auto bootstrap_allocation = network.genesis_state.genesis_allocations.find(*bootstrap_id);
     Require(bootstrap_allocation != network.genesis_state.genesis_allocations.end());
     Require(bootstrap_allocation->second.label == BOOTSTRAP_ALLOCATION_LABEL &&
-        bootstrap_allocation->second.balance == 0 &&
-        bootstrap_allocation->second.authority == GENESIS_ALLOCATION_AUTHORITY);
+        bootstrap_allocation->second.balance == 0);
     Require(network.genesis_state.genesis_allocations.size() == 2);
     Require(CybouStateHash(network.genesis_state) == std::optional<Hash256>{network.genesis.GetGenesisStateRoot()});
     std::cout << "DEVNET verified: compiled signed genesis, state, Network Root, PoA, Recovery, and both allocations match.\n";

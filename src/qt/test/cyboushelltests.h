@@ -47,7 +47,6 @@ private Q_SLOTS:
     void networkPageReflectsModel();
     void networkMonitorUsesCoreSnapshot();
     void authorityDashboardUsesLocalHeightObservation();
-    void walletShowsAuthorityLimits();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();
     void fixturesLoadDeterministically();
@@ -75,7 +74,6 @@ private Q_SLOTS:
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();
     void rotationKeepsLiveSessionWorking();
-    void identityAuthorityIsAnHonestPreview();
 
 private:
     std::unique_ptr<CybouMainWindow> makeWindow();

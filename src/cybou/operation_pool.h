@@ -51,7 +51,7 @@ struct OperationPoolLimits {
     size_t max_peer_count{MAX_PEER_PENDING_OPERATIONS};
     /// \brief Максимум сериализованных байт от одного source_peer, байты.
     size_t max_peer_bytes{MAX_PEER_PENDING_BYTES};
-    /// \brief Только для component tests: фиксированная сложность relay-PoW вместо уровня AUTH.
+    /// \brief Только для component tests: фиксированная сложность relay-PoW вместо production.
     std::optional<uint32_t> operation_work_bits;
 };
 

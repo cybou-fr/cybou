@@ -394,7 +394,7 @@ PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id,
     }
     // Размещаем только finalized публикации и только с их точным набором leaves.
     // Это соответствует finality-first admission из docs/cybou/STORAGE_ADMISSION.md:
-    // Validation сама по себе не даёт права на placement.
+    // только finalized RootPublication даёт право на placement.
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return {.state = DurabilityState::SECURING, .error = "Publication is not finalized yet"};
     if (leaves.empty() || leaves.size() > MAX_PUBLICATION_CHUNKS || leaves.size() != publication->chunk_count) {

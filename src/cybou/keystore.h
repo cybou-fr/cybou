@@ -14,7 +14,7 @@
 #include <cybou/identity_kem.h>
 #include <cybou/identity_material.h>
 #include <cybou/poa_signer.h>
-#include <cybou/validation_attestation.h>
+#include <cybou/identity_signer.h>
 #include <cybou/hash256.h>
 
 #include <array>
@@ -150,11 +150,11 @@ private:
     const CybouKeyStore& m_keystore;
 };
 
-/// Представление Validation signer поверх разблокированного vault.
-class CybouKeyStoreValidationSigner final : public ValidationSigner {
+/// Identity Authorization signer поверх разблокированного vault (storage payout binding).
+class CybouKeyStoreIdentitySigner final : public IdentitySigner {
 public:
     /// \param keystore Разблокированный keystore текущей Identity.
-    explicit CybouKeyStoreValidationSigner(const CybouKeyStore& keystore) : m_keystore{keystore} {}
+    explicit CybouKeyStoreIdentitySigner(const CybouKeyStore& keystore) : m_keystore{keystore} {}
     std::optional<AccountId> Account() const override { return m_keystore.GetAccountId(); }
     std::optional<IdentityHybridSignature> SignAuthorization(std::span<const unsigned char> digest) const override
     {

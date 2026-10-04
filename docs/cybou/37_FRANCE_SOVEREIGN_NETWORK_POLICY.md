@@ -7,7 +7,7 @@ Every participant runs the same node software. Storage is intrinsic to every Ful
 
 Bootstrap is an ordinary CYBOU full peer whose IP:port and TLS SPKI pin are known
 in advance for initial rendezvous and peer discovery. It has no special consensus
-role, does not vote, and does not finalize. Any AUTH its
+role, does not vote, and does not finalize. Any CYBOU its
 Identity holds is an ordinary GenesisAllocation decision, not a bootstrap property.
 The genesis-authorized Central Authority PoA key remains the sole canonical finality signer.
 

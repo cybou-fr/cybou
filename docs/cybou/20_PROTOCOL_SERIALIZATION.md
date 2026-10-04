@@ -10,7 +10,6 @@ before allocation. Typed layouts have no recursive generic value parser.
 The active formats are defined by their protocol authorities:
 
 - block and PoA finality: `POA_FINALITY.md`;
-- Validation signatures: `VALIDATION.md`;
 - deterministic application encoding: `ROOT_PUBLICATION.md`;
 - encrypted payload and chunk tree: `ENCRYPTED_CHUNK_TREE.md`;
 - provider admission proofs: `STORAGE_ADMISSION.md`;

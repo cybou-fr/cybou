@@ -37,7 +37,7 @@ Central Treasury Balance -> new Identity System Balance (onboarding origin)
 ```
 
 The claimant of the Treasury allocation itself receives no bonus. AccountCreate
-does not mint CYBOU and earns no AUTH (a genesis allocation may grant initial AUTH).
+does not mint CYBOU.
 
 ## Protocol fees
 
@@ -54,7 +54,7 @@ ordinary AccountState Balance; the allocation Balance no longer changes.
 
 Missing or duplicate allocations, invalid claimants and recipient overflow
 reject the operation without changing balances or authorization nonce. There
-is no batching, fee burn, priority bidding or validator reward. Storage rent is
+is no batching, fee burn or priority bidding. Storage rent is
 not a fee: it goes through StorageEscrow to providers (below).
 
 Payment uses the existing configured payment_fee. RootPublication uses:
@@ -66,14 +66,11 @@ Payment uses the existing configured payment_fee. RootPublication uses:
 Each paid operation performs its own transfer. Block execution checks that
 TotalCybou is unchanged; it performs no later fee distribution.
 
-## Supply and AUTH
+## Supply
 
 TotalCybou counts unclaimed genesis allocation Balances, account Balances,
 account System Balances and StorageEscrow. The genesis monetary base exists in
 full from genesis; there is no cap, no unissued remainder and no virtual reserve.
-
-AUTH is non-transferable, excluded from CYBOU supply, and changes through the
-finalized rules in `57_IDENTITY_AUTHORITY.md`. Fee amounts do not scale AUTH.
 
 ## Network cutover
 

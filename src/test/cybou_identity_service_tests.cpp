@@ -535,7 +535,6 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_claim_e2e)
     fixture.genesis.genesis_allocations.clear();
     fixture.genesis.genesis_allocations[*recovery_id] = cybou::GenesisAllocation{
         .balance = 100'000'000,
-        .authority = 10'000'001,
         .label = "cybou",
         .claimed_by = std::nullopt,
     };
@@ -565,7 +564,6 @@ BOOST_AUTO_TEST_CASE(genesis_allocation_claim_e2e)
     BOOST_REQUIRE(loaded && loaded.state);
     const auto it = loaded.state->accounts.find(result.account_id);
     BOOST_REQUIRE(it != loaded.state->accounts.end());
-    BOOST_CHECK_EQUAL(it->second.authority, 10'000'001u);
     BOOST_CHECK_EQUAL(it->second.balance, 100'000'000u);
     // Claiming the Treasury allocation `cybou` brings no onboarding bonus: it is its source (DEC-277).
     BOOST_CHECK_EQUAL(it->second.system_balance, 0u);

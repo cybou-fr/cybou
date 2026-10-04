@@ -32,10 +32,10 @@ bool CheckOperationWork(const cybou::Hash256& network_binding, const cybou::Hash
 std::optional<uint64_t> SolveOperationWork(const cybou::Hash256& network_binding,
     const cybou::Hash256& operation_id, uint32_t required_bits, std::stop_token stop = {});
 
-/// \brief Сложность relay-PoW операции по уровню AUTH авторизующей Identity в finalized state.
-/// \return 0 для операций со своей защитой: AccountCreate (consensus PoW) и PoaAuthAdjustment
+/// \brief Сложность relay-PoW операции: одна для всех Identity (DEC-273).
+/// \return 0 для операций со своей защитой: AccountCreate (consensus PoW) и StorageSettlement
 ///         (подпись genesis PoA key). Name-операции дороже на `NAME_OPERATION_EXTRA_WORK_BITS`.
-uint32_t RequiredOperationWorkBits(const ProtocolOperation& operation, const CybouState& finalized);
+uint32_t RequiredOperationWorkBits(const ProtocolOperation& operation);
 
 } // namespace cybou
 

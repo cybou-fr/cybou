@@ -167,7 +167,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_candidates = Tile(grid, 0, 2, tr("Waiting for next block"), this);
     m_peers = Tile(grid, 1, 0, tr("Connected peers"), this);
     m_identities = Tile(grid, 1, 1, tr("Identities"), this);
-    m_validators = Tile(grid, 1, 2, tr("Validators (AUTH > 10M)"), this);
+    m_escrow = Tile(grid, 1, 2, tr("Storage escrow"), this);
     for (int column = 0; column < 3; ++column) grid->setColumnStretch(column, 1);
     root->addLayout(grid);
 
@@ -177,48 +177,6 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_queue = Rows(queue);
     m_recent = Rows(Section(root, tr("Recently finalized"), this,
         tr("Operations this node saw finalized recently, newest first.")));
-
-    // AUTH adjustment.
-    auto* auth = Section(root, tr("Adjust Authority"), this,
-        tr("Signs a PoaAuthAdjustment for the next block. GRANT adds AUTH; BURN removes it (never below 0). "
-           "AUTH cannot be transferred and grants no finalization power."));
-    auto* form = new QHBoxLayout;
-    form->setSpacing(10);
-    m_auth_target = new QLineEdit{this};
-    m_auth_target->setPlaceholderText(tr("name.cybou or Account ID"));
-    m_auth_target->setAccessibleName(tr("Identity"));
-    m_auth_target->setMinimumHeight(36);
-    m_auth_amount = new QLineEdit{this};
-    m_auth_amount->setPlaceholderText(tr("AUTH"));
-    m_auth_amount->setAccessibleName(tr("AUTH amount"));
-    m_auth_amount->setMinimumHeight(36);
-    m_auth_amount->setMaximumWidth(180);
-    m_auth_amount->setValidator(new QRegularExpressionValidator{QRegularExpression{QStringLiteral("[0-9]{1,15}")}, m_auth_amount});
-    m_grant = new QPushButton{tr("Grant"), this};
-    m_grant->setObjectName(QStringLiteral("primaryButton"));
-    m_grant->setProperty("cybouId", QStringLiteral("authorityGrant"));
-    m_burn = new QPushButton{tr("Burn"), this};
-    m_burn->setObjectName(QStringLiteral("secondaryButton"));
-    m_burn->setProperty("cybouId", QStringLiteral("authorityBurn"));
-    form->addWidget(m_auth_target, 1);
-    form->addWidget(m_auth_amount);
-    form->addWidget(m_grant);
-    form->addWidget(m_burn);
-    auth->addLayout(form);
-    m_auth_status = MutedText({}, this);
-    auth->addWidget(m_auth_status);
-    connect(m_auth_target, &QLineEdit::textChanged, this, [this] { updateAuthButtons(); });
-    connect(m_auth_amount, &QLineEdit::textChanged, this, [this] { updateAuthButtons(); });
-    connect(m_grant, &QPushButton::clicked, this, [this] { confirmAuthAdjustment(true); });
-    connect(m_burn, &QPushButton::clicked, this, [this] { confirmAuthAdjustment(false); });
-    connect(m_model, &CybouDesktopModel::authAdjustmentFinished, this, [this](bool ok, const QString& message) {
-        m_auth_status->setText(message);
-        if (ok) {
-            m_auth_amount->clear();
-            m_model->notify(message);
-        }
-        updateAuthButtons();
-    });
 
     m_totals = Rows(Section(root, tr("Network totals"), this));
     m_peer_rows = Rows(Section(root, tr("Peers"), this,
@@ -289,7 +247,7 @@ void NetworkAuthorityPage::refresh()
     m_candidates->setText(locale.toString(a.candidates));
     m_peers->setText(locale.toString(static_cast<qulonglong>(d.peers.size())));
     m_identities->setText(locale.toString(a.identities));
-    m_validators->setText(locale.toString(a.validators));
+    m_escrow->setText(cybouAmountText(a.storage_escrow));
 
     ClearLayout(m_queue);
     if (a.candidate_ids.isEmpty()) {
@@ -317,7 +275,6 @@ void NetworkAuthorityPage::refresh()
     ClearLayout(m_totals);
     Row(m_totals, tr("Spendable Balance"), cybouAmountText(a.total_balance));
     Row(m_totals, tr("System Balance"), cybouAmountText(a.total_system_balance));
-    Row(m_totals, tr("Authority"), cybouAuthorityText(a.total_authority));
     Row(m_totals, tr("Storage escrow"), cybouAmountText(a.storage_escrow));
     Row(m_totals, tr(".cybou names"), tr("%1  ·  %2 commits pending")
         .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
@@ -338,35 +295,4 @@ void NetworkAuthorityPage::refresh()
     Row(m_chain, tr("State root"), QString::fromStdString(d.state_root), true);
     Row(m_chain, tr("Network ID"), QString::fromStdString(d.network_binding), true);
     Row(m_chain, tr("Connection"), cybouConnectionText(m_model->status()));
-
-    updateAuthButtons();
-}
-
-void NetworkAuthorityPage::updateAuthButtons()
-{
-    const auto& a = m_model->networkAuthority();
-    const bool ready = a.signer_enabled && a.finalizer != CybouFinalizerState::SafetyHalt &&
-        !m_model->authAdjustmentPending() && !m_auth_target->text().trimmed().isEmpty() &&
-        m_auth_amount->text().toULongLong() > 0;
-    m_grant->setEnabled(ready);
-    m_burn->setEnabled(ready);
-    if (m_model->authAdjustmentPending()) m_auth_status->setText(tr("Signing…"));
-}
-
-void NetworkAuthorityPage::confirmAuthAdjustment(bool grant)
-{
-    const QString target = m_auth_target->text().trimmed();
-    const quint64 amount = m_auth_amount->text().toULongLong();
-    const QString amount_text = cybouAuthorityText(amount);
-    const auto answer = QMessageBox::question(this, grant ? tr("Grant AUTH") : tr("Burn AUTH"),
-        grant ? tr("Grant %1 to %2?\n\nThis is signed with the genesis PoA key and becomes canonical "
-                   "once finalized.").arg(amount_text, target)
-              : tr("Burn %1 from %2?\n\nAUTH never goes below 0. This is signed with the genesis PoA key "
-                   "and becomes canonical once finalized.").arg(amount_text, target),
-        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
-    if (answer != QMessageBox::Yes) return;
-    if (!m_model->requestAuthAdjustment(target, grant, amount)) {
-        m_auth_status->setText(tr("Enter a .cybou name or a 64-character Account ID and a whole AUTH amount."));
-    }
-    updateAuthButtons();
 }

@@ -6,17 +6,16 @@ objects.
 
 ## Current state domains
 
-- account values: Balance and System Balance in CYBOU, Authority in AUTH;
+- account values: Balance and System Balance in CYBOU;
 - Identity registry: stable AccountID, Recovery/Authorization capabilities,
   current KEM commitment, nonce and key epoch;
 - `.cybou` name registry;
 - Central Treasury (the `cybou` allocation or its claimant) funding onboarding and receiving protocol fees;
-- genesis allocations containing initial CYBOU and AUTH; the unique `cybou`
+- genesis allocations containing initial CYBOU; the unique `cybou`
   allocation also accumulates protocol fees before its one-time claim;
 - immutable network parameters bound to the active network definition;
-- operation accounting (DEC-272): per-Identity `usage` (operations in the current
-  epoch and block) and the publication register `publications` (RootPublication
-  OperationID -> owner, chunk authorization root, chunk count, height);
+- the publication register `publications` (RootPublication OperationID ->
+  owner, chunk authorization root, chunk count, height);
 - storage economy (DEC-277..DEC-282): per-account onboarding-origin System
   Balance, `settlement` cursor (next period, its UTC start) and `leases`
   (publication -> payer, units, replicas, period range, escrow by origin).
@@ -38,18 +37,10 @@ consensus row for each Mail message or file.
 
 Clients rebuild private application projections from finalized publications.
 
-## Authority
+## No Authority unit
 
-Authority is a canonical non-transferable AUTH account value, included in the
-state root and excluded from CYBOU TotalSupply. AUTH changes only through
-deterministic finalized state transitions: GenesisAllocation claimed once by
-AccountCreate, +1 AUTH per finalized Identity-authorized operation, and
-PoA-signed `PoaAuthAdjustment` GRANT / BURN (floor 0). There is no derived Authority
-index. Its sole protocol eligibility effect is qualifying an Identity to sign
-Validation when its latest finalized `AccountState.authority > 10,000,000`.
-It also determines the Identity's resource rate limits and remote storage allowance.
-
-Detailed Authority policies are defined in [`57_IDENTITY_AUTHORITY.md`](57_IDENTITY_AUTHORITY.md).
+There is no AUTH, Authority index or per-Identity usage counter in state
+(DEC-284). Spam is priced by fees, storage rent and relay proof-of-work.
 
 ## State synthesis and object pruning
 
@@ -99,5 +90,5 @@ Compared with the superseded DEVNET state:
 - New records: StorageLease (publication, payer, units, replicas, period, escrow
   by origin, status ACTIVE/CLOSING/EXPIRED, rate remainder) and the last settled
   StorageSettlement period.
-- `usage.stored_chunks` and AUTH storage quota checks are removed; the
+- per-account usage counters and storage quota checks are removed; the
   publication register remains.

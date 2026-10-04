@@ -10,7 +10,6 @@
 #include <cybou/account_creation.h>
 #include <cybou/name_registry.h>
 #include <cybou/payment.h>
-#include <cybou/poa_auth_adjustment.h>
 #include <cybou/root_publication.h>
 #include <cybou/identity_registry.h>
 #include <cybou/storage_lease.h>
@@ -61,10 +60,9 @@ enum class ProtocolOperationKind : uint8_t {
     NAME_COMMIT = 5,         ///< Payload: `AuthorizedNameCommit`, commit фазы claim-а имени.
     NAME_REVEAL = 6,         ///< Payload: `AuthorizedNameReveal`, reveal фазы claim-а имени с PoW.
     ROOT_PUBLICATION = 7,    ///< Payload: `AuthorizedRootPublication`, единственная кандидат-операция публикации контента.
-    POA_AUTH_ADJUSTMENT = 8, ///< Payload: `PoaAuthAdjustment`, PoA-подписанная корректировка AUTH для следующего блока.
-    REVOKE_PUBLICATION = 9,  ///< Payload: `AuthorizedRevokePublication`, отзыв собственной публикации автором.
-    STORAGE_LEASE = 10,      ///< Payload: `AuthorizedStorageLease`, аренда хранения через StorageEscrow.
-    STORAGE_SETTLEMENT = 11, ///< Payload: `StorageSettlement`, PoA-подписанные выплаты providers за период.
+    REVOKE_PUBLICATION = 8,  ///< Payload: `AuthorizedRevokePublication`, отзыв собственной публикации автором.
+    STORAGE_LEASE = 9,       ///< Payload: `AuthorizedStorageLease`, аренда хранения через StorageEscrow.
+    STORAGE_SETTLEMENT = 10, ///< Payload: `StorageSettlement`, PoA-подписанные выплаты providers за период.
 };
 
 /// \brief Канонический tagged union всех операций, попадающих в блок.
@@ -76,7 +74,6 @@ using ProtocolOperation = std::variant<
     AuthorizedNameCommit,
     AuthorizedNameReveal,
     AuthorizedRootPublication,
-    PoaAuthAdjustment,
     AuthorizedRevokePublication,
     AuthorizedStorageLease,
     StorageSettlement>;
@@ -111,24 +108,17 @@ std::optional<cybou::Hash256> ComputeOperationId(const ProtocolOperation& operat
 /// \brief Возвращает существующий `AccountId`-авторизатор операции.
 /// \param operation Кандидат-операция любого поддерживаемого типа.
 /// \return `AccountId` для identity-authorized операций и `IdentityRotate`; `std::nullopt` для
-///         `AccountCreate` и `PoaAuthAdjustment`, где аккаунт не авторизует payload текущим Authorization key.
+///         `AccountCreate` и `StorageSettlement`, где аккаунт не авторизует payload текущим Authorization key.
 /// \note Потокобезопасно; не проверяет существование аккаунта в состоянии.
 std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation);
-/// \brief Возвращает аккаунт, который получает AUTH после финализации utility-операции.
-/// \param operation Кандидат-операция.
-/// \return `AccountId` только для `RootPublication` и `SystemLock`; для всех остальных операций `std::nullopt`.
-/// \post Функция отражает правило из `docs/cybou/57_IDENTITY_AUTHORITY.md`: AUTH начисляется
-///       только за финализированную сетевую utility, а не за платежи, ротации или name-операции.
-/// \note Потокобезопасно и детерминировано.
-std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operation);
 /// \brief Проверяет подписи и binding payload перед ретрансляцией в volatile mesh.
 /// \param operation Кандидат-операция, пришедшая до финализации.
 /// \param network_binding Привязка активной сети.
 /// \param identities Локально известный финализированный Identity registry.
 /// \return `true`, если операция статически корректна и её relay proofs совпадают с финализированным
-///         состоянием; `false` при любой неопределённости, включая `PoaAuthAdjustment`.
+///         состоянием; `false` при любой неопределённости, включая `StorageSettlement`.
 /// \pre `network_binding` должен относиться к текущей официальной сети.
-/// \post Функция не меняет состояние и не признаёт финализацию; Validation и PoA-поведение остаются отдельными.
+/// \post Функция не меняет состояние и не признаёт финализацию; PoA-поведение остаётся отдельным.
 /// \note Потокобезопасно, детерминировано и fail-closed.
 bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
     const cybou::Hash256& network_binding, const IdentityRegistry& identities);

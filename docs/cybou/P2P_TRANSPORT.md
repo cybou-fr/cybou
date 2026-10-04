@@ -1,7 +1,7 @@
 # CYBOU P2P transport
 
 CYBOU P2P is one uniform Full Node baseline: finalized block serving and sync,
-announcements, discovery, candidate operation relay, Validation
+announcements, discovery, candidate operation relay,
 transport and encrypted storage. No compatibility
 negotiation, capability bitmap or network-role announcement exists.
 
@@ -33,7 +33,7 @@ No IP, endpoint, TLS session or peer declaration grants consensus authority.
 ## On-demand storage proof
 
 When storage placement/admission or retrieval needs a StorageId, the requester
-sends `STORAGE_PROOF_REQUEST` (26) with a fresh random 32-byte challenge.
+sends `STORAGE_PROOF_REQUEST` (24) with a fresh random 32-byte challenge.
 `STORAGE_PROOF` (23) returns the STORAGE public key (purpose 8) and hybrid
 signature. The signature covers domain `CYBOU/STORAGE-PROOF`, the
 32-byte TLS exporter, signer HELLO, verifier HELLO and challenge, in that order.
@@ -41,19 +41,16 @@ The proven StorageId is cached only for this live storage relationship.
 Reconnection requires a new proof; invalid proofs fail closed.
 
 StorageId = BLAKE3("CYBOU/STORAGE-ID" || Ed25519 public key || ML-DSA public key).
-It distinguishes remote replica identities, never nodes, AUTH or PoA authority.
+It distinguishes remote replica identities, never nodes or PoA authority.
 Two endpoints proving the same StorageId count as one independent replica.
 Every Full Node implements storage; quota zero/full returns CAPACITY_EXCEEDED
 for otherwise valid admissions and does not impair its other protocol functions.
 Remote PUT still requires finalized RootPublication and Merkle authorization.
 
-## Operations, Validation and sync
+## Operations and sync
 
 Every node executes candidates against its own finalized state before staging
-or relaying; signatures from other nodes never substitute execution.
-VALIDATION_ATTESTATION_POLL (24) and VALIDATION_ATTESTATION (25) retain their
-existing encodings and rules: only locally held valid candidates, current
-finalized base, eligible AUTH > 10,000,000 and valid Identity Authorization signature.
+or relaying. There are no Validation attestations (DEC-284).
 
 All peers can relay correctly signed finalized blocks. No session identifies
 the PoA key holder. Local signer activation affects block production only and
@@ -78,9 +75,9 @@ rate limits protect connections, operation execution and storage proof signing.
 | 8 | BLOCK_ANNOUNCE | 21 | GET_CHUNK_AUTHORIZATION_PROOF |
 | 9 | BLOCK_RESULT | 22 | CHUNK_AUTHORIZATION_PROOF |
 | 10 | OP_POLL | 23 | STORAGE_PROOF |
-| 11 | OP_META | 24 | VALIDATION_ATTESTATION_POLL |
-| 12 | OP_DATA | 25 | VALIDATION_ATTESTATION |
-| 13 | OP_RESULT | 26 | STORAGE_PROOF_REQUEST |
+| 11 | OP_META | 24 | STORAGE_PROOF_REQUEST |
+| 12 | OP_DATA | 25 | STORAGE_AUDIT_CHALLENGE |
+| 13 | OP_RESULT | 26 | STORAGE_AUDIT_RESPONSE |
 
 GET_BLOCKS requests a first height (u64 LE) and count (u8, 1–32).
 For each consecutive block the responder sends BLOCK_META (height u64 LE,

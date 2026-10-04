@@ -15,16 +15,12 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 5. **One official startup path** (Completed `ec76ef3`): select compiled DEVNET constants, verify signature/state root, and remove external official CYG1/CYN1 loaders, profile digest pins and `--network` file startup.
 6. **NetworkID transition** (Completed `66d5fd3`): NetworkID is the exact Network Public Key; 32-byte fields use `ComputeNetworkBinding(key)`.
 7. **Bootstrap conversion**: legacy bootstrap binding/protocol/store and the standalone executable are removed (`ec76ef3`); nodes dial the compiled locator with its SPKI pin; remaining: transition the DEV VPS to an ordinary headless `cybou` node after coordinated state reset.
-8. **Canonical AUTH state** (Completed in `393657f`, `52c5406`): AUTH in AccountState and GenesisAllocation, state, AuthorityIndex removed, desktop reads AUTH directly.
+8. **AUTH and Validation removed** (DEC-284): accounts hold only CYBOU; flat relay PoW and fees price spam.
 9. **DEVNET acceptance**: verify desktop, ordinary peers, finality, operation relay and storage end to end.
 
-## Phase 3 — AUTH and Validation
+## Phase 3 — Candidate execution
 
-- **A — AUTH transitions** (Completed `99af6db`, `4a393fd`): +1 AUTH per finalized Identity-authorized operation; one PoA-signed `PoaAuthAdjustment` operation (GRANT / BURN, floor 0).
 - **B — Full-node independent candidate execution** (Completed `7f447d4`): move `OperationPool` from `PoaFinalizer` into `CybouNodeRuntime`; every node executes candidates before relay; PoA produces blocks from the same pool.
-- **C — Validation signatures** (Completed `c9422a8`, `f7f894f`, `037e6b0`): `ValidationAttestation` (NetworkBinding, OperationID, finalized base BlockID, AccountID, Authorization signature), local signing when AUTH > 10,000,000, bounded Validation store, `VALIDATION_ATTESTATION` CYBOU P2P gossip.
-- **D — UI** (Wallet completed `885986f`): AUTH, Validation eligibility, Submitted / Validated · N / Finalized; Mail/Files publication jobs and a PoA adjustment action remain.
-- **E — Hardening**: evidence for invalid Validation and a frozen AUTH penalty table.
 
 ## Phase 4 — Product integration and end-to-end acceptance
 
@@ -66,7 +62,7 @@ features and durability rather than reopening architecture cleanup.
 - **M4 Shadow economy** (implemented; DEVNET measurement pending): estimated rent and rewards on the live DEVNET; validate the
   5 CYBOU rate; no CYBOU moved.
 - **M5 Consensus economics** (implemented; evidence aggregation pending): Treasury monetary base, 20,000 onboarding, StorageLease,
-  StorageEscrow, StorageSettlement, AUTH storage quota removal.
+  StorageEscrow, StorageSettlement, storage quota removal.
 - **M6 Adversarial tests** (implemented; per-account selection added; Identity-splitting price open): monetary conservation, payout abuse, storage failure,
   concentration and Sybil simulations as release gates.
 - **M7 New DEVNET** (genesis provisioned, VPS cut over; desktop and live acceptance pending): new Network Root, NetworkID and signed genesis; VPS cutover;

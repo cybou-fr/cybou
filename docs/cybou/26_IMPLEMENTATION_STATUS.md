@@ -17,18 +17,15 @@ define the target. The changes described here include committed local developmen
 | Bootstrap | Ordinary CYBOU full peer | Bootstrap binding/protocol/store, `BOOTSTRAP_REQUEST/RESPONSE` and the `cybou-bootstrap` executable are removed. Nodes and the desktop dial the compiled locator first and check its SPKI pin; the locator node serves `--tls-certificate/--tls-key`. Every process uses the same Full Node network lifecycle; signer activation does not reconnect peers. Pinned rendezvous endpoints are protected from discovered-peer crowd-out. The DEV VPS runs the ordinary `cybou node run` command on current current DEVNET. |
 | Geo updater | France-only admission with a valid local dataset; fail closed otherwise | HTTPS and published archive SHA-1 verification, bounded gzip decode, SHA-256 CSV cache and validated atomic installation. Each failed attempt re-fetches metadata and archive; five attempts use interruptible 0/2/5/15/60s delays. Exhaustion retains valid cache and retries in 1h, or retries in 5m without a valid dataset. Successful/current checks use 14 days. Test-only fetch/wait hooks cover publication mismatch, rejected candidates, cache retention, strict temporary cleanup and cancellation without network access. |
 | Consensus bootstrap state | No grants, roster, or network-role announcements | Removed. |
-| Consensus state | Unified current state format | State with canonical AUTH, Treasury monetary base, onboarding-origin System Balance, settlement cursor and storage leases (M5); no OnboardingPool; older decoders removed. The compiled DEVNET no longer decodes and fails closed until M7. |
-| AUTH state | Canonical non-transferable AUTH in AccountState and GenesisAllocation; state root commits it | Implemented (`393657f`): `AccountState.authority`, `GenesisAllocation.authority`, state root commits it. Legacy AuthorityIndex/AuthorityPolicy removed. Desktop reads AUTH from AccountState (`52c5406`). |
-| AUTH transitions | Current utility-bound earning; PoA-signed `PoaAuthAdjustment` GRANT / BURN | Implemented: utility operations RootPublication and SystemLock earn flat +1, capped at +1 per account per finalized block (`59ada0b`); AccountCreate, maintenance, payments and adjustments earn nothing. `PoaAuthAdjustment` (`4a393fd`) is signed by the genesis PoA key, bound to one block height, once per block, verified by every node; never relayed. No CLI/GUI action yet issues adjustments. |
-| Relay proof-of-work | Every user operation carries tier PoW checked by every Full Node and the PoA (DEC-273) | Implemented: `operation_work.h` (`CYBOU/OP-WORK`), `OperationPool::Admit` and revalidation check it against finalized state; `OP_META` carries `size u32 + nonce u64`; `CybouNodeRuntime::PrepareOperationWork` solves outside the runtime lock and caches; CLI `operation submit` solves before sending. Never stored in blocks. Component tests set `NodeRuntimeConfig.operation_work_bits = 0`. Wire change: every DEVNET node, the VPS included, must run this build. |
+| Consensus state | Unified current state format | State with Treasury monetary base, onboarding-origin System Balance, settlement cursor and storage leases (M5); no OnboardingPool; older decoders removed. No AUTH or usage counters (DEC-284). |
+| Relay proof-of-work | Every user operation carries flat PoW checked by every Full Node and the PoA (DEC-273, DEC-284) | Implemented: `operation_work.h` (`CYBOU/OP-WORK`), `OPERATION_WORK_BITS` 22, names +4; `OperationPool::Admit` and revalidation check it; `OP_META` carries `size u32 + nonce u64`; `CybouNodeRuntime::PrepareOperationWork` solves outside the runtime lock and caches; CLI `operation submit` solves before sending. Never stored in blocks. Component tests set `NodeRuntimeConfig.operation_work_bits = 0`. |
 | Candidate execution | Every full node executes candidates before relay; one pool per node, used by PoA for blocks | Implemented (`7f447d4`): `CybouNodeRuntime` owns the single `OperationPool`; local, peer and relayed operations pass `OperationPool::Admit` before staging or forwarding; every node revalidates after each finalized block. CybouNodeRuntime produces from that pool; PoaFinalizer only signs with its durable journal. |
-| Validation | `ValidationAttestation` after local execution by an Identity with finalized AUTH > 10,000,000 | Implemented (`b01f2dc`): threshold raised to 10M AUTH (`VALIDATION_AUTHORITY_THRESHOLD{10'000'000}`), codec, eligibility and vault-backed signer (`c9422a8`), bounded RAM `ValidationPool` and `OperationStatus::IsValidated()` (`f7f894f`), CYBOU P2P frame `VALIDATION_ATTESTATION_POLL` / `VALIDATION_ATTESTATION` (`037e6b0`), desktop Validated state and signer (`885986f`). |
-| Notarial Storage & Resource Ladder | Consensus-enforced AUTH tier limits (DEC-272), 5 GiB onboarding credit, 1:3 reciprocal storage ratio | Implemented: `protocol_limits.h` holds the finite tier table (`ComputeAuthorityTierLimits`: operations per block/epoch, quota and largest publication in 512 KiB chunks, relay-PoW bits). `ExecuteBlockOperations` meters every Identity-authorized operation against the parent finalized AUTH and refuses `OPERATION_LIMIT_EXCEEDED`, `PUBLICATION_TOO_LARGE` and `STORAGE_QUOTA_EXCEEDED`. `CybouState.usage` and `CybouState.publications` are committed by the state root in a section omitted while empty (genesis root unchanged). Wallet shows the live window, quota, largest file and PoW. Current DEVNET had no finalized block, so the rules apply from height 1 without an activation height. |
+| Anti-spam | Fees, storage rent and flat relay PoW; no AUTH, tiers or Validation (DEC-284) | Implemented: AUTH, `AccountUsage`, operation tiers, `PoaAuthAdjustment`, `ValidationAttestation`/`ValidationPool` and their P2P messages are removed. `CybouState.publications` remains the publication register. |
 | Mutual Proof of Storage | Randomized challenge-response byte-offset and nonce auditing | Cryptographic primitive implemented (`b01f2dc`): `src/cybou/storage_audit.h` and `.cpp` provide `StorageAuditChallenge`, `CreateStorageAuditProof`, and `VerifyStorageAuditProof` using BLAKE3 chunk sampling (test coverage in `cybou_finalized_chunk_store_tests`). Network mutual-audit protocol, PoA notarization, and reliability coefficient in state: NOT IMPLEMENTED. |
-| Object Pruning | Author `RevokePublication` retires the record and providers purge chunks (DEC-271) | Implemented: `RevokePublication` (ProtocolOperationKind 9, IdentityOperationKind 6) is owner-only, costs the payment fee, earns no AUTH and frees quota; a revoked publication fails `FindFinalizedRootPublication`, so no new admission; `FinalizedChunkStore::PurgePublication` runs on each finalized revocation and deletes chunks no other publication authorizes. Desktop Mail/Files revoke automatically: once the application index is complete and every own job is finalized, `PublicationService::RevokeUnreferenced` revokes one own publication at a time (never recovery bridges, keeping 5 operations of the window for the user) when no catalog record came from it, no non-deleted message is it and no live file or attachment tree lives in its leaves; indexing skips revoked publications. "Delete forever" and "Empty Trash" can trigger revocation and managed purge once their prerequisites are satisfied; they do not erase historical capsules, retained keys, recipient copies or prove physical deletion. The fix committed in `a3f05aa` journals pending purge, retains quota on removal failure and retries on reopen and maintenance; startup reconciliation covers revocations whose local purge event was missed. |
+| Object Pruning | Author `RevokePublication` retires the record and providers purge chunks (DEC-271) | Implemented: `RevokePublication` (ProtocolOperationKind 8, IdentityOperationKind 6) is owner-only, costs the payment fee and closes the lease; a revoked publication fails `FindFinalizedRootPublication`, so no new admission; `FinalizedChunkStore::PurgePublication` runs on each finalized revocation and deletes chunks no other publication authorizes. Desktop Mail/Files revoke automatically: once the application index is complete and every own job is finalized, `PublicationService::RevokeUnreferenced` revokes one own publication at a time (never recovery bridges, keeping 5 operations of the window for the user) when no catalog record came from it, no non-deleted message is it and no live file or attachment tree lives in its leaves; indexing skips revoked publications. "Delete forever" and "Empty Trash" can trigger revocation and managed purge once their prerequisites are satisfied; they do not erase historical capsules, retained keys, recipient copies or prove physical deletion. The fix committed in `a3f05aa` journals pending purge, retains quota on removal failure and retries on reopen and maintenance; startup reconciliation covers revocations whose local purge event was missed. |
 | Executables | One production `cybou` | `cybou` is the desktop and the headless CLI (`src/cybou/cli/cybou_cli.cpp`, one parser, no internal positional commands); `BUILD_GUI=OFF` builds a headless-only `cybou`. `cybou-node` and the `network bootstrap` command are removed; `network info` lists the locators. `cybou-loadgen` builds only with `BUILD_TESTS`. |
 | Operation routing | Uniform CYBOU P2P Full Node mesh | HELLO has no capability field. No PoA transport proof or special route. Sync completion is advisory. Storage is intrinsic; StorageId is challenged only for storage interaction. |
-| PoA | Sole independent canonical finalizer | Single-operator PoA re-executes every candidate through the node pool and finalizes with zero attestations; a multi-node CYBOU P2P test covers validator, ordinary node and PoA. |
+| PoA | Sole independent canonical finalizer | Single-operator PoA re-executes every candidate through the node pool and finalizes; a multi-node CYBOU P2P test covers ordinary nodes and PoA. |
 
 ## Storage economy status (2026-10-04)
 
@@ -42,7 +39,7 @@ usage separately. The desktop has no capacity picker yet and uses the
 15 GiB default. M3 is implemented: successful admissions return a signed
 `StorageReceipt` (P2P `CHUNK_ADMISSION_RESULT`), StorageService counts a replica
 only with a receipt from that StorageId and keeps it in the encrypted
-Application DB, `STORAGE_AUDIT_CHALLENGE`/`RESPONSE` (27/28) carry random-offset
+Application DB, `STORAGE_AUDIT_CHALLENGE`/`RESPONSE` (25/26) carry random-offset
 audits, and `StorageService::ProviderEvidence()` exposes bounded in-memory
 rolling evidence. Replicas still drop on the first failed check.
 M4 shadow accounting is implemented: `storage_economy.h` holds the exact
@@ -57,17 +54,17 @@ M5 consensus economics is implemented in `state.cpp`, `storage_lease.h/.cpp`
 and `block_executor.cpp`: no MAX_SUPPLY or OnboardingPool, `TotalCybou`
 conservation, Treasury-funded 20,000 onboarding, onboarding-origin tracking,
 `RootPublication.lease_periods` (initial lease paid atomically), `StorageLease`
-(operation kind 10) and PoA-signed `StorageSettlement` (kind 11, contiguous
+(operation kind 9) and PoA-signed `StorageSettlement` (kind 10, contiguous
 86,400 s periods, per-lease period cap, no self-payout, origin-preserving
-payouts and refunds). AUTH storage quotas are removed; `MAX_PUBLICATION_CHUNKS`
+payouts and refunds). Storage quotas are removed; `MAX_PUBLICATION_CHUNKS`
 remains a safety bound. Providers admit chunks only under an active lease;
 PublicationService leases at publication and renews inactive leases. Not yet
 implemented: aggregation of off-chain evidence into settlements, payout
 bindings, lease renewal UX. Because the state and genesis formats changed, the
-previous compiled DEVNET was retired. M7 steps 1–3 are done: main compiles the
-new storage-economy DEVNET (NetworkBinding `6d202ccf…2d97`), `verify-devnet`
-passes and the compiled-DEVNET tests are restored. The DEV VPS runs the new
-network since 2026-10-04 (`--capacity 40GiB`); desktops cut over on demand.
+previous compiled DEVNET was retired. After M7, AUTH and Validation were removed
+(DEC-284), changing the state format again: main compiles the DEVNET
+`eee26eca…3665` (`verify-devnet` passes); the DEV VPS runs it with
+`--capacity 40GiB`; desktops cut over on demand.
 
 M6 adversarial evidence (`cybou_resource_limits_tests`,
 `cybou_storage_placement_simulation_tests`):
@@ -135,14 +132,13 @@ tests use in-memory fixtures and synthetic Geo input through the actual parser;
 these fixtures are not available as a runtime network profile.
 
 Current NetworkBinding:
-`846e8f223054d5d1944c4e01a576ecbbbc5ef497654ae2fded57368ac6a4b311`.
+`eee26eca805d5a16b2f550d66b3355ecf50d90c43138bc1fefc34df92f7f3665`.
 Signed genesis anchor:
-`5bd33c6c65462345bd5b40c297ecdfcf718029bc94cf743175bd3e73f9cea9f2`.
-Genesis allocations: `cybou` 100,000,000 CYBOU and 10,000,001 AUTH (same
-phrase and PoA key as the retired DEVNET; AccountID is created on initial
-onboarding into the current network); `bootstrap` 0 CYBOU and
-10,000,001 AUTH. Retired material: `private/devnet-retired-auth1m-20261003/`.
-The pre-generated material is under gitignored `private/devnet/`. Production
+`1abf2355b6597e53c6affb73d4c92bacc9b970f956a1a259bac8c3699f958cfc`.
+Genesis allocations: `cybou` 100,000,000,000 CYBOU (Central Treasury; same
+phrase and PoA key as the retired DEVNETs; AccountID is created on initial
+onboarding into the current network); `bootstrap` 0 CYBOU. The private
+material is under gitignored `private/devnet-no-auth/`. Production
 Network Root derivation/signing are disabled. The existing official PoA is
 locked; finality/content integration requires the operator to unlock it.
 

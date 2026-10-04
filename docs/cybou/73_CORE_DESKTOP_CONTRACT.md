@@ -53,17 +53,16 @@ event loop.
 The operation axis is:
 
 ```text
-Local → Preparing → Submitted → Validated (optional) → Finalized, or Failed
+Local → Preparing → Submitted → Finalized, or Failed
 ```
 
 - **Submitted**: locally executed as valid and held in the volatile candidate pool, awaiting finality.
-- **Validated**: locally valid and holding at least one valid Validation signature from an Identity with finalized AUTH > 10,000,000, displayed as `Validated · N signatures`. Informational only; it changes no Balance, System Balance, AUTH or other state.
 - **Finalized**: included in a valid block signed by the PoA key and independently verified locally. Finalized never regresses.
 - **Failed**: terminal for an exact OperationID unless verified PoA finality includes it.
 
 When a new finalized block arrives, the node re-executes held candidates
-against it; one that is no longer valid becomes Failed and its Validation
-signatures are dropped. There is no provisional state to roll back.
+against it; one that is no longer valid becomes Failed. There is no
+provisional state to roll back.
 
 The separate content axis includes:
 `Local → Preparing → Securing → Protected → Received`, or `Temporarily unavailable` / `Needs attention`.
@@ -74,7 +73,7 @@ Development requires 1 remote full replica; Beta requires 2 independent remote f
 Mail maps Protected to Sent. Incoming Mail is Received after verified finality and decryption;
 the recipient does not claim proof of sender durability.
 
-## Feature availability, policy and Authority
+## Feature availability, policy and account values
 
 A UI feature becomes available only when its backend path is live. Mail needs
 publication, scanning, retrieval and mailbox projection. Files needs private
@@ -88,9 +87,7 @@ The account panel shows, from the latest finalized `AccountState`:
 ```text
 Balance: X CYBOU
 System Balance: Y CYBOU
-Authority: Z AUTH
-Validation eligible: Yes / No   (Yes iff Z > 10,000,000)
 ```
 
-The controller does not maintain an Authority index and shows no Age,
-Activity, System contribution or scanned-height fields. AUTH grants no PoA power.
+The controller shows no AUTH, Age, Activity, System contribution or
+scanned-height fields.

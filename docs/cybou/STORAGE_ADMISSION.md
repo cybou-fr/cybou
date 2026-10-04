@@ -68,8 +68,7 @@ only after verifying:
 
 Remote GET is content-addressed by ChunkID.
 
-Validation signatures never authorize remote chunk admission. There is no
-provisional storage admission.
+There is no provisional storage admission.
 
 ## Durability targets
 
@@ -128,7 +127,7 @@ are bounded by `floor(2V/3)`. Values below 15 GiB and zero are limited to
 memory-only unit tests. Admission also preserves a disk reserve of
 max(1 GiB, 5% of filesystem size) and fails closed on unavailable disk-space
 information. Existing replicas survive capacity reductions.
-Block sync, candidate relay and Validation transport remain operational.
+Block sync and candidate relay remain operational.
 
 ## Notarial object register and deterministic quotas
 
@@ -136,36 +135,6 @@ The blockchain acts as the canonical Notarial Register for application content:
 - Tracks `RootPublication` metadata, Merkle roots, recipient capsules. Provider placements remain local encrypted metadata.
 - Remote storage allowances and admission rights are computed deterministically strictly from PoA-finalized state.
 - Local configuration declarations and off-chain vouchers convey zero authority. The network only respects what is notarized and finalized by PoA.
-
-## Superseded: onboarding trust credit and AUTH resource ladder
-
-The two sections below describe the pre-M5 model still run by the deployed
-DEVNET binary until M7. Code on main implements paid leases instead.
-
-### Onboarding trust credit and 1:3 reciprocal ratio
-
-Every newly registered Identity receives an immediate **Onboarding Trust Credit of 5 GB** of remote storage in the network (DEC-269).
-- **Physical ratio (1:3)**: 1 GB of stored user data requires 2 remote replicas plus 1 local copy = 3 physical copies total.
-- **Reciprocal baseline**: Target capacity/service reciprocity is not measured. Automatic allocation depends on free disk space and may be below 10–15 GB; see the allocation formula above.
-- Frictionless onboarding: the quota does not require prior reputation; publication still needs finality, relay work, fees, capacity and reachable providers before remote durability.
-
-### AUTH resource ladder
-
-Remote storage allowances scale according to finalized Identity Authority (DEC-268, DEC-272).
-Block execution refuses a RootPublication whose `chunk_count` exceeds the author's largest
-file or whose author's register total would exceed the quota (512 KiB per chunk):
-
-| Tier | AUTH | Ops / block | Ops / epoch (1024 blocks, ~17 min) | Network storage | Largest file | Relay PoW |
-|---|---|---|---|---|---|---|
-| T0 | < 10,000 | 1 | 30 | 5 GiB | 1 GiB | 22 bits |
-| T1 | >= 10,000 | 5 | 150 | 25 GiB | 4 GiB | 21 bits |
-| T2 | >= 100,000 | 25 | 750 | 100 GiB | 16 GiB | 20 bits |
-| T3 | >= 1,000,000 | 100 | 3,000 | 500 GiB | 64 GiB | 19 bits |
-| Validator | > 10,000,000 | 1,000 | 30,000 | 2 TiB | 256 GiB | 18 bits |
-
-`RevokePublication` removes the record from the register and frees its chunks from the
-quota. A revoked publication no longer authorizes admission, and providers purge every
-chunk no other admitted publication still authorizes.
 
 ## Mutual proof of storage and uptime auditing
 
@@ -183,8 +152,8 @@ Block finalization synthesizes transaction history into active state (`CybouStat
 
 ## Storage economy (implemented in M5; active from the M7 genesis)
 
-DEC-274–DEC-283 replace the AUTH resource ladder storage columns, the onboarding
-credit and automatic allocation:
+DEC-274–DEC-283 replaced the former AUTH storage quota, the onboarding credit
+and automatic allocation; DEC-284 removed AUTH entirely:
 
 - **Local capacity** (implemented, M2): explicit `V >= 15 GiB`; the
   ChunkBlobStore is bounded by `V` and finalized provider obligations by

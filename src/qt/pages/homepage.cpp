@@ -131,8 +131,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
 
     for (auto signal : {&CybouDesktopModel::statusChanged, &CybouDesktopModel::mailChanged,
              &CybouDesktopModel::filesChanged, &CybouDesktopModel::activityChanged,
-             &CybouDesktopModel::walletChanged, &CybouDesktopModel::namesChanged,
-             &CybouDesktopModel::authorityChanged}) {
+             &CybouDesktopModel::walletChanged, &CybouDesktopModel::namesChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
     // Relative activity times age while the window stays open.
@@ -320,8 +319,7 @@ void HomePage::refresh()
     m_files_caption->setText(tr("%1 used").arg(CybouProduct::sizeText(status.storage_used)));
 
     m_wallet_value->setText(cybouAmountText(status.balance));
-    m_wallet_caption->setText(tr("System Balance %1  ·  %2")
-        .arg(cybouAmountText(status.system_balance), cybouAuthorityText(status.authority)));
+    m_wallet_caption->setText(tr("System Balance %1").arg(cybouAmountText(status.system_balance)));
 
     ClearLayout(m_activity_rows);
     auto items = m_model->activity();

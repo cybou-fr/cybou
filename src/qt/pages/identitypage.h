@@ -33,7 +33,6 @@ public:
     /** Opens Identity creation (false) or restore (true) on Home. */
     std::function<void(bool restore)> onSetupRequested;
     /** Expands the Identity Authority breakdown (screenshots and tests). */
-    void showAuthorityDetails(bool open);
 
 private:
     CybouDesktopModel* const m_model;
@@ -54,7 +53,6 @@ private:
     QPushButton* m_lock{nullptr};
     QLabel* m_balance{nullptr};
     QLabel* m_system_balance{nullptr};
-    QLabel* m_authority_value{nullptr};
     QToolButton* m_advanced_toggle{nullptr};
     QFrame* m_advanced{nullptr};
     QVBoxLayout* m_advanced_rows{nullptr};

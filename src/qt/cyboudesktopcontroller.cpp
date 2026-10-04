@@ -14,10 +14,9 @@
 #include <cybou/node_service.h>
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/p2p/peer_admission.h>
-#include <cybou/poa_auth_adjustment.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/storage_economy.h>
-#include <cybou/validation_attestation.h>
+#include <cybou/identity_signer.h>
 #include <cybou/wallet_service.h>
 
 #include <QFile>
@@ -98,7 +97,7 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
         connect(m_model, &CybouDesktopModel::lockVaultRequested, this, [this] { lockIdentity(); });
         connect(m_model, &CybouDesktopModel::statusChanged, this, [this] {
             updatePoaSigner();
-            updateValidationSigner();
+            updateIdentitySigner();
         });
         connect(m_model, &CybouDesktopModel::finalizationPauseRequested, this, [this](bool paused) {
             m_production_paused = paused;
@@ -106,8 +105,6 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
             publishNetworkAuthority();
         });
         connect(m_model, &CybouDesktopModel::finalizeNowRequested, this, [this] { finalizeNow(); });
-        connect(m_model, &CybouDesktopModel::authAdjustmentRequested, this,
-            [this](const QString& account_id, bool grant, quint64 amount) { submitAuthAdjustment(account_id, grant, amount); });
     }
 }
 
@@ -137,33 +134,6 @@ void CybouDesktopController::finalizeNow()
             model->notify(produced ? CybouDesktopModel::tr("Block finalized.")
                                    : CybouDesktopModel::tr("No block was finalized. See the finalizer state."));
         }, Qt::QueuedConnection);
-    });
-}
-
-void CybouDesktopController::submitAuthAdjustment(const QString& account_id, bool grant, quint64 amount)
-{
-    const auto target = cybou::ParseHash256UserHex(account_id.toStdString());
-    if (!m_node_service || !target) {
-        m_model->setAuthAdjustmentFinished(false, CybouDesktopModel::tr("The AUTH change could not be prepared."));
-        return;
-    }
-    if (m_operator_worker.joinable()) m_operator_worker.join();
-    m_operator_worker = std::jthread([this, target = *target, grant, amount] {
-        QString message;
-        bool ok{false};
-        try {
-            const auto result = m_node_service->Runtime().SubmitPoaAuthAdjustment(
-                grant ? cybou::PoaAuthAction::GRANT : cybou::PoaAuthAction::BURN, cybou::AccountId{target}, amount);
-            ok = static_cast<bool>(result);
-            message = ok ? CybouDesktopModel::tr("AUTH change submitted for the next block.")
-                : result.status == cybou::OperationSubmitStatus::POA_SIGNER_UNAVAILABLE
-                ? CybouDesktopModel::tr("The PoA signer is not active.")
-                : CybouDesktopModel::tr("The AUTH change was rejected by local execution.");
-        } catch (const std::exception& e) {
-            message = QString::fromLocal8Bit(e.what());
-        }
-        QMetaObject::invokeMethod(m_model, [model = m_model, ok, message] { model->setAuthAdjustmentFinished(ok, message); },
-            Qt::QueuedConnection);
     });
 }
 
@@ -279,17 +249,8 @@ void CybouDesktopController::start()
                             item.amount = entry.amount;
                             item.system_side = entry.system_side;
                             item.time = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(entry.timestamp));
-                            // The ledger knows only pending/final; Validation comes from
-                            // this node's own candidate pool and attestations.
                             item.operation_state = entry.finality == cybou::WalletEntryFinality::PENDING
                                 ? CybouOperationState::Submitted : CybouOperationState::Finalized;
-                            if (entry.finality == cybou::WalletEntryFinality::PENDING) {
-                                const auto status = m_node_service->Runtime().GetOperationStatus(entry.entry_id);
-                                if (status.IsValidated()) {
-                                    item.operation_state = CybouOperationState::Validated;
-                                    item.validation_signatures = status.validation_signatures;
-                                }
-                            }
                             item.operation_id = QString::fromStdString(entry.entry_id.GetHex());
                             item.finalized_height = entry.height;
                             if (!entry.counterparty.IsNull()) {
@@ -347,8 +308,8 @@ void CybouDesktopController::start()
         const QString reason = QString::fromLocal8Bit(e.what());
         qWarning() << "CYBOU desktop startup error:" << reason;
         if (m_node_service) m_node_service->StopNetwork();
-        if (m_node_service) m_node_service->Runtime().SetValidationSigner(nullptr);
-        m_validation_signer_enabled = false;
+        if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);
+        m_identity_signer_enabled = false;
         m_model->setApplicationBackend(nullptr);
         m_application.reset();
         m_model->setIdentityService(nullptr);
@@ -387,8 +348,6 @@ void CybouDesktopController::publishNetworkAuthority()
             for (const auto& [id, account] : state.accounts) {
                 status.total_balance += account.balance;
                 status.total_system_balance += account.system_balance;
-                status.total_authority += account.authority;
-                if (account.authority > cybou::VALIDATION_AUTHORITY_THRESHOLD) ++status.validators;
             }
             for (const auto& [id, lease] : state.leases) {
                 status.storage_escrow += lease.escrow_onboarding + lease.escrow_locked;
@@ -413,19 +372,18 @@ void CybouDesktopController::lockIdentity()
     publishNetworkAuthority();
 }
 
-void CybouDesktopController::updateValidationSigner()
+void CybouDesktopController::updateIdentitySigner()
 {
     if (!m_model || !m_node_service || !m_identity_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
     const bool active = m_model->status().identity_state == CybouIdentityState::Active &&
         m_identity_service->IsUnlocked();
-    if (active == m_validation_signer_enabled) return;
-    // The runtime signs only for candidates it executed itself and only while
-    // this Identity's finalized AUTH exceeds 10,000,000.
-    m_node_service->Runtime().SetValidationSigner(active
-        ? std::make_shared<cybou::CybouKeyStoreValidationSigner>(m_identity_service->GetKeyStore())
+    if (active == m_identity_signer_enabled) return;
+    // The runtime uses the signer only for this node's storage payout binding.
+    m_node_service->Runtime().SetIdentitySigner(active
+        ? std::make_shared<cybou::CybouKeyStoreIdentitySigner>(m_identity_service->GetKeyStore())
         : nullptr);
-    m_validation_signer_enabled = active;
+    m_identity_signer_enabled = active;
 }
 
 void CybouDesktopController::updatePoaSigner()
@@ -464,43 +422,26 @@ void CybouDesktopController::publishAuthority()
 {
     if (!m_identity_service || !m_node_service) return;
     std::lock_guard identity_access{m_identity_access_mutex};
-    quint64 auth_val{0};
     quint64 quota_used{0};
-    quint32 epoch_operations{0};
-    quint64 blocks_left{0};
     if (const auto account = m_identity_service->GetAccountId()) {
-        auto& runtime = m_node_service->Runtime();
-        if (const auto account_state = runtime.GetAccountState(*account)) {
-            auth_val = account_state->authority;
-        }
-        // The next block's window: counters of an older epoch no longer count.
-        const auto& params = runtime.GetNetworkGenesis().GetProtocolParameters();
-        const uint64_t next_height = runtime.GetFinalizedHeight().value_or(0) + 1;
-        const uint64_t epoch = cybou::EpochForHeight(next_height, params);
-        if (params.epoch_blocks > 0) blocks_left = (epoch + 1) * params.epoch_blocks - next_height;
-        const auto loaded = runtime.GetStore().LoadState();
+        const auto loaded = m_node_service->Runtime().GetStore().LoadState();
         if (loaded && loaded.state) {
-            // Сетевое хранение — billing units действующих публикаций (DEC-279), не AUTH-квота.
+            // Сетевое хранение — billing units действующих публикаций (DEC-279).
             for (const auto& [id, publication] : loaded.state->publications) {
                 if (publication.owner == *account) quota_used += publication.chunk_count * cybou::STORAGE_BILLING_UNIT_BYTES;
             }
-            if (const auto usage = loaded.state->usage.find(*account); usage != loaded.state->usage.end()) {
-                if (usage->second.epoch == epoch) epoch_operations = usage->second.epoch_operations;
-            }
         }
     }
-    QMetaObject::invokeMethod(m_model, [model = m_model, auth_val, quota_used, epoch_operations, blocks_left] {
-        model->setAuthority(auth_val);
-        model->setResourceUsage(quota_used, epoch_operations, blocks_left);
-    }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(m_model, [model = m_model, quota_used] { model->setResourceUsage(quota_used); },
+        Qt::QueuedConnection);
 }
 
 void CybouDesktopController::stop()
 {
     if (m_node_service) m_node_service->StopNetwork();
     // The signer references the Identity key store; never let it outlive it.
-    if (m_node_service) m_node_service->Runtime().SetValidationSigner(nullptr);
-    m_validation_signer_enabled = false;
+    if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);
+    m_identity_signer_enabled = false;
     // Joins the application worker before the runtime goes away.
     if (m_model) m_model->setApplicationBackend(nullptr);
     m_application.reset();

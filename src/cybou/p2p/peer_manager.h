@@ -114,8 +114,6 @@ public:
     size_t FanoutFinalizedBlocks(size_t max_per_peer = 16);
     /// \brief Запрашивает и обрабатывает новые relay-операции у подключенных пиров.
     size_t PollOperationRelays();
-    /// \brief Запрашивает Validation-attestation'ы у relay-пиров и возвращает число принятых записей.
-    size_t PollValidationAttestations();
     size_t ConnectedCount() const { return m_peers.size(); }
     /// \brief Возвращает снимок известных подключенных пиров.
     std::vector<PeerInfo> Peers() const;

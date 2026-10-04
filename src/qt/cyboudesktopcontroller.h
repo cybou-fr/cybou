@@ -47,17 +47,16 @@ private:
     std::unique_ptr<CybouCoreApplicationAdapter> m_application;
     std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> m_geo_database_updater;
     std::mutex m_identity_access_mutex;
-    bool m_validation_signer_enabled{false};
+    bool m_identity_signer_enabled{false};
     /** Operator pause of the local block production loop (GUI thread). */
     std::atomic<bool> m_production_paused{false};
-    /** Runs one operator command (finalize now, AUTH change) off the GUI thread. */
+    /** Runs one operator command (finalize now) off the GUI thread. */
     std::jthread m_operator_worker;
     void finalizeNow();
-    void submitAuthAdjustment(const QString& account_id, bool grant, quint64 amount);
     /** Where data of an older DEV network was moved at startup, if it was. */
     void stop();
     void updatePoaSigner();
-    void updateValidationSigner();
+    void updateIdentitySigner();
     void publishAuthority();
     void lockIdentity();
     /** Canonical network totals, published only when the unlocked Identity is the genesis authority. */

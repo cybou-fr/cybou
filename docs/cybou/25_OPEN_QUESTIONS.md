@@ -27,12 +27,10 @@ or certification claims.
 - coordinated DEV VPS cutover to an ordinary headless `cybou` node on the re-provisioned DEVNET, serving a TLS certificate that matches the compiled SPKI pin (or a re-pinned locator);
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
-## AUTH and Validation
+## Candidate pool
 
-- exact wire encoding of `PoaAuthAdjustment` and `ValidationAttestation`;
-- bounds of the per-node candidate pool and Validation store, gossip rate limits and TTL;
-- re-execution policy for held candidates and signatures when the finalized base advances;
-- AUTH penalty table for verifiable invalid Validation (not frozen).
+- bounds of the per-node candidate pool, gossip rate limits and TTL;
+- re-execution policy for held candidates when the finalized base advances.
 
 ## Application data plane
 

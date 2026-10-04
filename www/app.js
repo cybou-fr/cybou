@@ -115,7 +115,7 @@ const translations = {
     srvWalletTag: "Ressources",
     srvWalletTitle: "Un budget de service lisible",
     srvWalletDesc: "CYBOU utilise des unités de service internes pour comptabiliser les ressources consommées par les opérations et le stockage. Votre budget permet de suivre l’utilisation de ces services.",
-    srvStorageEconomy: "Le stockage est organisé par des leases et des contrôles de disponibilité. Le budget de service suit les ressources utilisées ; AUTH reste distinct et ne détermine pas le volume de stockage.",
+    srvStorageEconomy: "Le stockage est organisé par des leases et des contrôles de disponibilité. Le budget de service suit les ressources utilisées.",
     srvWalletStatus: "Opérations de base disponibles dans le client DEVNET",
 
     secLabel: "Sécurité & Transport",
@@ -880,7 +880,7 @@ const translations = {
     srvWalletTag: "Resources",
     srvWalletTitle: "A clear service budget",
     srvWalletDesc: "CYBOU uses internal service units to account for resources consumed by operations and storage. Your budget lets you track service usage.",
-    srvStorageEconomy: "Storage is organized through leases and availability checks. The service budget tracks resource usage; AUTH remains separate and does not determine storage volume.",
+    srvStorageEconomy: "Storage is organized through leases and availability checks. The service budget tracks resource usage.",
     srvWalletStatus: "Basic operations available in the DEVNET client",
 
     secLabel: "Security & Transport",

@@ -353,15 +353,4 @@ BOOST_AUTO_TEST_CASE(storage_audit_challenge_and_proof_verification)
     BOOST_CHECK(!cybou::CreateStorageAuditProof(invalid_challenge, data).has_value());
 }
 
-BOOST_AUTO_TEST_CASE(canonical_operation_ladder)
-{
-    // Storage is paid by lease (DEC-274); AUTH only governs operation rate (DEC-268).
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(0), 1U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000), 5U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(100'000), 25U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(1'000'000), 100U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'000), 100U);
-    BOOST_CHECK_EQUAL(cybou::ComputeMaxOperationsPerBlock(10'000'001), 1000U);
-}
-
 BOOST_AUTO_TEST_SUITE_END()

@@ -74,16 +74,12 @@ struct CybouDesktopStatus {
 
     quint64 balance{0};
     quint64 system_balance{0};
-    quint64 authority{0};
 
     quint64 storage_used{0};
     quint64 storage_quota{0};
 
-    /** Finalized resource accounting of this Identity (DEC-272). */
+    /** Network storage of this Identity's active publications, billing-unit bytes (DEC-279). */
     quint64 quota_used{0};
-    quint32 epoch_operations{0};
-    /** Blocks until the operation window resets. */
-    quint64 epoch_blocks_left{0};
 };
 
 /**
@@ -114,37 +110,13 @@ struct CybouNetworkAuthorityStatus {
     QStringList candidate_ids;
     quint64 finalized_height{0};
     quint64 identities{0};
-    /** Identities whose finalized AUTH makes them eligible to sign Validation. */
-    quint64 validators{0};
     quint64 names{0};
     quint64 pending_name_commits{0};
     quint64 total_balance{0};
     quint64 total_system_balance{0};
-    quint64 total_authority{0};
     quint64 storage_escrow{0};
 };
 
-/**
- * Resource limits that finalized AUTH grants an Identity. Derived locally
- * from the same deterministic tier rules every Full Node applies.
- */
-struct CybouAccountLimits {
-    /** Remote network storage quota, bytes. */
-    quint64 storage_quota{0};
-    /** Largest single file (one publication), bytes. */
-    quint64 max_file_bytes{0};
-    /** Network operations per block and per epoch (~17 minutes). */
-    quint32 operations_per_block{0};
-    quint32 operations_per_epoch{0};
-    /** Proof-of-work each operation needs before the network relays it, bits. */
-    quint32 work_bits{0};
-    bool validation_eligible{false};
-    /** AUTH at which the next tier starts; nullopt at the top tier. */
-    std::optional<quint64> next_tier_authority;
-};
-CybouAccountLimits cybouAccountLimits(quint64 authority);
-/** "12,345 AUTH". */
-QString cybouAuthorityText(quint64 authority);
 
 /**
  * Canonical CYBOU amount rendering.
@@ -197,15 +169,6 @@ public:
     /* Central Authority operator commands; the controller carries them out. */
     void requestFinalizationPaused(bool paused);
     void requestFinalizeNow();
-    /**
-     * Signs a PoaAuthAdjustment for the next block. target is a .cybou name
-     * or a 64-hex AccountID. Returns false when inputs are invalid or one is
-     * already in flight; the result arrives via authAdjustmentFinished.
-     */
-    bool requestAuthAdjustment(const QString& target, bool grant, quint64 amount);
-    bool authAdjustmentPending() const { return m_auth_adjustment_pending; }
-    /** Adapter entry: the PoaAuthAdjustment was submitted (ok) or refused. */
-    void setAuthAdjustmentFinished(bool ok, const QString& message);
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
@@ -216,10 +179,8 @@ public:
     void setPrimaryName(const QString& name);
     void setBalances(quint64 balance, quint64 system_balance);
     void setStorageUsage(quint64 used, quint64 quota);
-    /** Adapter entry: finalized quota use and the current operation window. */
-    void setResourceUsage(quint64 quota_used, quint32 epoch_operations, quint64 epoch_blocks_left);
-    /** Empty while another network operation fits this window, else a user-facing reason. */
-    QString operationLimitProblem() const;
+    /** Adapter entry: finalized network storage of this Identity's publications. */
+    void setResourceUsage(quint64 quota_used);
     /** Recomputes storage_used from the Identity's files (live mode only). */
     void refreshStorageUsed();
 
@@ -292,7 +253,7 @@ public:
     bool paymentPending() const { return m_payment_pending; }
     /**
      * Irreversibly moves `amount` from Balance to System Balance (network
-     * service budget; one-time Identity Authority contribution). Runs off the
+     * service budget). Runs off the
      * GUI thread; the result arrives via systemLockFinished.
      */
     bool requestLockToSystemBalance(quint64 amount);
@@ -306,10 +267,6 @@ public:
     bool requestPayment(const QString& to_name, quint64 amount);
     /** Adapter entry: payment finished (ok) or failed with a reason. */
     void setPaymentFinished(bool ok, const QString& error = {});
-
-    /* ---- Canonical Identity Authority (AUTH in AccountState). ---- */
-    quint64 authority() const { return m_status.authority; }
-    void setAuthority(quint64 authority);
 
     /*
      * ---- Operation lifecycle, shared by Wallet, Mail, Files and Identity. ----
@@ -459,12 +416,8 @@ Q_SIGNALS:
     /** ok means submitted to the network, not finalized: finality shows in activity. */
     void paymentFinished(bool ok, const QString& error);
     void systemLockFinished(bool ok, const QString& error);
-    void authorityChanged();
     void finalizationPauseRequested(bool paused);
     void finalizeNowRequested();
-    /** target is already resolved to a 64-hex AccountID. */
-    void authAdjustmentRequested(const QString& account_id, bool grant, quint64 amount);
-    void authAdjustmentFinished(bool ok, const QString& message);
     void operationStatusChanged(const QString& operation_id);
 
 private:
@@ -481,7 +434,6 @@ private:
     /** Submits (or resumes) IdentityRotate once the backend secured the old keys. */
     void startRecoveryRotation(cybou::RecoveryWords words, const QString& vault_password, bool resume_pending);
     bool m_payment_pending{false};
-    bool m_auth_adjustment_pending{false};
     std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};
     bool m_fixture_mode{false};

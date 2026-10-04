@@ -355,21 +355,6 @@ size_t PeerManager::PollOperationRelays()
     return delivered;
 }
 
-size_t PeerManager::PollValidationAttestations()
-{
-    size_t received{0};
-    constexpr size_t MAX_ATTESTATIONS_PER_PEER{8};
-    for (auto& [endpoint, session] : m_peers) {
-        (void)endpoint;
-        if (!session->Peer()) continue;
-        for (size_t i = 0; i < MAX_ATTESTATIONS_PER_PEER; ++i) {
-            if (!session->PollValidationAttestation(m_runtime)) break;
-            ++received;
-        }
-    }
-    return received;
-}
-
 std::vector<PeerInfo> PeerManager::Peers() const
 {
     std::vector<PeerInfo> peers;

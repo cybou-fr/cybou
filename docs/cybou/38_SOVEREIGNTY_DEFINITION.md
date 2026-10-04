@@ -33,7 +33,6 @@ user-authorized Balance operations
 user-held Identity recovery and decryption keys
 independent full-node validation
 transparent single-operator PoA trust boundary
-optional advisory Validation by eligible Identities (> 10M finalized Authority)
 no mandatory central mailbox cloud
 no universal decryption key
 no arbitrary operator Balance debit

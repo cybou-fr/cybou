@@ -4,10 +4,10 @@
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
 implements the complete CYBOU P2P baseline: blocks, announcements,
-discovery, operation relay, Validation transport and encrypted storage. There
+discovery, operation relay and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
+Node. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -15,7 +15,7 @@ storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
 Status: **Active architecture target**. This document defines official network
-trust, creation, joining, Validation, and network replacement.
+trust, creation, joining, and network replacement.
 
 ## Official networks
 
@@ -58,19 +58,18 @@ network always has a new NetworkID. Private material stays only under gitignored
 (`devnet/` for DEVNET; `mainnet/` does not yet exist). Only public keys,
 public Identity data, and signed genesis constants enter Git.
 
-The current DEVNET is the storage-economy network provisioned on 2026-10-04
-(DEC-283, M7). Its NetworkBinding is
-`6d202ccf07b41232ef36210927444b2d622bd079d59e242c8232a3ae868e2d97`
+The current DEVNET is the storage-economy network without AUTH or Validation,
+provisioned on 2026-10-04 (DEC-283, DEC-284). Its NetworkBinding is
+`eee26eca805d5a16b2f550d66b3355ecf50d90c43138bc1fefc34df92f7f3665`
 and its signed genesis anchor is
-`e0d3d6ee9cf90be3bce3650615069a6db20ff3b71eb36129bbfecc7358cac25f`.
+`1abf2355b6597e53c6affb73d4c92bacc9b970f956a1a259bac8c3699f958cfc`.
 Genesis allocations: `cybou` (Central Treasury; `cybou.cybou` phrase and PoA key
-kept from the previous DEVNET) 100,000,000,000 CYBOU and 10,000,001 AUTH;
-`bootstrap` (ordinary Identity of the bootstrap operator, phrase kept) 0 CYBOU
-and 10,000,001 AUTH. The AUTH is a genesis decision, never a property of the
-bootstrap role. By operator decision this DEVNET Network Root was generated on
-a networked machine: DEVNET is disposable and re-provisioned often; MAINNET keys
-keep the strictly offline ceremony. The previous DEVNET
-(`846e8f22…b311`, anchor `5bd33c6c…a9f2`) is retired.
+kept from the previous DEVNET) 100,000,000,000 CYBOU; `bootstrap` (ordinary
+Identity of the bootstrap operator, phrase kept) 0 CYBOU. By operator decision
+this DEVNET Network Root was generated on a networked machine: DEVNET is
+disposable and re-provisioned often; MAINNET keys keep the strictly offline
+ceremony. The previous DEVNETs (`6d202ccf…2d97`, anchor `e0d3d6ee…c25f`, with
+AUTH; `846e8f22…b311`, anchor `5bd33c6c…a9f2`) are retired.
 The preceding NetworkIDs are permanently retired. No prior genesis was re-signed
 or replaced, and no prior network-bound state is imported.
 
@@ -82,7 +81,7 @@ Bootstrap is an **ordinary CYBOU full peer**:
 - announces no network role;
 - has no `BootstrapNode` class or distinct role in consensus;
 - has an IP:port and TLS SPKI pin known in advance for initial discovery;
-- bootstrap status itself grants no authority and no AUTH.
+- bootstrap status itself grants no authority.
 
 The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
 `src/cybou/official_networks.cpp` to authenticate initial transport discovery.
@@ -90,16 +89,15 @@ The DEV locator is `51.255.46.58:29461`; its SPKI SHA-256 pin is compiled in
 ## Bootstrap Identity
 
 The bootstrap node runs an ordinary CYBOU Identity with no special consensus
-grant or wire structure. Whether that Identity holds AUTH is an ordinary
+grant or wire structure. Whatever CYBOU that Identity holds is an ordinary
 GenesisAllocation decision for the network, not a property of the bootstrap
-role. Genesis may give `cybou.cybou` more than 10,000,000 AUTH so the network
-starts with an eligible Validation Identity.
+role.
 
 ## Network creation and joining
 
 ```text
 Offline:
-  Owner creates immutable genesis (params, GenesisAllocation AUTH, PoA key P)
+  Owner creates immutable genesis (params, GenesisAllocation CYBOU, PoA key P)
   Owner signs genesis once with Network Private Key
   Provisioning generates public C++ constants for the official network
 
@@ -118,14 +116,10 @@ Authorization, KEM, Mail/support, and a distinct PoA key role. Its finalization
 right comes solely from the PoA public key authorized by genesis. Its name does
 not confer consensus power, and there is no separate PoA Identity entity.
 
-## Authority and Validation
+## Candidate execution
 
-Authority is non-transferable AUTH stored in each finalized AccountState and
-committed by the state root; see `57_IDENTITY_AUTHORITY.md`.
-
-Every full node independently executes every candidate. Validation is an
-additional signature by an Identity with finalized AUTH > 10,000,000 after its
-own node validated the operation; it is evidence only. See `VALIDATION.md`.
+Every full node independently executes every candidate against its latest
+finalized state and relays only locally valid ones.
 
 ## Canonical PoA finality
 
@@ -133,7 +127,7 @@ The Central Authority PoA finalizer:
 - is the sole canonical finalizer;
 - operates from the Central Authority desktop;
 - independently executes every candidate;
-- trusts no validator, bootstrap, or peer state;
+- trusts no bootstrap or peer state;
 - valid -> signs block certificate;
 - invalid -> drops candidate.
 
@@ -141,11 +135,9 @@ Canonical truth is always the latest valid PoA-finalized state.
 
 ## No alternative finality
 
-Validation creates no state. Only a valid PoA-finalized block changes
-canonical state. There is:
+Only a valid PoA-finalized block changes canonical state. There is:
 - NO voting against PoA;
-- NO validator fork-choice;
-- NO validator quorum finality;
+- NO validators, Validation signatures or quorum finality;
 - NO BFT consensus.
 
 ## Immutable genesis
@@ -190,7 +182,7 @@ domain (e.g., UI theme, language) may be retained.
 ## Direct P2P mesh
 
 Bootstrap provides initial peer hints. Ordinary full nodes then exchange
-finalized blocks, operation relays, Validation signatures, and encrypted
+finalized blocks, operation relays and encrypted
 chunks directly. A bootstrap outage does not stop an already formed mesh.
 Production and DEV public inbound/outbound admission is France-only and fails
 closed when local Geo data is unavailable or corrupt; see
@@ -199,8 +191,7 @@ closed when local Geo data is unavailable or corrupt; see
 ## Simplified implementation boundary
 
 The only node type is Full Node. Nodes announce no roles or capabilities.
-PoA authority is possession of the genesis-authorized private key; Validation
-is an eligible Identity signature checked against finalized state. Storage is
+PoA authority is possession of the genesis-authorized private key. Storage is
 intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.

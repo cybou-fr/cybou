@@ -30,7 +30,6 @@ struct AccountState {
     /// \brief Часть `system_balance` onboarding-происхождения (DEC-281): расходуется первой
     ///        и через storage payouts никогда не становится spendable Balance.
     uint64_t onboarding_system_balance{0};
-    uint64_t authority{0};        ///< Канонический нетрансферабельный AUTH; не входит в total supply CYBOU.
     uint64_t creation_height{0};  ///< Высота блока, на которой аккаунт был финализирован через `AccountCreate`.
     uint64_t creation_epoch{0};   ///< Детерминированный epoch, вычисленный из `creation_height` и protocol params.
 
@@ -40,7 +39,6 @@ struct AccountState {
 /// \brief Неизменяемое genesis-выделение для recovery-ключа, заявляемое ровно одним AccountCreate.
 struct GenesisAllocation {
     uint64_t balance{0};                   ///< Начальный Balance, зарезервированный под один recovery key id.
-    uint64_t authority{0};                 ///< Начальный AUTH, заявляемый тем же самым `AccountCreate`.
     std::string label;                     ///< Необязательная genesis-метка/имя, резервируемая без отдельного reveal.
     std::optional<AccountId> claimed_by;   ///< Аккаунт, единожды заявивший allocation; `nullopt` до claim-а.
 
@@ -48,19 +46,6 @@ struct GenesisAllocation {
 };
 
 inline constexpr size_t MAX_GENESIS_ALLOCATIONS{16};
-
-/// \brief Детерминированный учёт операций одной Identity для лимитов уровня AUTH (DEC-272).
-/// \details Запись существует только пока хотя бы один счётчик ненулевой; устаревшие окна
-///          блока и эпохи обнуляются в начале исполнения каждого блока. Хранение AUTH не квотирует (DEC-274).
-struct AccountUsage {
-    uint64_t epoch{0};            ///< Эпоха, к которой относится `epoch_operations`.
-    uint32_t epoch_operations{0}; ///< Метрируемые операции в эпохе `epoch`.
-    uint64_t block_height{0};     ///< Высота, к которой относится `block_operations`.
-    uint32_t block_operations{0}; ///< Метрируемые операции в блоке `block_height`.
-
-    bool Empty() const { return epoch_operations == 0 && block_operations == 0; }
-    friend bool operator==(const AccountUsage&, const AccountUsage&) = default;
-};
 
 /// \brief Запись Notarial Register о действующей финализированной RootPublication.
 struct PublicationRecord {
@@ -104,8 +89,6 @@ struct CybouState {
     NameRegistry names;            ///< Реестр `.cybou` имён и pending commit-ов.
     /** Keyed by recovery key id; only claim and pre-claim Central Authority fees mutate it. */
     std::map<IdentityKeyId, GenesisAllocation> genesis_allocations;
-    /// \brief Ненулевые счётчики ресурсов по аккаунтам (DEC-272).
-    std::map<AccountId, AccountUsage> usage;
     /// \brief Действующие публикации по OperationID их RootPublication (DEC-271).
     std::map<cybou::Hash256, PublicationRecord> publications;
     /// \brief Курсор ежедневного StorageSettlement.
@@ -223,7 +206,7 @@ enum class StateValidationError : uint8_t {
     DUPLICATE_RECOVERY_BINDING,     ///< RecoveryKeyId неоднозначен или не индексируется обратно.
     BALANCE_OVERFLOW,               ///< TotalCybou переполнен или onboarding-часть превышает System Balance.
     INVALID_NAME_REGISTRY,          ///< Нарушены правила имён, pending commit-ов или genesis-label binding.
-    INVALID_RESOURCE_USAGE,         ///< Учёт операций или регистр публикаций неканоничен.
+    INVALID_RESOURCE_USAGE,         ///< Регистр публикаций неканоничен.
     INVALID_STORAGE_LEASE,          ///< Аренда хранения неканонична или ссылается на отсутствующий аккаунт.
 };
 
@@ -233,7 +216,7 @@ enum class StateValidationError : uint8_t {
 /// \post Состояние не изменяется.
 /// \note Потокобезопасно при неизменяемом доступе; детерминировано и fail-closed.
 StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_total_cybou = nullptr);
-/// \brief Считает все существующие CYBOU, исключая AUTH и обнаруживая переполнения (DEC-277).
+/// \brief Считает все существующие CYBOU, обнаруживая переполнения (DEC-277).
 /// \param state Полный снимок состояния.
 /// \return Сумма незаявленных genesis allocation + `Balance` + `System Balance` + StorageEscrow;
 ///         при переполнении возвращает `std::numeric_limits<uint64_t>::max()`.

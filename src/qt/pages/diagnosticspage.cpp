@@ -10,7 +10,7 @@
 
 #include <cybou/p2p/session.h>
 #include <cybou/storage_economy.h>
-#include <cybou/validation_attestation.h>
+#include <cybou/identity_signer.h>
 
 #include <QFrame>
 #include <QDialog>
@@ -191,7 +191,6 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
 
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::authorityChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
     connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
     ticker->start(30000);
@@ -227,9 +226,6 @@ void DiagnosticsPage::refresh()
     Row(m_rows, tr("Network ID"), status.network_binding.isEmpty() ? tr("Available after node startup") : status.network_binding, parent);
     Row(m_rows, tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory, parent);
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
-    const auto auth_val = m_model->authority();
-    Row(m_rows, tr("Authority"), cybouAuthorityText(auth_val), parent);
-    Row(m_rows, tr("Validation eligible"), auth_val > cybou::VALIDATION_AUTHORITY_THRESHOLD ? tr("Yes") : tr("No"), parent);
 
     ClearLayout(m_services);
     const auto& caps = m_model->featureAvailability();

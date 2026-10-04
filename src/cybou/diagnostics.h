@@ -48,8 +48,7 @@ struct NodeDiagnosticsSnapshot {
     /// \brief `true`, когда runtime инициализирован и может отвечать непротиворечивым состоянием.
     /// \brief `true`, когда локальная защитная логика остановила небезопасный путь fail-closed.
     /// \brief `true`, когда локальный PoA signer сейчас активен и не отключен правилами signing safety.
-    /// \brief `true`, когда у локальной Identity в финализованном состоянии AUTH достаточно для создания `Validation`.
-    bool initialized{false}, safety_halted{false}, poa_signer_active{false}, validation_eligible{false};
+    bool initialized{false}, safety_halted{false}, poa_signer_active{false};
     /// \brief Снимок всех подключенных P2P-пиров на момент формирования структуры.
     std::vector<PeerDiagnostics> peers;
     /// \brief Снимок операций, которые локальный runtime еще отслеживает вне уже финализованной истории.

@@ -22,7 +22,6 @@ BlockExecutor::BlockExecutor(const CybouState& parent,
       m_candidate{parent},
       m_network_binding{network_binding},
       m_block_height{block_height},
-      m_epoch{EpochForHeight(block_height, params)},
       m_params{params},
       m_poa_key{poa_key}
 {
@@ -39,16 +38,6 @@ BlockExecutor::BlockExecutor(const CybouState& parent,
                 m_block_height - item.second.commit_height > m_params.name_commit_max_lifetime;
         });
     }
-    // Окна лимитов (DEC-272): счётчики другого блока или другой эпохи обнуляются до
-    // исполнения, пустые записи удаляются. Идемпотентно для повторного исполнения той же высоты.
-    for (auto it = m_candidate.usage.begin(); it != m_candidate.usage.end();) {
-        auto& usage = it->second;
-        if (usage.epoch != m_epoch) usage.epoch_operations = 0;
-        if (usage.epoch_operations == 0) usage.epoch = 0;
-        if (usage.block_height != m_block_height) usage.block_operations = 0;
-        if (usage.block_operations == 0) usage.block_height = 0;
-        it = usage.Empty() ? m_candidate.usage.erase(it) : std::next(it);
-    }
     m_valid = true;
 }
 
@@ -62,24 +51,7 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
     };
     if (!m_valid) return fail(m_init_error);
 
-    // Лимиты уровня считаются по AUTH финализированного родителя: одно и то же
-    // решение для пула, Validation и PoA. AccountCreate и PoaAuthAdjustment не метрируются.
-    // Хранение не квотируется AUTH (DEC-274): оно оплачивается арендой.
-    const auto metered = AuthorizingAccount(operation);
     const auto* publication_op = std::get_if<AuthorizedRootPublication>(&operation);
-    if (metered) {
-        const auto parent_account = m_parent->accounts.find(*metered);
-        const auto limits = ComputeAuthorityTierLimits(
-            parent_account == m_parent->accounts.end() ? 0 : parent_account->second.authority);
-        const auto found = m_candidate.usage.find(*metered);
-        const AccountUsage usage = found == m_candidate.usage.end() ? AccountUsage{} : found->second;
-        if (usage.block_operations >= limits.operations_per_block ||
-            usage.epoch_operations >= limits.operations_per_epoch) {
-            return fail(BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-        }
-    }
-
-    std::optional<std::array<unsigned char, 32>> adjustment_digest;
 
     if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
         if (m_account_creates >= m_params.max_account_creates_per_block) {
@@ -140,17 +112,6 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
             failure.revoke_error = result;
             return failure;
         }
-    } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operation)) {
-        const auto digest = ComputePoaAuthAdjustmentDigest(m_network_binding, *adjustment);
-        auto result = !m_poa_key ? PoaAuthAdjustmentError::INVALID_SIGNATURE
-            : !digest || m_adjustment_digests.contains(*digest) ? PoaAuthAdjustmentError::INVALID_PAYLOAD
-            : ApplyPoaAuthAdjustment(*adjustment, m_network_binding, m_block_height, *m_poa_key, m_candidate);
-        if (result != PoaAuthAdjustmentError::NONE) {
-            auto failure = fail(BlockExecutionError::INVALID_POA_AUTH_ADJUSTMENT);
-            failure.poa_auth_error = result;
-            return failure;
-        }
-        adjustment_digest = digest;
     } else if (const auto* lease = std::get_if<AuthorizedStorageLease>(&operation)) {
         const auto result = ApplyStorageLease(*lease, m_network_binding, m_params, m_candidate);
         if (result != StorageLeaseError::NONE) {
@@ -176,29 +137,6 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
             return fail(BlockExecutionError::INVALID_STATE);
         }
     }
-    if (metered) {
-        auto& usage = m_candidate.usage[*metered];
-        usage.epoch = m_epoch;
-        ++usage.epoch_operations;
-        usage.block_height = m_block_height;
-        ++usage.block_operations;
-    }
-    bool auth_credited{false};
-    std::optional<AccountId> credited_actor;
-    if (const auto actor = AuthorityEarningAccount(operation)) {
-        if (!m_auth_credited_accounts.contains(*actor)) {
-            const auto account = m_candidate.accounts.find(*actor);
-            if (account == m_candidate.accounts.end()) return fail(BlockExecutionError::INVALID_STATE);
-            auto& authority = account->second.authority;
-            authority = authority > std::numeric_limits<uint64_t>::max() - AUTH_PER_FINALIZED_OPERATION
-                ? std::numeric_limits<uint64_t>::max() : authority + AUTH_PER_FINALIZED_OPERATION;
-            auth_credited = true;
-            credited_actor = actor;
-        }
-    }
-
-    if (adjustment_digest) m_adjustment_digests.insert(*adjustment_digest);
-    if (auth_credited && credited_actor) m_auth_credited_accounts.insert(*credited_actor);
     if (std::holds_alternative<AccountCreateOp>(operation)) {
         ++m_account_creates;
     }

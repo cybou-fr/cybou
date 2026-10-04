@@ -27,7 +27,7 @@
 #include <QStandardItemModel>
 #include <QVBoxLayout>
 
-#include <cybou/validation_attestation.h>
+#include <cybou/identity_signer.h>
 
 #include <algorithm>
 
@@ -122,18 +122,6 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
     m_lock_button->setIcon(QIcon{glyphPixmap(Glyph::Lock, {14, 14}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))});
     system->addWidget(m_lock_button, 0, Qt::AlignLeft);
     hero_layout->addLayout(system, 1);
-    auto* authority = new QVBoxLayout;
-    authority->setSpacing(2);
-    authority->addWidget(Eyebrow(tr("AUTHORITY"), hero));
-    m_authority = new QLabel{hero};
-    m_authority->setObjectName(QStringLiteral("metric"));
-    m_authority->setProperty("cybouId", QStringLiteral("walletAuthority"));
-    m_authority->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    authority->addWidget(m_authority);
-    m_authority_hint = MutedText(tr("Earned by network use; cannot be sent"), hero);
-    authority->addWidget(m_authority_hint);
-    authority->addStretch();
-    hero_layout->addLayout(authority, 1);
     auto* actions = new QVBoxLayout;
     actions->setSpacing(8);
     m_send_button = new QPushButton{tr("Send"), hero};
@@ -151,41 +139,6 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
 
     m_gate = MutedText({}, this);
     root->addWidget(m_gate);
-
-    // Limits granted by finalized AUTH.
-    auto* limits = Card(this);
-    limits->setProperty("cybouId", QStringLiteral("walletLimits"));
-    auto* limits_layout = new QVBoxLayout{limits};
-    limits_layout->setContentsMargins(22, 16, 22, 16);
-    limits_layout->setSpacing(10);
-    limits_layout->addWidget(SectionTitle(tr("Your current limits"), limits));
-    auto* limits_grid = new QGridLayout;
-    limits_grid->setHorizontalSpacing(24);
-    limits_grid->setVerticalSpacing(2);
-    const auto limit = [&](int column, const QString& caption) {
-        auto* label = new QLabel{caption, limits};
-        label->setObjectName(QStringLiteral("metricCaption"));
-        auto* value = new QLabel{limits};
-        value->setObjectName(QStringLiteral("rowTitle"));
-        value->setWordWrap(true);
-        limits_grid->addWidget(label, 0, column);
-        limits_grid->addWidget(value, 1, column, Qt::AlignTop);
-        limits_grid->setColumnStretch(column, 1);
-        return value;
-    };
-    m_limit_storage = limit(0, tr("Network storage"));
-    m_limit_operations = limit(1, tr("Network operations"));
-    m_limit_file = limit(2, tr("Largest file"));
-    m_limit_validation = limit(3, tr("Validation"));
-    limits_layout->addLayout(limits_grid);
-    m_next_tier_bar = new QProgressBar{limits};
-    m_next_tier_bar->setRange(0, 1000);
-    m_next_tier_bar->setTextVisible(false);
-    m_next_tier_bar->setFixedHeight(6);
-    limits_layout->addWidget(m_next_tier_bar);
-    m_limit_next = MutedText({}, limits);
-    limits_layout->addWidget(m_limit_next);
-    root->addWidget(limits);
 
     // Send panel.
     m_send_panel = Card(this);
@@ -382,35 +335,6 @@ void WalletPage::refresh()
         : QString{});
     m_gate->setVisible(!m_gate->text().isEmpty());
 
-    const QLocale locale;
-    const auto limits = cybouAccountLimits(status.authority);
-    m_authority->setText(cybouAuthorityText(status.authority));
-    // Finalized network storage in live mode; fixtures only know the files they show.
-    // Storage is paid by lease from System Balance, not limited by AUTH (DEC-274).
-    const quint64 quota_used = m_model->fixtureMode() ? status.storage_used : status.quota_used;
-    m_limit_storage->setText(tr("%1 stored  ·  paid by storage lease").arg(CybouProduct::sizeText(quota_used)));
-    // One block is about a second, so blocks left are seconds left.
-    const quint64 minutes = (status.epoch_blocks_left + 59) / 60;
-    m_limit_operations->setText(tr("%1 of %2 in this window  ·  up to %3 per block")
-        .arg(locale.toString(status.epoch_operations), locale.toString(limits.operations_per_epoch),
-            locale.toString(limits.operations_per_block)));
-    m_limit_operations->setToolTip(status.epoch_blocks_left > 0
-        ? tr("The window resets in about %n minute(s).", nullptr, static_cast<int>(qMax<quint64>(1, minutes))) : QString{});
-    m_limit_file->setText(CybouProduct::sizeText(limits.max_file_bytes));
-    m_limit_validation->setText(limits.validation_eligible ? tr("Eligible to sign")
-        : tr("Above %1").arg(cybouAuthorityText(cybou::VALIDATION_AUTHORITY_THRESHOLD)));
-    if (limits.next_tier_authority) {
-        const quint64 next = *limits.next_tier_authority;
-        m_next_tier_bar->setValue(static_cast<int>(qMin<quint64>(1000, status.authority * 1000 / next)));
-        m_limit_next->setText(tr("%1 more to the next tier. Each finalized file or message publication and each "
-                                 "move to System Balance adds 1 AUTH (at most 1 per block). Every operation also "
-                                 "needs %2-bit proof-of-work on this computer before the network accepts it.")
-            .arg(cybouAuthorityText(next - status.authority)).arg(limits.work_bits));
-    } else {
-        m_next_tier_bar->setValue(1000);
-        m_limit_next->setText(tr("Validator tier: the highest limits. Every operation needs %1-bit proof-of-work.")
-            .arg(limits.work_bits));
-    }
     if (!payments) m_send_panel->setVisible(false);
     updateSendState();
 }
@@ -593,8 +517,7 @@ void WalletPage::showLockDialog()
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(10);
     layout->addWidget(SectionTitle(tr("Add to System Balance"), &dialog));
-    auto* explain = MutedText(tr("System Balance pays CYBOU network fees for your Mail, Files and payments. "
-                                 "Moving CYBOU there also counts once toward your Identity Authority."), &dialog);
+    auto* explain = MutedText(tr("System Balance pays CYBOU network fees and storage for your Mail, Files and payments."), &dialog);
     layout->addWidget(explain);
     auto* amount_label = new QLabel{tr("Amount (available: %1)").arg(cybouAmountText(available)), &dialog};
     amount_label->setObjectName(QStringLiteral("cardLabel"));
@@ -669,12 +592,9 @@ void WalletPage::rebuildActivity()
         }
         const QString sign = entry.amount >= 0 ? QStringLiteral("+") : QStringLiteral("−");
         const QString amount = sign + cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
-        // Until PoA finality the row shows the operation (Waiting for
-        // confirmation / Validated); balances never include it.
+        // Until PoA finality the row shows the operation; balances never include it.
         const auto operation = m_model->displayedOperationState(entry.operation_id, entry.operation_state);
-        const QString subtitle = operation == CybouOperationState::Validated && entry.validation_signatures > 0
-            ? tr("Validated  ·  %n signature(s)", nullptr, static_cast<int>(entry.validation_signatures))
-            : CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
+        const QString subtitle = CybouProduct::operationPending(operation) || operation == CybouOperationState::Failed
             ? CybouProduct::operationStateText(operation)
             : entry.kind == CybouWalletEntryKind::NetworkServiceFee
                 ? tr("System Balance  ·  %1").arg(m_model->feePurpose(entry.operation_id))

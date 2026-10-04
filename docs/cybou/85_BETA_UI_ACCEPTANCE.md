@@ -140,16 +140,12 @@ Advanced details expose exact algorithms/evidence.
 [ ] technical evidence remains inspectable through Advanced
 ```
 
-## 10. Validation and AUTH
+## 10. Account values
 
 ```text
-[ ] Validated status never displays as Finalized
-[ ] Validated shows the eligible validator signature count
-[ ] a Validated payment does not modify spendable Balance
-[ ] a Validated Mail/File never displays as Sent / Protected
-[ ] Balance, System Balance and Authority (AUTH) display from finalized AccountState
-[ ] Validation eligibility displays Yes only when finalized AUTH > 10,000,000
-[ ] no Age, Activity, System contribution or Authority index fields appear
+[ ] a Submitted payment does not modify spendable Balance
+[ ] Balance and System Balance display from finalized AccountState
+[ ] no AUTH, Validation, Age, Activity or System contribution fields appear
 ```
 
 ## 11. Beta wow-flow

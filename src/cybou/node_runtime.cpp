@@ -322,10 +322,10 @@ std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoint
 
 std::optional<StoragePayoutBinding> CybouNodeRuntime::LocalStoragePayoutBinding() const
 {
-    ValidationSignerRef signer;
+    IdentitySignerRef signer;
     {
         std::lock_guard lock{m_mutex};
-        signer = m_validation_signer;
+        signer = m_identity_signer;
     }
     const auto account = signer ? signer->Account() : std::nullopt;
     const auto storage_id = LocalStorageId();
@@ -503,20 +503,6 @@ bool CybouNodeRuntime::IsStorageLeaseActive(const cybou::Hash256& publication_id
         period < lease->second.end_period;
 }
 
-uint32_t CybouNodeRuntime::RemainingEpochOperations(const AccountId& account_id) const
-{
-    std::lock_guard lock(m_mutex);
-    const auto loaded = m_store.LoadState();
-    const auto head = m_store.GetFinalizedHead();
-    if (!loaded || !loaded.state || !head) return 0;
-    const auto account = loaded.state->accounts.find(account_id);
-    const auto limits = ComputeAuthorityTierLimits(account == loaded.state->accounts.end() ? 0 : account->second.authority);
-    const uint64_t epoch = EpochForHeight(head->height + 1, m_config.network_genesis.GetProtocolParameters());
-    const auto usage = loaded.state->usage.find(account_id);
-    const uint32_t used = usage != loaded.state->usage.end() && usage->second.epoch == epoch ? usage->second.epoch_operations : 0;
-    return used >= limits.operations_per_epoch ? 0 : limits.operations_per_epoch - used;
-}
-
 OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
 {
     const auto nonce = PrepareOperationWork(op);
@@ -553,34 +539,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitStorageSettlement(const uint64_t p
     return result;
 }
 
-OperationSubmitResult CybouNodeRuntime::SubmitPoaAuthAdjustment(
-    const PoaAuthAction action, const AccountId& target, const uint64_t amount)
-{
-    std::lock_guard lock(m_mutex);
-    if (!m_poa_finalizer || !m_poa_finalizer->SignerEnabled() || m_store.PoaSafetyHalted()) {
-        return {.status = OperationSubmitStatus::POA_SIGNER_UNAVAILABLE};
-    }
-    const auto head = m_store.GetFinalizedHead();
-    if (!head || head->height == std::numeric_limits<uint64_t>::max() || m_poa_finalizer->SafetyHalted()) return {};
-    PoaAuthAdjustment adjustment{.action = action, .target_account_id = target,
-        .amount = amount, .block_height = head->height + 1};
-    if (!m_poa_finalizer->SignAuthAdjustment(adjustment)) return {};
-    const ProtocolOperation operation{std::move(adjustment)};
-    OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
-    // Signed by the genesis PoA key: its own protection, no relay PoW.
-    switch (m_operation_pool.Admit(operation, 0)) {
-    case PoolAdmission::ACCEPTED: status = OperationSubmitStatus::ACCEPTED; break;
-    case PoolAdmission::ALREADY_PENDING: status = OperationSubmitStatus::ALREADY_PENDING; break;
-    case PoolAdmission::ALREADY_FINALIZED: status = OperationSubmitStatus::ALREADY_FINALIZED; break;
-    case PoolAdmission::REJECTED: break;
-    }
-    const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(cybou::Hash256{})};
-    if (result.status == OperationSubmitStatus::ACCEPTED) {
-        RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
-    }
-    return result;
-}
-
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
     const std::span<const unsigned char> exact_bytes, const uint64_t work_nonce, const bool allow_seen_retry,
     std::optional<std::string> source_peer)
@@ -602,8 +560,6 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         // forwards an operation it could not execute itself.
         switch (m_operation_pool.Admit(*operation, work_nonce, std::move(source_peer))) {
         case PoolAdmission::ACCEPTED:
-            if (const auto id = ComputeOperationId(*operation)) AttestCandidate(*id);
-            break;
         case PoolAdmission::ALREADY_PENDING:
             break;
         case PoolAdmission::ALREADY_FINALIZED:
@@ -636,76 +592,12 @@ bool CybouNodeRuntime::HasCandidateOperation(const cybou::Hash256& operation_id)
 void CybouNodeRuntime::RevalidateCandidates()
 {
     for (const auto& dropped : m_operation_pool.Revalidate()) m_operation_relay.ForgetFinalized(dropped);
-    // Attestations name their finalized base: all become stale, and every
-    // still-valid candidate is attested again relative to the new tip.
-    if (const auto tip = m_store.GetFinalizedTip()) m_validation_pool.ResetBase(*tip);
-    for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
 }
 
-void CybouNodeRuntime::AttestCandidate(const cybou::Hash256& operation_id)
-{
-    if (!m_validation_signer || !m_operation_pool.Contains(operation_id)) return;
-    const auto tip = m_store.GetFinalizedTip();
-    const auto loaded = m_store.LoadState();
-    if (!tip || !loaded || !loaded.state) return;
-    m_validation_pool.ResetBase(*tip);
-    const auto attestation = SignValidationAttestation(*m_validation_signer, m_network_binding, operation_id, *tip,
-        *loaded.state);
-    if (attestation) m_validation_pool.Add(*attestation);
-}
-
-void CybouNodeRuntime::SetValidationSigner(ValidationSignerRef signer)
+void CybouNodeRuntime::SetIdentitySigner(IdentitySignerRef signer)
 {
     std::lock_guard lock{m_mutex};
-    m_validation_signer = std::move(signer);
-    // Refreshing local Validation eagerly keeps the sidecar aligned with the
-    // signer currently active on this node instead of leaking prior identity state.
-    for (const auto& id : m_operation_pool.Ids()) AttestCandidate(id);
-}
-
-bool CybouNodeRuntime::IsLocalValidationEligible() const
-{
-    std::lock_guard lock{m_mutex};
-    const auto account = m_validation_signer ? m_validation_signer->Account() : std::nullopt;
-    const auto loaded = m_store.LoadState();
-    return account && loaded && loaded.state && IsValidationEligible(*loaded.state, *account);
-}
-
-ValidationAcceptStatus CybouNodeRuntime::AcceptValidationAttestation(const ValidationAttestation& attestation)
-{
-    std::lock_guard lock{m_mutex};
-    // The attestation never replaces execution: this node must already hold
-    // the operation as a candidate it executed itself.
-    if (!m_operation_pool.Contains(attestation.operation_id)) return ValidationAcceptStatus::NOT_CANDIDATE;
-    const auto tip = m_store.GetFinalizedTip();
-    const auto loaded = m_store.LoadState();
-    if (!tip || !loaded || !loaded.state) return ValidationAcceptStatus::INVALID;
-    switch (VerifyValidationAttestation(attestation, m_network_binding, *tip, *loaded.state)) {
-    case ValidationAttestationError::NONE: break;
-    case ValidationAttestationError::STALE_BASE: return ValidationAcceptStatus::STALE_BASE;
-    default: return ValidationAcceptStatus::INVALID;
-    }
-    m_validation_pool.ResetBase(*tip);
-    switch (m_validation_pool.Add(attestation)) {
-    case ValidationPoolAdd::ADDED: return ValidationAcceptStatus::ADDED;
-    case ValidationPoolAdd::DUPLICATE: return ValidationAcceptStatus::DUPLICATE;
-    case ValidationPoolAdd::STALE_BASE: return ValidationAcceptStatus::STALE_BASE;
-    case ValidationPoolAdd::FULL: return ValidationAcceptStatus::FULL;
-    }
-    return ValidationAcceptStatus::INVALID;
-}
-
-std::vector<ValidationAttestation> CybouNodeRuntime::GetValidationAttestations(const cybou::Hash256& operation_id) const
-{
-    std::lock_guard lock{m_mutex};
-    return m_validation_pool.ForOperation(operation_id);
-}
-
-std::optional<ValidationAttestation> CybouNodeRuntime::NextValidationAttestation(
-    const std::function<bool(const ValidationPool::Key&)>& skip) const
-{
-    std::lock_guard lock{m_mutex};
-    return m_validation_pool.First(skip);
+    m_identity_signer = std::move(signer);
 }
 
 std::optional<RelayedOperation> CybouNodeRuntime::ClaimRelayedOperation()
@@ -743,18 +635,11 @@ OperationStatus CybouNodeRuntime::GetOperationStatus(const cybou::Hash256& op_id
     }
     // Only a PoA node's own pool is local pending; an ordinary node holding a
     // candidate must keep relaying it until the finalizer acknowledges it.
-    const auto signatures = m_operation_pool.Contains(op_id) ?
-        static_cast<uint32_t>(m_validation_pool.Count(op_id)) : 0U;
     if (m_poa_finalizer && m_poa_finalizer->SignerEnabled() && m_operation_pool.Contains(op_id)) {
-        return {.kind = OperationStatusKind::LOCAL_PENDING, .validation_signatures = signatures};
+        return {.kind = OperationStatusKind::LOCAL_PENDING};
     }
     const auto known = m_recent_operation_status.find(op_id);
-    if (known != m_recent_operation_status.end()) {
-        auto status = known->second;
-        status.validation_signatures = signatures;
-        return status;
-    }
-    return {.validation_signatures = signatures};
+    return known != m_recent_operation_status.end() ? known->second : OperationStatus{};
 }
 
 IdentityOperationCoordinator& CybouNodeRuntime::GetIdentityOperationCoordinator(CybouKeyStore& keystore)
@@ -836,7 +721,6 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::REJECTED_KNOWN});
             return OperationSubmitResult{.status = OperationSubmitStatus::REJECTED, .op_id = op_id};
         }
-        if (admission == PoolAdmission::ACCEPTED) AttestCandidate(op_id);
         if (m_poa_finalizer && m_poa_finalizer->SignerEnabled()) {
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
             return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?
@@ -1335,7 +1219,6 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     result.caught_up_with_known_peers = all_peers_caught_up;
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
     m_peer_manager->PollOperationRelays();
-    m_peer_manager->PollValidationAttestations();
     m_peer_manager->FanoutFinalizedBlocks();
     return result;
 }
@@ -1347,7 +1230,6 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     snapshot.network_binding = status.network_binding.GetHex();
     snapshot.node_type = "Full Node";
     snapshot.poa_signer_active = status.poa_signer_active;
-    snapshot.validation_eligible = IsLocalValidationEligible();
     snapshot.height = status.finalized_height;
     snapshot.tip = status.finalized_tip.GetHex();
     snapshot.state_root = status.state_root.GetHex();

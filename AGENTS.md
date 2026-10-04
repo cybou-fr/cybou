@@ -4,10 +4,10 @@
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
 implements the complete CYBOU P2P baseline: blocks, announcements,
-discovery, operation relay, Validation transport and encrypted storage. There
+discovery, operation relay and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
+Node. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -87,29 +87,18 @@ Bootstrap:
     - no BootstrapNode class
     - no special consensus role
     - IP:port is known in advance for initial discovery
-    - bootstrap status itself grants no authority and no AUTH
-    - any AUTH held by the bootstrap operator's Identity is an ordinary
+    - bootstrap status itself grants no authority
+    - any CYBOU held by the bootstrap operator's Identity is an ordinary
       GenesisAllocation decision, not a property of the bootstrap role
 
 Account values (AccountState, committed by the state root):
     Balance         spendable, transferable CYBOU
     System Balance  non-transferable CYBOU service budget
-    Authority       non-transferable AUTH, separate unit, not CYBOU supply
 
-AUTH:
-    - changes only through deterministic finalized state transitions
-    - GenesisAllocation may assign initial AUTH
-    - finalized network utility operations (RootPublication, SystemLock) -> +1 AUTH
-      to their authorizing account, velocity-capped at max +1 AUTH per account per block
-    - AccountCreate, Payment, IdentityRotate, NameCommit, NameReveal earn no AUTH
-      (prevents zero-cost and ping-pong Sybil farming)
-    - PoaAuthAdjustment GRANT (signed by the genesis PoA key) -> +N AUTH
-    - PoaAuthAdjustment BURN  (signed by the genesis PoA key) -> -N AUTH, floor 0
-    - PoaAuthAdjustment itself earns no AUTH
-    - no transfer between Identities
-    - Authority > 10,000,000 AUTH makes an Identity eligible to sign Validation
-    - Authority never grants PoA finalization power
-    - automatic penalties are not frozen
+Anti-spam (DEC-284):
+    - relay proof-of-work on every user operation, one flat difficulty
+    - protocol fees and storage rent paid in CYBOU
+    - no AUTH, no reputation unit, no per-Identity operation tiers
 
 Candidate execution:
     - every full node independently validates and executes every candidate
@@ -117,23 +106,10 @@ Candidate execution:
     - invalid -> reject, do not relay
     - valid   -> keep in bounded volatile pool and relay
 
-Validation:
-    - an additional signature, never a substitute for local execution
-    - an Identity with finalized AUTH > 10,000,000 may sign an operation
-      only after its own node independently validated it
-    - signs NetworkBinding, OperationID, finalized base BlockID, AccountID
-      with the ordinary Identity Authorization key
-    - receiving nodes MUST independently validate the operation regardless
-      of Validation signatures
-    - eligibility is evaluated against latest FINALIZED state
-    - pre-finalization evidence only; never changes balances or state
-    - no provisional state, no provisional storage admission
-
 PoA:
     - sole canonical finalizer
     - MUST independently execute every candidate
-    - Validation signatures are never sufficient for finalization
-    - trusts no validator/bootstrap/peer state
+    - trusts no bootstrap/peer state
     - valid -> signs/finalizes
     - invalid -> drops
     - owns no special canonical pending state; only finalized state is canonical
@@ -151,11 +127,9 @@ Only a valid PoA-finalized block changes canonical state.
 
 No:
     voting against PoA
-    validator fork-choice
-    validator quorum finality
-    validator registry, ValidatorSet
-    provisional state or provisional storage from Validation
-    validation.enabled / validation.min_signatures
+    validators, Validation signatures, validator quorum or registry
+    AUTH or any Authority unit
+    provisional state or provisional storage
     BFT
 ```
 
@@ -192,7 +166,6 @@ Storage:
     provider revenue only from verified foreign storage service
     off-chain receipts, audits and full-GET checks; PoA-signed daily
     StorageSettlement is the only canonical record of service
-    No AUTH value determines storage entitlement
 
 No:
     storage-node role, provider register, StorageVolume container
@@ -201,19 +174,19 @@ No:
     per-audit blockchain records, Reed-Solomon
 ```
 
-Status: M1–M6 are implemented and main compiles the new storage-economy DEVNET
-(NetworkBinding `6d202ccf…2d97`, provisioned 2026-10-04, M7 steps 1–3). The DEV
-VPS runs it since its 2026-10-04 cutover; desktops cut over on demand. AUTH,
-Validation, AUTH operation tiers and all PoW are unchanged by this work.
+Status: M1–M6 are implemented. AUTH, Validation and AUTH operation tiers were
+removed (DEC-284); main compiles the resulting DEVNET (NetworkBinding
+`eee26eca…3665`, provisioned 2026-10-04). Desktops cut over on demand.
 
 ## DEV VPS deployment — migration state
 
 There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
-  `cybou node run --capacity 40GiB` on the storage-economy DEVNET (cut over
-  2026-10-04), with state under `/var/lib/cybou/node/state`. The pre-storage-economy
-  DEVNET state is retired under `/var/lib/cybou/node-retired-20261004-pre-storage-economy`;
+  `cybou node run --capacity 40GiB` on the current DEVNET (cut over
+  2026-10-04), with state under `/var/lib/cybou/node/state`. The AUTH-era
+  storage-economy state is retired under `/var/lib/cybou/node-retired-20261004-auth`;
+  the pre-storage-economy one under `/var/lib/cybou/node-retired-20261004-pre-storage-economy`;
   the domain before it under `/var/lib/cybou/node-retired-20261003-de-version`;
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.
@@ -299,12 +272,12 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
   For each NetworkID, exactly one signed genesis is valid. There is no `genesis_generation`,
   no re-genesis, and no in-place genesis replacement.
 - Network genesis defines the initial chain state, protocol parameters, authorized
-  PoA public key, and initial AUTH in GenesisAllocation for designated ordinary Identities.
+  PoA public key, and initial CYBOU in GenesisAllocation for designated ordinary Identities.
   Such an allocation is a genesis decision, never a property of a bootstrap role.
 - `cybou.cybou` is an ordinary account-level Identity with AccountID, Recovery,
   Authorization, KEM, Mail/support, and a distinct PoA key role derived from its
   mnemonic. Consensus recognizes its finalization right solely through the PoA
-  public key in genesis; its name and AUTH value confer no finalization power.
+  public key in genesis; its name and balances confer no finalization power.
 - Cross-network migration does not exist. A network cutover to a new official network
   (a new Network Public Key, new NetworkID, new genesis) wipes all local network-bound state cleanly:
   chain/state, network definition, genesis, Identity, vault, AccountID,
@@ -380,7 +353,7 @@ The documentation has a strict hierarchy; lower levels cannot introduce
 architecture that is absent from higher levels:
 - LEVEL 0 — Implementation authority: `AGENTS.md`
 - LEVEL 1 — Frozen architecture and decisions: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
-- LEVEL 2 — Normative domain documents: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_IDENTITY_AUTHORITY.md`, etc.
+- LEVEL 2 — Normative domain documents: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, etc.
 - LEVEL 3 — Mutable implementation truth: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
 - LEVEL 4 — Roadmap and unresolved work: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
 - LEVEL 5 — Product and UX contracts: `docs/cybou/81_BETA_PRODUCT_SCOPE.md`–`85_BETA_UI_ACCEPTANCE.md`, `APPLICATION_DATA_PLANE.md`
@@ -388,24 +361,17 @@ architecture that is absent from higher levels:
 - LEVEL 7 — Machine-readable mirrors: `spec/*`
 - LEVEL 8 — Public projection: `README.md`, `www/*`, `www/llms.txt`
 
-## Finality and Validation
+## Finality
 
 - Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized
   PoA key for the block height.
 - The Central Authority PoA finalizer executes operations independently, trusts no
-  external validator state, and publishes finalized blocks.
+  external state, and publishes finalized blocks.
 - Full nodes independently validate every candidate operation, block transition,
   state root, and PoA certificate.
-- Validation is an additional signature by an Identity whose Authority in the
-  latest finalized state exceeds 10,000,000, made only after its own node
-  independently validated the operation. It is pre-finalization evidence and
-  never substitutes local or PoA execution, never changes state, and creates
-  no provisional state. Receiving nodes and PoA always re-execute.
-- An operation is shown `Validated` when the local node holds it as valid and
-  has at least one valid eligible Validation signature for it.
+- An operation is `Submitted` until a PoA-finalized block includes it.
 - PoA is centralized finality, not BFT.
 - Durable signing journal must fail closed; equivocation conflicts are deterministically resolved by min(BlockID) while verified evidence is durably recorded.
-- AUTH never grants PoA finalization power.
 
 ## Application content and storage admission
 
@@ -416,8 +382,7 @@ architecture that is absent from higher levels:
 - Default storage admission is finality-first: chunks are admitted remotely only
   after a finalized RootPublication authorizes them by Merkle proof. Application
   publication remains local until finality.
-- Validation never authorizes remote chunk admission; there is no provisional
-  storage admission.
+- There is no provisional storage admission.
 - A RootPublication may locally bundle multiple encrypted content trees under
   one authorization root; this is an application implementation pattern, not
   a new wire entity.
@@ -451,44 +416,26 @@ architecture that is absent from higher levels:
 - A file/message is not `Protected`/`Sent` merely because its RootPublication
   is finalized; durability requires confirmed remote replicas.
 
-## Canonical Identity Authority and Resource Governance
+## Accounts and anti-spam
 
-- Every AccountState has three canonical account values: spendable Balance in CYBOU,
-  non-transferable System Balance in CYBOU, and non-transferable Authority in AUTH.
-  All three are committed by the finalized state root.
-- AUTH changes only through deterministic finalized transitions:
-  GenesisAllocation (claimed exactly once by AccountCreate), +1 AUTH to the
-  authorizing account of finalized utility operations (RootPublication,
-  SystemLock) subject to an anti-Sybil per-block velocity limit of max +1 AUTH
-  per account per block, and the PoA-signed `PoaAuthAdjustment` GRANT (+N) / BURN
-  (-N, floor 0). Payments, key rotations, and name claims earn no AUTH to prevent
-  ping-pong and zero-cost Sybil farming. AUTH is never transferred between Identities.
-  Amounts locked, paid as fees, credited at onboarding or stored never scale AUTH;
-  such an operation earns only the flat +1.
-- Authority > 10,000,000 AUTH qualifies an Identity to sign Validation.
-- Authority grants NO PoA finalization power, NO consensus voting rights, and NO stake weight.
-- AUTH acts as the anti-spam operation-rate governor (DEC-272). It no longer
-  governs storage (DEC-274): storage is paid by lease, and `MAX_PUBLICATION_CHUNKS`
-  is only a safety bound. Block execution enforces, per Identity and against the
-  parent finalized AUTH, a tier limit of metered operations per block and per
-  epoch. Limits expand with AUTH up to the Validator tier
-  (AUTH > 10,000,000), whose limits are high but finite: one Identity can never
-  take a whole block. AccountCreate and PoaAuthAdjustment are not metered.
-- Every user operation carries relay proof-of-work (DEC-273): SHA-256 of
-  `CYBOU/OP-WORK || NetworkBinding || OperationID || nonce` with tier-dependent
+- Every AccountState has two canonical account values: spendable Balance and
+  non-transferable System Balance, both in CYBOU and committed by the finalized
+  state root. There is no AUTH, reputation unit or per-Identity operation tier
+  (DEC-284).
+- Spam is priced by protocol fees and storage rent in CYBOU and by relay
+  proof-of-work. `MAX_PUBLICATION_CHUNKS` and block size are safety bounds only.
+- Every user operation carries relay proof-of-work (DEC-273, DEC-284): SHA-256 of
+  `CYBOU/OP-WORK || NetworkBinding || OperationID || nonce` with one flat
   difficulty (names harder). Every Full Node, the PoA included, admits and relays
-  only operations whose work meets the author's finalized tier. The nonce travels
-  with the exact bytes until finalization and never enters a block.
+  only operations whose work meets it. The nonce travels with the exact bytes
+  until finalization and never enters a block.
 - One `.cybou` name per Identity: NameCommit and NameReveal refuse an Identity that
   already owns a name or holds a pending commit.
 - Every newly created Identity receives a 20,000 CYBOU System Balance start
   budget transferred from the Central Treasury (DEC-277); it pays fees and storage
   rent. Onboarding-origin CYBOU never becomes spendable through storage payouts.
-- Automatic AUTH penalties require objectively verifiable protocol evidence and
-  are not frozen. Signed Validation of an operation that is invalid against its
-  stated finalized base is evidence a future penalty rule may use.
-- Local peer failures use local disconnect, backoff, and abuse limits; they do
-  not change global Authority.
+- Local peer failures use local disconnect, backoff, and abuse limits; they
+  never change canonical state.
 
 ## Notarial object storage register, mutual proofs, and pruning
 
@@ -506,8 +453,7 @@ architecture that is absent from higher levels:
   When an object is deleted by its author (`RevokePublication`), its active state record
   is removed from the active publication register (historical blocks remain), initiating managed purge by compliant storing nodes of the underlying chunks
   from local ChunkStore, preventing storage bloat. `RevokePublication` is author-only,
-  costs the payment fee from System Balance, earns no AUTH and frees its chunks from the
-  author's quota; a revoked publication no longer authorizes chunk admission.
+  costs the payment fee from System Balance and closes the author's lease; a revoked publication no longer authorizes chunk admission.
 
 ## Economics
 
@@ -523,13 +469,11 @@ After claim: they are that claimant's ordinary AccountState Balance.
 ```
 
 Balance is spendable CYBOU. System Balance is an irreversible CYBOU service budget.
-Authority is canonical, non-transferable AUTH and is excluded from CYBOU supply.
 
 ## Simplified implementation boundary
 
 The only node type is Full Node. Nodes announce no roles or capabilities.
-PoA authority is possession of the genesis-authorized private key; Validation
-is an eligible Identity signature checked against finalized state. Storage is
+PoA authority is possession of the genesis-authorized private key. Storage is
 intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.

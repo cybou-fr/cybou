@@ -13,7 +13,6 @@
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/storage_audit.h>
 #include <cybou/operation_relay.h>
-#include <cybou/validation_pool.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -69,11 +68,9 @@ enum class MessageType : uint8_t {
     GET_CHUNK_AUTHORIZATION_PROOF = 21, ///< Запрос Merkle proof для chunk'а.
     CHUNK_AUTHORIZATION_PROOF = 22,     ///< Ответ с proof авторизации chunk'а.
     STORAGE_PROOF = 23,                 ///< Доказательство владения storage-ключом, привязанное к TLS-сессии.
-    VALIDATION_ATTESTATION_POLL = 24,   ///< Запрос одной `Validation` attestation из gossip-очереди пира.
-    VALIDATION_ATTESTATION = 25,        ///< Gossip-сообщение с одной attestation.
-    STORAGE_PROOF_REQUEST = 26,         ///< Challenge для on-demand доказательства `StorageId`.
-    STORAGE_AUDIT_CHALLENGE = 27,       ///< Random-offset audit challenge по admitted chunk (DEC-276).
-    STORAGE_AUDIT_RESPONSE = 28,        ///< Ответ на audit challenge по exact stored bytes.
+    STORAGE_PROOF_REQUEST = 24,         ///< Challenge для on-demand доказательства `StorageId`.
+    STORAGE_AUDIT_CHALLENGE = 25,       ///< Random-offset audit challenge по admitted chunk (DEC-276).
+    STORAGE_AUDIT_RESPONSE = 26,        ///< Ответ на audit challenge по exact stored bytes.
 };
 /// \brief Наибольший допустимый wire-код сообщения в текущем baseline.
 inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_AUDIT_RESPONSE)};
@@ -255,8 +252,6 @@ public:
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Забирает одну relay-операцию у удаленного пира и передает ее runtime.
     bool PollOperationRelay(CybouNodeRuntime& runtime);
-    /// \brief Забирает одну Validation-attestation; runtime затем перепроверяет ее на своем состоянии.
-    bool PollValidationAttestation(CybouNodeRuntime& runtime);
     /// \brief Запрашивает у пира список известных endpoint'ов.
     std::vector<std::pair<std::string, uint16_t>> RequestPeers(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});
@@ -323,10 +318,6 @@ private:
     std::optional<StorageId> m_peer_storage_id;
     std::optional<StoragePayoutBinding> m_peer_payout_binding;
     std::optional<Hello> m_local;
-    /// \brief Финализованная база, для которой уже выдавались attestation'ы этому пиру.
-    cybou::Hash256 m_served_attestation_base;
-    /// \brief Attestation'ы, уже выданные этому пиру на текущей финализованной базе, чтобы не дублировать gossip в пределах сеанса.
-    std::set<ValidationPool::Key> m_served_attestations;
     std::set<cybou::Hash256> m_served_operations;
     HandshakeStatus m_handshake_status{HandshakeStatus::NOT_ATTEMPTED};
 };

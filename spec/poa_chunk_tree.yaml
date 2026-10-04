@@ -25,21 +25,9 @@ consensus:
     separate_genesis_digest_profile_pin: absent
   poa_public_key: genesis_authorized
   poa_identity: ordinary_cybou_dot_cybou_identity_with_distinct_poa_key_role
-  authority_assignment: genesis_allocation_claimed_once_into_canonical_account_AUTH
-  authority_state_field: AccountState.authority
-  authority_unit: AUTH
   bft: false
   validator_set: absent
-  validation:
-    role: optional_prefinalization_signatures
-    requires_local_independent_execution: true
-    receivers_reexecute: true
-    poa_reexecutes: true
-    creates_state: false
-    minimum_authority_for_eligibility: 10000001
-    authority_evaluation_state: latest_finalized_state
-    signed_fields: [network_binding, operation_id, finalized_base_block_id, validator_account_id]
-    signature: identity_authorization_ed25519_mldsa44
+  validation: absent  # DEC-284
   bootstrap:
     role: ordinary_cybou_full_peer
     same_executable: true
@@ -190,23 +178,15 @@ storage:
   local_onboarding_storage_baseline_bytes: 16106127360  # 15 GiB
   mutual_proof_of_storage: challenge_response_byte_offset_nonce_verified_in_blocks
   object_pruning_on_revocation: true
-  revocation_operation: RevokePublication  # author only, payment fee, no AUTH
+  revocation_operation: RevokePublication  # author only, payment fee
   quota_unit_bytes: 524288  # one authorized chunk
   publication_register: state.publications_keyed_by_root_publication_operation_id
-resource_tiers:  # DEC-272 operation rate only; storage is not an AUTH resource (DEC-274)
-  metered_operations: [Payment, SystemLock, IdentityRotate, NameCommit, NameReveal, RootPublication, RevokePublication]
-  epoch_blocks: 1024
-  tiers:
-    - {name: T0, min_auth: 0, ops_per_block: 1, ops_per_epoch: 30, work_bits: 22}
-    - {name: T1, min_auth: 10000, ops_per_block: 5, ops_per_epoch: 150, work_bits: 21}
-    - {name: T2, min_auth: 100000, ops_per_block: 25, ops_per_epoch: 750, work_bits: 20}
-    - {name: T3, min_auth: 1000000, ops_per_block: 100, ops_per_epoch: 3000, work_bits: 19}
-    - {name: VALIDATOR, min_auth_exclusive: 10000000, ops_per_block: 1000, ops_per_epoch: 30000, work_bits: 18}
-  one_name_per_identity: true
-relay_proof_of_work:  # DEC-273
+one_name_per_identity: true
+relay_proof_of_work:  # DEC-273, DEC-284
+  work_bits: 22
   hash: SHA-256(CYBOU/OP-WORK || NetworkBinding || OperationID || nonce_u64_le)
   name_operation_extra_bits: 4
-  exempt: [AccountCreate, PoaAuthAdjustment]
+  exempt: [AccountCreate, StorageSettlement]
   checked_by: every_full_node_including_poa_before_candidate_execution_and_relay
   transport: OP_META_size_u32_nonce_u64
   in_block: false

@@ -152,8 +152,7 @@ IdentityRegistryError IdentityRegistry::AuthorizeOperation(
     if (record.nonce == std::numeric_limits<uint64_t>::max()) return IdentityRegistryError::NONCE_EXHAUSTED;
     const auto digest = ComputeIdentityOperationDigest(network_binding, request);
     if (!digest) return IdentityRegistryError::INVALID_PAYLOAD;
-    // Реестр продвигает nonce только после локальной криптографической проверки exact bytes;
-    // Validation не заменяет локальную проверку Full Node.
+    // Реестр продвигает nonce только после локальной криптографической проверки exact bytes.
     if (!VerifyIdentityMessage(record.authorization_key, request.signature, *digest)) return IdentityRegistryError::INVALID_SIGNATURE;
     ++record.nonce;
     return IdentityRegistryError::NONE;

@@ -36,21 +36,19 @@ experimental software, not a public mail or cloud-storage service.
 - DEVNET uses bootstrap `51.255.46.58:29461`. MAINNET remains unprovisioned,
   without a bootstrap locator, and disabled in the GUI until provisioning.
 - `cybou.cybou` is an ordinary Identity with a distinct genesis-authorized PoA
-  key role; its name and AUTH value do not grant finalization rights.
+  key role; its name and balances do not grant finalization rights.
 - The Central Authority finalizer is operated from its desktop after unlock using
   the genesis-authorized PoA key. Its blocks are authenticated by genesis-authorized PoA certificates.
-- Authority is canonical non-transferable AUTH in AccountState, excluded from
-  CYBOU supply. AUTH changes only by finalized transitions (+1 per finalized utility
-  operation, PoA-signed GRANT/BURN adjustments) and is never transferred. Every full node executes
-  every candidate; identities with AUTH > 10,000,000 may add Validation signatures as
-  evidence only. PoA re-executes everything and alone finalizes.
+- Accounts hold only CYBOU (Balance, System Balance); there is no AUTH or
+  Validation. Spam is priced by fees, storage rent and a flat relay proof-of-work.
+  Every full node executes every candidate. PoA re-executes everything and alone finalizes.
 - Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots
   and recipient capsules. Mutual storage-proof notarization is a target, not implemented.
   Storage admission requires an active finalized StorageLease paid from System Balance
   into escrow; local declarations convey zero authority.
 - CYBOU service units account for resources used by operations and storage.
   Identities have an initial service budget; storage leases and verified service
-  records govern resource accounting. AUTH is separate and does not determine storage volume.
+  records govern resource accounting.
   Each Full Node chooses explicit local capacity of at least 15 GiB.
 - Storage audit primitives (`StorageAuditChallenge`, `CreateStorageAuditProof`,
   `VerifyStorageAuditProof`) verify stored chunks via randomized offset and nonce proofs;

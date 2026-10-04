@@ -408,7 +408,7 @@ void CybouShellTests::mailNavigationAndSearch()
     search->clear();
 
     mail->setView(EmailPage::View::Sent);
-    QCOMPARE(mail->visibleMessageIds(), (QStringList{QStringLiteral("m-sent-validated"),
+    QCOMPARE(mail->visibleMessageIds(), (QStringList{QStringLiteral("m-sent-submitted"),
         QStringLiteral("m-sent-securing"), QStringLiteral("m-sent-1")}));
     mail->setView(EmailPage::View::Starred);
     QCOMPARE(mail->visibleMessageIds(), QStringList{QStringLiteral("m-welcome")});
@@ -961,57 +961,10 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
     finalize_now->click();
     QCOMPARE(finalize.count(), 1);
 
-    // AUTH changes need an active signer, a target and an amount.
-    auto* grant = button("authorityGrant");
-    QVERIFY(grant);
-    QVERIFY(!grant->isEnabled());
-    for (auto* edit : page.findChildren<QLineEdit*>()) {
-        edit->setText(edit->accessibleName() == QStringLiteral("Identity") ? QStringLiteral("alice.cybou") : QStringLiteral("5"));
-    }
-    QVERIFY(grant->isEnabled());
     authority.finalizer = CybouFinalizerState::SafetyHalt;
     authority.signer_enabled = false;
     model.setNetworkAuthority(authority);
-    QVERIFY(!grant->isEnabled());
     QVERIFY(pause->isEnabled() == false);
-}
-
-void CybouShellTests::walletShowsAuthorityLimits()
-{
-    constexpr quint64 GIB{1024ULL * 1024 * 1024};
-    const auto base = cybouAccountLimits(0);
-    QCOMPARE(base.storage_quota, quint64{0});
-    QCOMPARE(base.max_file_bytes, 512 * GIB);
-    QCOMPARE(base.operations_per_block, quint32{1});
-    QCOMPARE(base.operations_per_epoch, quint32{30});
-    QCOMPARE(base.work_bits, quint32{22});
-    QVERIFY(!base.validation_eligible);
-    QCOMPARE(base.next_tier_authority.value_or(0), quint64{10'000});
-    const auto top = cybouAccountLimits(10'000'001);
-    QCOMPARE(top.storage_quota, quint64{0});
-    QCOMPARE(top.operations_per_block, quint32{1'000});
-    QVERIFY(top.validation_eligible);
-    QVERIFY(!top.next_tier_authority);
-
-    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
-    model.setAuthority(12'000);
-    model.setResourceUsage(3 * GIB, 7, 600);
-    QCOMPARE(model.status().storage_quota, quint64{0});
-    WalletPage page{&model};
-    QLabel* authority = nullptr;
-    for (auto* label : page.findChildren<QLabel*>()) {
-        if (label->property("cybouId").toString() == QStringLiteral("walletAuthority")) authority = label;
-    }
-    QVERIFY(authority);
-    QCOMPARE(authority->text(), cybouAuthorityText(12'000));
-    const auto labels = page.findChildren<QLabel*>();
-    const auto shows = [&labels](const QString& text) {
-        return std::any_of(labels.begin(), labels.end(), [&](const QLabel* label) { return label->text().contains(text); });
-    };
-    QVERIFY(shows(QStringLiteral("7 of 150 in this window")));
-    QVERIFY(shows(QStringLiteral("up to 5 per block")));
-    // No AUTH file-size tier any more: only the safety bound (DEC-274).
-    QVERIFY(shows(CybouProduct::sizeText(512 * GIB)));
 }
 
 void CybouShellTests::networkPageReflectsModel()
@@ -2185,25 +2138,6 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
 
 
 
-
-void CybouShellTests::identityAuthorityIsAnHonestPreview()
-{
-    auto window = makeWindow();
-    auto* model = window->desktopModel();
-    auto* page = window->page(CybouPage::Identity);
-    const auto auth_label = [page]() -> QLabel* {
-        for (auto* widget : page->findChildren<QLabel*>()) {
-            if (widget->property("cybouId").toString() == QLatin1String{"identityAuthorityValue"}) return widget;
-        }
-        return nullptr;
-    };
-    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
-    QVERIFY(auth_label());
-    QVERIFY(auth_label()->text().contains(QLatin1String{"AUTH"}));
-
-    model->setAuthority(500);
-    QVERIFY(auth_label()->text().contains(QStringLiteral("500 AUTH")));
-}
 
 void CybouShellTests::rotationKeepsLiveSessionWorking()
 {

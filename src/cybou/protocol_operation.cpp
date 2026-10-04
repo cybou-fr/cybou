@@ -322,10 +322,6 @@ std::optional<std::vector<unsigned char>> SerializeProtocolOperation(const Proto
         const auto body = SerializeRootPublicationOperation(*publication);
         if (!body || body->size() + 1 > ROOT_PUBLICATION_MAX_OPERATION_BYTES) return std::nullopt;
         return TaggedOperationBytes(ProtocolOperationKind::ROOT_PUBLICATION, *body);
-    } else if (const auto* adjustment = std::get_if<PoaAuthAdjustment>(&operation)) {
-        const auto body = SerializePoaAuthAdjustment(*adjustment);
-        if (!body) return std::nullopt;
-        return TaggedOperationBytes(ProtocolOperationKind::POA_AUTH_ADJUSTMENT, *body);
     } else if (const auto* revoke = std::get_if<AuthorizedRevokePublication>(&operation)) {
         const auto body = SerializeRevokePublicationOperation(*revoke);
         if (!body) return std::nullopt;
@@ -386,11 +382,6 @@ std::optional<ProtocolOperation> DeserializeProtocolOperation(std::span<const un
         const auto op = DeserializeRootPublicationOperation(bytes.subspan(1));
         return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
     }
-    case ProtocolOperationKind::POA_AUTH_ADJUSTMENT: {
-        if (bytes.size() != 1 + POA_AUTH_ADJUSTMENT_SIZE) return std::nullopt;
-        const auto op = DeserializePoaAuthAdjustment(bytes.subspan(1));
-        return op ? std::optional<ProtocolOperation>{ProtocolOperation{*op}} : std::nullopt;
-    }
     case ProtocolOperationKind::REVOKE_PUBLICATION: {
         if (bytes.size() != 1 + AUTHORIZED_REVOKE_PUBLICATION_SIZE) return std::nullopt;
         const auto op = DeserializeRevokePublicationOperation(bytes.subspan(1));
@@ -414,26 +405,13 @@ std::optional<AccountId> AuthorizingAccount(const ProtocolOperation& operation)
 {
     return std::visit([](const auto& op) -> std::optional<AccountId> {
         using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, AccountCreateOp> || std::is_same_v<T, PoaAuthAdjustment> ||
-                      std::is_same_v<T, StorageSettlement>) {
+        if constexpr (std::is_same_v<T, AccountCreateOp> || std::is_same_v<T, StorageSettlement>) {
             return std::nullopt;
         } else if constexpr (std::is_same_v<T, IdentityRotate>) {
             return op.account_id;
         } else {
             return op.authorization.account_id;
         }
-    }, operation);
-}
-
-std::optional<AccountId> AuthorityEarningAccount(const ProtocolOperation& operation)
-{
-    return std::visit([](const auto& op) -> std::optional<AccountId> {
-        using T = std::decay_t<decltype(op)>;
-        if constexpr (std::is_same_v<T, AuthorizedRootPublication> ||
-                      std::is_same_v<T, AuthorizedSystemLock>) {
-            return op.authorization.account_id;
-        }
-        return std::nullopt;
     }, operation);
 }
 
@@ -486,7 +464,7 @@ bool VerifyProtocolOperationRelayProofs(const ProtocolOperation& operation,
                 VerifyIdentityMessage(record->recovery_key, op.old_recovery_signature, *digest) &&
                 VerifyIdentityMessage(op.new_recovery_key, op.new_recovery_pop, *digest) &&
                 VerifyIdentityMessage(op.new_authorization_key, op.new_authorization_pop, *digest);
-        } else if constexpr (std::is_same_v<T, PoaAuthAdjustment> || std::is_same_v<T, StorageSettlement>) {
+        } else if constexpr (std::is_same_v<T, StorageSettlement>) {
             // PoA-подписанные операции не являются mesh-relay: их создаёт PoA
             // для собственного следующего блока после локального решения finality.
             return false;

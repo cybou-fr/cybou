@@ -24,7 +24,7 @@ check cannot prove that the endpoint is uncompromised or that no key ever leaked
 |---|---|---|---|---|
 | Content confidentiality | `encrypted_chunk.cpp`: ContentKey, per-chunk salt, HKDF, ChaCha20-Poly1305, network/header AAD; `root_publication.cpp`: KEM-wrapped key | Providers receive encrypted content; authorized clients can authenticate decryption | Does not establish absence of endpoint compromise, key export or traffic metadata leakage | Trace plaintext/key flow through staging, transport, logging and failure paths; reject altered ciphertext/AAD |
 | Integrity | Exact encrypted bytes hashed to ChunkID; finalized authorization Merkle root; AEAD verification | Retrieved bytes match the authorized encrypted object and decrypt authentically | Does not establish availability or authorship merely from a hash | Corrupted chunk, wrong inclusion proof and wrong decryption context must fail before application use |
-| Publication authenticity/finality | Identity operation authorization and locally executed PoA-finalized block | Authorized publication included in canonical state | PoA may censor or stop; a peer ACK or Validation signature is not finality | Verify inclusion and state transition locally; keep pending/unknown distinct |
+| Publication authenticity/finality | Identity operation authorization and locally executed PoA-finalized block | Authorized publication included in canonical state | PoA may censor or stop; a peer ACK is not finality | Verify inclusion and state transition locally; keep pending/unknown distinct |
 | Remote admission | `StorageService::Place`: STORED/ALREADY_STORED and encrypted local placement records | Client observed successful admission to the recorded provider | No durable signed provider receipt; ACK is not proof of continued possession | Read each required chunk back and verify ChunkID; distinguish admission from subsequent checks |
 | Replica diversity | On-demand storage-key proof; placement deduplicates StorageId | Different proven storage keys | Different keys do not prove separate disks, hosts, operators or failure domains | One key on multiple endpoints counts once; investigate correlated-provider selection |
 | Availability | `Audit` reads all recorded chunks; `AuditNextPlacement` rotates through a bounded subset; GET plus ChunkID verification | Checked chunks were retrievable and intact during the check | Bounded pass does not check the whole object at once; no continuous-availability proof or persisted per-replica freshness guarantee established by this review | Report checked scope and time; exercise timeout, corruption and partial-object failure |
@@ -222,7 +222,7 @@ GET/hash audit and repair remain necessary, and a failed check invalidates the
 local availability estimate even while an earlier receipt remains authentic.
 
 Receipts initially have no canonical accounting effect: they cannot increase
-quota or AUTH, allocate rewards, impose penalties, admit chunks, or change
+quota, allocate rewards, impose penalties, admit chunks, or change
 finality. In particular, a receipt plus a requester-reported timeout is not
 objective evidence of global misconduct. No routine receipt is put on chain
 by this proposal. The frozen mutual-proof/notarial target remains a separate

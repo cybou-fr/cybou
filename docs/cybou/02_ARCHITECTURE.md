@@ -4,10 +4,10 @@
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
 implements the complete CYBOU P2P baseline: blocks, announcements,
-discovery, operation relay, Validation transport and encrypted storage. There
+discovery, operation relay and encrypted storage. There
 is no capability bitmap and no network role announcement. Storage is intrinsic;
 capacity is local policy. Bootstrap is only a known locator of an ordinary Full
-Node. Validation requires an Identity with finalized AUTH > 10,000,000. PoA is
+Node. PoA is
 possession of the private key matching the public key in genesis, with durable
 signing safety. IP, endpoints, TLS sessions, StorageId and peer declarations
 never confer consensus authority. StorageId is proven on demand only for a
@@ -32,7 +32,6 @@ ApplicationService / PublicationService / StorageService
 native CYBOU NodeRuntime
   + canonical state execution and independent candidate execution
   + single-operator hybrid-PQ PoA finality (genesis-authorized P)
-  + Validation signatures (local Identity AUTH > 10,000,000)
   + P2P mesh synchronization and operation relay
   + RootPublication
   + common encrypted ChunkStore
@@ -53,7 +52,7 @@ Compiled OfficialNetwork public constants:
   -> Verify compiled genesis signature and initial state root
   -> Ordinary bootstrap peer seeds initial CYBOU P2P discovery
   -> Direct P2P mesh
-  -> Every node executes candidates; eligible Identities add Validation signatures
+  -> Every node executes candidates before relay
   -> Central Authority P signs finalized blocks (absolute canonical truth)
 ```
 
@@ -74,8 +73,6 @@ material and signed constants enter the source tree.
 
 Every full node independently validates blocks, operation validity, and state
 transitions, and executes every candidate operation before relaying it.
-Validation signatures are pre-finalization evidence only; they never replace
-local or PoA execution and never change state.
 
 
 ## Storage implementation evidence boundary
@@ -115,7 +112,7 @@ CYBOU architecture adheres to a strict hierarchy of authority. Lower levels
 cannot introduce protocol mechanics absent from higher levels:
 - **Level 0 (Implementation authority)**: `AGENTS.md`
 - **Level 1 (Frozen architecture / decisions)**: `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
-- **Level 2 (Normative domain documents)**: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `VALIDATION.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`, `57_IDENTITY_AUTHORITY.md`
+- **Level 2 (Normative domain documents)**: `04_NETWORK_LIFECYCLE.md`, `05_CHAIN_STATE.md`, `08_P2P.md`, `POA_FINALITY.md`, `ROOT_PUBLICATION.md`, `STORAGE_ADMISSION.md`, `10_IDENTITY_NAMES.md`, `18_ECONOMICS_FEES.md`
 - **Level 3 (Mutable implementation truth)**: `docs/cybou/26_IMPLEMENTATION_STATUS.md`
 - **Level 4 (Roadmap / unresolved work)**: `docs/cybou/22_ROADMAP.md`, `docs/cybou/25_OPEN_QUESTIONS.md`
 - **Level 5 (Product / UX)**: `docs/cybou/81`–`85`, `APPLICATION_DATA_PLANE.md`
@@ -154,20 +151,15 @@ only the PoA public key authorized in genesis grants finalization right.
 Storage keys are proven on demand within the storage relationship. PoA authority
 is proven by finalized block certificates, never by a transport declaration. There is no canonical service-node registry.
 
-## Finality and Validation
+## Finality
 
 Canonical finality is single-operator hybrid-PQ PoA under the genesis-authorized
 PoA key. The PoA finalizer MUST execute operations independently and signs
-blocks; Validation signatures are never sufficient for finalization.
-There is no BFT or validator quorum.
+blocks. There is no BFT, validator or quorum.
 
-Authority is a canonical non-transferable AUTH account value committed by the
-state root, separate from CYBOU Balance and System Balance. It changes only
-through finalized transitions (genesis, +1 for utility operations RootPublication
-and SystemLock, capped at +1 per account per block, PoA-signed `PoaAuthAdjustment` GRANT / BURN). An Identity whose finalized
-AccountState.authority exceeds 10,000,000 AUTH may add a Validation signature to
-an operation its own node has independently validated. Every receiving node and
-PoA still re-execute the operation.
+Accounts hold only CYBOU: spendable Balance and non-transferable System Balance.
+There is no AUTH or reputation unit; spam is priced by fees, storage rent and a
+flat relay proof-of-work (DEC-284).
 
 ## Application content and storage
 
@@ -183,7 +175,7 @@ from PoA-finalized state; local capacity declarations and off-chain vouchers con
 
 Storage admission is finality-first: authorized chunks are admitted remotely
 only after a finalized RootPublication authorizes them by Merkle proof.
-Validation never authorizes chunk admission. Application publication remains
+Application publication remains
 local until finality.
 Recoverable owner content requires an application-layer self capsule.
 Beta storage durability targets 2 independent remote full replicas plus 1 local
@@ -205,7 +197,7 @@ Balance to the Central Authority's spendable Balance (the unique genesis-granted
 allocation before claim, and its ordinary claimant Balance afterwards). The whole
 100,000,000,000 CYBOU genesis monetary base belongs to that Central Treasury and is
 conserved; AccountCreate transfers the 20,000 CYBOU onboarding budget from it.
-AUTH is excluded from CYBOU. Storage is paid: StorageLease rent moves from payer System Balance to
+Storage is paid: StorageLease rent moves from payer System Balance to
 StorageEscrow and is paid by PoA-signed StorageSettlement to providers with
 verified foreign storage service, while protocol fees still go to the Central
 Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.
@@ -214,8 +206,7 @@ See `18_ECONOMICS_FEES.md`.
 ## Simplified implementation boundary
 
 The only node type is Full Node. Nodes announce no roles or capabilities.
-PoA authority is possession of the genesis-authorized private key; Validation
-is an eligible Identity signature checked against finalized state. Storage is
+PoA authority is possession of the genesis-authorized private key. Storage is
 intrinsic; StorageId proves possession of a cryptographic storage key only. Rendezvous is a known
 location of an ordinary Full Node. Runtime takes VerifiedNetworkGenesis and
 uses its signed specification digest as the height-zero chain anchor.

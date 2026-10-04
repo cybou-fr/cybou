@@ -26,8 +26,6 @@ local encrypt/chunk
    ↓
 RootPublication submission
    ↓
-[optional Validation signatures: evidence only]
-   ↓
 PoA finality
    ↓
 finalized-authorized chunks → storage providers
@@ -45,7 +43,6 @@ RootPublication is finalized, all ciphertext chunks remain local staging only.
 Status terms are distinct and must never share one indicator:
 
 ```text
-Validated    = locally valid and signed by at least one eligible Identity (evidence only)
 Finalized    = the RootPublication is part of canonical PoA history
 Authorized   = its ChunkIDs are admitted for storage by that finalized publication
 Available    = the chunks can actually be retrieved from the network
@@ -55,8 +52,6 @@ Retrievable  = this client has fetched and verified the content
 
 `Finalized` does not mean `Sent`. Finality authorizes storage admission;
 the message is `Sent` when the required remote durability/availability is reached.
-A `Validated` message displays informational confirmation only; it cannot reach
-`Sent`/`Protected` until PoA finality and remote durability.
 
 The Beta interaction target includes conversation threads, unread/read state,
 local labels, reply/reply-all/forward, blocked senders, local search, and
@@ -198,7 +193,7 @@ attachment filename
 local labels
 ```
 
-Search must not send plaintext query terms to validators or storage providers.
+Search must not send plaintext query terms to peers or storage providers.
 If the implementation is local-only, the UI should simply behave like normal
 search; the privacy architecture belongs in Security Details, not in the
 placeholder text.

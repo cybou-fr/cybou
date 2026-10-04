@@ -116,15 +116,12 @@ std::optional<uint64_t> SolveOperationWork(const cybou::Hash256& network_binding
     }
 }
 
-uint32_t RequiredOperationWorkBits(const ProtocolOperation& operation, const CybouState& finalized)
+uint32_t RequiredOperationWorkBits(const ProtocolOperation& operation)
 {
-    const auto account = AuthorizingAccount(operation);
-    if (!account) return 0;
-    const auto found = finalized.accounts.find(*account);
-    const auto limits = ComputeAuthorityTierLimits(found == finalized.accounts.end() ? 0 : found->second.authority);
+    if (!AuthorizingAccount(operation)) return 0;
     const bool name = std::holds_alternative<AuthorizedNameCommit>(operation) ||
         std::holds_alternative<AuthorizedNameReveal>(operation);
-    return limits.operation_work_bits + (name ? NAME_OPERATION_EXTRA_WORK_BITS : 0);
+    return OPERATION_WORK_BITS + (name ? NAME_OPERATION_EXTRA_WORK_BITS : 0);
 }
 
 } // namespace cybou

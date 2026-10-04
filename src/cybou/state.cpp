@@ -17,11 +17,10 @@
 
 namespace cybou {
 namespace {
-constexpr size_t ACCOUNT_SIZE{32 + 8 * 6};
-constexpr size_t USAGE_SIZE{32 + 8 + 4 + 8 + 4};
+constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
 constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8};
-constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 8 + 4 + 1};
+constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
 {
@@ -122,7 +121,7 @@ size_t SerializedStateSize(const CybouState& state,
         total_size += GENESIS_ALLOCATION_BASE_SIZE + allocation.label.size();
         if (allocation.claimed_by) total_size += AccountId::SIZE;
     }
-    total_size += 4 + state.usage.size() * USAGE_SIZE + 4 + state.publications.size() * PUBLICATION_SIZE;
+    total_size += 4 + state.publications.size() * PUBLICATION_SIZE;
     total_size += 8 + 8 + 4 + state.leases.size() * LEASE_SIZE;
     return total_size;
 }
@@ -189,12 +188,10 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
     // Bonus списывается до claim: до него Treasury — сама allocation `cybou`.
     if (bonus) *TreasuryBalance(state) -= bonus;
     uint64_t genesis_balance{0};
-    uint64_t genesis_authority{0};
     if (claims_allocation) {
         // Identity registry уже отверг повторное использование recovery key,
         // поэтому соответствующая genesis allocation может быть заявлена только один раз.
         genesis_balance = claim->second.balance;
-        genesis_authority = claim->second.authority;
         claim->second.claimed_by = op.account_id;
         if (!claim->second.label.empty()) {
             state.names.names.emplace(claim->second.label, op.account_id);
@@ -205,7 +202,6 @@ AccountCreateStateError ApplyAccountCreate(const AccountCreateOp& op,
         .balance = genesis_balance,
         .system_balance = bonus,
         .onboarding_system_balance = bonus,
-        .authority = genesis_authority,
         .creation_height = block_height,
         .creation_epoch = EpochForHeight(block_height, params),
     });
@@ -465,9 +461,6 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
             return StateValidationError::INVALID_RESOURCE_USAGE;
         }
     }
-    for (const auto& [id, usage] : state.usage) {
-        if (usage.Empty() || !state.accounts.contains(id)) return StateValidationError::INVALID_RESOURCE_USAGE;
-    }
     // Аренда: плательщик существует, период непуст и начинается не позже курсора settlement.
     for (const auto& [id, lease] : state.leases) {
         if (id.IsNull() || !state.accounts.contains(lease.payer) || lease.units == 0 || lease.replicas == 0 ||
@@ -492,7 +485,6 @@ uint64_t TotalCybou(const CybouState& state)
         total += value;
         return true;
     };
-    // AUTH сознательно не участвует: он не является CYBOU (57_IDENTITY_AUTHORITY.md).
     for (const auto& [id, allocation] : state.genesis_allocations) {
         if (allocation.claimed_by) continue; // counted in the claimant Balance
         if (!add(allocation.balance)) return OVERFLOW;
@@ -522,7 +514,6 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         Write64(out, account.balance);
         Write64(out, account.system_balance);
         Write64(out, account.onboarding_system_balance);
-        Write64(out, account.authority);
         Write64(out, account.creation_height);
         Write64(out, account.creation_epoch);
     }
@@ -534,21 +525,12 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
     for (const auto& [recovery_id, allocation] : state.genesis_allocations) {
         out.insert(out.end(), recovery_id.begin(), recovery_id.end());
         Write64(out, allocation.balance);
-        Write64(out, allocation.authority);
         Write32(out, static_cast<uint32_t>(allocation.label.size()));
         out.insert(out.end(), allocation.label.begin(), allocation.label.end());
         out.push_back(allocation.claimed_by ? 1 : 0);
         if (allocation.claimed_by) {
             out.insert(out.end(), allocation.claimed_by->Value().begin(), allocation.claimed_by->Value().end());
         }
-    }
-    Write32(out, static_cast<uint32_t>(state.usage.size()));
-    for (const auto& [id, usage] : state.usage) {
-        out.insert(out.end(), id.Value().begin(), id.Value().end());
-        Write64(out, usage.epoch);
-        Write32(out, usage.epoch_operations);
-        Write64(out, usage.block_height);
-        Write32(out, usage.block_operations);
     }
     Write32(out, static_cast<uint32_t>(state.publications.size()));
     for (const auto& [id, record] : state.publications) {
@@ -588,16 +570,16 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         const auto balance = reader.U64();
         const auto system = reader.U64();
         const auto onboarding = reader.U64();
-        const auto authority = reader.U64();
         const auto height = reader.U64();
         const auto epoch = reader.U64();
         // Map-ключи должны приходить уже в строгом порядке: это закрепляет одну
         // каноническую сериализацию и исключает множественные байтовые представления
         // одного и того же логического состояния.
-        if (!id || (prior && !(*prior < *id)) || !balance || !system || !onboarding || !authority || !height ||
-            !epoch) return std::nullopt;
+        if (!id || (prior && !(*prior < *id)) || !balance || !system || !onboarding || !height || !epoch) {
+            return std::nullopt;
+        }
         prior = *id;
-        state.accounts.emplace(*id, AccountState{*balance, *system, *onboarding, *authority, *height, *epoch});
+        state.accounts.emplace(*id, AccountState{*balance, *system, *onboarding, *height, *epoch});
     }
     const auto identity_size = reader.U32();
     if (!identity_size) return std::nullopt;
@@ -622,9 +604,8 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
     for (uint32_t i{0}; i < *allocations; ++i) {
         const auto id_bytes = reader.Bytes(IdentityKeyId{}.size());
         const auto balance = reader.U64();
-        const auto authority = reader.U64();
         const auto label_size = reader.U32();
-        if (!id_bytes || !balance || !authority || !label_size || *label_size > NAME_MAX_LABEL_LENGTH) return std::nullopt;
+        if (!id_bytes || !balance || !label_size || *label_size > NAME_MAX_LABEL_LENGTH) return std::nullopt;
         const auto label = reader.Bytes(*label_size);
         const auto claimed = reader.U8();
         if (!label || !claimed || *claimed > 1) return std::nullopt;
@@ -632,7 +613,7 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         std::copy(id_bytes->begin(), id_bytes->end(), recovery_id.begin());
         if (prior_allocation && !(*prior_allocation < recovery_id)) return std::nullopt;
         prior_allocation = recovery_id;
-        GenesisAllocation allocation{.balance = *balance, .authority = *authority,
+        GenesisAllocation allocation{.balance = *balance,
             .label = std::string(label->begin(), label->end())};
         if (*claimed) {
             const auto claimant = reader.Bytes(AccountId::SIZE);
@@ -643,21 +624,6 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         state.genesis_allocations.emplace(recovery_id, std::move(allocation));
     }
     {
-        const auto usage_count = reader.U32();
-        if (!usage_count || *usage_count > reader.Remaining() / USAGE_SIZE) return std::nullopt;
-        std::optional<AccountId> prior_usage;
-        for (uint32_t i{0}; i < *usage_count; ++i) {
-            const auto id_bytes = reader.Bytes(AccountId::SIZE);
-            const auto id = id_bytes ? AccountId::FromBytes(*id_bytes) : std::nullopt;
-            const auto epoch = reader.U64();
-            const auto epoch_ops = reader.U32();
-            const auto block_height = reader.U64();
-            const auto block_ops = reader.U32();
-            if (!id || !epoch || !epoch_ops || !block_height || !block_ops ||
-                (prior_usage && !(*prior_usage < *id))) return std::nullopt;
-            prior_usage = *id;
-            state.usage.emplace(*id, AccountUsage{*epoch, *epoch_ops, *block_height, *block_ops});
-        }
         const auto publication_count = reader.U32();
         if (!publication_count || *publication_count > reader.Remaining() / PUBLICATION_SIZE) return std::nullopt;
         std::optional<cybou::Hash256> prior_publication;

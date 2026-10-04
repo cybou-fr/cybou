@@ -117,7 +117,7 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
     res.cybou_poa_key_id = *poa_id;
 
     // 2b. bootstrap Identity: an ordinary Identity for the bootstrap locator's
-    // operator. Its AUTH is a genesis decision, never a property of the role.
+    // operator. The bootstrap role grants it nothing.
     auto bootstrap_entropy = bootstrap_identity ? bootstrap_identity : GenerateRecoveryEntropy();
     if (!bootstrap_entropy) return std::nullopt;
     res.bootstrap_entropy = *bootstrap_entropy;
@@ -127,14 +127,14 @@ std::optional<DevnetProvisionResult> GenerateDevnetProvisioning(
     if (!bootstrap_rec_id || *bootstrap_rec_id == res.cybou_recovery_key_id) return std::nullopt;
     res.bootstrap_recovery_key_id = *bootstrap_rec_id;
 
-    // 3. Consensus Genesis State: cybou.cybou and bootstrap both start above
-    // the Validation threshold; only cybou.cybou holds spendable CYBOU.
+    // 3. Consensus Genesis State: only cybou.cybou (the Central Treasury) holds CYBOU;
+    // bootstrap reserves its name.
     res.genesis_state = CreateDevGenesisState();
     res.genesis_state.genesis_allocations[res.cybou_recovery_key_id] = GenesisAllocation{
-        .balance = CENTRAL_AUTHORITY_GENESIS_BALANCE, .authority = GENESIS_ALLOCATION_AUTHORITY,
+        .balance = CENTRAL_AUTHORITY_GENESIS_BALANCE,
         .label = std::string{CENTRAL_AUTHORITY_NAME}};
     res.genesis_state.genesis_allocations[res.bootstrap_recovery_key_id] = GenesisAllocation{
-        .balance = 0, .authority = GENESIS_ALLOCATION_AUTHORITY, .label = std::string{BOOTSTRAP_ALLOCATION_LABEL}};
+        .balance = 0, .label = std::string{BOOTSTRAP_ALLOCATION_LABEL}};
 
     if (ValidateCybouState(res.genesis_state) != StateValidationError::NONE) {
         return std::nullopt;
@@ -300,9 +300,9 @@ bool ProvisionDevnet(
            << "PoA Finalizer Key ID:\n  " << cybou::HexEncode(prov->cybou_poa_key_id) << "\n\n"
            << "cybou.cybou Recovery Key ID:\n  " << cybou::HexEncode(prov->cybou_recovery_key_id) << "\n"
            << "  Genesis allocation: " << CENTRAL_AUTHORITY_GENESIS_BALANCE << " CYBOU (Central Treasury), "
-           << GENESIS_ALLOCATION_AUTHORITY << " AUTH, name cybou\n\n"
+           << "name cybou\n\n"
            << "bootstrap Recovery Key ID:\n  " << cybou::HexEncode(prov->bootstrap_recovery_key_id) << "\n"
-           << "  Genesis allocation: 0 CYBOU, 10,000,001 AUTH, name bootstrap\n\n"
+           << "  Genesis allocation: 0 CYBOU, name bootstrap\n\n"
            << "Signed Genesis Size: " << prov->serialized_signed_genesis.size() << " bytes\n"
            << "Genesis State Size:  " << prov->serialized_genesis_state.size() << " bytes\n";
         const auto summary_path = private_dir / "summary.txt";

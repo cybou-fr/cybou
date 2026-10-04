@@ -43,7 +43,7 @@ void OperationPool::RecordPeerUsage(const std::optional<std::string>& peer, cons
 
 uint32_t OperationPool::RequiredWorkBits(const ProtocolOperation& operation, const CybouState& finalized) const
 {
-    const uint32_t bits = RequiredOperationWorkBits(operation, finalized);
+    const uint32_t bits = RequiredOperationWorkBits(operation);
     return bits == 0 || !m_limits.operation_work_bits ? bits : *m_limits.operation_work_bits;
 }
 

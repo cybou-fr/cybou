@@ -50,7 +50,7 @@ struct LimitsFixture {
             *SignIdentityMessage(authorization_seed, IdentityKeyPurpose::AUTHORIZATION, binding.pop_digest)};
         state = CreateDevGenesisState();
         state.genesis_allocations.emplace(IdentityKeyId{}, GenesisAllocation{
-            .balance = 100'000'000, .authority = 0, .label = std::string{CENTRAL_AUTHORITY_NAME}});
+            .balance = 100'000'000, .label = std::string{CENTRAL_AUTHORITY_NAME}});
         BOOST_REQUIRE(ApplyAccountCreate(create, network, 0, params, state) == AccountCreateStateError::NONE);
         std::array<unsigned char, 32> other_recovery{}, other_authorization{};
         other_recovery[0] = 0x41;
@@ -140,53 +140,6 @@ struct LimitsFixture {
 
 BOOST_AUTO_TEST_SUITE(cybou_resource_limits_tests)
 
-BOOST_AUTO_TEST_CASE(tier_table_is_monotonic_and_bounded)
-{
-    BOOST_CHECK(ComputeAuthorityTier(9'999) == AuthorityTier::T0);
-    BOOST_CHECK(ComputeAuthorityTier(10'000) == AuthorityTier::T1);
-    BOOST_CHECK(ComputeAuthorityTier(10'000'000) == AuthorityTier::T3);
-    BOOST_CHECK(ComputeAuthorityTier(10'000'001) == AuthorityTier::VALIDATOR);
-    const uint64_t tiers[]{0, 10'000, 100'000, 1'000'000, 10'000'001};
-    for (size_t i{1}; i < std::size(tiers); ++i) {
-        const auto lower = ComputeAuthorityTierLimits(tiers[i - 1]);
-        const auto upper = ComputeAuthorityTierLimits(tiers[i]);
-        BOOST_CHECK_GT(upper.operations_per_block, lower.operations_per_block);
-        BOOST_CHECK_GT(upper.operations_per_epoch, lower.operations_per_epoch);
-        BOOST_CHECK_LT(upper.operation_work_bits, lower.operation_work_bits);
-    }
-}
-
-BOOST_AUTO_TEST_CASE(t0_identity_gets_one_operation_per_block)
-{
-    LimitsFixture f;
-    const auto first = f.Lock();
-    const auto second = f.Lock();
-    const auto refused = f.Execute({first, second}, 1);
-    BOOST_CHECK(refused.error == BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-    BOOST_CHECK_EQUAL(refused.failed_operation_index, 1U);
-    BOOST_REQUIRE(f.Execute({first}, 1));
-    // The same height cannot take another one (candidate pool executes one by one).
-    BOOST_CHECK(f.Execute({second}, 1).error == BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-    BOOST_CHECK(f.Execute({second}, 2));
-}
-
-BOOST_AUTO_TEST_CASE(epoch_limit_resets_in_the_next_epoch)
-{
-    LimitsFixture f;
-    const auto per_epoch = ComputeAuthorityTierLimits(0).operations_per_epoch;
-    uint64_t height{1};
-    for (uint32_t i{0}; i < per_epoch; ++i) BOOST_REQUIRE(f.Execute({f.Lock()}, height++));
-    BOOST_CHECK_EQUAL(f.state.usage.at(f.account).epoch_operations, per_epoch);
-    const auto over = f.Lock();
-    BOOST_CHECK(f.Execute({over}, height).error == BlockExecutionError::OPERATION_LIMIT_EXCEEDED);
-    // First block of the next epoch opens a fresh window; the stale record is swept away first.
-    const uint64_t next_epoch = (EpochForHeight(height, f.params) + 1) * f.params.epoch_blocks;
-    BOOST_REQUIRE(f.Execute({}, next_epoch));
-    BOOST_CHECK(!f.state.usage.contains(f.account));
-    BOOST_CHECK(f.Execute({over}, next_epoch + 1));
-    BOOST_CHECK_EQUAL(f.state.usage.at(f.account).epoch_operations, 1U);
-}
-
 BOOST_AUTO_TEST_CASE(publications_are_not_limited_by_auth)
 {
     // DEC-274: a T0 Identity publishes beyond the former 5 GiB credit; only the safety bound applies.
@@ -216,8 +169,6 @@ BOOST_AUTO_TEST_CASE(revoke_publication_frees_quota_and_is_owner_only)
 
     // Another Identity cannot revoke it.
     auto foreign = f.state;
-    foreign.usage[f.other] = foreign.usage.at(f.account);
-    foreign.usage.erase(f.account);
     foreign.publications.at(publication_id).owner = f.other;
     BOOST_REQUIRE(ValidateCybouState(foreign) == StateValidationError::NONE);
     const auto stolen = ExecuteBlockOperations(foreign, {f.Revoke(publication_id)}, f.network, 2, f.params);
@@ -255,7 +206,6 @@ BOOST_AUTO_TEST_CASE(resource_and_storage_sections_roundtrip_exactly)
     BOOST_REQUIRE(bytes);
     const auto decoded = DeserializeCybouState(*bytes);
     BOOST_REQUIRE(decoded);
-    BOOST_CHECK(decoded->usage == f.state.usage);
     BOOST_CHECK(decoded->publications == f.state.publications);
     BOOST_CHECK(CybouStateHash(*decoded) == CybouStateHash(f.state));
 }
@@ -420,7 +370,7 @@ BOOST_AUTO_TEST_CASE(revoked_publication_closes_its_lease_after_the_current_peri
     BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
 }
 
-BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_tiered)
+BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_flat)
 {
     LimitsFixture f;
     const auto operation = f.Lock();
@@ -434,14 +384,13 @@ BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_tiered)
     BOOST_CHECK(!CheckOperationWork(other_network, id, *nonce, 24) || !CheckOperationWork(f.network, id, *nonce, 24));
     BOOST_CHECK(CheckOperationWork(f.network, id, 12345, 0));
 
-    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(operation, f.state), 22U);
-    f.state.accounts.at(f.account).authority = 10'000'001;
-    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(operation, f.state), 18U);
+    // One difficulty for every Identity (DEC-273); names cost more.
+    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(operation), OPERATION_WORK_BITS);
     AuthorizedNameCommit commit{};
     commit.authorization.account_id = f.account;
-    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{commit}, f.state), 18U + NAME_OPERATION_EXTRA_WORK_BITS);
-    // AccountCreate and PoaAuthAdjustment carry their own protection.
-    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{PoaAuthAdjustment{}}, f.state), 0U);
+    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{commit}), OPERATION_WORK_BITS + NAME_OPERATION_EXTRA_WORK_BITS);
+    // AccountCreate and StorageSettlement carry their own protection.
+    BOOST_CHECK_EQUAL(RequiredOperationWorkBits(ProtocolOperation{StorageSettlement{}}), 0U);
 }
 
 // ---- M6: adversarial storage-economy tests (DEC-283 release gate) ----

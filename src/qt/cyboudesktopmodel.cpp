@@ -16,7 +16,7 @@
 #include <cybou/protocol_limits.h>
 #include <cybou/storage_economy.h>
 #include <cybou/support_mail.h>
-#include <cybou/validation_attestation.h>
+#include <cybou/identity_signer.h>
 #include <cybou/wallet_service.h>
 
 #include <cybou/crypto/cleanse.h>
@@ -639,60 +639,10 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
     Q_EMIT walletChanged();
 }
 
-CybouAccountLimits cybouAccountLimits(quint64 authority)
+void CybouDesktopModel::setResourceUsage(quint64 quota_used)
 {
-    // AUTH at which ComputeAuthorityTier steps up.
-    static constexpr quint64 kTiers[]{10'000, 100'000, 1'000'000, 10'000'001};
-    const auto tier = cybou::ComputeAuthorityTierLimits(authority);
-    CybouAccountLimits limits;
-    // Хранение оплачивается арендой, а не AUTH (DEC-274): квоты нет, файл ограничен safety bound.
-    limits.storage_quota = 0;
-    limits.max_file_bytes = quint64{cybou::MAX_PUBLICATION_CHUNKS} * cybou::STORAGE_BILLING_UNIT_BYTES;
-    limits.operations_per_block = tier.operations_per_block;
-    limits.operations_per_epoch = tier.operations_per_epoch;
-    limits.work_bits = tier.operation_work_bits;
-    limits.validation_eligible = authority > cybou::VALIDATION_AUTHORITY_THRESHOLD;
-    for (const quint64 tier : kTiers) {
-        if (authority < tier) {
-            limits.next_tier_authority = tier;
-            break;
-        }
-    }
-    return limits;
-}
-
-QString cybouAuthorityText(quint64 authority)
-{
-    return QLocale{}.toString(authority) + QStringLiteral(" AUTH");
-}
-
-void CybouDesktopModel::setResourceUsage(quint64 quota_used, quint32 epoch_operations, quint64 epoch_blocks_left)
-{
-    if (m_status.quota_used == quota_used && m_status.epoch_operations == epoch_operations &&
-        m_status.epoch_blocks_left == epoch_blocks_left) return;
+    if (m_status.quota_used == quota_used) return;
     m_status.quota_used = quota_used;
-    m_status.epoch_operations = epoch_operations;
-    m_status.epoch_blocks_left = epoch_blocks_left;
-    Q_EMIT statusChanged();
-}
-
-QString CybouDesktopModel::operationLimitProblem() const
-{
-    if (m_fixture_mode) return {};
-    const auto limits = cybouAccountLimits(m_status.authority);
-    if (m_status.epoch_operations < limits.operations_per_epoch) return {};
-    const auto minutes = static_cast<int>(qMax<quint64>(1, (m_status.epoch_blocks_left + 59) / 60));
-    return tr("You reached %1 network operations for this window. It resets in about %n minute(s).", nullptr, minutes)
-        .arg(limits.operations_per_epoch);
-}
-
-void CybouDesktopModel::setAuthority(quint64 authority)
-{
-    if (m_status.authority == authority) return;
-    m_status.authority = authority;
-    // Хранение не квотируется AUTH (DEC-274); fixtures задают свои значения.
-    if (!m_fixture_mode) m_status.storage_quota = 0;
-    Q_EMIT authorityChanged();
     Q_EMIT statusChanged();
 }
 
@@ -721,41 +671,6 @@ void CybouDesktopModel::requestFinalizeNow()
     Q_EMIT finalizeNowRequested();
 }
 
-bool CybouDesktopModel::requestAuthAdjustment(const QString& target, bool grant, quint64 amount)
-{
-    if (!m_network_authority.proven || m_auth_adjustment_pending || amount == 0) return false;
-    const QString input = target.trimmed().toLower();
-    QString account_id;
-    if (const auto parsed = cybou::ParseHash256UserHex(input.toStdString())) {
-        account_id = QString::fromStdString(parsed->GetHex());
-    } else if (input.endsWith(QStringLiteral(".cybou")) && nameLabelProblem(input.chopped(6)).isEmpty() &&
-               m_identity_service) {
-        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
-        if (loaded && loaded.state) {
-            if (const auto* owner = loaded.state->names.Resolve(input.chopped(6).toStdString())) {
-                account_id = QString::fromStdString(owner->Value().GetHex());
-            }
-        }
-        if (account_id.isEmpty()) {
-            setAuthAdjustmentFinished(false, tr("%1 does not belong to a CYBOU Identity.").arg(input));
-            return true;
-        }
-    } else {
-        return false;
-    }
-    m_auth_adjustment_pending = true;
-    Q_EMIT networkAuthorityChanged();
-    Q_EMIT authAdjustmentRequested(account_id, grant, amount);
-    return true;
-}
-
-void CybouDesktopModel::setAuthAdjustmentFinished(bool ok, const QString& message)
-{
-    m_auth_adjustment_pending = false;
-    Q_EMIT networkAuthorityChanged();
-    Q_EMIT authAdjustmentFinished(ok, message);
-}
-
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
 {
     if (status.operation_id.isEmpty()) return;
@@ -772,9 +687,7 @@ void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
         switch (stored.state) {
         case CybouOperationState::Local: return status.state == CybouOperationState::Preparing || status.state == CybouOperationState::Submitted;
         case CybouOperationState::Preparing: return status.state == CybouOperationState::Submitted;
-        // Attestations are volatile: a new finalized base can drop them until re-attested.
-        case CybouOperationState::Submitted: return status.state == CybouOperationState::Validated;
-        case CybouOperationState::Validated: return status.state == CybouOperationState::Submitted;
+        case CybouOperationState::Submitted:
         case CybouOperationState::Finalized: case CybouOperationState::Failed: return false;
         }
         return false;
@@ -816,10 +729,6 @@ bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
     const QString name = to_name.trimmed().toLower();
     if (!name.endsWith(QStringLiteral(".cybou")) || !nameLabelProblem(name.chopped(6)).isEmpty()) return false;
     if (name == m_status.primary_name) return false;
-    if (const auto problem = operationLimitProblem(); !problem.isEmpty()) {
-        Q_EMIT paymentFinished(false, problem);
-        return true;
-    }
     m_payment_pending = true;
     Q_EMIT statusChanged();
     Q_EMIT paymentRequested(name, amount);
@@ -864,10 +773,6 @@ bool CybouDesktopModel::requestLockToSystemBalance(quint64 amount)
 {
     if (m_payment_pending || amount == 0 || amount > m_status.balance ||
         m_status.identity_state != CybouIdentityState::Active) return false;
-    if (const auto problem = operationLimitProblem(); !problem.isEmpty()) {
-        Q_EMIT systemLockFinished(false, problem);
-        return true;
-    }
     m_payment_pending = true;
     Q_EMIT statusChanged();
     const auto finish = [this](bool ok, const QString& error) {
@@ -1402,7 +1307,6 @@ void CybouDesktopModel::completeVaultLock()
     m_extra_activity.clear();
     m_wallet_entries.clear();
     m_operations.clear();
-    m_status.authority = 0;
     m_network_authority = {};
     m_payment_fee.reset();
     m_payment_pending = false;
@@ -1415,7 +1319,6 @@ void CybouDesktopModel::completeVaultLock()
     Q_EMIT contactsChanged();
     Q_EMIT activityChanged();
     Q_EMIT walletChanged();
-    Q_EMIT authorityChanged();
     Q_EMIT networkAuthorityChanged();
     Q_EMIT featureAvailabilityChanged();
 }

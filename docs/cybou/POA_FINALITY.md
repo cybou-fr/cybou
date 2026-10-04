@@ -6,10 +6,10 @@ ValidatorSet, vote, quorum or staking weight.
 
 ## Operational model
 
-Genesis defines the network, initial state, initial AUTH allocations, and the
+Genesis defines the network, initial state, initial CYBOU allocations, and the
 authorized PoA public key `P`.
 The Central Authority executes candidate operations independently from its
-desktop, trusts no validator or peer state, and publishes finalized blocks.
+desktop, trusts no peer state, and publishes finalized blocks.
 
 Every full node independently checks certificate signatures, height, parent,
 timestamp, operation execution and deterministic state root. A signature alone
@@ -47,15 +47,13 @@ or rejecting it if not. Corrupt storage halts fail closed.
 
 ```text
 PoA MUST independently execute candidate operations.
-Validation signatures are never sufficient for finalization.
 
 operation -> own validation/execution -> state root -> block -> PoA signature
 ```
 
-PoA produces blocks from its node's ordinary candidate pool. It may receive
-Validation signatures but never relies on them. There is no validator
-fork-choice, no BFT voting, and no validator quorum override. Validation creates
-no state, so PoA finality never needs to roll back provisional effects.
+PoA produces blocks from its node's ordinary candidate pool. There is no
+validator, fork-choice vote, BFT voting or quorum override, and no provisional
+state for PoA finality to roll back.
 
 ## Genesis and signer boundary
 

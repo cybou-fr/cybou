@@ -9,7 +9,7 @@ remain cryptographically separate:
 | `cybou.cybou` PoA key role P | Ordinary Identity's distinct PoA role operates from Central Authority desktop; signs canonical next blocks |
 | Release Signing | Authenticates official software releases and update artifacts |
 | Treasury | Controls company-owned reserve funds |
-| User Identity | End-user account recovery, operations, and Validation signatures |
+| User Identity | End-user account recovery, operations and storage payout bindings |
 
 ## Key boundaries
 
@@ -37,7 +37,7 @@ The same network lifecycle handles discovery, sync, operation relay and gossip.
 Every Full Node has intrinsic quota-controlled encrypted storage. Its separate
 STORAGE key (purpose 8) is proven only on demand for a storage relationship,
 with both HELLOs, the TLS exporter and a fresh challenge. StorageId identifies
-replicas and confers no finality or Validation authority.
+replicas and confers no finality authority.
 
 The STORAGE purpose keeps its original numeric value and mnemonic derivation
 label to preserve storage key bytes. PoA has purpose 7; unused purposes 5 and 6
