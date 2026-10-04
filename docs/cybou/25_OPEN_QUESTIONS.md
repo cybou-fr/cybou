@@ -9,6 +9,11 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 code evidence. Deployment log rotation, GUI exports, processing roles and
 retention decisions remain open; pool/cache bounds are not retention schedules.
 
+[`LOGGING_RETENTION_AND_EXPORT.md`](LOGGING_RETENTION_AND_EXPORT.md) specifies
+rotation/export acceptance gates. The current writer cannot be safely rotated
+by renaming its live file alone; support export and live service policy remain
+unimplemented/unverified respectively.
+
 Apply [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) before narrowing work
 to technical primitives: establish processing/metadata inventory and roles,
 RGPD and NIS2 applicability, ANSSI risk scenarios, ISO control selection,

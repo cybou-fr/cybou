@@ -49,6 +49,11 @@ absent because it is outside these files.
 
 ## Outstanding operational decisions
 
+The logging review and proposed rotation/export contract are recorded in
+[`LOGGING_RETENTION_AND_EXPORT.md`](LOGGING_RETENTION_AND_EXPORT.md).
+Minimal JSON mode does not filter stdout/stderr; live service retention and
+backup configuration were not inspected by that review.
+
 Retention decisions should be justified by processing purpose and applicable
 requirements using the [CNIL retention guidance](https://www.cnil.fr/fr/passer-laction/les-durees-de-conservation-des-donnees)
 and [logging guidance](https://www.cnil.fr/fr/securite-tracer-les-operations).
