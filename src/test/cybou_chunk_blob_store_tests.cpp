@@ -14,6 +14,8 @@
 #include <array>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <optional>
 #include <vector>
 
 BOOST_FIXTURE_TEST_SUITE(cybou_chunk_blob_store_tests, CybouTestSetup)
@@ -157,6 +159,51 @@ BOOST_AUTO_TEST_CASE(storage_startup_checks_size_not_content_and_put_heals_damag
     std::filesystem::resize_file(blob_file, bytes.size() - 1);
     cybou::ChunkBlobStore truncated(blob_root);
     BOOST_CHECK_THROW(cybou::FinalizedChunkStore(truncated, storage_path, network_binding, 4096), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(explicit_capacity_bounds_whole_store_and_provider_budget)
+{
+    // DEC-275: provider obligations <= floor(2V/3); the rest of V is a local reserve.
+    BOOST_CHECK_EQUAL(cybou::ProviderBudgetBytes(0), 0U);
+    BOOST_CHECK_EQUAL(cybou::ProviderBudgetBytes(3), 2U);
+    BOOST_CHECK_EQUAL(cybou::ProviderBudgetBytes(5), 3U);
+    BOOST_CHECK_EQUAL(cybou::ProviderBudgetBytes(150ULL << 30), 100ULL << 30);
+    BOOST_CHECK_EQUAL(cybou::ProviderBudgetBytes(std::numeric_limits<uint64_t>::max()),
+        std::numeric_limits<uint64_t>::max() / 3 * 2);
+
+    const std::vector<unsigned char> first(1100, 0x11), second(1100, 0x22);
+    for (const bool memory_only : {true, false}) {
+        cybou::ChunkBlobStore blobs(m_data_dir / (memory_only ? "cap-mem" : "cap-disk"), memory_only, true, 2000);
+        BOOST_CHECK(blobs.Put(cybou::ComputeChunkId(first), first) == cybou::ChunkBlobPutStatus::STORED);
+        BOOST_CHECK(blobs.Put(cybou::ComputeChunkId(second), second) == cybou::ChunkBlobPutStatus::CAPACITY_EXCEEDED);
+        BOOST_CHECK(blobs.Put(cybou::ComputeChunkId(first), first) == cybou::ChunkBlobPutStatus::ALREADY_STORED);
+        BOOST_CHECK_EQUAL(blobs.UsedBytes(), first.size());
+        BOOST_CHECK(!blobs.Has(cybou::ComputeChunkId(second)));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(runtime_requires_minimum_capacity_and_defaults_to_it)
+{
+    const auto genesis = cybou::CreateTestGenesisState();
+    const auto make = [&](std::optional<uint64_t> capacity, bool memory_only) {
+        return cybou::NodeRuntimeConfig{
+            .network_genesis = cybou::CreateTestNetworkGenesis(
+                genesis, cybou::TestPoaFinalizerPublicKey(), cybou::TestNetworkPublicKey()),
+            .data_dir = m_data_dir / "capacity-runtime",
+            .memory_only = memory_only,
+            .wipe_data = true,
+            .storage_capacity_bytes = capacity, .operation_work_bits = 0};
+    };
+    BOOST_CHECK_THROW(cybou::CybouNodeRuntime{make(cybou::MIN_STORAGE_CAPACITY_BYTES - 1, false)},
+        std::invalid_argument);
+    BOOST_CHECK_THROW(cybou::CybouNodeRuntime{make(0, false)}, std::invalid_argument);
+
+    cybou::CybouNodeRuntime runtime{make(std::nullopt, true)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(genesis));
+    const auto diagnostics = runtime.GetDiagnostics();
+    BOOST_CHECK_EQUAL(diagnostics.local_storage_capacity, cybou::DEFAULT_STORAGE_CAPACITY_BYTES);
+    BOOST_CHECK_EQUAL(diagnostics.storage_capacity, cybou::ProviderBudgetBytes(cybou::DEFAULT_STORAGE_CAPACITY_BYTES));
+    BOOST_CHECK_EQUAL(runtime.GetChunkBlobStore().CapacityBytes(), cybou::DEFAULT_STORAGE_CAPACITY_BYTES);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

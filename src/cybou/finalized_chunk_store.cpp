@@ -216,6 +216,7 @@ ChunkAdmissionResult FinalizedChunkStore::PutChunk(const cybou::Hash256& publica
         if (blob_status == ChunkBlobPutStatus::INVALID) return {ChunkAdmissionStatus::INVALID};
         if (blob_status == ChunkBlobPutStatus::CONFLICT) return {ChunkAdmissionStatus::CONFLICT};
         if (blob_status == ChunkBlobPutStatus::STORAGE_ERROR) return {ChunkAdmissionStatus::STORAGE_ERROR};
+        if (blob_status == ChunkBlobPutStatus::CAPACITY_EXCEEDED) return {ChunkAdmissionStatus::CAPACITY_EXCEEDED};
         if (association_exists) {
             return {blob_status == ChunkBlobPutStatus::STORED ? ChunkAdmissionStatus::STORED :
                 ChunkAdmissionStatus::ALREADY_STORED};

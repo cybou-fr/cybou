@@ -66,7 +66,7 @@ public:
     /// \param blobs Общий physical ChunkBlobStore exact encrypted bytes.
     /// \param path Каталог локальных provider-метаданных.
     /// \param network_binding 32-байтовый NetworkBinding, к которому жёстко привязаны метаданные.
-    /// \param capacity_bytes Локальная квота provider-реплик в байтах.
+    /// \param capacity_bytes Provider budget: предел finalized provider obligations, `floor(2V/3)` (DEC-275).
     /// \param wipe_data Если \c true, предыдущее состояние provider-метаданных стирается.
     /// \post При успехе все сохранённые admitted записи согласованы по сети и размерам blobs.
     /// \throw std::invalid_argument При некорректной конфигурации или несовпадении сети.

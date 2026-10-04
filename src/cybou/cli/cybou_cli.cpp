@@ -58,10 +58,10 @@ std::shared_ptr<const p2p::PeerAdmissionPolicy> peer_admission_policy;
 void Stop(int) { stopping.store(true); }
 
 const char* HELP = R"(CYBOU (headless; run without arguments for the desktop)
-                [--block-interval 1000ms] [--peers FILE] [--capacity 20GiB] [--advertise IP:PORT]
+                [--block-interval 1000ms] [--peers FILE] [--capacity 15GiB] [--advertise IP:PORT]
                 [--tls-certificate FILE --tls-key FILE] [--event-log FILE] [--event-log-mode minimal|detailed]
   node run --network devnet --data-dir DIR [--peer IP:PORT] [--listen IP:PORT] [--peers FILE]
-           [--capacity 20GiB] [--poa-key-file FILE] [--block-interval 1000ms]
+           [--capacity 15GiB] [--poa-key-file FILE] [--block-interval 1000ms]
            [--advertise IP:PORT] [--tls-certificate FILE --tls-key FILE]
            [--event-log FILE] [--event-log-mode minimal|detailed]
            [--identity-vault FILE --identity-password-file FILE]   (sign Validation as this Identity)
@@ -528,7 +528,7 @@ int RunNode(const Options& opts)
     config.tls_server_identity = TlsIdentity(opts);
     if (opts.Has("capacity")) {
         const auto capacity = Quantity(opts.Get("capacity"));
-        if (capacity == 0) throw std::invalid_argument("--capacity must be positive; omit it for automatic allocation");
+        if (capacity < MIN_STORAGE_CAPACITY_BYTES) throw std::invalid_argument("--capacity must be at least 15GiB");
         config.storage_capacity_bytes = capacity;
     }
     if (opts.Has("poa-key-file")) {

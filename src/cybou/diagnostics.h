@@ -42,6 +42,9 @@ struct NodeDiagnosticsSnapshot {
     /// \brief Текущий объем занятых локальных storage-байт.
     /// \brief Локальная политика емкости storage в байтах.
     std::uint64_t height{0}, storage_used{0}, storage_capacity{0};
+    /// rief Занятые bytes всего локального ChunkBlobStore (own, cache и provider).
+    /// rief Локальная CYBOU capacity `V`; `storage_capacity` выше — provider budget `floor(2V/3)`.
+    std::uint64_t local_storage_used{0}, local_storage_capacity{0};
     /// \brief `true`, когда runtime инициализирован и может отвечать непротиворечивым состоянием.
     /// \brief `true`, когда локальная защитная логика остановила небезопасный путь fail-closed.
     /// \brief `true`, когда локальный PoA signer сейчас активен и не отключен правилами signing safety.

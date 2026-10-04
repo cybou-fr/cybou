@@ -208,8 +208,10 @@ std::uint64_t ScanBlobs(const std::filesystem::path& root)
 
 } // namespace
 
-ChunkBlobStore::ChunkBlobStore(std::filesystem::path root, const bool memory_only, const bool wipe_data)
-    : m_root{memory_only ? std::filesystem::path{} : std::move(root)}, m_memory_only{memory_only}
+ChunkBlobStore::ChunkBlobStore(std::filesystem::path root, const bool memory_only, const bool wipe_data,
+    const std::uint64_t capacity_bytes)
+    : m_root{memory_only ? std::filesystem::path{} : std::move(root)}, m_memory_only{memory_only},
+      m_capacity_bytes{capacity_bytes}
 {
     if (m_memory_only) return;
     if (m_root.empty()) throw std::invalid_argument{"chunk blob root is empty"};
@@ -239,8 +241,8 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
             return SameBytes(existing->second, stored_bytes) ?
                 ChunkBlobPutStatus::ALREADY_STORED : ChunkBlobPutStatus::CONFLICT;
         }
-        if (stored_bytes.size() > std::numeric_limits<std::uint64_t>::max() - m_used_bytes) {
-            return ChunkBlobPutStatus::STORAGE_ERROR;
+        if (m_used_bytes > m_capacity_bytes || stored_bytes.size() > m_capacity_bytes - m_used_bytes) {
+            return ChunkBlobPutStatus::CAPACITY_EXCEEDED;
         }
         m_memory_blobs.emplace(id, std::vector<unsigned char>{stored_bytes.begin(), stored_bytes.end()});
         m_used_bytes += stored_bytes.size();
@@ -265,8 +267,9 @@ ChunkBlobPutStatus ChunkBlobStore::Put(const ChunkId& id, const std::span<const 
             m_used_bytes = m_used_bytes - std::min<std::uint64_t>(m_used_bytes, damaged_size) + stored_bytes.size();
             return ChunkBlobPutStatus::ALREADY_STORED;
         }
-        if (stored_bytes.size() > std::numeric_limits<std::uint64_t>::max() - m_used_bytes) {
-            return ChunkBlobPutStatus::STORAGE_ERROR;
+        // Весь physical store ограничен `V`; ремонт существующего blob выше store не растит.
+        if (m_used_bytes > m_capacity_bytes || stored_bytes.size() > m_capacity_bytes - m_used_bytes) {
+            return ChunkBlobPutStatus::CAPACITY_EXCEEDED;
         }
         if (!WriteBlobAtomically(path, id, stored_bytes)) {
             // Ошибка fsync/rename может оставить корректный blob на диске; ёмкость пересчитываем по факту.

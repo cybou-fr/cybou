@@ -48,6 +48,17 @@ class IdentityOperationCoordinator;
 class PoaSigner;
 
 /// \brief Стабильная TLS identity для узла, обслуживающего compiled bootstrap locator.
+/// \brief Минимальная локальная CYBOU capacity production Full Node (DEC-275).
+inline constexpr uint64_t MIN_STORAGE_CAPACITY_BYTES{15ULL << 30};
+/// \brief Capacity, когда оператор не выбрал `V` явно.
+inline constexpr uint64_t DEFAULT_STORAGE_CAPACITY_BYTES{MIN_STORAGE_CAPACITY_BYTES};
+
+/// \brief Provider budget `floor(2V/3)`: остаток `V` — локальный резерв, не network quota.
+constexpr uint64_t ProviderBudgetBytes(const uint64_t capacity_bytes)
+{
+    return capacity_bytes / 3 * 2 + capacity_bytes % 3 * 2 / 3;
+}
+
 struct TlsServerIdentity {
     /// \brief Путь к certificate chain PEM/DER для входящего TLS listener.
     std::filesystem::path certificate_chain_file;
@@ -83,7 +94,9 @@ struct NodeRuntimeConfig {
     bool wipe_data{false};
     /// \brief Только для узла bootstrap locator; обычные узлы используют ephemeral TLS.
     std::optional<TlsServerIdentity> tls_server_identity;
-    /// \brief nullopt = автоматическая local storage allocation; zero допустим только в memory-only tests.
+    /// \brief Локальная CYBOU capacity `V` (DEC-275); nullopt = DEFAULT_STORAGE_CAPACITY_BYTES.
+    /// \details Production требует `V >= MIN_STORAGE_CAPACITY_BYTES`; меньшие значения и zero
+    /// допустимы только в memory-only tests.
     std::optional<uint64_t> storage_capacity_bytes;
     /// \brief Optional sink для событий runtime; отсутствие логирования допустимо.
     std::shared_ptr<EventWriter> event_writer;

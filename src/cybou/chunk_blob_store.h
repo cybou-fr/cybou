@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -32,6 +33,8 @@ enum class ChunkBlobPutStatus {
     CONFLICT,
     /// \brief Локальная файловая система/память не позволила завершить запись надёжно.
     STORAGE_ERROR,
+    /// \brief Новый blob превысил бы локальную CYBOU capacity `V` (DEC-275).
+    CAPACITY_EXCEEDED,
 };
 
 /// \brief Общее физическое хранилище exact encrypted bytes.
@@ -49,7 +52,9 @@ public:
     /// \throw std::runtime_error При небезопасном wipe или повреждённой файловой структуре.
     /// \par Потокобезопасность
     /// Конструктор не рассчитан на конкурентный доступ к объекту до завершения создания.
-    ChunkBlobStore(std::filesystem::path root, bool memory_only = false, bool wipe_data = false);
+    /// \param capacity_bytes Локальная CYBOU capacity `V`: предел всех physical blobs.
+    ChunkBlobStore(std::filesystem::path root, bool memory_only = false, bool wipe_data = false,
+        std::uint64_t capacity_bytes = std::numeric_limits<std::uint64_t>::max());
     ChunkBlobStore(const ChunkBlobStore&) = delete;
     ChunkBlobStore& operator=(const ChunkBlobStore&) = delete;
 
@@ -105,10 +110,13 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     bool MemoryOnly() const { return m_memory_only; }
+    /// \brief Локальная CYBOU capacity `V`, ограничивающая все blobs.
+    std::uint64_t CapacityBytes() const { return m_capacity_bytes; }
 
 private:
     const std::filesystem::path m_root;
     const bool m_memory_only;
+    const std::uint64_t m_capacity_bytes;
     mutable std::mutex m_mutex;
     std::map<ChunkId, std::vector<unsigned char>> m_memory_blobs;
     std::uint64_t m_used_bytes{0};

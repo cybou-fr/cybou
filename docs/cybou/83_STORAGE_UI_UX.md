@@ -502,9 +502,10 @@ transfer peers
 
 ## 20. Reciprocal storage and node health
 
-Storage is intrinsic to every Full Node: each node automatically allocates ~10–15 GB
-of local space to support the network's reciprocal 1:3 obligation, backing the user's
-5 GB Onboarding Trust Credit (DEC-258, DEC-269). Inspecting local storage allocation,
+Storage is intrinsic to every Full Node: each node has an explicit local CYBOU
+capacity `V >= 15 GiB` (default 15 GiB), of which at most `floor(2V/3)` serves
+provider obligations and the rest is a local reserve (DEC-275). On the current
+DEVNET the user's 5 GB Onboarding Trust Credit still applies (DEC-269). Inspecting local storage allocation,
 uptime, and mutual audit health is an advanced setting, not part of normal file browsing.
 
 Suggested path:

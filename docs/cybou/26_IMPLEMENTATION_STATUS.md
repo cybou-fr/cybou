@@ -32,10 +32,16 @@ define the target. The changes described here include committed local developmen
 
 ## Storage economy status (2026-10-04)
 
-DEC-274–DEC-283 are frozen as target architecture (M1). Nothing is implemented:
-the runtime still uses automatic capacity, AUTH storage quotas, the 5 GiB
+DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:
+`NodeRuntimeConfig::storage_capacity_bytes` is the explicit local capacity `V`
+(default and minimum 15 GiB outside memory-only tests, `cybou node run
+--capacity`), `ChunkBlobStore` rejects new blobs beyond `V` with
+`CAPACITY_EXCEEDED`, and `FinalizedChunkStore` receives the provider budget
+`ProviderBudgetBytes(V) = floor(2V/3)`; diagnostics report local and provider
+usage separately. The runtime still uses AUTH storage quotas, the 5 GiB
 onboarding credit and OnboardingPool; no StorageLease, StorageEscrow,
-StorageSettlement, receipts or audit transport exist.
+StorageSettlement, receipts or audit transport exist. The desktop has no
+capacity picker yet and uses the 15 GiB default.
 
 ## Evidence limits reviewed on 2026-10-04
 

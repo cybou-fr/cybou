@@ -119,11 +119,13 @@ STORAGE_PROOF (23), bound to both HELLOs, TLS exporter and a fresh challenge.
 The STORAGE key retains purpose value 8 and its original derivation domain.
 No role is advertised. PublicationService retains ordered authorization leaves
 in the encrypted Application DB; StorageService builds transient Merkle levels
-and generates each proof on demand. Production nodes allocate a positive quota automatically (or accept an explicit
-positive quota). Zero is limited to memory-only unit tests. Automatic allocation
-uses 10% of space remaining after a reserve of max(1 GiB, 5% of filesystem size),
-clamped to 64 MiB–20 GiB. Admission preserves the same reserve and fails closed
-on unavailable disk-space information. Existing replicas survive quota reductions.
+and generates each proof on demand. Production nodes use an explicit local capacity `V >= 15 GiB` (default
+15 GiB; headless `--capacity`; DEC-275). The whole ChunkBlobStore (own staging,
+cache and provider replicas) is bounded by `V`; finalized provider obligations
+are bounded by `floor(2V/3)`. Values below 15 GiB and zero are limited to
+memory-only unit tests. Admission also preserves a disk reserve of
+max(1 GiB, 5% of filesystem size) and fails closed on unavailable disk-space
+information. Existing replicas survive capacity reductions.
 Block sync, candidate relay and Validation transport remain operational.
 
 ## Notarial object register and deterministic quotas
@@ -177,9 +179,9 @@ Block finalization synthesizes transaction history into active state (`CybouStat
 DEC-274–DEC-283 replace the AUTH resource ladder storage columns, the onboarding
 credit and automatic allocation:
 
-- **Local capacity**: explicit `V >= 15 GiB`; the ChunkBlobStore is bounded by
-  `V` and finalized provider obligations by `floor(2V/3)`. Nothing is physically
-  partitioned and `V` is not consensus state.
+- **Local capacity** (implemented, M2): explicit `V >= 15 GiB`; the
+  ChunkBlobStore is bounded by `V` and finalized provider obligations by
+  `floor(2V/3)`. Nothing is physically partitioned and `V` is not consensus state.
 - **Admission**: finality-first admission additionally requires an active funded
   StorageLease and an assignment to this provider.
 - **Assignment**: secure random shuffle over eligible Full Nodes (valid recently

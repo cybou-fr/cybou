@@ -148,31 +148,22 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     if (!m_config.memory_only) {
         storage_path = std::filesystem::path{m_config.data_dir.string() + ".chunks"};
     }
+    // `V` — явная local policy оператора, не consensus state; минимум не ослабляется для production.
+    if (!m_config.storage_capacity_bytes) m_config.storage_capacity_bytes = DEFAULT_STORAGE_CAPACITY_BYTES;
+    if (*m_config.storage_capacity_bytes < MIN_STORAGE_CAPACITY_BYTES && !m_config.memory_only)
+        throw std::invalid_argument("storage capacity must be at least 15 GiB; smaller values are memory-only tests");
+    const uint64_t capacity = *m_config.storage_capacity_bytes;
+    // Zero существует только для memory-only tests «без provider»: собственный staging не ограничен.
     m_chunk_blob_store = std::make_unique<ChunkBlobStore>(
         m_config.memory_only ? std::filesystem::path{} : storage_path / "chunks",
-        m_config.memory_only, m_config.wipe_data);
+        m_config.memory_only, m_config.wipe_data,
+        capacity == 0 ? std::numeric_limits<uint64_t>::max() : capacity);
     m_chunk_retention = std::make_unique<ChunkRetentionRegistry>(
         m_config.memory_only ? std::filesystem::path{} : storage_path / "retention",
         m_config.memory_only, m_config.wipe_data);
-    if (m_config.storage_capacity_bytes == std::optional<uint64_t>{0} && !m_config.memory_only)
-        throw std::invalid_argument("zero storage capacity is restricted to memory-only unit tests");
-    if (!m_config.storage_capacity_bytes) {
-        constexpr uint64_t gib = 1ULL << 30;
-        uint64_t target = 64ULL << 20;
-        if (!m_config.memory_only) {
-            std::error_code ec;
-            const auto space = std::filesystem::space(storage_path, ec);
-            const uint64_t reserve = std::max<uint64_t>(gib, space.capacity / 20);
-            const uint64_t usable = space.available > reserve ? space.available - reserve : 0;
-            // Automatic storage is a local policy only: keep a floor for tiny
-            // installs, keep reserve space for the machine, and cap runaway use.
-            if (!ec) target = std::clamp<uint64_t>(usable / 10, 64ULL << 20, 20 * gib);
-        }
-        m_config.storage_capacity_bytes = target;
-    }
     m_finalized_chunk_store = std::make_unique<FinalizedChunkStore>(*m_chunk_blob_store, storage_path,
         std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
-        *m_config.storage_capacity_bytes, m_config.wipe_data);
+        ProviderBudgetBytes(capacity), m_config.wipe_data);
     // Recover a crash between durable block commit and its local purge event.
     const auto restored = m_store.LoadState();
     if (restored.error == StateLoadError::NONE && restored.state) {
@@ -1289,6 +1280,10 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     if (m_finalized_chunk_store) {
         snapshot.storage_used = m_finalized_chunk_store->UsedBytes();
         snapshot.storage_capacity = m_finalized_chunk_store->CapacityBytes();
+    }
+    if (m_chunk_blob_store) {
+        snapshot.local_storage_used = m_chunk_blob_store->UsedBytes();
+        snapshot.local_storage_capacity = m_config.storage_capacity_bytes.value_or(0);
     }
     return snapshot;
 }

@@ -211,7 +211,8 @@ void DiagnosticsPage::refresh()
     QWidget* parent = m_rows->parentWidget();
     const auto& diagnostics = m_model->networkDiagnostics();
     Row(m_rows, tr("Node type"), tr("Full Node"), parent);
-    Row(m_rows, tr("Storage used / capacity"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.storage_used).arg(diagnostics.storage_capacity), parent);
+    Row(m_rows, tr("Local storage used / capacity"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.local_storage_used).arg(diagnostics.local_storage_capacity), parent);
+    Row(m_rows, tr("Provider obligations / budget"), QStringLiteral("%1 / %2 bytes").arg(diagnostics.storage_used).arg(diagnostics.storage_capacity), parent);
     Row(m_rows, tr("PoA signer active"), diagnostics.poa_signer_active ? tr("Yes") : tr("No"), parent);
     Row(m_rows, tr("Connection"), cybouConnectionText(status), parent);
     const QString geo_status = status.geo_admission == CybouGeoAdmissionStatus::Ready ? tr("Ready")

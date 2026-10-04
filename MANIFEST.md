@@ -8,7 +8,7 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 546 | 02f724453fc85281 |
+| AGENTS.md | 547 | d6e39aba02a9ba18 |
 | CONTRIBUTING.md | 50 | cf30228b23288058 |
 | INSTALL.md | 37 | 21b5ef259577e6d2 |
 | README.md | 152 | aba12b3cd685dee9 |
@@ -18,7 +18,7 @@ editing an included file.
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 216 | b672b4e056e690e0 |
 | docs/cybou/05_CHAIN_STATE.md | 102 | e26d95022ba511d2 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | ee6747d95045a75c |
-| docs/cybou/08_P2P.md | 125 | c33eb49a550d0ba0 |
+| docs/cybou/08_P2P.md | 125 | 495479983c44ca06 |
 | docs/cybou/09_CRYPTO_PQ.md | 29 | 5f99f8a8845ae474 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 98f3227719c0291a |
 | docs/cybou/18_ECONOMICS_FEES.md | 142 | b667bd72e4db87aa |
@@ -26,9 +26,9 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 68 | 08b4831d155d06d3 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 74 | 85101dd415897720 |
-| docs/cybou/24_DECISIONS.md | 222 | 448e4ee3fc85d926 |
+| docs/cybou/24_DECISIONS.md | 222 | fc68a07f8848c94e |
 | docs/cybou/25_OPEN_QUESTIONS.md | 93 | d7586fc125777058 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 123 | 1e8f69f833208842 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 129 | 4a7f51a99d8ea223 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 67 | d3fc59e20cb63db1 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 49 | cadd921838903857 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -52,7 +52,7 @@ editing an included file.
 | docs/cybou/80_CRYPTO_SOVEREIGNTY_AUDIT.md | 51 | 78ce0659bd11f6b7 |
 | docs/cybou/81_BETA_PRODUCT_SCOPE.md | 114 | d3623e9c7ab7f327 |
 | docs/cybou/82_MAIL_UI_UX.md | 656 | fabec7f7e547c31c |
-| docs/cybou/83_STORAGE_UI_UX.md | 574 | 74dc72cb5d976dd9 |
+| docs/cybou/83_STORAGE_UI_UX.md | 575 | 2d9bd80579631b36 |
 | docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 520 | 43250d708665708f |
 | docs/cybou/85_BETA_UI_ACCEPTANCE.md | 188 | 8b581a3c1c4313be |
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 116 | ec7a81b2ffc567a4 |
@@ -73,7 +73,7 @@ editing an included file.
 | docs/cybou/ROOT_PUBLICATION.md | 129 | 21dad0ace7f05a61 |
 | docs/cybou/SECURITY_GOVERNANCE.md | 75 | a67a214a43175bd8 |
 | docs/cybou/SECURITY_STANDARDS.md | 65 | 76ee18509f85730c |
-| docs/cybou/STORAGE_ADMISSION.md | 201 | aa8c3922758fc9f1 |
+| docs/cybou/STORAGE_ADMISSION.md | 203 | 7a3674e594f425b5 |
 | docs/cybou/UPSTREAM_BASELINE.md | 34 | 2a43f53cf9b9979e |
 | docs/cybou/VALIDATION.md | 109 | da4dd391e9327a9d |
 | spec/circulation_scenarios.csv | 2 | b63d09ab8a0355ce |

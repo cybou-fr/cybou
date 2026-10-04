@@ -213,7 +213,7 @@ There is no production network.
 - **Target architecture**: The DEV bootstrap is an ordinary CYBOU full peer process.
 - **Current deployment**: `cybou-node.service` runs the ordinary headless
   `cybou node run` on the immutable current DEVNET, with state under
-  `/var/lib/cybou/node/state` and intrinsic automatic storage allocation.
+  `/var/lib/cybou/node/state` and the default 15 GiB local storage capacity.
   The preceding network domain is retired under `/var/lib/cybou/node-retired-20261003-de-version`;
   the earlier hardening retirement is preserved separately. Neither state may
   be reused by the current network. The prototype service is inactive.
@@ -263,9 +263,10 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
 - Production `cybou` has no provisioning command or Network Root derivation/signing.
   `cybou-provision` is a separate explicitly built offline tool (`BUILD_PROVISION_TOOL=ON`).
   Creation never overwrites existing private material or public constants; verification never signs.
-- Every production Full Node has a positive local storage allocation. Target (DEC-275):
-  explicit capacity `V >= 15 GiB` replaces the current automatic free-space policy;
-  explicit zero is confined to memory-only unit tests. Low disk space rejects
+- Every production Full Node has an explicit local storage capacity `V >= 15 GiB`
+  (default 15 GiB; headless `--capacity`). The whole ChunkBlobStore is bounded by
+  `V` and provider obligations by `floor(2V/3)` (DEC-275). Smaller values and zero
+  are confined to memory-only unit tests. Low disk space rejects
   new admission without changing node type, consensus authority, or mesh participation.
 - `cybou-loadgen`, storage smoke/soak and other tools exist only with
   `BUILD_TESTS=ON`.
