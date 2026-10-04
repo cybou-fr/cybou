@@ -44,6 +44,8 @@ See [`04_NETWORK_LIFECYCLE.md`](04_NETWORK_LIFECYCLE.md).
 ## Operational resilience
 
 The automatic local Geo updater verifies every candidate before activation.
+The published DB-IP SHA-1 is checked against the decompressed CSV bytes;
+the gzip envelope is decoded strictly with bounded input and output sizes.
 A failed update never replaces an already validated dataset. Transient download,
 publication or checksum inconsistency is retried by fetching both release metadata
 and the archive again, up to five attempts (0, 2, 5, 15 and 60 second delays).

@@ -336,10 +336,11 @@ GeoDatabaseUpdater::RefreshResult GeoDatabaseUpdater::RefreshOnce()
     // downgrade недопустим, а повторная установка той же версии только расходует сеть.
     if (current && CurrentDataset() && release->month <= current->issued_month) return RefreshResult::CURRENT;
     const auto compressed = Fetch(DB_IP_FILE_HOST, release->download_path, MAX_GZIP_BYTES);
-    if (Hex(ComputeSha1(compressed)) != release->sha1) {
-        throw std::runtime_error("DB-IP Geo archive does not match its published SHA-1");
-    }
     const auto csv = Gunzip(compressed);
+    // DB-IP publishes the checksum of the uncompressed CSV, not its gzip envelope.
+    if (Hex(ComputeSha1(csv)) != release->sha1) {
+        throw std::runtime_error("DB-IP Geo CSV does not match its published SHA-1");
+    }
     std::array<unsigned char, 32> sha256{};
     if (!crypto::ComputeSha256({std::span<const unsigned char>{
             reinterpret_cast<const unsigned char*>(csv.data()), csv.size()}}, sha256.data())) {

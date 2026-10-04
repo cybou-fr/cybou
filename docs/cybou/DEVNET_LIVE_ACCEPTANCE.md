@@ -68,6 +68,15 @@ for an entire 5 GiB allowance. Protocol fees go to Central Authority; this
 exercise establishes no provider payment or economic incentive for third-party
 storage. Those remain constraints on the product's storage proposition.
 
+## Geo updater verification (2026-10-04)
+
+A fresh Windows Full Node automatically downloaded the October DB-IP country
+dataset into an empty Geo cache and then connected to the DEV VPS and synchronized
+finalized blocks. The published SHA-1 `c8ad1dfe98cb29bcacd82a5c3ec361c880e5bb59`
+matches the decompressed CSV, not the gzip envelope. The installed CSV has
+SHA-256 `53864a68fbfef02c27c717d08d431a6d453e9e00e77d9e8da841d382267fca88`.
+No pre-existing dataset was copied into this test node.
+
 ## Recovery commands
 
 Use the same existing test directories and passwords as the publication run.

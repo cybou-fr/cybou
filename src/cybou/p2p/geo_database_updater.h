@@ -31,7 +31,7 @@ struct GeoDatabaseRelease {
     std::chrono::year_month month;
     /// \brief HTTP path gzip-архива на `download.db-ip.com`.
     std::string download_path;
-    /// \brief Опубликованный SHA-1 gzip-архива в нижнем ASCII hex.
+    /// \brief Опубликованный SHA-1 распакованного CSV в нижнем ASCII hex.
     std::string sha1;
 };
 

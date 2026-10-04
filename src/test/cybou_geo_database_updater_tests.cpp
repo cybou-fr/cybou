@@ -135,6 +135,7 @@ struct GeoFixture {
 BOOST_FIXTURE_TEST_CASE(fresh_directory_refetches_metadata_after_checksum_mismatch, GeoFixture)
 {
     const auto archive = Gzip(CSV);
+    BOOST_REQUIRE(Digest(archive, EVP_sha1()) != Digest(CSV, EVP_sha1()));
     unsigned pages{0}, archives{0};
     std::vector<std::string> requests;
     auto updater = Create([&](auto host, auto path, size_t limit, const auto& headers) {
@@ -145,7 +146,7 @@ BOOST_FIXTURE_TEST_CASE(fresh_directory_refetches_metadata_after_checksum_mismat
         requests.emplace_back(host);
         if (host == "db-ip.com") {
             BOOST_CHECK_EQUAL(path, "/db/download/ip-to-country-lite");
-            return Page(++pages == 1 ? std::string(40, '0') : Digest(archive, EVP_sha1()), month);
+            return Page(++pages == 1 ? std::string(40, '0') : Digest(CSV, EVP_sha1()), month);
         }
         ++archives;
         BOOST_CHECK_EQUAL(host, "download.db-ip.com");
@@ -202,7 +203,8 @@ BOOST_FIXTURE_TEST_CASE(invalid_gzip_and_malformed_csv_retry_before_activation, 
             if (host == "db-ip.com") {
                 ++attempts;
                 if (attempts == 2) { BOOST_CHECK(!updater->Ready()); }
-                return Page(Digest(attempts == 1 ? bad[variant] : good, EVP_sha1()), month);
+                return Page(Digest(attempts == 1 && variant == 1 ? std::string_view{"invalid csv\n"} : CSV,
+                    EVP_sha1()), month);
             }
             return attempts == 1 ? bad[variant] : good;
         }, [](auto, auto) { return true; });
