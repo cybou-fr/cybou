@@ -1525,6 +1525,11 @@ void CybouShellTests::runtimeRetiresStateFromAnotherNetwork()
     ScopedEnvironment p2p_port{"CYBOU_DEV_P2P_PORT", "1"};
     ScopedUnsetEnvironment finalizer_mode{"CYBOU_DEV_FINALIZER"};
     QVERIFY(WriteForeignNetworkState(directory.path()));
+    // Unrelated files in the data directory are never moved.
+    QFile unrelated{directory.filePath(QStringLiteral("unrelated.vhdx"))};
+    QVERIFY(unrelated.open(QIODevice::WriteOnly));
+    unrelated.write("keep");
+    unrelated.close();
 
     CybouDesktopModel model{QStringLiteral("CYBOU-DEV")};
     CybouDesktopController controller{&model, directory.path().toStdString()};
@@ -1536,7 +1541,10 @@ void CybouShellTests::runtimeRetiresStateFromAnotherNetwork()
     const QDir retired{directory.filePath(QStringLiteral("retired"))};
     const auto runs = retired.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     QCOMPARE(runs.size(), 1);
-    QVERIFY(!QDir{retired.filePath(runs.first())}.isEmpty());
+    const QDir run{retired.filePath(runs.first())};
+    QVERIFY(run.exists(QStringLiteral("cybou_state")));
+    QVERIFY(!run.exists(QStringLiteral("unrelated.vhdx")));
+    QVERIFY(QFile::exists(directory.filePath(QStringLiteral("unrelated.vhdx"))));
 }
 
 void CybouShellTests::backendCommandsDriveProjection()

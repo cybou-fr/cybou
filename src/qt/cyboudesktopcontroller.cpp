@@ -32,6 +32,8 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
+#include <vector>
 #include <thread>
 #include <utility>
 
@@ -39,17 +41,30 @@
 
 namespace {
 
+/// Network-bound entries the desktop itself creates in its data directory. The
+/// directory may hold unrelated files (it can be user-chosen), so nothing else moves.
+constexpr std::array<std::string_view, 4> NETWORK_BOUND_ENTRIES{
+    "cybou_state", "cybou_state.chunks", "identity.cybou", "identities"};
+
 /// Network cutover (AGENTS.md): network-bound data of another official network is
-/// moved aside under `retired/<UTC time>/`; only the network-independent Geo cache stays.
+/// moved aside under `retired/<UTC time>/`; all-or-nothing, rolled back on failure.
 std::filesystem::path RetireForeignNetworkData(const std::filesystem::path& data_directory)
 {
     const auto stamp = QDateTime::currentDateTimeUtc().toString(QStringLiteral("yyyyMMdd-HHmmss")).toStdString();
     const auto target = data_directory / "retired" / stamp;
     std::filesystem::create_directories(target);
-    for (const auto& entry : std::filesystem::directory_iterator{data_directory}) {
-        const auto name = entry.path().filename();
-        if (name == "geo" || name == "retired") continue;
-        std::filesystem::rename(entry.path(), target / name);
+    std::vector<std::string_view> moved;
+    try {
+        for (const auto name : NETWORK_BOUND_ENTRIES) {
+            const auto source = data_directory / name;
+            if (!std::filesystem::exists(std::filesystem::symlink_status(source))) continue;
+            std::filesystem::rename(source, target / name);
+            moved.push_back(name);
+        }
+    } catch (...) {
+        std::error_code ignored;
+        for (const auto name : moved) std::filesystem::rename(target / name, data_directory / name, ignored);
+        throw;
     }
     return target;
 }
