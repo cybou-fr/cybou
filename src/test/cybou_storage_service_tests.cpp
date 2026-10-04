@@ -321,6 +321,53 @@ BOOST_AUTO_TEST_CASE(shadow_accounting_credits_verified_intervals_and_survives_r
     }
 }
 
+BOOST_AUTO_TEST_CASE(settlement_pays_verified_replicas_of_leased_publications)
+{
+    // DEC-282: each verified replica earns one replica share of the period cap; unverified
+    // replicas, providers without a payout binding and the payer earn nothing.
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture, 2};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    const auto lease = fixture.runtime->GetStorageLease(content.operation_id);
+    BOOST_REQUIRE(lease);
+    const auto endpoints = network.Endpoints();
+    std::array<unsigned char, 32> first{}, second{};
+    first.fill(0x11);
+    second.fill(0x22);
+    network.payout[endpoints[0].storage_id] = first;
+    network.payout[endpoints[1].storage_id] = second;
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+    const auto period = lease->first_period;
+    BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
+    const auto cap = cybou::ComputeStorageLeasePeriodCap(
+        fixture.runtime->GetNetworkGenesis().GetProtocolParameters(), lease->units, lease->replicas);
+    BOOST_REQUIRE(cap && *cap > 0);
+    // Every slot is verified: the whole period cap is paid, split between the two accounts.
+    const auto entries = storage.SettlementEntries(period, 0);
+    BOOST_REQUIRE(!entries.empty() && entries.size() <= 2U);
+    std::uint64_t total{0};
+    for (const auto& entry : entries) {
+        BOOST_CHECK(entry.publication_id == content.operation_id);
+        BOOST_CHECK(entry.payout_account != identity->GetKeyStore().GetAccountId());
+        total += entry.amount;
+    }
+    BOOST_CHECK_EQUAL(total, *cap);
+    if (entries.size() == 2) BOOST_CHECK(entries[0].payout_account < entries[1].payout_account);
+    // Without payout bindings nobody is owed anything.
+    network.payout.clear();
+    BOOST_CHECK(storage.SettlementEntries(period, 0).empty());
+    network.payout[endpoints[0].storage_id] = first;
+    network.payout[endpoints[1].storage_id] = second;
+    // Checks older than the period start do not count.
+    BOOST_CHECK(storage.SettlementEntries(period, std::numeric_limits<std::int64_t>::max()).empty());
+    // Outside the lease nothing is owed.
+    BOOST_CHECK(storage.SettlementEntries(lease->end_period, 0).empty());
+}
+
 BOOST_AUTO_TEST_CASE(replicas_go_to_distinct_payout_accounts_and_nodes_of_one_account_count_once)
 {
     // DEC-280: three StorageIds of one payout account are one economic identity. With two

@@ -716,6 +716,19 @@ void CybouCoreApplicationAdapter::openIdentity()
         m_transport_override);
 }
 
+void CybouCoreApplicationAdapter::prepareStorageSettlement(const std::uint64_t period,
+    const std::int64_t verified_since_ms, std::function<void(std::vector<cybou::StorageSettlementEntry>)> done)
+{
+    if (!m_session) {
+        done({});
+        return;
+    }
+    m_session->Post([period, verified_since_ms, done = std::move(done)](Session& s) {
+        done(s.storage ? s.storage->SettlementEntries(period, verified_since_ms)
+                       : std::vector<cybou::StorageSettlementEntry>{});
+    });
+}
+
 void CybouCoreApplicationAdapter::identityKeysChanged()
 {
     if (!m_session || m_reopening) return;

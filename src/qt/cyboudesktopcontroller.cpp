@@ -21,6 +21,7 @@
 #include <cybou/wallet_service.h>
 
 #include <QDateTime>
+#include <QTimeZone>
 #include <QFile>
 #include <QMetaObject>
 
@@ -137,6 +138,7 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
             publishNetworkAuthority();
         });
         connect(m_model, &CybouDesktopModel::finalizeNowRequested, this, [this] { finalizeNow(); });
+        connect(m_model, &CybouDesktopModel::storageSettlementRequested, this, [this] { settleStoragePeriod(); });
     }
 }
 
@@ -144,6 +146,42 @@ CybouDesktopController::~CybouDesktopController()
 {
     if (m_operator_worker.joinable()) m_operator_worker.join();
     stop();
+}
+
+void CybouDesktopController::settleStoragePeriod()
+{
+    if (!m_node_service || !m_application) return;
+    auto& runtime = m_node_service->Runtime();
+    const auto cursor = runtime.GetStorageSettlementCursor();
+    if (!cursor) return;
+    const auto period_seconds = runtime.GetNetworkGenesis().GetProtocolParameters().storage_settlement_period_seconds;
+    const auto now = static_cast<std::uint64_t>(QDateTime::currentSecsSinceEpoch());
+    if (period_seconds == 0 || now < period_seconds) return;
+    // The first period is the last complete UTC period; later ones continue the finalized cursor.
+    const std::uint64_t start = cursor->next_period_start_utc != 0 ? cursor->next_period_start_utc
+                                                                  : (now / period_seconds - 1) * period_seconds;
+    if (start + period_seconds > now) {
+        m_model->notify(CybouDesktopModel::tr("The next storage settlement is due %1 UTC.")
+            .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(start + period_seconds), QTimeZone::UTC)
+                    .toString(QStringLiteral("yyyy-MM-dd HH:mm"))));
+        return;
+    }
+    const auto period = cursor->next_period;
+    m_application->prepareStorageSettlement(period, static_cast<std::int64_t>(start) * 1000,
+        [this, start, period](std::vector<cybou::StorageSettlementEntry> entries) {
+            std::uint64_t total{0};
+            for (const auto& entry : entries) total += entry.amount;
+            const auto count = entries.size();
+            const auto result = m_node_service->Runtime().SubmitStorageSettlement(start, std::move(entries));
+            const bool ok = result.status == cybou::OperationSubmitStatus::ACCEPTED ||
+                result.status == cybou::OperationSubmitStatus::ALREADY_PENDING;
+            QMetaObject::invokeMethod(m_model, [model = m_model, ok, period, count, total] {
+                model->notify(ok
+                    ? CybouDesktopModel::tr("Storage period %1 settled: %2 payouts, %3 CYBOU. It is finalized in the next block.")
+                          .arg(period).arg(count).arg(cybouAmountText(total))
+                    : CybouDesktopModel::tr("The storage settlement was rejected by local execution."));
+            }, Qt::QueuedConnection);
+        });
 }
 
 void CybouDesktopController::finalizeNow()

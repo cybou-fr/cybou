@@ -817,6 +817,86 @@ void StorageService::ForgetReplica(const std::array<unsigned char, 32>& storage_
     m_replica_verified_ms.erase(std::pair{chunk_id, storage_id});
 }
 
+std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std::uint64_t period,
+    const std::int64_t verified_since_ms)
+{
+    // Payout-аккаунты известны только из живых проверенных bindings (в placement они не хранятся).
+    std::map<std::array<unsigned char, 32>, AccountId> payout_by_storage;
+    for (const auto& provider : m_transport.Providers()) {
+        if (!provider.payout_account) continue;
+        if (const auto account = AccountId::FromBytes(*provider.payout_account)) {
+            payout_by_storage.emplace(provider.storage_id, *account);
+        }
+    }
+    std::vector<Placement> placements;
+    {
+        std::lock_guard lock{m_mutex};
+        for (const auto& operation_id : PlacementIndex()) {
+            if (auto placement = Load(operation_id)) placements.push_back(std::move(*placement));
+        }
+    }
+    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
+    std::vector<StorageSettlementEntry> entries;
+    for (const auto& placement : placements) {
+        const auto lease = m_runtime.GetStorageLease(placement.operation_id);
+        if (!lease || lease->replicas == 0 || lease->units == 0 ||
+            period < lease->first_period || period >= lease->end_period) continue;
+        const auto cap = ComputeStorageLeasePeriodCap(params, lease->units, lease->replicas);
+        if (!cap) continue;
+        // Число проверенных в этом периоде чанков на каждый payout-аккаунт; одна реплика чанка на аккаунт.
+        std::map<AccountId, std::uint64_t> verified_chunks;
+        {
+            std::lock_guard lock{m_evidence_mutex};
+            for (std::size_t leaf = 0; leaf < placement.leaves.size() && leaf < placement.replicas.size(); ++leaf) {
+                std::set<AccountId> counted;
+                for (const auto& replica : placement.replicas[leaf]) {
+                    const auto payout = payout_by_storage.find(replica.storage_id);
+                    if (payout == payout_by_storage.end() || payout->second == lease->payer) continue;
+                    const auto checked = m_replica_verified_ms.find(std::pair{placement.leaves[leaf], replica.storage_id});
+                    if (checked == m_replica_verified_ms.end() || checked->second < verified_since_ms) continue;
+                    if (counted.insert(payout->second).second) ++verified_chunks[payout->second];
+                }
+            }
+        }
+        std::vector<std::pair<std::uint64_t, AccountId>> ranked;
+        for (const auto& [account, chunks] : verified_chunks) ranked.emplace_back(chunks, account);
+        std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+            return a.first != b.first ? a.first > b.first : a.second < b.second;
+        });
+        if (ranked.size() > lease->replicas) ranked.resize(lease->replicas);
+        if (ranked.empty()) continue;
+        // Cap периода делится по слотам `units × replicas`: аккаунт получает долю своих проверенных слотов.
+        // Целые CYBOU: floor на аккаунт, остаток до floor(cap × verified / slots) раздаётся по одному,
+        // начиная со смещения `period`, чтобы остаток не доставался всегда одному аккаунту.
+        const auto slots = static_cast<unsigned __int128>(lease->units) * lease->replicas;
+        unsigned __int128 verified_slots{0};
+        std::vector<std::uint64_t> amounts;
+        std::uint64_t floor_sum{0};
+        for (const auto& [chunks, account] : ranked) {
+            const auto chunk_count = std::min<std::uint64_t>(chunks, lease->units);
+            verified_slots += chunk_count;
+            amounts.push_back(static_cast<std::uint64_t>(static_cast<unsigned __int128>(*cap) * chunk_count / slots));
+            floor_sum += amounts.back();
+        }
+        auto leftover = static_cast<std::uint64_t>(static_cast<unsigned __int128>(*cap) * verified_slots / slots) - floor_sum;
+        for (std::size_t i{0}; leftover > 0 && i < amounts.size(); ++i, --leftover) {
+            ++amounts[(period + i) % amounts.size()];
+        }
+        std::uint64_t remaining = lease->escrow_onboarding + lease->escrow_locked;
+        for (std::size_t i{0}; i < ranked.size(); ++i) {
+            const auto paid = std::min(amounts[i], remaining);
+            if (paid == 0) continue;
+            remaining -= paid;
+            entries.push_back({.publication_id = placement.operation_id, .payout_account = ranked[i].second, .amount = paid});
+        }
+    }
+    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+        return a.publication_id != b.publication_id ? a.publication_id < b.publication_id : a.payout_account < b.payout_account;
+    });
+    if (entries.size() > MAX_STORAGE_SETTLEMENT_ENTRIES) entries.resize(MAX_STORAGE_SETTLEMENT_ENTRIES);
+    return entries;
+}
+
 std::optional<std::uint64_t> StorageService::EstimatedDailyRent()
 {
     std::uint64_t units{0};

@@ -53,6 +53,8 @@ private:
     /** Runs one operator command (finalize now) off the GUI thread. */
     std::jthread m_operator_worker;
     void finalizeNow();
+    /** Signs and submits the StorageSettlement of the next due period (PoA only, DEC-282). */
+    void settleStoragePeriod();
     /** Where data of another official network was moved at startup, if it was. */
     std::optional<std::filesystem::path> m_retired_network_data;
     void stop();

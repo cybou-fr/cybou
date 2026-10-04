@@ -671,6 +671,12 @@ void CybouDesktopModel::requestFinalizeNow()
     Q_EMIT finalizeNowRequested();
 }
 
+void CybouDesktopModel::requestStorageSettlement()
+{
+    if (!m_network_authority.proven || !m_network_authority.signer_enabled) return;
+    Q_EMIT storageSettlementRequested();
+}
+
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)
 {
     if (status.operation_id.isEmpty()) return;

@@ -302,6 +302,10 @@ public:
     bool IsPublicationActive(const cybou::Hash256& publication_id) const;
     /// \brief true, если финализированная аренда покрывает текущий несettled период (DEC-279).
     bool IsStorageLeaseActive(const cybou::Hash256& publication_id) const;
+    /// \brief Finalized аренда публикации или std::nullopt.
+    std::optional<StorageLeaseRecord> GetStorageLease(const cybou::Hash256& publication_id) const;
+    /// \brief Finalized курсор StorageSettlement (следующий период и его UTC-начало).
+    std::optional<StorageSettlementCursor> GetStorageSettlementCursor() const;
 
     /// \brief Локально исполняет и подаёт операцию в candidate pool и/или relay.
     /// \param op Candidate operation; exact signed bytes будут восстановлены canonical serialization.

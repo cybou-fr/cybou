@@ -58,9 +58,15 @@ conservation, Treasury-funded 20,000 onboarding, onboarding-origin tracking,
 86,400 s periods, per-lease period cap, no self-payout, origin-preserving
 payouts and refunds). Storage quotas are removed; `MAX_PUBLICATION_CHUNKS`
 remains a safety bound. Providers admit chunks only under an active lease;
-PublicationService leases at publication and renews inactive leases. Not yet
-implemented: aggregation of off-chain evidence into settlements, payout
-bindings, lease renewal UX. Because the state and genesis formats changed, the
+PublicationService leases at publication and renews inactive leases. The
+Central Authority desktop settles one complete UTC period per click
+("Settle storage period"): `StorageService::SettlementEntries` splits each
+active lease's period cap over its `units × replicas` slots and pays the live
+payout account of every replica verified since the period start; the
+settlement also advances the cursor and refunds ended leases. Limitation: the
+PoA pays only leases whose placements its own Identity holds; evidence of
+other payers is not yet transported to the PoA, so their escrow is refunded
+at lease end. Not yet implemented: that evidence transport, lease renewal UX. Because the state and genesis formats changed, the
 previous compiled DEVNET was retired. After M7, AUTH and Validation were removed
 (DEC-284), changing the state format again: main compiles the DEVNET
 `eee26eca…3665` (`verify-devnet` passes); the DEV VPS runs it with

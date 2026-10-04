@@ -503,6 +503,24 @@ bool CybouNodeRuntime::IsPublicationActive(const cybou::Hash256& publication_id)
     return loaded && loaded.state && loaded.state->publications.contains(publication_id);
 }
 
+std::optional<StorageLeaseRecord> CybouNodeRuntime::GetStorageLease(const cybou::Hash256& publication_id) const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (!loaded || !loaded.state) return std::nullopt;
+    const auto lease = loaded.state->leases.find(publication_id);
+    if (lease == loaded.state->leases.end()) return std::nullopt;
+    return lease->second;
+}
+
+std::optional<StorageSettlementCursor> CybouNodeRuntime::GetStorageSettlementCursor() const
+{
+    std::lock_guard lock(m_mutex);
+    const auto loaded = m_store.LoadState();
+    if (!loaded || !loaded.state) return std::nullopt;
+    return loaded.state->settlement;
+}
+
 bool CybouNodeRuntime::IsStorageLeaseActive(const cybou::Hash256& publication_id) const
 {
     std::lock_guard lock(m_mutex);

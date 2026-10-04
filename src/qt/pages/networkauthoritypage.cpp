@@ -153,11 +153,18 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_finalize_now->setCursor(Qt::PointingHandCursor);
     m_finalize_now->setToolTip(tr("Available while finalization is paused"));
     hero_layout->addWidget(m_finalize_now, 0, Qt::AlignVCenter);
+    m_settle_storage = new QPushButton{tr("Settle storage period"), hero};
+    m_settle_storage->setObjectName(QStringLiteral("secondaryButton"));
+    m_settle_storage->setProperty("cybouId", QStringLiteral("authoritySettleStorage"));
+    m_settle_storage->setCursor(Qt::PointingHandCursor);
+    m_settle_storage->setToolTip(tr("Pays verified storage service of the next complete period and returns escrow of ended leases"));
+    hero_layout->addWidget(m_settle_storage, 0, Qt::AlignVCenter);
     root->addWidget(hero);
     connect(m_pause, &QPushButton::clicked, this, [this] {
         m_model->requestFinalizationPaused(m_model->networkAuthority().finalizer != CybouFinalizerState::Paused);
     });
     connect(m_finalize_now, &QPushButton::clicked, this, [this] { m_model->requestFinalizeNow(); });
+    connect(m_settle_storage, &QPushButton::clicked, this, [this] { m_model->requestStorageSettlement(); });
 
     // Live network health.
     auto* grid = new QGridLayout;
@@ -239,6 +246,7 @@ void NetworkAuthorityPage::refresh()
     m_pause->setText(paused ? tr("Resume") : tr("Pause"));
     m_pause->setEnabled(a.finalizer == CybouFinalizerState::Finalizing || paused);
     m_finalize_now->setVisible(paused);
+    m_settle_storage->setEnabled(a.proven && a.signer_enabled && a.finalizer != CybouFinalizerState::SafetyHalt);
 
     m_height->setText(a.proven ? locale.toString(a.finalized_height) : QStringLiteral("—"));
     m_last_block->setText(!a.proven ? QStringLiteral("—")

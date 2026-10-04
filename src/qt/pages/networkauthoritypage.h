@@ -38,6 +38,7 @@ private:
     QLabel* m_finalizer_detail{nullptr};
     QPushButton* m_pause{nullptr};
     QPushButton* m_finalize_now{nullptr};
+    QPushButton* m_settle_storage{nullptr};
 
     QLabel* m_height{nullptr};
     QLabel* m_last_block{nullptr};

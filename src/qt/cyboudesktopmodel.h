@@ -169,6 +169,7 @@ public:
     /* Central Authority operator commands; the controller carries them out. */
     void requestFinalizationPaused(bool paused);
     void requestFinalizeNow();
+    void requestStorageSettlement();
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);
@@ -418,6 +419,7 @@ Q_SIGNALS:
     void systemLockFinished(bool ok, const QString& error);
     void finalizationPauseRequested(bool paused);
     void finalizeNowRequested();
+    void storageSettlementRequested();
     void operationStatusChanged(const QString& operation_id);
 
 private:
