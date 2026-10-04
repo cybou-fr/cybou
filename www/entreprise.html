@@ -114,9 +114,7 @@
     </div>
 
     <h1 class="hero-title" style="max-width: 940px; margin-top: 10px;" data-i18n="eHeroTitle">Créez votre Réseau Privé d'Entreprise Sécurisé &amp; Dédié</h1>
-    <p class="hero-subtitle" style="max-width: 860px;" data-i18n="eHeroDesc">
-      Pour organisations françaises et internationales : Déployez une appliance logicielle de réseau privé CYBOU 100% autonome, cryptographiquement étanche et administrée par votre DSI. Chiffrement post-quantique OpenSSL v3.5.2+, stockage On-Premise ou Air-Gap, et immunité juridique absolue.
-    </p>
+    <p class="hero-subtitle" style="max-width: 860px;" data-i18n="eHeroDesc">Nous construisons CYBOU Entreprise pour les organisations qui souhaitent leur propre domaine de confiance : un réseau privé dédié, une genèse propre, une clé PoA sous leur contrôle et un stockage sur l’infrastructure choisie.</p>
 
     <!-- Anchor Pills Navigation -->
     <nav class="compliance-nav-pills" aria-label="Sommaire Entreprise">
@@ -184,7 +182,7 @@
             <span class="compliance-status-good" data-i18n="eCard4Badge">Zéro SPOF</span>
           </div>
           <h3 data-i18n="eCard4Title">Stockage Distribué sans Point Unique de Panne</h3>
-          <p data-i18n="eCard4Desc">Vos fichiers et messages sont fragmentés (BLAKE3-256) et répliqués sur vos serveurs internes ou vos datacenters distants. La panne d'un serveur ou la rupture d'un lien WAN n'interrompt pas le service : le réseau s'auto-répare automatiquement.</p>
+          <p data-i18n="eCard4Desc">Vos fichiers et messages chiffrés sont répliqués sur vos serveurs. Confirmations signées, audits de portions aléatoires et téléchargements vérifiés par BLAKE3 contrôlent les copies. Les pertes sont réparées à partir d’une copie valide lorsqu’un fournisseur est disponible.</p>
         </div>
       </div>
     </article>
@@ -201,9 +199,7 @@
       </div>
 
       <div class="compliance-prose">
-        <p data-i18n="eArt2P1">
-          L'architecture unifiée de CYBOU permet d'instancier un réseau d'entreprise indépendant en quelques minutes, sans modifier une seule ligne de code source. Le protocole sépare hermétiquement les réseaux par leur <strong>définition de genèse</strong> et leurs <strong>certificats de transport</strong> :
-        </p>
+        <p data-i18n="eArt2P1">La direction Entreprise repose sur un réseau distinct, avec sa propre genèse et son identité réseau. L’organisation maîtrise la clé de finalité PoA et choisit son infrastructure de stockage. Le déploiement et l’outillage dédiés font partie du produit à construire :</p>
 
         <!-- Process Steps Flow -->
         <div class="enterprise-flow-box">
@@ -220,8 +216,8 @@
             </div>
             <div class="enterprise-step-card">
               <div class="enterprise-step-num">3</div>
-              <div class="enterprise-step-title" data-i18n="eStep3Title">Nœuds Bootstrap (1 à 4)</div>
-              <div class="enterprise-step-desc" data-i18n="eStep3Desc">Déploiement de 1 à 4 serveurs d'amorçage sur votre intranet pour l'aiguillage des pairs et la synchronisation.</div>
+              <div class="enterprise-step-title" data-i18n="eStep3Title">Points de contact initiaux</div>
+              <div class="enterprise-step-desc" data-i18n="eStep3Desc">Des Full Nodes ordinaires à des adresses connues sur votre intranet permettent la découverte initiale ; les pairs communiquent ensuite directement.</div>
             </div>
             <div class="enterprise-step-card">
               <div class="enterprise-step-num">4</div>
@@ -255,7 +251,7 @@
             <tr>
               <td><strong data-i18n="eRowBoot">Nœuds d'Amorçage (Bootstrap)</strong></td>
               <td data-i18n="eRowBootPub">Nœuds publics géolocalisés en France</td>
-              <td data-i18n="eRowBootPriv"><strong>1 à 4 serveurs d'amorçage internes</strong> (Sur votre LAN / Intranet / VPN)</td>
+              <td data-i18n="eRowBootPriv">Full Nodes ordinaires à des adresses connues sur votre LAN / Intranet / VPN</td>
             </tr>
             <tr>
               <td><strong data-i18n="eRowStorage">Infrastructure de Stockage</strong></td>
@@ -334,7 +330,7 @@
           </li>
           <li>
             <strong data-i18n="eGovItem5Title">Sauvegarde de sinistre et PCA/PRA déterministe :</strong><br>
-            <span data-i18n="eGovItem5Desc">En cas de sinistre physique majeur détruisant vos locaux, la simple possession de la clé de genèse et des 24 mots permet de réinstancier l'autorité et de restaurer les données d'entreprise de manière mathématiquement vérifiée.</span>
+            <span data-i18n="eGovItem5Desc">La continuité repose sur des sauvegardes des coffres Identity, des clés de finalité et de leur historique de signature, ainsi que sur des copies de données accessibles. Restaurer l’autorité et restaurer les contenus sont deux procédures distinctes ; la clé de genèse seule ne permet pas de récupérer les fichiers.</span>
           </li>
         </ul>
       </div>
@@ -358,7 +354,7 @@
             <span class="compliance-status-good" data-i18n="eUse1Badge">Secret des Affaires</span>
           </div>
           <h3 data-i18n="eUse1Title">R&amp;D, Propriété Intellectuelle &amp; Brevets</h3>
-          <p data-i18n="eUse1Desc">Protection absolue des plans de fabrication, formulations chimiques, codes sources et stratégies de mise sur le marché contre l'espionnage industriel étranger et les attaques par rançongiciel.</p>
+          <p data-i18n="eUse1Desc">Chiffrement côté client des plans, formulations, codes sources et documents stratégiques, avec contrôle des clés et copies vérifiées. La sécurité des postes et les procédures de récupération complètent ces mécanismes.</p>
         </div>
 
         <div class="compliance-card">
@@ -475,8 +471,8 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </div>
         <div class="roi-banner-content">
-          <h4 data-i18n="eRoiTitle">0 € de coût de licence mensuel par utilisateur (Économie massive vs. SaaS US)</h4>
-          <p data-i18n="eRoiDesc">Contrairement aux offres SaaS (Microsoft 365, Google Workspace) facturées entre 20 et 35 €/utilisateur/mois — représentant 30 000 €/an pour 100 postes et 150 000 €/an pour 500 postes —, une appliance réseau privé CYBOU est amortie dès les premiers mois. Votre organisation reste l'unique détentrice de ses données et de son code, sans risque d'inflation tarifaire unilatérale.</p>
+          <h4 data-i18n="eRoiTitle">Une infrastructure dimensionnée pour vos besoins</h4>
+          <p data-i18n="eRoiDesc">Le dimensionnement, l’exploitation, le support et les intégrations déterminent le coût du projet. Une étude adaptée à votre environnement permet d’évaluer ces besoins et les gains attendus, sans promettre une durée d’amortissement universelle.</p>
         </div>
       </div>
     </article>

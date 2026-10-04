@@ -28,19 +28,17 @@ const translations = {
 
     heroTag: "Cryptographie standard OpenSSL v3.5.2+ • Souveraineté France • Post-Quantique NIST",
     heroAccent: "Votre espace privé souverain. Messagerie, fichiers et identité.",
-    heroSubtitle: "CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Zéro algorithme maison : toute la cryptographie repose sur OpenSSL v3.5.2+ et les standards post-quantiques du NIST.",
-    heroPillSlogan: "Une suite souveraine qui protège votre vie privée — sans compromis publicitaire ni surveillance.",
+    heroSubtitle: "CYBOU réunit messagerie privée, fichiers et identité numérique portable dans une seule application. Vos contenus sont chiffrés sur votre ordinateur avant tout envoi.",
+    heroPillSlogan: "Vos clés. Votre espace. Votre identité vous accompagne.",
 
-    statusCalloutTitle: "Protocole DEV opérationnel. Préparation de la version publique.",
-    statusCalloutBody: "Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3 post-quantique. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.",
 
     heroBtnShowcase: "Découvrir l'application",
     heroBtnSecurity: "Pourquoi CYBOU ?",
 
-    badgeOpenssl: "Moteur OpenSSL v3.5.2+ (Zéro crypto maison)",
+    badgeOpenssl: "Primitives standard OpenSSL · Compositions documentées",
     badgeFrance: "Réseau à admission IP française",
     badgeTls: "Transport TLS 1.3 Post-Quantique (CYBOU P2P)",
-    badgePhrase: "Zéro Mot de passe / Clé 24 mots",
+    badgePhrase: "Clés Identity · Coffre local protégé",
     badgeNoAds: "Zéro Collecte & Zéro Publicité",
 
     showcaseLabel: "Aperçu de l'application",
@@ -79,12 +77,12 @@ const translations = {
     mockupIdHeading2: "Clés Post-Quantiques",
     mockupIdSub2: "Signature hybride active contre attaques quantiques.",
     mockupIdHeading3: "Restauration de compte",
-    mockupIdSub3: "Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.",
+    mockupIdSub3: "Récupération sur un autre ordinateur ; le coffre local est protégé par un mot de passe.",
     mockupIdHeading4: "Moteur cryptographique standard",
-    mockupIdSub4: "Standards officiels NIST FIPS 203/204. Zéro cryptographie maison.",
+    mockupIdSub4: "Primitives ML-KEM / ML-DSA standardisées ; composition protocolaire documentée.",
 
-    mockupSecHeading1: "Cryptographie éprouvée OpenSSL v3.5.2+ (Zéro crypto maison)",
-    mockupSecDesc1: "CYBOU applique la règle d'or de la sécurité : \"Don't roll your own crypto\". Aucun algorithme inventé : tout s'appuie sur la bibliothèque officielle OpenSSL v3.5.2+ conforme aux standards NIST FIPS 203 et FIPS 204.",
+    mockupSecHeading1: "Primitives standard OpenSSL · Compositions documentées",
+    mockupSecDesc1: "CYBOU utilise les primitives standard d’OpenSSL, notamment ML-KEM et ML-DSA, dans des compositions de protocole documentées. Le transport hybride TLS et le profil applicatif X-Wing sont des constructions distinctes ; la revue de leur composition reste séparée de la standardisation des primitives.",
     mockupSecHeading2: "Transport P2P TLS 1.3 Post-Quantique",
     mockupSecDesc2: "Tunnel TLS 1.3 avec groupe hybride X25519MLKEM768. Tout repli classique non-PQ est rejeté (fail-closed).",
     mockupSecHeading3: "Souveraineté territoriale France",
@@ -101,43 +99,44 @@ const translations = {
 
     srvFilesTag: "Stockage",
     srvFilesTitle: "CYBOU Files — Vos documents sous clé en France",
-    srvFilesDesc: "Un espace personnel souverain hébergé hors des clouds américains. Vos fichiers sont découpés en fragments chiffrés (BLAKE3-256), répliqués avec contrôle d'intégrité cryptographique sur des nœuds indépendants en France.",
+    srvFilesDesc: "Vos fichiers sont chiffrés et répliqués sur le réseau. Des confirmations de stockage signées, des contrôles sur des portions aléatoires et des téléchargements avec vérification BLAKE3 permettent de vérifier les copies et de réparer les pertes depuis une copie valide.",
     srvFilesStatus: "Flux intégrés — tests prolongés en cours",
 
     srvIdentityTag: "Identité",
     srvIdentityTitle: "CYBOU Identity — Une clé unique pour votre vie numérique",
     srvIdentityDesc: "Oubliez les mots de passe vulnérables et les SMS piratables. Votre compte est sécurisé par une phrase secrète de 24 mots et un nom lisible .cybou inaliénable qui vous appartient à vie.",
-    srvIdentityStatus: "Identité et coffre intégrés au protocole DEV",
+    srvIdentityStatus: "Identité et coffre intégrés au protocole DEVNET",
 
     srvContinuityTag: "Continuité",
     srvContinuityTitle: "Restauration & Continuité",
-    srvContinuityDesc: "En cas de perte ou de changement d'ordinateur, votre phrase de 24 mots et les preuves finalisées permettent de reconstruire vos emails, fichiers et carnet d'adresses en toute sécurité.",
-    srvContinuityStatus: "Reconstruction intégrée sur DEV",
+    srvContinuityDesc: "Le coffre Identity Vault portable et le mécanisme de récupération permettent de retrouver l’accès à votre Identity sur un autre ordinateur. La reconstruction des messages et fichiers nécessite des publications accessibles, des capsules de clé ouvrables et des copies chiffrées disponibles.",
+    srvContinuityStatus: "Reconstruction intégrée sur DEVNET",
 
-    srvWalletTag: "Économie",
-    srvWalletTitle: "Budget de service transparent",
-    srvWalletDesc: "Un modèle économique déterministe et prévisible pour rémunérer le stockage et la sécurité du réseau sans abonnement caché ni exploitation de vos données.",
-    srvWalletStatus: "Opérations de base disponibles dans le client DEV",
+    srvWalletTag: "Ressources",
+    srvWalletTitle: "Un budget de service lisible",
+    srvWalletDesc: "CYBOU utilise des unités de service internes pour comptabiliser les ressources consommées par les opérations et le stockage. Votre budget permet de suivre l’utilisation de ces services.",
+    srvStorageEconomy: "Le stockage est organisé par des leases et des contrôles de disponibilité. Le budget de service suit les ressources utilisées ; AUTH reste distinct et ne détermine pas le volume de stockage.",
+    srvWalletStatus: "Opérations de base disponibles dans le client DEVNET",
 
     secLabel: "Sécurité & Transport",
     secTitle: "Une forteresse numérique de bout en bout.",
     secDesc: "Découvrez les protections de CYBOU et leurs limites, du transport au stockage chiffré.",
 
     secOpensslTag: "Standard Mondial Audité",
-    secOpensslTitle: "Cryptographie Standard OpenSSL v3.5.2+ (Zéro crypto maison)",
+    secOpensslTitle: "Primitives standard OpenSSL · Compositions documentées",
     secOpensslDesc: "CYBOU utilise les primitives ML-KEM et ML-DSA fournies par OpenSSL. Le profil hybride X-Wing reste expérimental ; sa conformité exacte et les compositions exigent une vérification. Aucune certification du produit ou du module FIPS n’est revendiquée.",
 
     secTlsTag: "Protection Réseau",
     secTlsTitle: "Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYBOU P2P)",
-    secTlsDesc: "Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.",
+    secTlsDesc: "Chaque connexion P2P impose TLS 1.3 avec échange de clés hybride X25519MLKEM768 et refuse le repli classique. Ce mécanisme protège le transport ; la sécurité dépend également des postes, des clés et de la composition du protocole.",
 
-    secE2eeTag: "Confidentialité Totale",
+    secE2eeTag: "Contenu privé chiffré",
     secE2eeTitle: "Chiffrement Client de bout en bout & Arbre BLAKE3",
-    secE2eeDesc: "Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Le consensus de la chaîne n'enregistre aucun message, aucun nom de fichier, aucun destinataire : seuls des fragments chiffrés opaques existent.",
+    secE2eeDesc: "Les messages, fichiers et schémas applicatifs Mail/Files sont chiffrés sur votre ordinateur avant l’envoi. Le registre conserve les publications, racines Merkle et capsules de clé, pas le contenu en clair. Les identifiants publics et les métadonnées réseau restent distincts du contenu chiffré.",
 
     secFranceTag: "Admission France",
     secFranceTitle: "Souveraineté Territoriale France & UE",
-    secFranceDesc: "Zéro serveur aux États-Unis, zéro dépendance aux géants du cloud centralisé. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Infrastructure P2P souveraine en France hors juridiction cloud américaine.",
+    secFranceDesc: "L’admission P2P publique utilise les données Geo locales pour accepter les adresses IP françaises et échoue en l’absence de données valides. Cette politique soutient la cible d’un réseau souverain français ; elle ne constitue pas, à elle seule, une preuve de localisation physique ou de juridiction.",
 
     compLabel: "Comparatif objectif",
     compTitle: "CYBOU face aux géants du numérique.",
@@ -148,81 +147,80 @@ const translations = {
     compThAppleMs: "Apple iCloud / Microsoft",
     compRow1Crit: "Chiffrement des messages et fichiers",
     compRow1Cybou: "Client-side obligatoire (Zero-Knowledge)",
-    compRow1Google: "Chiffré sur serveurs Google (Google possède les clés)",
-    compRow1AppleMs: "Chiffrement serveur avec clés détenues par l'éditeur",
+    compRow1Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow1AppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRowCryptoCrit: "Moteur et code cryptographique",
-    compRowCryptoCybou: "OpenSSL v3.5.2+ standard (Zéro crypto maison, NIST FIPS 203/204)",
-    compRowCryptoGoogle: "Propriétaire / Boîte noire serveur",
-    compRowCryptoAppleMs: "Propriétaire / Boîte noire serveur",
+    compRowCryptoCybou: "Primitives standard OpenSSL · Compositions documentées",
+    compRowCryptoGoogle: "À vérifier selon l’offre, la version et la configuration",
+    compRowCryptoAppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRow2Crit: "Sécurité du transport réseau",
     compRow2Cybou: "TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)",
-    compRow2Google: "TLS classique (Vulnérable à l'enregistrement et déchiffrement quantique)",
-    compRow2AppleMs: "TLS classique (Algorithmes traditionnels vulnérables)",
+    compRow2Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow2AppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRow3Crit: "Analyse des contenus pour pub / IA",
     compRow3Cybou: "Zéro analyse, zéro publicité, zéro entraînement IA",
-    compRow3Google: "Indexation pour ciblage et entraînement d'algorithmes",
-    compRow3AppleMs: "Scans automatisés et télémétrie",
+    compRow3Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow3AppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRow4Crit: "Juridiction et législation",
     compRow4Cybou: "France & Union Européenne (RGPD souverain)",
-    compRow4Google: "États-Unis (Soumis au Cloud Act & FISA 702)",
-    compRow4AppleMs: "États-Unis (Soumis aux lois extraterritoriales US)",
+    compRow4Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow4AppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRow5Crit: "Résistance aux attaques quantiques",
     compRow5Cybou: "NIST ML-DSA post-quantique intégré",
-    compRow5Google: "Algorithmes classiques (RSA / ECC)",
-    compRow5AppleMs: "Algorithmes classiques (RSA / ECC)",
+    compRow5Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow5AppleMs: "À vérifier selon l’offre, la version et la configuration",
     compRow6Crit: "Authentification et propriété",
-    compRow6Cybou: "Phrase de 24 mots souveraine (Aucun mot de passe / SMS)",
-    compRow6Google: "Numéro de téléphone requis, risque de ban arbitraire",
-    compRow6AppleMs: "Identifiant lié à numéro de téléphone et carte bancaire",
+    compRow6Cybou: "Clés Identity et phrase de récupération ; mot de passe du coffre local",
+    compRow6Google: "À vérifier selon l’offre, la version et la configuration",
+    compRow6AppleMs: "À vérifier selon l’offre, la version et la configuration",
 
     archLabel: "Sous le capot",
     archTitle: "Architecture technique & Fondations.",
     archDesc: "Pour les développeurs, auditeurs et curieux : les spécifications exactes du moteur de consensus et du réseau.",
 
-    bento1Title: "PoA DEV à opérateur unique",
-    bento1Desc: "CYBOU exploite l'unique signataire de finalité du réseau DEV. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.",
+    bento1Title: "PoA DEVNET à opérateur unique",
+    bento1Desc: "CYBOU exploite l'unique signataire de finalité du réseau DEVNET. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.",
     bento1Metric: "Centralisé — pas de tolérance BFT",
 
-    bento2Title: "Profil hybride X-Wing pour DEV",
-    bento2Desc: "Le protocole DEV publie une capacité Identity X-Wing basée sur le draft IETF -05. Le profil n'est pas automatiquement transféré à Beta/Mainnet, et son existence ne signifie pas que le service Mail/Files est livré ou audité.",
+    bento2Title: "Profil hybride X-Wing pour DEVNET",
+    bento2Desc: "Le protocole DEVNET publie une capacité Identity X-Wing basée sur le draft IETF -05. Le profil n'est pas automatiquement transféré à Beta/Mainnet, et son existence ne signifie pas que le service Mail/Files est livré ou audité.",
     bento2Metric: "Profil de développement, revue indépendante requise",
 
     bento3Title: "Une Identity, rôles cryptographiques séparés",
     bento3Desc: "La récupération, l'autorisation, l'accord de clés, la finalité PoA, la signature des versions et la trésorerie utilisent des rôles séparés.",
     bento3Metric: "Clés locales et rôles distincts",
 
-    bento4Title: "Finalité PoA et économie déterministe",
-    bento4Desc: "DEV utilise un opérateur de finalité unique et ne revendique pas le BFT. Le plafond de l'actif est de 100 milliards d'unités sans décimales ; tous les frais du protocole vont à l’Identity de l’Autorité centrale.",
-    bento4Value: "100 Mrd",
-    bento4Metric: "Plafond de 100 milliards — 0 décimale",
+    bento4Title: "Finalité et état vérifiable",
+    bento4Desc: "Un signataire PoA finalise les opérations. Chaque nœud complet vérifie indépendamment les blocs et les transitions d’état.",
+    bento4Value: "PoA",
+    bento4Metric: "Finalisation unique, vérification indépendante",
 
     step1Title: "Préparer le contenu privé",
     step1Desc: "Le client transforme le contenu en arbre ROOT/INDEX/DATA chiffré et conserve localement les éléments nécessaires. Les schémas Mail/Files restent à l'intérieur du chiffrement.",
 
     step2Title: "Protéger la clé de contenu",
-    step2Desc: "RootPublication transporte des capsules de clé pour les capacités KEM des destinataires sans publier leur AccountID. Le profil X-Wing draft-05 est réservé au réseau DEV.",
+    step2Desc: "RootPublication transporte des capsules de clé pour les capacités KEM des destinataires sans publier leur AccountID. Le profil X-Wing draft-05 est réservé au réseau DEVNET.",
 
     step3Title: "Autoriser une RootPublication",
     step3Desc: "Identity signe une opération générique qui engage la racine, l'arbre d'inclusion et les capsules. Mail ne possède pas de type d'opération de consensus dédié.",
 
     step4Title: "Finaliser, admettre, retrouver",
-    step4Desc: "PoA finalise l'opération ; les fournisseurs vérifient ensuite les preuves d'admission des chunks. Finalité ne signifie pas durabilité : le client doit mesurer la disponibilité, réessayer et reconstruire ses index locaux.",
+    step4Desc: "La finalisation autorise l’admission au stockage ; elle ne suffit pas à afficher Protégé ou Envoyé. Ces statuts exigent des copies distantes confirmées. La cible Beta est deux répliques distantes indépendantes ; le cache local ne compte pas. Des StorageId distincts ne prouvent pas l’indépendance des serveurs ou opérateurs.",
 
     factsheetHeading: "Paramètres canoniques de l'architecture CYBOU",
     dtTransport: "Transport P2P & Chiffrement",
     ddTransport: "CYBOU P2P encapsulé dans TLS 1.3 post-quantique strict (groupe X25519MLKEM768 obligatoire, fail-closed). Moteur OpenSSL v3.5.2+ avec export de clé de session 32 octets liée aux preuves cryptographiques.",
-    dtConsensus: "Finalité actuelle sur DEV",
-    ddConsensus: "PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.",
-    dtBootstrap: "Pairs d'amorce (Bootstrap)",
-    ddBootstrap: "Nœuds CYBOU ordinaires avec points de contact initiaux connus (IP:port + épingle TLS) pour la découverte initiale des pairs ; même logiciel complet, aucun rôle de finalité ni statut de consensus privilégié.",
+    dtConsensus: "Finalité actuelle sur DEVNET",
+    ddConsensus: "PoA hybride à un signataire exploité par CYBOU sur DEVNET. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.",
+    dtBootstrap: "Découverte initiale des pairs",
+    ddBootstrap: "Le premier contact se fait avec un Full Node ordinaire à une adresse connue, vérifiée par son épingle TLS. Les participants forment ensuite une connexion P2P directe entre pairs. Le bootstrap n’est pas un type de nœud distinct et ne confère aucune autorité de consensus.",
     dtAdmission: "Admission P2P France souveraine",
     ddAdmission: "Admission P2P publique restreinte à l'espace IP français (données Geo locales, fail-closed). Filtrage VPN/proxy/Tor local optionnel.",
-    dtSupply: "Offre maximale",
-    ddSupply: "<code>100 000 000 000</code> CYBOU, 0 décimale ; les paramètres sont liés à la définition de chaque réseau.",
     dtGrant: "Création de compte",
-    ddGrant: "<code>AccountCreate</code> permissionless avec travail anti-Sybil ; le bonus est transféré du Trésor central <code>cybou</code> vers <code>SystemBalance</code>.",
-    dtFees: "Frais et répartition",
-    ddFees: "Frais déterministes de publication selon la taille et le nombre de chunks ; priorité désactivée ; 100 % vers l’Identity de l’Autorité centrale.",
+    ddGrant: "Création d’Identity avec travail anti-Sybil et budget initial pour utiliser les services du réseau.",
+    dtStorageEconomy: "Gestion du stockage",
+    dtFees: "Comptabilisation des ressources",
+    ddFees: "Les opérations et le stockage utilisent un budget de service, avec des règles de comptabilisation déterministes.",
     dtPublication: "Publication de contenu",
     ddPublication: "<code>RootPublication</code> générique. Mail, Files et Backup sont des schémas privés chiffrés, pas des opérations de consensus distinctes.",
     dtKeys: "Rôles cryptographiques",
@@ -231,35 +229,35 @@ const translations = {
     ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3 et transport CYBOU P2P sur TLS 1.3.",
 
     matrixLabel: "Transparence technique",
-    matrixTitle: "Matrice d'implémentation.",
-    matrixDesc: "Mail/Files et le stockage sont intégrés sur DEV. Les tests prolongés, installations propres, critères UX et revue de sécurité restent les étapes Beta.",
+    matrixTitle: "État du projet",
+    matrixDesc: "Fonctions intégrées au code, réseau expérimental déployé et étapes de préparation à l’ouverture publique.",
 
-    col1Title: "Socle implémenté sur DEV",
+    col1Title: "Fonctions intégrées au code",
     badgeDone: "IMPLÉMENTÉ",
     col1Item1: "<strong>Identity et noms .cybou :</strong> AccountCreate avec travail anti-Sybil, rôles de clés hybrides, coffre portable et registre de noms finalisé.",
-    col1Item2: "<strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.",
+    col1Item2: "<strong>Finalité PoA :</strong> signataire unique, journal durable et vérification indépendante des blocs par les nœuds complets.",
     col1Item3: "<strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.",
     col1Item4: "<strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.",
     col1Item5: "<strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYBOU P2P sécurisé en TLS 1.3 post-quantique.",
-    col1Item6: "<strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.",
+    col1Item6: "<strong>Ressources :</strong> budget de service, leases de stockage et règles déterministes de comptabilisation.",
 
-    col2Title: "Durcissement et préparation Beta",
-    badgeWip: "EN COURS",
-    col2Item1: "<strong>Mail intégré :</strong> publications, pièces jointes et reconstruction Inbox/Sent ; acceptation desktop à compléter.",
-    col2Item2: "<strong>Files intégré :</strong> catalogue privé, transferts et restauration ; installations propres et UX à vérifier.",
-    col2Item3: "<strong>Durabilité :</strong> réplication, audit et réparation intégrés. DEV : 1 copie distante ; Beta : 2 indépendantes. Le cache local ne compte pas.",
-    col2Item4: "<strong>Preuves :</strong> tests de restauration propre et de panne multiprocessus ; soak prolongé et acceptation Beta à compléter.",
+    col2Title: "Déploiement expérimental",
+    badgeWip: "DEVNET",
+    col2Item1: "<strong>Réseau DEVNET :</strong> pair complet de découverte et transport P2P avec admission IP française.",
+    col2Item2: "<strong>Bureau :</strong> intégration de Mail, Files et Identity ; publication, récupération et reconstruction des index.",
+    col2Item3: "<strong>Stockage :</strong> confirmations signées, audits et contrôles GET/BLAKE3. Les versions déployées et leurs preuves sont suivies dans le registre d’implémentation.",
+    col2Item4: "<strong>Périmètre :</strong> réseau de développement ; les essais techniques ne constituent pas l’ouverture d’un service public.",
 
-    col3Title: "Étapes ultérieures",
-    badgePlanned: "PLUS TARD",
-    col3Item1: "<strong>Validation facultative :</strong> signature ajoutée après exécution locale par une identité au-delà de 10 000 000 AUTH. Chaque nœud ré-exécute ; aucun effet canonique ni pouvoir PoA.",
-    col3Item2: "<strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.",
+    col3Title: "Prochaines étapes",
+    badgePlanned: "PRÉPARATION",
+    col3Item1: "<strong>Acceptation desktop :</strong> installations propres, parcours Mail/Files et récupération sur un autre ordinateur.",
+    col3Item2: "<strong>Endurance et durabilité :</strong> essais prolongés, pertes de fournisseurs et deux répliques distantes indépendantes pour la cible Beta.",
     col3Item3: "<strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.",
-    col3Item4: "<strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.",
+    col3Item4: "<strong>Ouverture publique :</strong> revue de sécurité, critères UX, procédures d’exploitation et support.",
 
     faqLabel: "Questions fréquentes",
     faqTitle: "Comprendre CYBOU.",
-    faqDesc: "Ce qui fonctionne sur DEV, ce qui reste à construire et les garanties de sécurité.",
+    faqDesc: "Ce qui fonctionne sur DEVNET, ce qui reste à construire et les garanties de sécurité.",
     faqQ1: "Qu’est-ce que CYBOU en termes simples ?",
     faqA1: "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3 post-quantique.",
     faqTlsBadge: "Transport Post-Quantique",
@@ -271,14 +269,14 @@ const translations = {
     faqQ2: "En quoi CYBOU diffère-t-il de Gmail ou Google Drive ?",
     faqA2: "Contrairement à Google qui centralise vos données, possède les clés et scanne les contenus pour la publicité ou l'entraînement d'IA, CYBOU chiffre tout sur votre ordinateur. Aucun serveur ne peut lire vos emails ou fichiers, et tout le réseau public est localisé en France, à l'abri du Cloud Act américain.",
     faqQ3: "À quoi servent un nom .cybou et la phrase de récupération de 24 mots ?",
-    faqA3: "Un nom .cybou (ex: alice.cybou) est votre identifiant lisible inaliénable. La phrase de 24 mots est votre clé secrète maîtresse : elle vous permet de recréer instantanément votre environnement et vos clés sur n'importe quel ordinateur, sans jamais dépendre d'un mot de passe ou d'un numéro de mobile piratable.",
+    faqA3: "Un nom .cybou est l’adresse lisible de votre Identity. Le coffre portable conserve son AccountID stable et son secret de récupération. La phrase de récupération permet de retrouver les clés correspondantes ; le coffre local est protégé par un mot de passe. Retrouver les messages et fichiers exige aussi leurs publications, des capsules de clé ouvrables et une copie disponible du contenu chiffré.",
     faqQFrance: "Pourquoi CYBOU est-il hébergé exclusivement en France et en Europe ?",
     faqAFrance: "La souveraineté numérique repose sur une indépendance d'infrastructure. En restreignant les nœuds publics au territoire français, CYBOU assure que vos flux de données et vos fragments chiffrés restent hébergés en France sur une infrastructure P2P souveraine hors juridiction cloud américaine.",
     faqPqBadge: "Sécurité Future",
     faqQ5: "Que signifie la cryptographie post-quantique (ML-DSA) ?",
     faqA5: "Les ordinateurs quantiques rendront obsolètes les signatures RSA et ECC actuelles. CYBOU utilise dès aujourd'hui les algorithmes post-quantiques récemment normalisés par le NIST (ML-DSA-44 et ML-DSA-65) couplés à Ed25519 pour protéger vos correspondances contre l'enregistrement malveillant et le déchiffrement rétroactif futur.",
     faqQ7: "Puis-je utiliser CYBOU aujourd’hui ?",
-    faqA7: "Le réseau DEV et le code source complet sont actifs et consultables sur GitHub. L'application CYBOU Desktop est actuellement en cours de durcissement et d'intégration continue avant sa distribution publique pour la phase Beta.",
+    faqA7: "Le réseau DEVNET et le code source complet sont actifs et consultables sur GitHub. L'application CYBOU Desktop est actuellement en cours de durcissement et d'intégration continue avant sa distribution publique pour la phase Beta.",
 
     footBrand: "L'alternative souveraine pour vos communications et fichiers privés.<br>Conçu et développé en France.",
     footProd: "Produit",
@@ -301,12 +299,12 @@ const translations = {
 
     // Compliance Preview on Homepage
     compSecLabel: "Réglementation & Normes",
-    compSecTitle: "Conformité rigoureuse aux standards européens et français.",
-    compSecDesc: "Découvrez comment l'architecture Zero-Knowledge, la cryptographie OpenSSL v3.5.2+ et le réseau souverain France répondent point par point aux cadres légaux les plus exigeants.",
+    compSecTitle: "Sécurité, gouvernance et références européennes",
+    compSecDesc: "Chiffrement côté client, gestion des clés et politique réseau constituent des mesures techniques. Leur évaluation doit être complétée par la gouvernance et les preuves du déploiement concerné ; aucune certification du produit n’est revendiquée.",
     compCardRgpdPill: "Règlement UE 2016/679",
     compCardRgpdStatus: "Privacy by Design",
-    compCardRgpdTitle: "RGPD — Données personnelles sous protection absolue",
-    compCardRgpdDesc: "Chiffrement client systématique (Art. 25). Zéro métadonnée personnelle dans le consensus. Droit à l'oubli cryptographique garanti et absence totale de transfert de données vers des pays tiers (Schrems II).",
+    compCardRgpdTitle: "RGPD — Protection des données dès la conception",
+    compCardRgpdDesc: "Chiffrement côté client et contenu applicatif privé. La révocation retire l’autorisation active de stockage et déclenche une purge gérée chez les fournisseurs conformes. Les blocs historiques et les copies conservées par des destinataires peuvent subsister.",
     compCardNis2Pill: "Directive UE 2022/2555",
     compCardNis2Status: "Mesures Art. 21",
     compCardNis2Title: "Directive NIS 2 — Résilience & Chaîne d'Approvisionnement",
@@ -355,11 +353,11 @@ const translations = {
     cRgpdThReq: "Exigence Légale",
     cRgpdThSol: "Implémentation Technique CYBOU",
     cRgpdArt25Req: "Garantir la protection des données dès la conception des systèmes et par défaut sans action complexe de l'utilisateur.",
-    cRgpdArt25Sol: "<strong>Chiffrement client systématique.</strong> Aucun texte, fichier ou métadonnée ne quitte le poste de travail sans être préalablement chiffré par les clés secrètes locales de l'utilisateur.",
+    cRgpdArt25Sol: "<strong>Chiffrement côté client.</strong> Les contenus Mail/Files et leurs schémas applicatifs sont chiffrés avant l’envoi. Les publications, racines, capsules et métadonnées de protocole doivent être distinguées du contenu privé.",
     cRgpdArt5Req: "Les données doivent être adéquates, pertinentes et limitées au strict nécessaire.",
     cRgpdArt5Sol: "<strong>Contenu applicatif chiffré.</strong> Les noms de fichiers et le contenu Mail restent chiffrés. Le registre conserve des identifiants de comptes, des engagements de publication et des capsules ; les pairs observent les adresses IP et le trafic. Ces métadonnées nécessitent une analyse de protection des données.",
     cRgpdArt17Req: "Permettre l'effacement définitif et irréversible des données à caractère personnel.",
-    cRgpdArt17Sol: "<strong>Révocation et purge gérée.</strong> Une révocation finalisée retire l'autorisation de stockage. Les nœuds conformes tentent de supprimer les fragments qui ne sont plus autorisés par une autre publication. Les capsules historiques peuvent conserver un accès aux clés : la destruction cryptographique par objet n'est pas garantie.",
+    cRgpdArt17Sol: "<strong>Révocation et purge gérée.</strong> La révocation finalisée retire l’autorisation active et déclenche la suppression des fragments non partagés chez les fournisseurs conformes, avec suivi des échecs. Elle ne supprime pas les blocs historiques et ne prouve pas l’effacement des copies conservées ailleurs ni la destruction cryptographique par objet.",
     cRgpdArt20Req: "Permettre la récupération et le transfert des données dans un format ouvert et structuré.",
     cRgpdArt20Sol: "<strong>Restauration déterministe par phrase de 24 mots.</strong> L'utilisateur peut reconstruire l'ensemble de ses messages, fichiers et annuaires sur n'importe quel ordinateur grâce au standard ouvert de dérivation de clés.",
     cRgpdArt32Req: "Mettre en œuvre des mesures techniques appropriées, incluant le chiffrement et la résilience des systèmes.",
@@ -372,7 +370,7 @@ const translations = {
     cNis2Sub: "Répondre aux exigences strictes de cybersécurité pour les Entités Essentielles (EE) et Importantes (EI).",
     cNis2P1: "La directive européenne NIS 2 (en vigueur depuis 2024 et transposée dans les droits nationaux) impose des obligations strictes aux organisations dans 18 secteurs critiques (énergie, transports, santé, administration, infrastructures numériques). CYBOU s'aligne directement sur les prescriptions de l'Article 21 :",
     cNis2Item1Title: "Sécurité de la chaîne d'approvisionnement logicielle (Supply Chain Security) :",
-    cNis2Item1Desc: "CYBOU applique la règle formelle « Don't roll your own crypto ». Aucun algorithme cryptographique fait maison n'est toléré. L'ensemble des couches symétriques, asymétriques et post-quantiques provient de la version officielle d'OpenSSL v3.5.2+, maintenue mondialement et soumise à des audits de sécurité continus.",
+    cNis2Item1Desc: "CYBOU utilise les primitives standard d’OpenSSL, notamment ML-KEM et ML-DSA, dans des compositions de protocole documentées. Le transport hybride TLS et le profil applicatif X-Wing sont des constructions distinctes ; la revue de leur composition reste séparée de la standardisation des primitives.",
     cNis2Item2Title: "Anticipation de la menace quantique (ENISA & ANSSI) :",
     cNis2Item2Desc: "La menace des attaques « Harvest Now, Decrypt Later » (interception massive actuelle pour déchiffrement ultérieur par ordinateur quantique) est neutralisée par le chiffrement hybride TLS 1.3 avec échange de clés X25519MLKEM768 et signatures ML-DSA-44/65.",
     cNis2Item3Title: "Résilience, continuité d'activité et gestion des crises :",
@@ -384,8 +382,8 @@ const translations = {
     cHdsTitle: "Secteur Médical — Secret Professionnel, Données de Santé & HDS",
     cHdsSub: "Garanties techniques pour les professionnels de santé, laboratoires, cliniques et hôpitaux.",
     cHdsP1: "Les données médicales constituent la catégorie la plus sensible de données personnelles (« données de santé » au sens de l'art. 9 du RGPD). En France, leur traitement est encadré par le Code pénal et le Code de la santé publique.",
-    cHdsH1: "1. Respect absolu du Secret Médical (Art. 226-13 du Code Pénal)",
-    cHdsP2: "L'article 226-13 du Code pénal sanctionne la révélation d'une information à caractère secret par une personne qui en est dépositaire. En utilisant CYBOU Mail ou CYBOU Files, un médecin, un chirurgien ou un radiologue garantit qu'aucun intermédiaire technique ne peut matériellement commettre d'indiscrétion : les correspondances et imageries médicales sont chiffrées sur le poste de consultation avant tout envoi. Les clés privées ne sont jamais transmises à des tiers.",
+    cHdsH1: "1. Confidentialité des données de santé",
+    cHdsP2: "CYBOU chiffre les correspondances et fichiers sur le poste avant l’envoi. Pour les données de santé, ces mesures doivent être complétées par la gestion des accès, la sécurité des postes et l’évaluation des obligations applicables au traitement et aux prestataires. Le chiffrement seul ne démontre pas la conformité HDS.",
     cHdsH2: "2. Hébergement de Données de Santé (HDS — Art. L.1111-8 du Code de la santé publique)",
     cHdsP3: "L'article L.1111-8 du CSP dispose que toute personne qui héberge des données de santé à caractère personnel recueillies à l'occasion d'activités de prévention, de diagnostic ou de soins doit être certifiée HDS. Voici la déclinaison opérationnelle claire de cette obligation avec CYBOU :",
     cHdsThMode: "Scénario d'Usage",
@@ -406,11 +404,11 @@ const translations = {
     cIsoThName: "Intitulé de la Mesure",
     cIsoThSol: "Mise en Œuvre par CYBOU",
     cIsoA515Req: "Contrôle d'accès et authentification",
-    cIsoA515Sol: "Authentification forte sans mot de passe centralisé. Signature hybride ML-DSA-44 et Ed25519 pour chaque transaction d'identité souveraine.",
+    cIsoA515Sol: "Authentification par signatures hybrides ML-DSA-44 et Ed25519, sans mot de passe de compte centralisé. Le coffre local est protégé par un mot de passe.",
     cIsoA82Req: "Gestion des droits d'accès privilégiés",
     cIsoA82Sol: "Modèle Zero-Knowledge : aucun administrateur réseau ni opérateur PoA ne dispose d'un pouvoir technique de déchiffrement des capsules utilisateur.",
     cIsoA812Req: "Prévention des fuites de données (DLP)",
-    cIsoA812Sol: "Chiffrement client systématique avant toute transmission réseau. Découpage en fragments BLAKE3-256 opaques interdisant la reconstruction hors clé privée.",
+    cIsoA812Sol: "Chiffrement côté client avant toute transmission. Les fragments déjà chiffrés sont identifiés et vérifiés par leur empreinte BLAKE3-256 ; BLAKE3 est une fonction de hachage, pas un algorithme de chiffrement.",
     cIsoA814Req: "Redondance des moyens de traitement",
     cIsoA814Sol: "Réplication vers des fournisseurs aux StorageId distincts, contrôles GET et BLAKE3, puis tentative de réparation. La diversité géographique et l'indépendance physique ne sont pas prouvées par ces identifiants.",
     cIsoA820Req: "Sécurité des réseaux et cloisonnement",
@@ -426,7 +424,7 @@ const translations = {
     cCiaI: "2. Intégrité (I)",
     cCiaIDesc: "<strong>Intégrité vérifiable :</strong> Chaque fragment chiffré est identifié par son empreinte BLAKE3-256. Le client vérifie les données récupérées ; les nœuds vérifient les publications et transitions finalisées par le PoA. Le journal de signature refuse de signer en cas de conflit détecté.",
     cCiaA: "3. Disponibilité (D)",
-    cCiaADesc: "<strong>Disponibilité contrôlée :</strong> StorageService vérifie les répliques par téléchargement et contrôle BLAKE3, puis tente de réparer les pertes depuis une copie valide. Un contrôle réussi atteste la disponibilité au moment de la vérification, pas un stockage continu ni une récupération sans interruption.",
+    cCiaADesc: "<strong>Disponibilité contrôlée :</strong> StorageService utilise des confirmations signées, des audits de portions aléatoires et des téléchargements complets vérifiés par BLAKE3. La réparation nécessite une copie valide et un fournisseur disponible. Un contrôle réussi établit la disponibilité au moment du contrôle.",
 
     cAnssiStatus: "Réglementation Nationale",
     cAnssiTitle: "ANSSI & Souveraineté Numérique Française",
@@ -437,7 +435,7 @@ const translations = {
     cAnssiItem2Title: "Régime de déclaration des moyens de cryptologie (CPCE) :",
     cAnssiItem2Desc: "Conformément aux articles L. 133-1 et suivants du Code des postes et des communications électroniques, l'utilisation de moyens de cryptologie assurant des fonctions de confidentialité et d'authentification est libre en France pour les particuliers et les entreprises.",
     cAnssiItem3Title: "Souveraineté des données et cloud de confiance (SecNumCloud) :",
-    cAnssiItem3Desc: "Pour les déploiements destinés au secteur public et aux infrastructures sensibles, les nœuds fournisseurs de stockage CYBOU sont conçus pour être hébergés sur des infrastructures qualifiées SecNumCloud, garantissant une étanchéité totale face aux lois extraterritoriales non européennes.",
+    cAnssiItem3Desc: "Le choix des prestataires et des infrastructures doit être évalué dans le périmètre du déploiement. Une qualification d’hébergement éventuelle doit être vérifiée auprès du prestataire ; elle ne certifie pas automatiquement CYBOU ni l’ensemble du traitement.",
     cAnssiCtaTitle: "Besoin d'une analyse d'adéquation pour votre organisation ?",
     cAnssiCtaDesc: "Notre équipe technique et juridique répond à vos questions concernant vos déploiements on-premise, votre politique de conformité RGPD ou l'hébergement HDS.",
     cAnssiCtaBtn: "Contacter l'équipe",
@@ -446,7 +444,7 @@ const translations = {
     footSecEnterprise: "Réseaux privés dédiés",
     srvEnterpriseTag: "Sur Mesure",
     srvEnterpriseTitle: "CYBOU Entreprise — Réseau Privé Dédié & Isolé",
-    srvEnterpriseDesc: "Instanciez votre propre réseau souverain étanche : bloc de genèse dédié, clé PoA sous contrôle de votre DSI, stockage sur site (On-Premise / Air-Gap) et zéro fuite externe.",
+    srvEnterpriseDesc: "CYBOU Entreprise vise un réseau dédié à votre organisation : genèse propre, clé PoA sous votre contrôle et stockage sur l’infrastructure choisie.",
     srvEnterpriseLink: "Explorer les solutions d'entreprise &rarr;",
 
     // Dedicated Enterprise Page (entreprise.html)
@@ -455,7 +453,7 @@ const translations = {
     eHeroBadge: "DÉPLOIEMENT DÉDIÉ & ISOLATION SOUVERAINE",
     eHeroBadgeText: "Isolation Cryptographique & Gouvernance Dédiée",
     eHeroTitle: "Créez votre Réseau Privé d'Entreprise Sécurisé & Dédié",
-    eHeroDesc: "Pour organisations françaises et internationales : Déployez une appliance logicielle de réseau privé CYBOU 100% autonome, cryptographiquement étanche et administrée par votre DSI. Chiffrement post-quantique OpenSSL v3.5.2+, stockage On-Premise ou Air-Gap, et immunité juridique absolue.",
+    eHeroDesc: "Nous construisons CYBOU Entreprise pour les organisations qui souhaitent leur propre domaine de confiance : un réseau privé dédié, une genèse propre, une clé PoA sous leur contrôle et un stockage sur l’infrastructure choisie.",
 
     ePillAdv: "Avantages Clés",
     ePillArch: "Isolation & Genèse",
@@ -488,20 +486,20 @@ const translations = {
     eCard4Pill: "Résilience P2P",
     eCard4Badge: "Zéro SPOF",
     eCard4Title: "Stockage Distribué sans Point Unique de Panne",
-    eCard4Desc: "Vos fichiers et messages sont fragmentés (BLAKE3-256) et répliqués sur vos serveurs internes ou vos datacenters distants. La panne d'un serveur ou la rupture d'un lien WAN n'interrompt pas le service : le réseau s'auto-répare automatiquement.",
+    eCard4Desc: "Vos fichiers et messages chiffrés sont répliqués sur vos serveurs. Confirmations signées, audits de portions aléatoires et téléchargements vérifiés par BLAKE3 contrôlent les copies. Les pertes sont réparées à partir d’une copie valide lorsqu’un fournisseur est disponible.",
 
     eArt2Pill: "Sous le Capot",
     eArt2Status: "Spécifications Ouvertes",
     eArt2Title: "Comment fonctionne l'isolation d'un réseau dédié ?",
     eArt2Sub: "Tous les participants exécutent le même logiciel robuste standard, mais l'espace cryptographique est strictement circonscrit à votre entreprise.",
-    eArt2P1: "L'architecture unifiée de CYBOU permet d'instancier un réseau d'entreprise indépendant en quelques minutes, sans modifier une seule ligne de code source. Le protocole sépare hermétiquement les réseaux par leur définition de genèse et leurs certificats de transport :",
+    eArt2P1: "La direction Entreprise repose sur un réseau distinct, avec sa propre genèse et son identité réseau. L’organisation maîtrise la clé de finalité PoA et choisit son infrastructure de stockage. Le déploiement et l’outillage dédiés font partie du produit à construire :",
 
     eStep1Title: "Définition de Genèse",
     eStep1Desc: "Génération d'un fichier genesis.json signé par la clé privée de réseau (hors-ligne), avec un identifiant de réseau propre et les paramètres d'autorité.",
     eStep2Title: "Autorité Centrale PoA",
     eStep2Desc: "La DSI génère la clé de finalisation PoA sur un poste sécurisé (SecOps) pour sceller les blocs d'entreprise.",
-    eStep3Title: "Nœuds d'Amorçage Initiaux",
-    eStep3Desc: "Déploiement de 1 à 4 pairs CYBOU ordinaires avec points de contact connus sur votre intranet pour l'aiguillage initial des pairs et la synchronisation.",
+    eStep3Title: "Points de contact initiaux",
+    eStep3Desc: "Des Full Nodes ordinaires à des adresses connues sur votre intranet permettent la découverte initiale ; les pairs communiquent ensuite directement.",
     eStep4Title: "Grappe de Stockage",
     eStep4Desc: "Configuration de la capacité de stockage du nœud complet (cybou node run) sur vos serveurs internes pour héberger les fragments chiffrés.",
 
@@ -517,7 +515,7 @@ const translations = {
     eRowPoaPriv: "<strong>Poste sécurisé de votre DSI / RSSI</strong> (Contrôle souverain exclusif)",
     eRowBoot: "Nœuds d'Amorçage (Bootstrap)",
     eRowBootPub: "Nœuds publics géolocalisés en France",
-    eRowBootPriv: "<strong>1 à 4 pairs d'amorce internes</strong> (Points de contact initiaux sur votre LAN / Intranet / VPN)",
+    eRowBootPriv: "Full Nodes ordinaires à des adresses connues sur votre LAN / Intranet / VPN",
     eRowStorage: "Infrastructure de Stockage",
     eRowStoragePub: "Fournisseurs de stockage qualifiés en France",
     eRowStoragePriv: "<strong>Serveurs d'entreprise sur site (On-Premise)</strong> ou cloud privé qualifié",
@@ -553,7 +551,7 @@ const translations = {
     eGovItem4Title: "Cycle de vie et rotation des clés (IdentityRotate) :",
     eGovItem4Desc: "En cas de changement d'ordinateur ou de suspicion de compromission, l'opération atomique IdentityRotate permet de révoquer et renouveler instantanément les clés de signature et de chiffrement sans perdre l'historique ni l'identifiant du collaborateur.",
     eGovItem5Title: "Sauvegarde de sinistre et PCA/PRA déterministe :",
-    eGovItem5Desc: "En cas de sinistre physique majeur détruisant vos locaux, la simple possession de la clé de genèse et des 24 mots permet de réinstancier l'autorité et de restaurer les données d'entreprise de manière mathématiquement vérifiée.",
+    eGovItem5Desc: "La continuité repose sur des sauvegardes des coffres Identity, des clés de finalité et de leur historique de signature, ainsi que sur des copies de données accessibles. Restaurer l’autorité et restaurer les contenus sont deux procédures distinctes ; la clé de genèse seule ne permet pas de récupérer les fichiers.",
 
     eArt5Pill: "Applications Métier",
     eArt5Status: "Secteurs Sensibles",
@@ -563,7 +561,7 @@ const translations = {
     eUse1Pill: "Industrie de Pointe",
     eUse1Badge: "Secret des Affaires",
     eUse1Title: "R&D, Propriété Intellectuelle & Brevets",
-    eUse1Desc: "Protection absolue des plans de fabrication, formulations chimiques, codes sources et stratégies de mise sur le marché contre l'espionnage industriel étranger et les attaques par rançongiciel.",
+    eUse1Desc: "Chiffrement côté client des plans, formulations, codes sources et documents stratégiques, avec contrôle des clés et copies vérifiées. La sécurité des postes et les procédures de récupération complètent ces mécanismes.",
 
     eUse2Pill: "Défense & OIV",
     eUse2Badge: "Directive NIS 2",
@@ -605,8 +603,8 @@ const translations = {
     ePriceT2F4: "Veille et intégration continue des mises à jour OpenSSL v3.5.2+ & protocole",
     ePriceT2F5: "Revue annuelle d'architecture de sécurité, résilience et assistance aux audits",
     ePriceDisclaimer: "* Tarifs indicatifs hors taxes (« à partir de ») : les frais de déplacement (transports, hébergement), les développements spécifiques ou intégrations sur mesure et les prestations d'assistance étendue sur site font l'objet d'un devis préalable adapté à votre cahier des charges.",
-    eRoiTitle: "0 € de coût de licence mensuel par utilisateur (Économie massive vs. SaaS US)",
-    eRoiDesc: "Contrairement aux offres SaaS (Microsoft 365, Google Workspace) facturées entre 20 et 35 €/utilisateur/mois — représentant 30 000 €/an pour 100 postes et 150 000 €/an pour 500 postes —, une appliance réseau privé CYBOU est amortie dès les premiers mois. Votre organisation reste l'unique détentrice de ses données et de son code, sans risque d'inflation tarifaire unilatérale.",
+    eRoiTitle: "Une infrastructure dimensionnée pour vos besoins",
+    eRoiDesc: "Le dimensionnement, l’exploitation, le support et les intégrations déterminent le coût du projet. Une étude adaptée à votre environnement permet d’évaluer ces besoins et les gains attendus, sans promettre une durée d’amortissement universelle.",
 
     eArt6Pill: "Passez à l'Action",
     eArt6Status: "Pilote & Déploiement",
@@ -620,20 +618,20 @@ const translations = {
     // Comparison Teaser on Homepage
     compCardNextPill: "Open Source & Auto-Hébergement",
     compCardNextStatus: "P2P vs. LAMP",
-    compCardNextTitle: "CYBOU vs. Nextcloud — Zéro-Knowledge vs. Serveur PHP",
-    compCardNextDesc: "Nextcloud chiffre côté serveur par défaut (l'administrateur peut lire vos fichiers) et dépend d'une pile fragile (MySQL/PHP/Apache). CYBOU chiffre obligatoirement sur votre terminal et fonctionne sur un binaire C++ P2P sans base de données centrale.",
+    compCardNextTitle: "CYBOU et Nextcloud — Choisir son architecture",
+    compCardNextDesc: "CYBOU associe chiffrement côté client, clés locales et stockage P2P. Pour comparer avec une installation Nextcloud, examiner sa configuration, ses options de chiffrement et ses responsabilités d’exploitation.",
     compCardDropPill: "Stockage Cloud Américain",
     compCardDropStatus: "Cloud Act & IA",
-    compCardDropTitle: "CYBOU vs. Dropbox — Souveraineté vs. Scans d'IA",
-    compCardDropDesc: "Dropbox est soumis au US Cloud Act et intègre des outils d'IA analysant vos documents. CYBOU restreint son réseau à la France (fail-closed), isole mathématiquement chaque fragment (BLAKE3-256) et protège vos données contre les scans et l'entraînement d'IA tiers.",
+    compCardDropTitle: "CYBOU et Dropbox — Gestion des clés et du stockage",
+    compCardDropDesc: "CYBOU chiffre le contenu avant son envoi et conserve les clés sous le contrôle de l’Identity. Comparer les services hébergés selon l’offre, les options de chiffrement et les conditions de traitement retenues.",
     compCardGafamPill: "Suites Centralisées US",
     compCardGafamStatus: "Émancipation",
     compCardGafamTitle: "CYBOU vs. Google Workspace & Microsoft 365",
-    compCardGafamDesc: "Les GAFAM détiennent vos clés de déchiffrement et imposent des numéros de téléphone et cartes bancaires. CYBOU vous redonne la pleine propriété de votre compte via une phrase secrète de 24 mots et des clés post-quantiques inaliénables.",
+    compCardGafamDesc: "CYBOU vise un espace privé fondé sur des clés locales et un protocole ouvert. Le choix face à Google Workspace ou Microsoft 365 dépend des usages, des intégrations et de la configuration de sécurité.",
     compCardPqPill: "Standard Mondial OpenSSL v3.5.2+",
     compCardPqStatus: "Post-Quantique",
     compCardPqTitle: "Résistance Quantique Immédiate (NIST FIPS 203/204)",
-    compCardPqDesc: "Alors que Nextcloud, Dropbox et Microsoft restent cantonnés aux algorithmes classiques (RSA/ECC) vulnérables aux interceptions futures (« Harvest Now, Decrypt Later »), CYBOU déploie dès aujourd'hui ML-KEM-768 et ML-DSA.",
+    compCardPqDesc: "CYBOU intègre ML-KEM et ML-DSA dans une architecture hybride documentée. Une comparaison post-quantique doit vérifier les versions et les mécanismes réellement déployés dans chaque solution.",
     compTeaserCtaTitle: "Consulter la matrice comparative complète et détaillée",
     compTeaserCtaDesc: "Tableau exhaustif sur 8 critères de sécurité, analyse architecturale approfondie face à Nextcloud et Dropbox, et guide de choix pour les DSI.",
     compTeaserCtaBtn: "Voir le grand comparatif",
@@ -669,97 +667,97 @@ const translations = {
 
     cmpR1Crit: "Chiffrement des messages et fichiers",
     cmpR1Cybou: "Client-side obligatoire (Zero-Knowledge)",
-    cmpR1Nextcloud: "Serveur par défaut (admin lit tout) ; E2EE optionnel complexe",
-    cmpR1Dropbox: "Chiffrement serveur (Dropbox possède les clés)",
-    cmpR1Google: "Chiffrement serveur (Google possède les clés)",
-    cmpR1MsApple: "Chiffrement serveur (Éditeur possède les clés)",
+    cmpR1Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR1Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR1Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR1MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR2Crit: "Moteur et code cryptographique",
-    cmpR2Cybou: "Standard OpenSSL v3.5.2+ (NIST FIPS 203/204, zéro code maison)",
-    cmpR2Nextcloud: "PHP / OpenSSL classique (RSA / AES traditionnels)",
-    cmpR2Dropbox: "Boîte noire propriétaire fermée",
-    cmpR2Google: "Boîte noire propriétaire fermée",
-    cmpR2MsApple: "Boîte noire propriétaire fermée",
+    cmpR2Cybou: "Primitives standard OpenSSL · Compositions documentées",
+    cmpR2Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR2Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR2Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR2MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR3Crit: "Résistance aux attaques quantiques",
     cmpR3Cybou: "Natif : ML-KEM-768 (TLS 1.3) + ML-DSA-44/65 (Identités)",
-    cmpR3Nextcloud: "Aucune protection post-quantique",
-    cmpR3Dropbox: "Aucune protection post-quantique",
-    cmpR3Google: "Algorithmes classiques (RSA / ECC vulnérables)",
-    cmpR3MsApple: "Algorithmes classiques (RSA / ECC vulnérables)",
+    cmpR3Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR3Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR3Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR3MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR4Crit: "Architecture & Point unique de panne",
     cmpR4Cybou: "P2P décentralisé unifié C++, auto-réparation de fragments",
-    cmpR4Nextcloud: "Client-Serveur (SPOF MySQL + Web server + Redis + PHP)",
-    cmpR4Dropbox: "Cloud centralisé américain",
-    cmpR4Google: "Cloud centralisé américain",
-    cmpR4MsApple: "Cloud centralisé américain",
+    cmpR4Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR4Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR4Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR4MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR5Crit: "Juridiction & Lois extraterritoriales",
     cmpR5Cybou: "France & UE (P2P filtré France-only, hors juridiction cloud US)",
-    cmpR5Nextcloud: "Dépend de l'hébergeur choisi (soumis au Cloud Act si AWS/Azure)",
-    cmpR5Dropbox: "États-Unis (Soumis sans réserve au Cloud Act et FISA 702)",
-    cmpR5Google: "États-Unis (Soumis au US Cloud Act et FISA 702)",
-    cmpR5MsApple: "États-Unis (Soumis aux lois extraterritoriales US)",
+    cmpR5Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR5Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR5Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR5MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR6Crit: "Scan pour pub ou entraînement d'IA",
     cmpR6Cybou: "Zéro scan, zéro IA, zéro pub (données opaques)",
-    cmpR6Nextcloud: "Zéro scan par défaut (plugins IA optionnels)",
-    cmpR6Dropbox: "Scans de contenu et intégration IA tierce (Dropbox Dash)",
-    cmpR6Google: "Indexation algorithmique pour publicité et modèles IA",
-    cmpR6MsApple: "Télémétrie intensive et intégration Copilot",
+    cmpR6Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR6Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR6Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR6MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR7Crit: "Authentification & Dépendance",
-    cmpR7Cybou: "Phrase secrète 24 mots, zéro mot de passe, zéro SMS",
-    cmpR7Nextcloud: "Mots de passe stockés en base MySQL ou annuaire LDAP",
-    cmpR7Dropbox: "Mots de passe serveur, compte révocable à tout moment",
-    cmpR7Google: "Numéro de téléphone requis, risque de ban unilatéral",
-    cmpR7MsApple: "Compte lié à carte bancaire et téléphone, verrouillage éditeur",
+    cmpR7Cybou: "Accès par clés Identity ; coffre local protégé par mot de passe",
+    cmpR7Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR7Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR7Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR7MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpR8Crit: "Déploiement & Maintenance",
     cmpR8Cybou: "Binaire C++ autonome sans dépendances externes",
-    cmpR8Nextcloud: "Déploiement lourd (pile LAMP, bases SQL, migrations délicates)",
-    cmpR8Dropbox: "Simple utilisateur, mais enfermement propriétaire",
-    cmpR8Google: "SaaS géré, mais perte totale de contrôle",
-    cmpR8MsApple: "SaaS géré, mais dépendance commerciale critique",
+    cmpR8Nextcloud: "À vérifier selon l’offre, la version et la configuration",
+    cmpR8Dropbox: "À vérifier selon l’offre, la version et la configuration",
+    cmpR8Google: "À vérifier selon l’offre, la version et la configuration",
+    cmpR8MsApple: "À vérifier selon l’offre, la version et la configuration",
 
     cmpNextPill: "Analyse Open Source",
-    cmpNextStatus: "Architecture P2P vs. LAMP",
-    cmpNextTitle: "CYBOU vs. Nextcloud : Pourquoi le P2P Zero-Knowledge surpasse le modèle Client-Serveur PHP",
-    cmpNextSub: "Nextcloud est une excellente solution open-source de première génération, mais son architecture client-serveur traditionnelle présente des limites structurelles que CYBOU a résolues.",
-    cmpNextP1: "Nextcloud a popularisé l'auto-hébergement collaboratif. Cependant, son socle technique conçu il y a plus de 15 ans repose sur une pile LAMP (Linux, Apache, MySQL, PHP) conçue pour le web classique, et non pour la résilience cryptographique décentralisée :",
-    cmpNextItem1Title: "L'illusion du chiffrement côté serveur :",
-    cmpNextItem1Desc: "Par défaut, Nextcloud stocke les fichiers en clair sur le serveur ou les chiffre avec des clés stockées sur le serveur lui-même. Tout administrateur système ayant un accès SSH ou root peut lire l'intégralité des données des utilisateurs. Le module de chiffrement de bout en bout (E2EE) de Nextcloud est un greffon complexe, tristement célèbre pour ses pannes de synchronisation et ses pertes de clés. Chez CYBOU, le chiffrement Zero-Knowledge est le socle obligatoire et inaltérable du protocole.",
-    cmpNextItem2Title: "Résilience P2P vs. Single Point of Failure (SPOF) :",
-    cmpNextItem2Desc: "Un serveur Nextcloud est un point individuel de panne : si la base de données MySQL est corrompue, si le serveur PHP tombe ou si le stockage local sature, l'organisation entière est paralysée. CYBOU élimine les bases de données SQL centralisées. Les fichiers sont morcelés en fragments cryptographiques BLAKE3-256 distribués et auto-réparés sur plusieurs serveurs indépendants.",
-    cmpNextItem3Title: "Transition Post-Quantique (NIST FIPS 203/204) :",
-    cmpNextItem3Desc: "CYBOU intègre des primitives post-quantiques ML-KEM et ML-DSA via OpenSSL. La sécurité dépend aussi des compositions, des mises à jour et de l’environnement ; aucune certification globale n’est revendiquée.",
-    cmpNextItem4Title: "Maintenance et empreinte opérationnelle :",
-    cmpNextItem4Desc: "Administrer Nextcloud exige de maintenir un serveur web, un interpréteur PHP, une base de données relationnelle, un cache Redis et de gérer des migrations de schémas souvent périlleuses. CYBOU se déploie via un binaire unique C++ sans aucune dépendance externe, consommant une fraction infime de mémoire vive et de CPU.",
+    cmpNextStatus: "Architecture et contrôle",
+    cmpNextTitle: "CYBOU et Nextcloud — Critères de choix",
+    cmpNextSub: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpNextP1: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpNextItem1Title: "Chiffrement côté client",
+    cmpNextItem1Desc: "CYBOU chiffre les contenus avant leur transmission et conserve les clés localement. Vérifier les options et la gestion des clés de chaque solution comparée.",
+    cmpNextItem2Title: "Copies et récupération",
+    cmpNextItem2Desc: "CYBOU contrôle les répliques par audits et vérification BLAKE3, puis répare depuis une copie valide. Comparer les mécanismes de sauvegarde, les tests de panne et les engagements de disponibilité.",
+    cmpNextItem3Title: "Protocole ouvert et Identity",
+    cmpNextItem3Desc: "Le code ouvert et le coffre Identity portable permettent d’examiner les mécanismes et de conserver le contrôle des clés. Comparer les exports, la récupération et les responsabilités d’exploitation.",
+    cmpNextItem4Title: "Exploitation et dépendances",
+    cmpNextItem4Desc: "CYBOU utilise un exécutable commun pour le bureau et le nœud complet. Le dimensionnement et la maintenance doivent être évalués dans l’environnement choisi.",
 
     cmpDropPill: "Stockage Cloud US",
-    cmpDropStatus: "Danger Cloud Act & IA",
-    cmpDropTitle: "CYBOU vs. Dropbox : Le danger de l'extraterritorialité et de l'analyse par IA",
-    cmpDropSub: "Dropbox reste l'un des services grand public et d'entreprise les plus utilisés, mais il constitue un risque majeur pour la confidentialité des affaires et la souveraineté.",
-    cmpDropP1: "Sous son interface soignée, Dropbox fonctionne sur un modèle économique et juridique incompatible avec le secret professionnel européen :",
-    cmpDropItem1Title: "Soumission totale au US Cloud Act et à FISA 702 :",
-    cmpDropItem1Desc: "Dropbox étant une entreprise soumise au droit américain, les agences fédérales et les tribunaux des États-Unis peuvent ordonner l'accès aux données stockées, y compris lorsque celles-ci concernent des entreprises françaises ou européennes, sans notification préalable. CYBOU est ancré en France avec un filtrage géographique fail-closed garantissant une infrastructure P2P souveraine en France hors juridiction cloud américaine.",
-    cmpDropItem2Title: "Exploitation et scan des données pour les outils d'IA :",
-    cmpDropItem2Desc: "Dropbox a suscité une vive controverse en activant par défaut des fonctionnalités d'intelligence artificielle (Dropbox Dash / AI) transmettant des données de fichiers à des partenaires tiers (comme OpenAI). Avec CYBOU, les fragments de fichiers stockés sur le réseau sont mathématiquement indéchiffrables pour les nœuds d'hébergement : vos données sont protégées contre les scans et l'entraînement d'IA tiers.",
-    cmpDropItem3Title: "Possession unilatérale des clés de déchiffrement :",
-    cmpDropItem3Desc: "Dropbox chiffre vos fichiers « au repos », mais Dropbox détient la clé maîtresse. Un employé indélicat de Dropbox, une erreur de configuration ou une injonction judiciaire suffisent pour dévoiler vos fichiers. Chez CYBOU, seuls vos terminaux possèdent les clés de déchiffrement dérivées de votre phrase secrète de 24 mots.",
+    cmpDropStatus: "Architecture et contrôle",
+    cmpDropTitle: "CYBOU et Dropbox — Critères de choix",
+    cmpDropSub: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpDropP1: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpDropItem1Title: "Chiffrement côté client",
+    cmpDropItem1Desc: "CYBOU chiffre les contenus avant leur transmission et conserve les clés localement. Vérifier les options et la gestion des clés de chaque solution comparée.",
+    cmpDropItem2Title: "Copies et récupération",
+    cmpDropItem2Desc: "CYBOU contrôle les répliques par audits et vérification BLAKE3, puis répare depuis une copie valide. Comparer les mécanismes de sauvegarde, les tests de panne et les engagements de disponibilité.",
+    cmpDropItem3Title: "Protocole ouvert et Identity",
+    cmpDropItem3Desc: "Le code ouvert et le coffre Identity portable permettent d’examiner les mécanismes et de conserver le contrôle des clés. Comparer les exports, la récupération et les responsabilités d’exploitation.",
 
     cmpGafamPill: "Monopoles Big Tech",
-    cmpGafamStatus: "Émancipation Numérique",
-    cmpGafamTitle: "CYBOU vs. GAFAM : Reprendre le contrôle de ses communications",
-    cmpGafamSub: "Pourquoi les suites de Google, Microsoft et Apple ne garantissent aucune confidentialité réelle pour les décideurs européens.",
-    cmpGafamP1: "Google Workspace (Gmail, Drive) et Microsoft 365 (Outlook, OneDrive) dominent le marché des suites bureautiques. Cette hégémonie pose trois problèmes critiques résolus par CYBOU :",
-    cmpGafamItem1Title: "Le piège de la fausse promesse du « chiffrement géré » :",
-    cmpGafamItem1Desc: "Les géants américains affirment chiffrer vos données, mais ils gèrent eux-mêmes les modules HSM et les clés. Cette approche permet à leurs algorithmes de scanner en continu vos emails et documents pour alimenter leurs modèles d'IA, leurs moteurs publicitaires ou leurs télémétries. CYBOU applique le véritable chiffrement de bout en bout : le contenu est scellé avant de quitter votre processeur.",
-    cmpGafamItem2Title: "L'enfermement propriétaire et la dépendance tarifaire :",
-    cmpGafamItem2Desc: "Les hausses de tarifs unilatérales imposées aux entreprises et aux administrations publiques illustrent le risque du monopole. CYBOU est un protocole open-source, décentralisé, déployable sur site (on-premise) ou sur cloud souverain, garantissant une indépendance pérenne.",
-    cmpGafamItem3Title: "Souveraineté des identités sans numéros de téléphone ni SMS :",
-    cmpGafamItem3Desc: "Pour ouvrir un compte Google ou Microsoft, vous devez fournir un numéro de téléphone mobile et accepter des conditions générales modifiables à tout moment. Votre compte peut être suspendu arbitrairement sans recours. Une identité CYBOU est inaliénable : elle est protégée par votre phrase secrète de 24 mots et une preuve de travail anti-Sybil. Personne ne peut vous bannir de votre propre espace.",
+    cmpGafamStatus: "Architecture et contrôle",
+    cmpGafamTitle: "CYBOU et Google Workspace et Microsoft 365 — Critères de choix",
+    cmpGafamSub: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpGafamP1: "Comparer les usages, les configurations et les responsabilités. Les principes CYBOU ci-dessous permettent d’évaluer les différences pertinentes.",
+    cmpGafamItem1Title: "Chiffrement côté client",
+    cmpGafamItem1Desc: "CYBOU chiffre les contenus avant leur transmission et conserve les clés localement. Vérifier les options et la gestion des clés de chaque solution comparée.",
+    cmpGafamItem2Title: "Copies et récupération",
+    cmpGafamItem2Desc: "CYBOU contrôle les répliques par audits et vérification BLAKE3, puis répare depuis une copie valide. Comparer les mécanismes de sauvegarde, les tests de panne et les engagements de disponibilité.",
+    cmpGafamItem3Title: "Protocole ouvert et Identity",
+    cmpGafamItem3Desc: "Le code ouvert et le coffre Identity portable permettent d’examiner les mécanismes et de conserver le contrôle des clés. Comparer les exports, la récupération et les responsabilités d’exploitation.",
 
     cmpSynPill: "Guide de Choix",
     cmpSynStatus: "Synthèse Décisionnelle",
@@ -795,19 +793,17 @@ const translations = {
 
     heroTag: "Standard OpenSSL v3.5.2+ Cryptography • France Sovereign • NIST Post-Quantum",
     heroAccent: "Your sovereign private workspace. Mail, files, and identity.",
-    heroSubtitle: "CYBOU brings private messaging, file storage, and sovereign identity together into a protective desktop application. Zero homemade crypto: all cryptography relies on official OpenSSL v3.5.2+ and NIST post-quantum standards.",
-    heroPillSlogan: "A sovereign suite protecting your privacy — without ad tracking or surveillance.",
+    heroSubtitle: "CYBOU brings private messaging, files and a portable digital identity together in one application. Your content is encrypted on your computer before it is sent.",
+    heroPillSlogan: "Your keys. Your space. Your identity goes with you.",
 
-    statusCalloutTitle: "DEV protocol operational. Hardening for public release.",
-    statusCalloutBody: "The experimental DEV network operates with PoA finality, distributed chunk storage, and TLS 1.3 transport. The CYBOU desktop application is undergoing continuous hardening and integration tests ahead of public release.",
 
     heroBtnShowcase: "Explore the Desktop App",
     heroBtnSecurity: "Why CYBOU?",
 
-    badgeOpenssl: "OpenSSL v3.5.2+ Engine (Zero Homemade Crypto)",
+    badgeOpenssl: "Standard OpenSSL primitives · Documented compositions",
     badgeFrance: "Network with France-classified IP admission",
     badgeTls: "Post-Quantum TLS 1.3 Transport (CYBOU P2P)",
-    badgePhrase: "Zero Passwords / 24-Word Master Key",
+    badgePhrase: "Identity keys · Protected local vault",
     badgeNoAds: "Zero Tracking & Zero Ads",
 
     showcaseLabel: "Application Preview",
@@ -846,12 +842,12 @@ const translations = {
     mockupIdHeading2: "Post-Quantum Keys",
     mockupIdSub2: "Hybrid signatures active against future quantum threats.",
     mockupIdHeading3: "Account Recovery",
-    mockupIdSub3: "Reconstructs your identity on a new PC without passwords or SMS codes.",
+    mockupIdSub3: "Recovery on another computer; the local vault is protected by a password.",
     mockupIdHeading4: "Standard Crypto Engine",
-    mockupIdSub4: "Official NIST FIPS 203/204 standards. Zero homemade crypto.",
+    mockupIdSub4: "Standardized ML-KEM / ML-DSA primitives; documented protocol composition.",
 
-    mockupSecHeading1: "Battle-Tested OpenSSL v3.5.2+ (Zero Homemade Crypto)",
-    mockupSecDesc1: "CYBOU follows the golden rule of cybersecurity: \"Don't roll your own crypto\". No custom math: all algorithms rely directly on OpenSSL v3.5.2+ compliant with NIST FIPS 203 and FIPS 204 standards.",
+    mockupSecHeading1: "Standard OpenSSL primitives · Documented compositions",
+    mockupSecDesc1: "CYBOU uses standard OpenSSL primitives, including ML-KEM and ML-DSA, within documented protocol compositions. Hybrid TLS transport and the application X-Wing profile are distinct constructions; reviewing their composition remains separate from primitive standardization.",
     mockupSecHeading2: "Post-Quantum TLS 1.3 P2P Transport",
     mockupSecDesc2: "TLS 1.3 tunnel with hybrid X25519MLKEM768 group. Any classical fallback is strictly rejected (fails closed).",
     mockupSecHeading3: "Territorial France Sovereignty",
@@ -868,43 +864,44 @@ const translations = {
 
     srvFilesTag: "Storage",
     srvFilesTitle: "CYBOU Files — Your Documents Under Lock in France",
-    srvFilesDesc: "A sovereign personal space hosted outside US clouds. Files are sliced into encrypted chunks (BLAKE3-256), replicated with cryptographic integrity checks across independent nodes in France.",
+    srvFilesDesc: "Your files are encrypted and replicated across the network. Signed storage receipts, random-offset checks and downloads with BLAKE3 verification check replicas and allow lost copies to be repaired from a valid source.",
     srvFilesStatus: "Integrated flows — sustained soak pending",
 
     srvIdentityTag: "Identity",
     srvIdentityTitle: "CYBOU Identity — One Master Key for Digital Life",
     srvIdentityDesc: "Forget vulnerable passwords and hackable SMS codes. Your account is secured by a secure 24-word recovery phrase and a human-readable .cybou name you own for life.",
-    srvIdentityStatus: "Identity and vault path integrated on DEV",
+    srvIdentityStatus: "Identity and vault path integrated on DEVNET",
 
     srvContinuityTag: "Continuity",
     srvContinuityTitle: "Seamless Recovery & Continuity",
-    srvContinuityDesc: "If your computer is lost or replaced, your 24-word phrase and finalized proofs allow you to reconstruct your emails, files, and address book securely.",
-    srvContinuityStatus: "Integrated reconstruction on DEV",
+    srvContinuityDesc: "The portable Identity Vault and recovery mechanism let you regain access to your Identity on another computer. Rebuilding messages and files requires accessible publications, openable key capsules and available encrypted copies.",
+    srvContinuityStatus: "Integrated reconstruction on DEVNET",
 
-    srvWalletTag: "Economics",
-    srvWalletTitle: "Transparent Service Budget",
-    srvWalletDesc: "A deterministic and predictable economic model to fund network storage and security without hidden subscriptions or data monetization.",
-    srvWalletStatus: "Basic operations available in the DEV client",
+    srvWalletTag: "Resources",
+    srvWalletTitle: "A clear service budget",
+    srvWalletDesc: "CYBOU uses internal service units to account for resources consumed by operations and storage. Your budget lets you track service usage.",
+    srvStorageEconomy: "Storage is organized through leases and availability checks. The service budget tracks resource usage; AUTH remains separate and does not determine storage volume.",
+    srvWalletStatus: "Basic operations available in the DEVNET client",
 
     secLabel: "Security & Transport",
     secTitle: "An End-to-End Digital Fortress.",
     secDesc: "Explore CYBOU protections and their limits, from transport to encrypted storage.",
 
     secOpensslTag: "Audited Global Standard",
-    secOpensslTitle: "Standard OpenSSL v3.5.2+ Cryptography (Zero Homemade Crypto)",
+    secOpensslTitle: "Standard OpenSSL primitives · Documented compositions",
     secOpensslDesc: "CYBOU uses OpenSSL ML-KEM and ML-DSA primitives. The hybrid X-Wing profile remains experimental; exact conformance and compositions require review. No product or FIPS module certification is claimed.",
 
     secTlsTag: "Network Protection",
     secTlsTitle: "100% Post-Quantum TLS 1.3 Encrypted Transport (CYBOU P2P)",
-    secTlsDesc: "Every network connection enforces a post-quantum hybrid key exchange combining X25519 and NIST ML-KEM-768 (Kyber). Any classical fallback without ML-KEM is rejected. Neither your ISP, nor Wi-Fi eavesdroppers, nor future quantum supercomputers can decrypt your traffic.",
+    secTlsDesc: "Every P2P connection requires TLS 1.3 with hybrid X25519MLKEM768 key exchange and rejects classical fallback. This mechanism protects transport; security also depends on endpoints, keys and protocol composition.",
 
-    secE2eeTag: "Zero-Knowledge Privacy",
+    secE2eeTag: "Private encrypted content",
     secE2eeTitle: "End-to-End Client Encryption & BLAKE3 Chunking",
-    secE2eeDesc: "TLS protects the wire, but CYBOU also protects the data itself. Messages and files are encrypted on your CPU with private keys before departure. The blockchain consensus stores zero emails, zero file names, zero recipients: only opaque encrypted chunks exist.",
+    secE2eeDesc: "Messages, files and Mail/Files application schemas are encrypted on your computer before sending. The ledger retains publications, Merkle roots and key capsules, not plaintext content. Public identifiers and network metadata remain separate from encrypted content.",
 
     secFranceTag: "France admission",
     secFranceTitle: "Territorial Sovereignty France & EU",
-    secFranceDesc: "Zero servers in the US, zero dependence on centralized cloud giants. Public P2P admission is strictly confined to France with rigorous geolocation enforcement (fails closed). Sovereign French P2P infrastructure outside US cloud jurisdiction.",
+    secFranceDesc: "Public P2P admission uses local Geo data to accept French IP addresses and fails closed without valid data. This policy supports the goal of a sovereign French network; it does not, by itself, prove physical location or jurisdiction.",
 
     compLabel: "Objective Comparison",
     compTitle: "CYBOU vs Big Tech.",
@@ -915,81 +912,80 @@ const translations = {
     compThAppleMs: "Apple iCloud / Microsoft",
     compRow1Crit: "Message & File Encryption",
     compRow1Cybou: "Mandatory Client-side (Zero-Knowledge)",
-    compRow1Google: "Server-side encryption (Google holds keys)",
-    compRow1AppleMs: "Server encryption with vendor-held keys",
+    compRow1Google: "Verify offering, version and configuration",
+    compRow1AppleMs: "Verify offering, version and configuration",
     compRowCryptoCrit: "Cryptographic Engine & Code",
-    compRowCryptoCybou: "Standard OpenSSL v3.5.2+ (Zero homemade crypto, NIST FIPS 203/204)",
-    compRowCryptoGoogle: "Proprietary / Server black-box",
-    compRowCryptoAppleMs: "Proprietary / Server black-box",
+    compRowCryptoCybou: "Standard OpenSSL primitives · Documented compositions",
+    compRowCryptoGoogle: "Verify offering, version and configuration",
+    compRowCryptoAppleMs: "Verify offering, version and configuration",
     compRow2Crit: "Network Transport Security",
     compRow2Cybou: "TLS 1.3 Hybride Post-Quantique (X25519 + ML-KEM-768)",
-    compRow2Google: "TLS to Google datacenters",
-    compRow2AppleMs: "TLS to US datacenters",
+    compRow2Google: "Verify offering, version and configuration",
+    compRow2AppleMs: "Verify offering, version and configuration",
     compRow3Crit: "Content scanning for ads / AI",
     compRow3Cybou: "Zero scanning, zero ads, zero AI training",
-    compRow3Google: "Scanned for targeting and algorithmic training",
-    compRow3AppleMs: "Automated scans and telemetry",
+    compRow3Google: "Verify offering, version and configuration",
+    compRow3AppleMs: "Verify offering, version and configuration",
     compRow4Crit: "Jurisdiction & Governance",
     compRow4Cybou: "France & European Union (Sovereign GDPR)",
-    compRow4Google: "USA (Subject to US Cloud Act & FISA 702)",
-    compRow4AppleMs: "USA (Subject to extraterritorial US laws)",
+    compRow4Google: "Verify offering, version and configuration",
+    compRow4AppleMs: "Verify offering, version and configuration",
     compRow5Crit: "Quantum Computer Resistance",
     compRow5Cybou: "Integrated NIST ML-DSA post-quantum",
-    compRow5Google: "Classical algorithms (RSA / ECC)",
-    compRow5AppleMs: "Classical algorithms (RSA / ECC)",
+    compRow5Google: "Verify offering, version and configuration",
+    compRow5AppleMs: "Verify offering, version and configuration",
     compRow6Crit: "Authentication & Account Ownership",
-    compRow6Cybou: "Sovereign 24 words (No passwords / SMS)",
-    compRow6Google: "Phone number required, risk of arbitrary ban",
-    compRow6AppleMs: "Tied to phone number and credit card",
+    compRow6Cybou: "Identity keys and recovery phrase; local vault password",
+    compRow6Google: "Verify offering, version and configuration",
+    compRow6AppleMs: "Verify offering, version and configuration",
 
     archLabel: "Under the Hood",
     archTitle: "Technical Architecture & Foundations.",
     archDesc: "For developers, auditors, and enthusiasts: exact consensus engine and network specifications.",
 
-    bento1Title: "Single-operator PoA on DEV",
-    bento1Desc: "CYBOU operates the only finality signer on the DEV network. Every full node independently verifies blocks and state; that verification does not make the trust model BFT.",
+    bento1Title: "Single-operator PoA on DEVNET",
+    bento1Desc: "CYBOU operates the only finality signer on the DEVNET network. Every full node independently verifies blocks and state; that verification does not make the trust model BFT.",
     bento1Metric: "Centralized — no BFT fault tolerance",
 
-    bento2Title: "Hybrid X-Wing profile for DEV",
-    bento2Desc: "The DEV protocol publishes an Identity X-Wing capability based on IETF draft -05. The profile does not automatically carry over to Beta/Mainnet, and its presence does not mean Mail/Files are shipped or audited.",
+    bento2Title: "Hybrid X-Wing profile for DEVNET",
+    bento2Desc: "The DEVNET protocol publishes an Identity X-Wing capability based on IETF draft -05. The profile does not automatically carry over to Beta/Mainnet, and its presence does not mean Mail/Files are shipped or audited.",
     bento2Metric: "Development profile; independent review required",
 
     bento3Title: "One Identity, separate cryptographic roles",
     bento3Desc: "Recovery, authorization, key agreement, PoA finality, release signing, and treasury use separate cryptographic roles.",
     bento3Metric: "Local keys and distinct roles",
 
-    bento4Title: "PoA finality and deterministic economics",
-    bento4Desc: "DEV uses one finality operator and makes no BFT claim. The asset cap is 100 billion units with no decimals; all protocol fees go to the Central Authority Identity.",
-    bento4Value: "100B",
-    bento4Metric: "100 billion cap — 0 decimals",
+    bento4Title: "Finality and verifiable state",
+    bento4Desc: "One PoA signer finalizes operations. Every full node independently verifies blocks and state transitions.",
+    bento4Value: "PoA",
+    bento4Metric: "Single finalizer, independent verification",
 
     step1Title: "Prepare private content",
     step1Desc: "The client turns content into an encrypted ROOT/INDEX/DATA tree and keeps the required local material. Mail/Files schemas remain inside encryption.",
 
     step2Title: "Protect the content key",
-    step2Desc: "RootPublication carries key capsules for recipient KEM capabilities without publishing recipient AccountIDs. X-Wing draft -05 is limited to DEV.",
+    step2Desc: "RootPublication carries key capsules for recipient KEM capabilities without publishing recipient AccountIDs. X-Wing draft -05 is limited to DEVNET.",
 
     step3Title: "Authorize a RootPublication",
     step3Desc: "Identity signs a generic operation committing to the root, chunk-inclusion tree, and capsules. Mail has no dedicated consensus operation type.",
 
     step4Title: "Finalize, admit, retrieve",
-    step4Desc: "PoA finalizes the operation; providers then verify chunk-admission proofs. Finality is not durability: the client must measure availability, retry, and rebuild local indexes.",
+    step4Desc: "Finalization authorizes storage admission; it is not enough to show Protected or Sent. Those statuses require confirmed remote copies. The Beta target is two independent remote replicas; local cache does not count. Distinct StorageIds do not prove independent servers or operators.",
 
     factsheetHeading: "Canonical CYBOU Architecture Parameters",
     dtTransport: "P2P Transport & Encryption",
     ddTransport: "CYBOU P2P encapsulated in strict post-quantum TLS 1.3 (mandatory X25519MLKEM768 group, fails closed). Powered by OpenSSL v3.5.2+ with 32-byte session key export bound to crypto proofs.",
-    dtConsensus: "Current DEV finality",
-    ddConsensus: "Hybrid PoA with one signer operated by CYBOU on DEV. Full nodes independently verify; no BFT claim. Target: Central Authority desktop finalizer.",
-    dtBootstrap: "Bootstrap peers",
-    ddBootstrap: "Ordinary CYBOU full peers with known initial locators (IP:port + TLS pin) for initial discovery; no special consensus capability, no finality role, running the exact same software.",
+    dtConsensus: "Current DEVNET finality",
+    ddConsensus: "Hybrid PoA with one signer operated by CYBOU on DEVNET. Full nodes independently verify; no BFT claim. Target: Central Authority desktop finalizer.",
+    dtBootstrap: "Initial peer discovery",
+    ddBootstrap: "The first connection uses an ordinary Full Node at a known address, verified through its TLS pin. Participants then form direct P2P connections. Bootstrap is not a separate node type and grants no consensus authority.",
     dtAdmission: "France sovereign P2P admission",
     ddAdmission: "Public P2P admission restricted to French IP space using local Geo data (fails closed); optional local VPN/proxy/Tor filtering.",
-    dtSupply: "Maximum supply",
-    ddSupply: "<code>100,000,000,000</code> CYBOU, 0 decimals; parameters are bound to each network definition.",
     dtGrant: "Account creation",
-    ddGrant: "Permissionless <code>AccountCreate</code> with anti-Sybil work; the bonus moves from the <code>cybou</code> Central Treasury to <code>SystemBalance</code>.",
-    dtFees: "Fees and allocation",
-    ddFees: "Deterministic publication fees based on size and chunk count; priority fees disabled; 100% paid to the Central Authority Identity.",
+    ddGrant: "Identity creation with anti-Sybil work and an initial budget for network services.",
+    dtStorageEconomy: "Storage management",
+    dtFees: "Resource accounting",
+    ddFees: "Operations and storage use a service budget with deterministic accounting rules.",
     dtPublication: "Content publication",
     ddPublication: "Generic <code>RootPublication</code>. Mail, Files, and Backup are private encrypted schemas, not separate consensus operations.",
     dtKeys: "Cryptographic key roles",
@@ -998,35 +994,35 @@ const translations = {
     ddStack: "C++20, CMake, Qt 6, LevelDB, OpenSSL v3.5.2+, BLAKE3, and CYBOU P2P transport over TLS 1.3.",
 
     matrixLabel: "Technical Transparency",
-    matrixTitle: "Implementation Matrix.",
-    matrixDesc: "Mail/Files and storage are integrated on DEV. Sustained soak, clean installations, UX acceptance and security review remain Beta gates.",
+    matrixTitle: "Project status",
+    matrixDesc: "Features integrated in code, deployed experimental network and preparation for public availability.",
 
-    col1Title: "Protocol substrate on DEV",
+    col1Title: "Features integrated in code",
     badgeDone: "IMPLEMENTED",
     col1Item1: "<strong>Identity and .cybou names:</strong> AccountCreate with anti-Sybil work, hybrid key roles, portable vault, and finalized name registry.",
-    col1Item2: "<strong>PoA finality:</strong> dedicated DEV signer, durable anti-equivocation journal, conflict safety halt, and independent full-node validation.",
+    col1Item2: "<strong>PoA finality:</strong> single signer, durable journal and independent block verification by full nodes.",
     col1Item3: "<strong>RootPublication:</strong> generic Identity-authorized operation; no permanent Mail or file objects in consensus state.",
     col1Item4: "<strong>Encrypted content tree:</strong> ordered ROOT/INDEX/DATA chunks addressed by full BLAKE3-256 and built for streaming.",
     col1Item5: "<strong>Admission and transport:</strong> local chunk store, inclusion proofs tied to finalized publications, and CYBOU P2P transport secured with TLS 1.3.",
-    col1Item6: "<strong>Deterministic economics:</strong> fee and balance transitions validated by the state machine; DEV, Beta, and Mainnet use separate parameters.",
+    col1Item6: "<strong>Resources:</strong> service budget, storage leases and deterministic accounting rules.",
 
-    col2Title: "Hardening and Beta preparation",
-    badgeWip: "IN PROGRESS",
-    col2Item1: "<strong>Integrated Mail:</strong> publications, attachments and Inbox/Sent rebuild; desktop acceptance remains open.",
-    col2Item2: "<strong>Integrated Files:</strong> private catalog, transfers and restore; clean-install and UX acceptance remain open.",
-    col2Item3: "<strong>Durability:</strong> replication, audit and repair are integrated. DEV: 1 remote copy; Beta: 2 independent copies. Local cache does not count.",
-    col2Item4: "<strong>Evidence:</strong> clean-restore and multi-process failure tests; sustained soak and Beta acceptance remain open.",
+    col2Title: "Experimental deployment",
+    badgeWip: "DEVNET",
+    col2Item1: "<strong>DEVNET:</strong> full discovery peer and P2P transport with French IP admission.",
+    col2Item2: "<strong>Desktop:</strong> Mail, Files and Identity integration; publication, retrieval and index reconstruction.",
+    col2Item3: "<strong>Storage:</strong> signed receipts, audits and GET/BLAKE3 checks. Deployed versions and evidence are tracked in the implementation register.",
+    col2Item4: "<strong>Scope:</strong> development network; technical testing does not constitute a public service launch.",
 
-    col3Title: "Later stages",
-    badgePlanned: "LATER",
-    col3Item1: "<strong>Optional Validation:</strong> a signature added after local execution by an identity above 10,000,000 AUTH. Every node re-executes; no canonical effect or PoA power.",
-    col3Item2: "<strong>Scale:</strong> sustained testing of integrated attachments and shared storage.",
+    col3Title: "Next steps",
+    badgePlanned: "PREPARATION",
+    col3Item1: "<strong>Desktop acceptance:</strong> clean installations, Mail/Files workflows and recovery on another computer.",
+    col3Item2: "<strong>Endurance and durability:</strong> sustained tests, provider loss and two independent remote replicas for the Beta target.",
     col3Item3: "<strong>Backup:</strong> post-Beta application of the same encrypted graph, with verifiable restore.",
-    col3Item4: "<strong>Beta, then public service:</strong> measured operating costs, security review, UX acceptance, and documented operations before opening.",
+    col3Item4: "<strong>Public availability:</strong> security review, UX acceptance, operating procedures and support.",
 
     faqLabel: "Frequently Asked Questions",
     faqTitle: "Understanding CYBOU.",
-    faqDesc: "What runs on DEV, what still needs to be built, and security guarantees.",
+    faqDesc: "What runs on DEVNET, what still needs to be built, and security guarantees.",
     faqQ1: "What is CYBOU in simple terms?",
     faqA1: "CYBOU is a sovereign desktop privacy suite combining private messaging (Mail), encrypted cloud storage (Files), and an identity manager (Identity). Your data is encrypted on your machine before being sent, and all network transport is protected with post-quantum TLS 1.3.",
     faqTlsBadge: "Encrypted Transport",
@@ -1038,14 +1034,14 @@ const translations = {
     faqQ2: "How is CYBOU different from Gmail or Google Drive?",
     faqA2: "Unlike Google which centralizes your data, holds the decryption keys, and scans contents for advertising or AI model training, CYBOU encrypts everything directly on your computer. No server can read your emails or files, and the entire public network is based in France, shielded from the US Cloud Act.",
     faqQ3: "What do .cybou names and the 24-word recovery phrase do?",
-    faqA3: "A .cybou name (e.g. alice.cybou) is your permanent, human-readable account alias. The 24-word recovery phrase is your master secret key: it lets you reconstruct your keys and environment on any computer without relying on vulnerable passwords or hackable SMS codes.",
+    faqA3: "A .cybou name is your Identity’s readable address. The portable vault retains its stable AccountID and recovery secret. The recovery phrase lets you recover the corresponding keys; the local vault is protected by a password. Recovering messages and files also requires their publications, openable key capsules and an available copy of the encrypted content.",
     faqQFrance: "Why is CYBOU hosted exclusively in France and Europe?",
     faqAFrance: "Digital sovereignty relies on infrastructure independence. By restricting public nodes to French territory, CYBOU ensures that data streams and encrypted chunks remain hosted in France on sovereign P2P infrastructure outside US cloud jurisdiction.",
     faqPqBadge: "Future Security",
     faqQ5: "What does post-quantum cryptography (ML-DSA) mean?",
     faqA5: "Future quantum computers will render classical RSA and ECC encryption obsolete. CYBOU deploys NIST-standardized post-quantum algorithms (ML-DSA-44 and ML-DSA-65) alongside Ed25519 today to protect your correspondence against harvest-now, decrypt-later attacks.",
     faqQ7: "Can I use CYBOU today?",
-    faqA7: "The DEV network and full open-source codebase are active and verifiable on GitHub. The CYBOU Desktop application is undergoing continuous integration and hardening ahead of public distribution for the Beta phase.",
+    faqA7: "The DEVNET network and full open-source codebase are active and verifiable on GitHub. The CYBOU Desktop application is undergoing continuous integration and hardening ahead of public distribution for the Beta phase.",
 
     footBrand: "The sovereign alternative for your private communications and files.<br>Designed and engineered in France.",
     footProd: "Product",
@@ -1068,12 +1064,12 @@ const translations = {
 
     // Compliance Preview on Homepage
     compSecLabel: "Regulations & Standards",
-    compSecTitle: "Rigorous compliance with European and French standards.",
-    compSecDesc: "Discover how Zero-Knowledge architecture, OpenSSL v3.5.2+ cryptography, and sovereign France networking address the most demanding legal and regulatory frameworks.",
+    compSecTitle: "Security, governance and European references",
+    compSecDesc: "Client-side encryption, key management and network policy are technical measures. Their assessment must be complemented by governance and evidence for the relevant deployment; no product certification is claimed.",
     compCardRgpdPill: "EU Regulation 2016/679",
     compCardRgpdStatus: "Privacy by Design",
-    compCardRgpdTitle: "GDPR — Personal data under absolute protection",
-    compCardRgpdDesc: "Systematic client-side encryption (Art. 25). Zero personal metadata in consensus. Cryptographic right to be forgotten and strict territorial immunity against third-country transfers (Schrems II).",
+    compCardRgpdTitle: "GDPR — Data protection by design",
+    compCardRgpdDesc: "Client-side encryption and private application content. Revocation removes active storage authorization and initiates managed purge by compliant providers. Historical blocks and copies retained by recipients may remain.",
     compCardNis2Pill: "EU Directive 2022/2555",
     compCardNis2Status: "Art. 21 Risk Measures",
     compCardNis2Title: "NIS 2 Directive — Resilience & Supply Chain Security",
@@ -1122,11 +1118,11 @@ const translations = {
     cRgpdThReq: "Legal Requirement",
     cRgpdThSol: "CYBOU Technical Implementation",
     cRgpdArt25Req: "Ensure data protection by design and default without burdensome manual action.",
-    cRgpdArt25Sol: "<strong>Systematic client-side encryption.</strong> No plaintext, file, or metadata ever leaves the client workstation without prior encryption via local secret keys.",
+    cRgpdArt25Sol: "<strong>Client-side encryption.</strong> Mail/Files content and application schemas are encrypted before sending. Publications, roots, capsules and protocol metadata must be distinguished from private content.",
     cRgpdArt5Req: "Data must be adequate, relevant, and limited to what is strictly necessary.",
     cRgpdArt5Sol: "<strong>Encrypted application content.</strong> Filenames and Mail content remain encrypted. The ledger retains account identifiers, publication commitments and capsules; peers observe IP addresses and traffic. These metadata require a data-protection assessment.",
     cRgpdArt17Req: "Ensure the permanent and irreversible erasure of personal data upon request.",
-    cRgpdArt17Sol: "<strong>Revocation and managed purge.</strong> Finalized revocation removes storage authorization. Compliant nodes attempt to delete chunks no longer authorized by another publication. Historical capsules can retain access to keys: per-object cryptographic erasure is not guaranteed.",
+    cRgpdArt17Sol: "<strong>Revocation and managed purge.</strong> Finalized revocation removes active authorization and initiates deletion of unshared chunks by compliant providers, with failure tracking. It does not remove historical blocks or prove erasure of copies retained elsewhere or per-object cryptographic destruction.",
     cRgpdArt20Req: "Enable data export and porting in an open, structured format.",
     cRgpdArt20Sol: "<strong>Deterministic 24-word recovery phrase.</strong> Users can reconstruct their entire inbox, files, and address book on any computer using open key derivation standards.",
     cRgpdArt32Req: "Implement appropriate technical security measures including encryption and system resilience.",
@@ -1139,7 +1135,7 @@ const translations = {
     cNis2Sub: "Meeting cybersecurity obligations for Essential and Important Entities across critical sectors.",
     cNis2P1: "EU Directive NIS 2 imposes rigorous obligations across 18 critical sectors (healthcare, energy, transport, digital infrastructure). CYBOU aligns directly with Article 21 requirements:",
     cNis2Item1Title: "Software Supply Chain Security:",
-    cNis2Item1Desc: "CYBOU strictly abides by the principle \"Don't roll your own crypto\". No homemade algorithms are permitted. All cryptographic primitives stem directly from official OpenSSL v3.5.2+, maintained by the global community with continuous audits.",
+    cNis2Item1Desc: "CYBOU uses standard OpenSSL primitives, including ML-KEM and ML-DSA, within documented protocol compositions. Hybrid TLS transport and the application X-Wing profile are distinct constructions; reviewing their composition remains separate from primitive standardization.",
     cNis2Item2Title: "Anticipation of Quantum Threats (ENISA & ANSSI):",
     cNis2Item2Desc: "The risk of \"Harvest Now, Decrypt Later\" attacks is mitigated today via hybrid TLS 1.3 handshakes (X25519MLKEM768) and quantum-resistant identity signatures (ML-DSA-44/65).",
     cNis2Item3Title: "Resilience, Business Continuity & Disaster Recovery:",
@@ -1151,8 +1147,8 @@ const translations = {
     cHdsTitle: "Healthcare Sector — Professional Secrecy, Health Data & HDS",
     cHdsSub: "Technical guarantees for healthcare professionals, clinics, laboratories, and hospitals.",
     cHdsP1: "Medical data represents the most sensitive category of personal data (GDPR Article 9). In France, handling is governed by both the Penal Code and the Public Health Code.",
-    cHdsH1: "1. Absolute Respect for Medical Secrecy (Penal Code Art. 226-13)",
-    cHdsP2: "Article 226-13 punishes breaches of professional confidentiality. With CYBOU Mail and Files, physicians and radiologists ensure no technical intermediary can eavesdrop: records and medical imaging are encrypted locally on consultation workstations before transfer.",
+    cHdsH1: "1. Health-data confidentiality",
+    cHdsP2: "CYBOU encrypts messages and files on the endpoint before sending. For health data, these measures must be complemented by access management, endpoint security and assessment of obligations applicable to processing and providers. Encryption alone does not establish HDS compliance.",
     cHdsH2: "2. Health Data Hosting (HDS — CSP Art. L.1111-8)",
     cHdsP3: "Under French law, hosting patient personal health data gathered during diagnosis or care requires an ANS-certified HDS provider. Here is how CYBOU operationalizes this requirement:",
     cHdsThMode: "Usage Scenario",
@@ -1173,11 +1169,11 @@ const translations = {
     cIsoThName: "Control Objective",
     cIsoThSol: "CYBOU Implementation",
     cIsoA515Req: "Access control and authentication",
-    cIsoA515Sol: "Strong passwordless authentication. Hybrid ML-DSA-44 and Ed25519 signatures for every sovereign identity operation.",
+    cIsoA515Sol: "Authentication through hybrid ML-DSA-44 and Ed25519 signatures, without a centralized account password. The local vault is protected by a password.",
     cIsoA82Req: "Privileged access rights management",
     cIsoA82Sol: "Zero-Knowledge model: no network administrator or PoA operator possesses the cryptographic capability to open user data capsules.",
     cIsoA812Req: "Data leakage prevention (DLP)",
-    cIsoA812Sol: "Systematic client-side encryption before transmission. Opaque BLAKE3-256 chunking prohibits content reconstruction without private keys.",
+    cIsoA812Sol: "Client-side encryption before transmission. Already encrypted chunks are identified and verified by their BLAKE3-256 hash; BLAKE3 is a hash function, not an encryption algorithm.",
     cIsoA814Req: "Redundancy of processing facilities",
     cIsoA814Sol: "Replication to providers with distinct StorageIds, GET and BLAKE3 checks, followed by attempted repair. These identifiers do not prove geographical diversity or physical independence.",
     cIsoA820Req: "Network security and boundary protection",
@@ -1193,7 +1189,7 @@ const translations = {
     cCiaI: "2. Integrity (I)",
     cCiaIDesc: "<strong>Verifiable integrity:</strong> Each encrypted chunk is identified by its BLAKE3-256 hash. The client verifies retrieved data; nodes verify publications and transitions finalized by PoA. The signing journal refuses to sign when a conflict is detected.",
     cCiaA: "3. Availability (A)",
-    cCiaADesc: "<strong>Checked availability:</strong> StorageService checks replicas by downloading chunks and verifying BLAKE3, then attempts to repair losses from a valid copy. A successful check establishes availability at that time, not continuous storage or uninterrupted recovery.",
+    cCiaADesc: "<strong>Checked availability:</strong> StorageService uses signed receipts, random-offset audits and full downloads verified with BLAKE3. Repair requires a valid copy and an available provider. A successful check establishes availability at the time of the check.",
 
     cAnssiStatus: "National Regulatory Framework",
     cAnssiTitle: "ANSSI & French Digital Sovereignty",
@@ -1204,7 +1200,7 @@ const translations = {
     cAnssiItem2Title: "Declaration Regime for Cryptology Means (CPCE):",
     cAnssiItem2Desc: "Pursuant to French CPCE articles L. 133-1 et seq., the use of cryptology means providing confidentiality and authentication is completely unrestricted for individuals and businesses.",
     cAnssiItem3Title: "Data Sovereignty & Trusted Cloud (SecNumCloud):",
-    cAnssiItem3Desc: "For public sector and sensitive enterprise deployments, CYBOU storage nodes are designed to run on SecNumCloud-qualified cloud infrastructures, ensuring complete immunity against non-EU extraterritorial laws.",
+    cAnssiItem3Desc: "Provider and infrastructure selection must be assessed within the deployment scope. Any hosting qualification must be verified with the provider; it does not automatically certify CYBOU or the entire processing activity.",
     cAnssiCtaTitle: "Need a Compliance Evaluation for Your Organization?",
     cAnssiCtaDesc: "Our technical and legal team is available to assist with on-premise deployments, GDPR compliance roadmaps, and HDS storage integration.",
     cAnssiCtaBtn: "Contact the Team",
@@ -1213,7 +1209,7 @@ const translations = {
     footSecEnterprise: "Dedicated Private Networks",
     srvEnterpriseTag: "Custom",
     srvEnterpriseTitle: "CYBOU Enterprise — Dedicated & Isolated Private Network",
-    srvEnterpriseDesc: "Instantiate your own airtight sovereign network: custom genesis block, PoA key controlled by your IT/SecOps, on-premise or air-gapped storage, and zero data leakage.",
+    srvEnterpriseDesc: "CYBOU Enterprise targets a network dedicated to your organization: its own genesis, a PoA key under your control and storage on your chosen infrastructure.",
     srvEnterpriseLink: "Explore enterprise solutions &rarr;",
 
     // Dedicated Enterprise Page (entreprise.html)
@@ -1222,7 +1218,7 @@ const translations = {
     eHeroBadge: "DEDICATED DEPLOYMENT & SOVEREIGN ISOLATION",
     eHeroBadgeText: "Cryptographic Isolation & Dedicated Governance",
     eHeroTitle: "Build Your Secure & Dedicated Enterprise Private Network",
-    eHeroDesc: "For French and international organizations: Deploy an autonomous, cryptographically airtight CYBOU private network appliance governed by your IT/SecOps. Standard OpenSSL v3.5.2+ post-quantum encryption, On-Premise or Air-Gap storage, and absolute legal immunity.",
+    eHeroDesc: "We are building CYBOU Enterprise for organizations seeking their own trust domain: a dedicated private network, its own genesis, an organization-controlled PoA key and storage on chosen infrastructure.",
 
     ePillAdv: "Key Advantages",
     ePillArch: "Isolation & Genesis",
@@ -1255,20 +1251,20 @@ const translations = {
     eCard4Pill: "P2P Resilience",
     eCard4Badge: "Zero SPOF",
     eCard4Title: "Distributed Storage with No Single Point of Failure",
-    eCard4Desc: "Files and messages are chunked (BLAKE3-256) and replicated across internal servers or remote datacenters. Hardware failures or severed WAN connections do not interrupt service: the mesh repairs itself automatically.",
+    eCard4Desc: "Your encrypted files and messages are replicated across your servers. Signed receipts, random-offset audits and BLAKE3-verified downloads check the copies. Losses are repaired from a valid copy when a provider is available.",
 
     eArt2Pill: "Under the Hood",
     eArt2Status: "Open Specifications",
     eArt2Title: "How does private network isolation work?",
     eArt2Sub: "All participants run the exact same battle-tested core software, but the cryptographic boundary is strictly confined to your enterprise.",
-    eArt2P1: "CYBOU's unified architecture enables spinning up an independent enterprise network in minutes without altering a single line of source code. The protocol isolates networks through their genesis definition and transport credentials:",
+    eArt2P1: "The Enterprise direction is based on a distinct network with its own genesis and network identity. The organization controls the PoA finality key and chooses its storage infrastructure. Dedicated deployment procedures and tooling are part of the product we are building:",
 
     eStep1Title: "Genesis Definition",
     eStep1Desc: "Generation of a genesis.json file signed by the offline Network Private Key, with a custom enterprise network identifier and initial authority parameters.",
     eStep2Title: "PoA Central Authority",
     eStep2Desc: "IT SecOps generates the PoA finalization key on a secured internal machine to seal enterprise blocks.",
-    eStep3Title: "Initial Bootstrap Peers (1 to 4)",
-    eStep3Desc: "Deployment of 1 to 4 ordinary CYBOU full peers with known locators across your corporate intranet for initial peer discovery and synchronization.",
+    eStep3Title: "Initial contact points",
+    eStep3Desc: "Ordinary Full Nodes at known addresses on your intranet enable initial discovery; peers then communicate directly.",
     eStep4Title: "Private Storage Cluster",
     eStep4Desc: "Configuring the Full Node storage capacity (cybou node run) on internal servers to host encrypted chunk replicas.",
 
@@ -1284,7 +1280,7 @@ const translations = {
     eRowPoaPriv: "<strong>Hardened workstation of your IT / SecOps</strong> (Exclusive sovereignty)",
     eRowBoot: "Bootstrap Peers",
     eRowBootPub: "Public peers geo-located in France",
-    eRowBootPriv: "<strong>1 to 4 internal bootstrap peers</strong> (Known initial locators on your LAN / Intranet / VPN)",
+    eRowBootPriv: "Ordinary Full Nodes at known addresses on your LAN / Intranet / VPN",
     eRowStorage: "Storage Infrastructure",
     eRowStoragePub: "Qualified storage providers in France",
     eRowStoragePriv: "<strong>On-Premise enterprise servers</strong> or qualified private cloud",
@@ -1320,7 +1316,7 @@ const translations = {
     eGovItem4Title: "Key lifecycle and rotation (IdentityRotate):",
     eGovItem4Desc: "When changing hardware or upon suspected endpoint compromise, the atomic IdentityRotate transaction revokes and refreshes signature and encryption keys instantly without losing identity history.",
     eGovItem5Title: "Disaster recovery and deterministic BCP / DRP:",
-    eGovItem5Desc: "In the event of physical disaster destroying primary facilities, possession of the genesis key and 24-word phrase enables deterministic re-instantiation and cryptographic data reconstruction.",
+    eGovItem5Desc: "Continuity relies on backups of Identity vaults, finality keys and their signing history, together with accessible data copies. Restoring the authority and restoring content are separate procedures; the genesis key alone cannot recover files.",
 
     eArt5Pill: "Industry Applications",
     eArt5Status: "High-Security Sectors",
@@ -1330,7 +1326,7 @@ const translations = {
     eUse1Pill: "Advanced Manufacturing",
     eUse1Badge: "Trade Secrets",
     eUse1Title: "R&D, Intellectual Property & Patents",
-    eUse1Desc: "Absolute protection of blueprints, chemical formulations, proprietary source code, and go-to-market strategies against foreign industrial espionage and ransomware.",
+    eUse1Desc: "Client-side encryption of plans, formulations, source code and strategic documents, with key control and verified copies. Endpoint security and recovery procedures complement these mechanisms.",
 
     eUse2Pill: "Defense & Critical Infra",
     eUse2Badge: "NIS 2 Directive",
@@ -1372,8 +1368,8 @@ const translations = {
     ePriceT2F4: "Continuous tracking & rollout of OpenSSL v3.5.2+ and protocol security updates",
     ePriceT2F5: "Annual cryptographic security review, resilience audits & compliance support",
     ePriceDisclaimer: "* Indicative pricing excluding VAT ('from'): travel expenses (flights, lodging), bespoke feature modifications or tailored integrations, and extended on-site engineering services are quoted separately based on your technical specifications.",
-    eRoiTitle: "€0 monthly license fee per user (Massive savings vs. US SaaS)",
-    eRoiDesc: "Unlike SaaS suites (Microsoft 365, Google Workspace) billing €20 to €35/user/month—costing €30,000/year for 100 seats and €150,000/year for 500 seats—a CYBOU private network appliance achieves full ROI within months. Your organization remains the sole owner of its data and infrastructure, immune to unilateral subscription price hikes.",
+    eRoiTitle: "Infrastructure sized for your needs",
+    eRoiDesc: "Sizing, operations, support and integrations determine project cost. An assessment tailored to your environment evaluates these needs and expected benefits without promising a universal payback period.",
 
     eArt6Pill: "Take Action",
     eArt6Status: "Pilot & Deployment",
@@ -1387,20 +1383,20 @@ const translations = {
     // Comparison Teaser on Homepage
     compCardNextPill: "Open Source & Self-Hosting",
     compCardNextStatus: "P2P vs. LAMP",
-    compCardNextTitle: "CYBOU vs. Nextcloud — Zero-Knowledge vs. PHP Server",
-    compCardNextDesc: "Nextcloud encrypts server-side by default (system administrators can inspect your files) and relies on a fragile stack (MySQL/PHP/Apache). CYBOU enforces client-side encryption on your endpoint and operates on an autonomous C++ P2P binary with no central database.",
+    compCardNextTitle: "CYBOU and Nextcloud — Choosing an architecture",
+    compCardNextDesc: "CYBOU combines client-side encryption, local keys and P2P storage. To compare a Nextcloud deployment, examine its configuration, encryption options and operational responsibilities.",
     compCardDropPill: "US Cloud Storage",
     compCardDropStatus: "Cloud Act & AI Scans",
-    compCardDropTitle: "CYBOU vs. Dropbox — Sovereignty vs. AI Scans",
-    compCardDropDesc: "Dropbox is subject to the US Cloud Act and integrates AI features analyzing your documents. CYBOU restricts its network to France (fail-closed), mathematically isolates every chunk (BLAKE3-256), and protects your data against third-party scans and AI training.",
+    compCardDropTitle: "CYBOU and Dropbox — Key and storage management",
+    compCardDropDesc: "CYBOU encrypts content before sending and keeps keys under Identity control. Compare hosted services by offering, encryption options and selected processing terms.",
     compCardGafamPill: "Centralized US Suites",
     compCardGafamStatus: "Digital Freedom",
     compCardGafamTitle: "CYBOU vs. Google Workspace & Microsoft 365",
-    compCardGafamDesc: "Big Tech vendors hold your decryption keys and demand mobile phone numbers and credit cards. CYBOU returns full ownership of your account via a 24-word recovery phrase and inalienable post-quantum keys.",
+    compCardGafamDesc: "CYBOU targets a private workspace based on local keys and an open protocol. Selection against Google Workspace or Microsoft 365 depends on use cases, integrations and security configuration.",
     compCardPqPill: "Global Standard OpenSSL v3.5.2+",
     compCardPqStatus: "Post-Quantum",
     compCardPqTitle: "Immediate Quantum Resistance (NIST FIPS 203/204)",
-    compCardPqDesc: "While Nextcloud, Dropbox, and Microsoft remain confined to legacy algorithms (RSA/ECC) vulnerable to future decryption attacks ('Harvest Now, Decrypt Later'), CYBOU natively deploys ML-KEM-768 and ML-DSA today.",
+    compCardPqDesc: "CYBOU integrates ML-KEM and ML-DSA in a documented hybrid architecture. A post-quantum comparison must verify versions and mechanisms actually deployed in each solution.",
     compTeaserCtaTitle: "View the Complete & Detailed Comparison Matrix",
     compTeaserCtaDesc: "Comprehensive table across 8 security criteria, deep architectural breakdown vs. Nextcloud and Dropbox, and decision guide for CISOs.",
     compTeaserCtaBtn: "Explore the Full Comparison",
@@ -1436,97 +1432,97 @@ const translations = {
 
     cmpR1Crit: "Message and file encryption",
     cmpR1Cybou: "Mandatory client-side (Zero-Knowledge)",
-    cmpR1Nextcloud: "Server-side by default (admin reads all); complex optional E2EE",
-    cmpR1Dropbox: "Server-side encryption (Dropbox holds master keys)",
-    cmpR1Google: "Server-side encryption (Google holds master keys)",
-    cmpR1MsApple: "Server-side encryption (Vendor holds master keys)",
+    cmpR1Nextcloud: "Verify offering, version and configuration",
+    cmpR1Dropbox: "Verify offering, version and configuration",
+    cmpR1Google: "Verify offering, version and configuration",
+    cmpR1MsApple: "Verify offering, version and configuration",
 
     cmpR2Crit: "Cryptographic engine and code",
-    cmpR2Cybou: "Standard OpenSSL v3.5.2+ (NIST FIPS 203/204, zero homemade crypto)",
-    cmpR2Nextcloud: "PHP / legacy OpenSSL (traditional RSA / AES)",
-    cmpR2Dropbox: "Closed proprietary black box",
-    cmpR2Google: "Closed proprietary black box",
-    cmpR2MsApple: "Closed proprietary black box",
+    cmpR2Cybou: "Standard OpenSSL primitives · Documented compositions",
+    cmpR2Nextcloud: "Verify offering, version and configuration",
+    cmpR2Dropbox: "Verify offering, version and configuration",
+    cmpR2Google: "Verify offering, version and configuration",
+    cmpR2MsApple: "Verify offering, version and configuration",
 
     cmpR3Crit: "Resistance to quantum attacks",
     cmpR3Cybou: "Native: ML-KEM-768 (TLS 1.3) + ML-DSA-44/65 (Identities)",
-    cmpR3Nextcloud: "No post-quantum protection",
-    cmpR3Dropbox: "No post-quantum protection",
-    cmpR3Google: "Legacy algorithms (vulnerable RSA / ECC)",
-    cmpR3MsApple: "Legacy algorithms (vulnerable RSA / ECC)",
+    cmpR3Nextcloud: "Verify offering, version and configuration",
+    cmpR3Dropbox: "Verify offering, version and configuration",
+    cmpR3Google: "Verify offering, version and configuration",
+    cmpR3MsApple: "Verify offering, version and configuration",
 
     cmpR4Crit: "Architecture & Single Point of Failure",
     cmpR4Cybou: "Unified decentralized C++ P2P, self-healing chunk replicas",
-    cmpR4Nextcloud: "Client-Server (SPOF: MySQL + Web server + Redis + PHP)",
-    cmpR4Dropbox: "Centralized US cloud",
-    cmpR4Google: "Centralized US cloud",
-    cmpR4MsApple: "Centralized US cloud",
+    cmpR4Nextcloud: "Verify offering, version and configuration",
+    cmpR4Dropbox: "Verify offering, version and configuration",
+    cmpR4Google: "Verify offering, version and configuration",
+    cmpR4MsApple: "Verify offering, version and configuration",
 
     cmpR5Crit: "Jurisdiction & Extraterritorial laws",
     cmpR5Cybou: "France & EU (France-only geo-filtered P2P, outside US cloud jurisdiction)",
-    cmpR5Nextcloud: "Depends on hosting provider (subject to Cloud Act if AWS/Azure)",
-    cmpR5Dropbox: "United States (Fully subject to Cloud Act and FISA 702)",
-    cmpR5Google: "United States (Subject to US Cloud Act and FISA 702)",
-    cmpR5MsApple: "United States (Subject to US extraterritorial statutes)",
+    cmpR5Nextcloud: "Verify offering, version and configuration",
+    cmpR5Dropbox: "Verify offering, version and configuration",
+    cmpR5Google: "Verify offering, version and configuration",
+    cmpR5MsApple: "Verify offering, version and configuration",
 
     cmpR6Crit: "Scanning for ads or AI model training",
     cmpR6Cybou: "Zero scans, zero AI, zero ads (opaque cryptographic chunks)",
-    cmpR6Nextcloud: "Zero scans by default (optional AI plugins)",
-    cmpR6Dropbox: "Content scans and third-party AI integrations (Dropbox Dash)",
-    cmpR6Google: "Algorithmic indexing for advertising and AI models",
-    cmpR6MsApple: "Intensive telemetry and Copilot integrations",
+    cmpR6Nextcloud: "Verify offering, version and configuration",
+    cmpR6Dropbox: "Verify offering, version and configuration",
+    cmpR6Google: "Verify offering, version and configuration",
+    cmpR6MsApple: "Verify offering, version and configuration",
 
     cmpR7Crit: "Authentication & Account ownership",
-    cmpR7Cybou: "24-word recovery phrase, zero passwords, zero SMS",
-    cmpR7Nextcloud: "Passwords stored in MySQL database or LDAP directory",
-    cmpR7Dropbox: "Server-managed passwords, account revokable unilaterally",
-    cmpR7Google: "Mandatory mobile phone number, risk of unilateral account ban",
-    cmpR7MsApple: "Account tied to credit card and phone, proprietary lock-in",
+    cmpR7Cybou: "Access through Identity keys; password-protected local vault",
+    cmpR7Nextcloud: "Verify offering, version and configuration",
+    cmpR7Dropbox: "Verify offering, version and configuration",
+    cmpR7Google: "Verify offering, version and configuration",
+    cmpR7MsApple: "Verify offering, version and configuration",
 
     cmpR8Crit: "Deployment & Maintenance overhead",
     cmpR8Cybou: "Standalone C++ binary with zero external dependencies",
-    cmpR8Nextcloud: "Heavy deployment (LAMP stack, SQL databases, tricky migrations)",
-    cmpR8Dropbox: "Simple for end-users, but proprietary lock-in",
-    cmpR8Google: "Managed SaaS, but total loss of operational control",
-    cmpR8MsApple: "Managed SaaS, but critical commercial dependency",
+    cmpR8Nextcloud: "Verify offering, version and configuration",
+    cmpR8Dropbox: "Verify offering, version and configuration",
+    cmpR8Google: "Verify offering, version and configuration",
+    cmpR8MsApple: "Verify offering, version and configuration",
 
     cmpNextPill: "Open Source Analysis",
-    cmpNextStatus: "P2P vs. LAMP Architecture",
-    cmpNextTitle: "CYBOU vs. Nextcloud: Why Zero-Knowledge P2P Outperforms PHP Client-Server",
-    cmpNextSub: "Nextcloud is a remarkable first-generation open-source solution, but its traditional client-server architecture suffers from structural limitations that CYBOU has solved.",
-    cmpNextP1: "Nextcloud popularized self-hosted collaborative suites. However, its technical foundation—conceived over 15 years ago—relies on a LAMP stack (Linux, Apache, MySQL, PHP) designed for traditional web apps, rather than decentralized cryptographic resilience:",
-    cmpNextItem1Title: "The illusion of server-side encryption:",
-    cmpNextItem1Desc: "By default, Nextcloud stores files in plaintext on the server or encrypts them with keys stored on the server itself. Any system administrator with SSH or root privileges can read all user files. Nextcloud's end-to-end encryption (E2EE) module is a complex add-on, notorious for synchronization failures and lost keys. With CYBOU, Zero-Knowledge client-side encryption is the mandatory and unalterable foundation of the protocol.",
-    cmpNextItem2Title: "P2P resilience vs. Single Point of Failure (SPOF):",
-    cmpNextItem2Desc: "A Nextcloud server is a single point of failure: if the MySQL database is corrupted, the PHP service crashes, or local disk space exhausts, the entire organization is paralyzed. CYBOU eliminates centralized SQL databases. Files are partitioned into BLAKE3-256 cryptographic chunks, distributed and automatically repaired across independent servers.",
-    cmpNextItem3Title: "Post-Quantum Transition (NIST FIPS 203/204):",
-    cmpNextItem3Desc: "CYBOU integrates ML-KEM and ML-DSA post-quantum primitives through OpenSSL. Security also depends on compositions, updates and the runtime environment; no overall certification is claimed.",
-    cmpNextItem4Title: "Maintenance and operational footprint:",
-    cmpNextItem4Desc: "Administering Nextcloud requires maintaining a web server, PHP runtime, relational database, Redis cache, and navigating delicate database schema migrations. CYBOU deploys as a single C++ binary with zero external dependencies, consuming minimal RAM and CPU.",
+    cmpNextStatus: "Architecture and control",
+    cmpNextTitle: "CYBOU and Nextcloud — Selection criteria",
+    cmpNextSub: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpNextP1: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpNextItem1Title: "Client-side encryption",
+    cmpNextItem1Desc: "CYBOU encrypts content before transmission and keeps keys local. Verify options and key management in each compared solution.",
+    cmpNextItem2Title: "Copies and recovery",
+    cmpNextItem2Desc: "CYBOU checks replicas through audits and BLAKE3 verification, then repairs from a valid copy. Compare backup mechanisms, failure tests and availability commitments.",
+    cmpNextItem3Title: "Open protocol and Identity",
+    cmpNextItem3Desc: "Open code and the portable Identity vault allow mechanisms to be examined and keys to remain under user control. Compare export, recovery and operational responsibilities.",
+    cmpNextItem4Title: "Operations and dependencies",
+    cmpNextItem4Desc: "CYBOU uses a common executable for desktop and full-node operation. Sizing and maintenance must be assessed in the chosen environment.",
 
     cmpDropPill: "US Cloud Storage",
-    cmpDropStatus: "Cloud Act & AI Risks",
-    cmpDropTitle: "CYBOU vs. Dropbox: The Hazards of Extraterritoriality and AI Scanning",
-    cmpDropSub: "Dropbox remains one of the most widely used enterprise and consumer services, yet it presents major liabilities for corporate secrecy and digital sovereignty.",
-    cmpDropP1: "Behind its polished interface, Dropbox operates under an economic and legal framework fundamentally incompatible with European professional secrecy:",
-    cmpDropItem1Title: "Full exposure to the US Cloud Act and FISA 702:",
-    cmpDropItem1Desc: "As an entity incorporated under US law, Dropbox is compelled to grant US federal agencies and courts access to stored data—even when belonging to French or European organizations—without prior notification. CYBOU is anchored in France with fail-closed geo-filtering guaranteeing sovereign French P2P infrastructure outside US cloud jurisdiction.",
-    cmpDropItem2Title: "Data exploitation and scanning for AI tools:",
-    cmpDropItem2Desc: "Dropbox sparked significant controversy by enabling third-party AI features by default (Dropbox Dash / AI), sharing file contents with external vendors (such as OpenAI). With CYBOU, stored file chunks are mathematically indecipherable to hosting nodes: your data is protected against third-party scans and AI model training.",
-    cmpDropItem3Title: "Unilateral possession of master decryption keys:",
-    cmpDropItem3Desc: "Dropbox encrypts files 'at rest', but holds the master keys. A rogue employee, misconfiguration, or legal order is sufficient to expose stored records. With CYBOU, only your personal devices hold decryption keys derived from your 24-word recovery phrase.",
+    cmpDropStatus: "Architecture and control",
+    cmpDropTitle: "CYBOU and Dropbox — Selection criteria",
+    cmpDropSub: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpDropP1: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpDropItem1Title: "Client-side encryption",
+    cmpDropItem1Desc: "CYBOU encrypts content before transmission and keeps keys local. Verify options and key management in each compared solution.",
+    cmpDropItem2Title: "Copies and recovery",
+    cmpDropItem2Desc: "CYBOU checks replicas through audits and BLAKE3 verification, then repairs from a valid copy. Compare backup mechanisms, failure tests and availability commitments.",
+    cmpDropItem3Title: "Open protocol and Identity",
+    cmpDropItem3Desc: "Open code and the portable Identity vault allow mechanisms to be examined and keys to remain under user control. Compare export, recovery and operational responsibilities.",
 
     cmpGafamPill: "Big Tech Monopolies",
-    cmpGafamStatus: "Digital Emancipation",
-    cmpGafamTitle: "CYBOU vs. Big Tech: Reclaiming Control Over Communications",
-    cmpGafamSub: "Why suites from Google, Microsoft, and Apple fail to provide authentic confidentiality for European decision-makers.",
-    cmpGafamP1: "Google Workspace (Gmail, Drive) and Microsoft 365 (Outlook, OneDrive) dominate enterprise office suites. This hegemony creates three critical problems solved by CYBOU:",
-    cmpGafamItem1Title: "The false promise of 'managed encryption':",
-    cmpGafamItem1Desc: "Tech giants claim to encrypt data, but they manage the HSM modules and keys themselves. This architecture enables automated algorithms to continuously scan emails and documents to feed AI models, ad networks, and telemetry. CYBOU enforces genuine end-to-end encryption: data is sealed before leaving your device's processor.",
-    cmpGafamItem2Title: "Vendor lock-in and pricing leverage:",
-    cmpGafamItem2Desc: "Unilateral price increases imposed on enterprises and public bodies highlight the danger of software monopolies. CYBOU is an open-source, decentralized protocol deployable on-premise or on sovereign clouds, ensuring long-term technological independence.",
-    cmpGafamItem3Title: "Identity sovereignty without phone numbers or SMS:",
-    cmpGafamItem3Desc: "Registering a Google or Microsoft account requires providing a mobile phone number and accepting arbitrary terms of service. Accounts can be terminated without right of appeal. A CYBOU identity is inalienable: secured by your 24-word master phrase and anti-Sybil proof-of-work. No one can evict you from your cryptographic workspace.",
+    cmpGafamStatus: "Architecture and control",
+    cmpGafamTitle: "CYBOU and Google Workspace and Microsoft 365 — Selection criteria",
+    cmpGafamSub: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpGafamP1: "Compare use cases, configurations and responsibilities. The CYBOU principles below help assess relevant differences.",
+    cmpGafamItem1Title: "Client-side encryption",
+    cmpGafamItem1Desc: "CYBOU encrypts content before transmission and keeps keys local. Verify options and key management in each compared solution.",
+    cmpGafamItem2Title: "Copies and recovery",
+    cmpGafamItem2Desc: "CYBOU checks replicas through audits and BLAKE3 verification, then repairs from a valid copy. Compare backup mechanisms, failure tests and availability commitments.",
+    cmpGafamItem3Title: "Open protocol and Identity",
+    cmpGafamItem3Desc: "Open code and the portable Identity vault allow mechanisms to be examined and keys to remain under user control. Compare export, recovery and operational responsibilities.",
 
     cmpSynPill: "Decision Guide",
     cmpSynStatus: "Strategic Synthesis",
@@ -1717,199 +1713,78 @@ function setLanguage(lang, updateUrl = false) {
   }
 }
 
-// --- DeepTech Reactive Particle Canvas (Hero Network Visualizer) ---
+// --- Galactic flight background shared by all pages ---
 function initHeroParticles() {
-  const canvas = document.getElementById('hero-particles');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const heroSection = document.getElementById('hero');
-  let width = 0;
-  let height = 0;
-  let dpr = 1;
-  let animationFrameId = null;
-  let isVisible = true;
-
-  const mouse = { x: -9999, y: -9999, maxDistance: 140 };
-  const particleCount = 48;
-  const particles = [];
-  const maxConnectionDistance = 115;
-
-  function resize() {
-    if (!heroSection) return;
-    dpr = window.devicePixelRatio || 1;
-    width = heroSection.clientWidth;
-    height = heroSection.clientHeight;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
-    canvas.style.width = width + 'px';
-    canvas.style.height = height + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  document.getElementById('hero-particles')?.remove();
+  const canvas=document.createElement('canvas');
+  canvas.id='hero-particles';canvas.setAttribute('aria-hidden','true');
+  Object.assign(canvas.style,{position:'fixed',inset:'0',width:'100%',height:'100%',pointerEvents:'none',zIndex:'10'});
+  document.body.appendChild(canvas);
+  const ctx=canvas.getContext('2d');if(!ctx)return;
+  const reduced=matchMedia('(prefers-reduced-motion: reduce)');
+  let width=0,height=0,stars=[],frame=0,last=0,boost=0,previousScroll=scrollY;
+  let cx=.5,cy=.42,targetX=.5,targetY=.42;
+  function star(randomDepth=true){
+    const angle=Math.random()*Math.PI*2;
+    const radius=.12+Math.sqrt(Math.random())*1.6;
+    return {x:Math.cos(angle)*radius,y:Math.sin(angle)*radius,
+      z:randomDepth?.25+Math.random()*3:3,size:.75+Math.random()*1.8,
+      tone:Math.random()};
   }
-
-  function createParticles() {
-    particles.length = 0;
-    for (let i = 0; i < particleCount; i++) {
-      particles.push({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: (Math.random() - 0.5) * 0.42,
-        vy: (Math.random() - 0.5) * 0.42,
-        radius: Math.random() * 1.6 + 1.2,
-        baseAlpha: Math.random() * 0.28 + 0.22,
-        pulseSpeed: Math.random() * 0.02 + 0.01,
-        pulsePhase: Math.random() * Math.PI * 2
-      });
-    }
-  }
-
-  function onPointerMove(e) {
-    const rect = heroSection.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
-  }
-
-  function onPointerLeave() {
-    mouse.x = -9999;
-    mouse.y = -9999;
-  }
-
-  if (heroSection) {
-    heroSection.addEventListener('pointermove', onPointerMove, { passive: true });
-    heroSection.addEventListener('pointerleave', onPointerLeave, { passive: true });
-  }
-
-  function draw() {
-    if (!isVisible) return;
-    ctx.clearRect(0, 0, width, height);
-
-    const time = Date.now() * 0.001;
-
-    // 1. Draw connection lines between nearby cryptographic nodes
-    for (let i = 0; i < particles.length; i++) {
-      const p1 = particles[i];
-
-      for (let j = i + 1; j < particles.length; j++) {
-        const p2 = particles[j];
-        const dx = p1.x - p2.x;
-        const dy = p1.y - p2.y;
-        const dist = Math.hypot(dx, dy);
-
-        if (dist < maxConnectionDistance) {
-          const lineAlpha = (1 - dist / maxConnectionDistance) * 0.22;
-          ctx.beginPath();
-          ctx.moveTo(p1.x, p1.y);
-          ctx.lineTo(p2.x, p2.y);
-          ctx.strokeStyle = `rgba(5, 150, 105, ${lineAlpha})`;
-          ctx.lineWidth = 0.85;
-          ctx.stroke();
-        }
-      }
-
-      // 2. Interactive line to cursor when nearby
-      const dxM = p1.x - mouse.x;
-      const dyM = p1.y - mouse.y;
-      const distM = Math.hypot(dxM, dyM);
-      if (distM < mouse.maxDistance) {
-        const mAlpha = (1 - distM / mouse.maxDistance) * 0.32;
-        ctx.beginPath();
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(mouse.x, mouse.y);
-        ctx.strokeStyle = `rgba(52, 211, 153, ${mAlpha})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
+  function draw(dt=0){
+    ctx.clearRect(0,0,width,height);
+    const focal=Math.max(width,height)*.55;
+    const originX=width*cx,originY=height*cy;
+    boost*=Math.exp(-dt*2.4);
+    cx+=(targetX-cx)*(1-Math.exp(-dt*2));cy+=(targetY-cy)*(1-Math.exp(-dt*2));
+    for(let i=0;i<stars.length;i++){
+      let s=stars[i];const oldZ=s.z;
+      s.z-=dt*(.16+boost);
+      if(s.z<.12){stars[i]=star(false);continue;}
+      const x=originX+s.x/s.z*focal,y=originY+s.y/s.z*focal;
+      if(x<-60||x>width+60||y<-60||y>height+60){stars[i]=star(false);continue;}
+      const depth=Math.min(1,1/s.z);
+      const alpha=.12+depth*.28;
+      const color=s.tone>.75?'95,100,150':'40,110,110';
+      ctx.fillStyle=`rgba(${color},${alpha})`;
+      ctx.beginPath();ctx.arc(x,y,Math.min(3.8,s.size*depth),0,Math.PI*2);ctx.fill();
+      // Perspective streaks appear only on nearby stars and during acceleration.
+      if(dt && (s.z<.8||boost>.25)){
+        const previous=Math.min(3,oldZ+(.025+boost*.04));
+        const px=originX+s.x/previous*focal,py=originY+s.y/previous*focal;
+        const gradient=ctx.createLinearGradient(px,py,x,y);
+        gradient.addColorStop(0,`rgba(${color},0)`);
+        gradient.addColorStop(1,`rgba(${color},${alpha*.65})`);
+        ctx.strokeStyle=gradient;ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(px,py);ctx.lineTo(x,y);ctx.stroke();
       }
     }
-
-    // 3. Update and draw nodes
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-
-      // Gentle interactive gravity towards cursor
-      const dx = mouse.x - p.x;
-      const dy = mouse.y - p.y;
-      const distMouse = Math.hypot(dx, dy);
-      if (distMouse < mouse.maxDistance && distMouse > 1) {
-        const force = (1 - distMouse / mouse.maxDistance) * 0.04;
-        p.vx += (dx / distMouse) * force;
-        p.vy += (dy / distMouse) * force;
-      }
-
-      // Movement
-      p.x += p.vx;
-      p.y += p.vy;
-
-      // Damping
-      p.vx *= 0.992;
-      p.vy *= 0.992;
-
-      // Soft bounce on canvas borders
-      if (p.x < 0) { p.x = 0; p.vx *= -1; }
-      else if (p.x > width) { p.x = width; p.vx *= -1; }
-      if (p.y < 0) { p.y = 0; p.vy *= -1; }
-      else if (p.y > height) { p.y = height; p.vy *= -1; }
-
-      // Breathing node pulse
-      const alpha = p.baseAlpha + Math.sin(time * 2 + p.pulsePhase) * 0.1;
-
-      // Soft ambient aura
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius * 2.4, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(52, 211, 153, ${Math.max(0.02, alpha * 0.28)})`;
-      ctx.fill();
-
-      // Sharp central node
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(5, 150, 105, ${Math.max(0.12, alpha)})`;
-      ctx.fill();
-    }
-
-    animationFrameId = requestAnimationFrame(draw);
   }
-
-  resize();
-  createParticles();
-  animationFrameId = requestAnimationFrame(draw);
-
-  // Resize handler
-  let resizeTimeout;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(() => {
-      resize();
-      createParticles();
-    }, 120);
-  });
-
-  // IntersectionObserver to conserve resources when out of view
-  if ('IntersectionObserver' in window && heroSection) {
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          if (!isVisible) {
-            isVisible = true;
-            animationFrameId = requestAnimationFrame(draw);
-          }
-        } else {
-          isVisible = false;
-          if (animationFrameId) cancelAnimationFrame(animationFrameId);
-        }
-      });
-    }, { threshold: 0.05 });
-    observer.observe(heroSection);
+  function resize(){
+    width=innerWidth;height=innerHeight;
+    const dpr=Math.min(devicePixelRatio||1,2);
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    stars=Array.from({length:Math.min(650,Math.max(220,Math.floor(width*height/2000)))},()=>star());draw();
   }
-
-  // Page visibility API
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      isVisible = false;
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    } else {
-      isVisible = true;
-      animationFrameId = requestAnimationFrame(draw);
-    }
-  });
+  function tick(now){
+    if(!last||now-last>=32){draw(last?Math.min((now-last)/1000,.08):1/30);last=now;}
+    frame=requestAnimationFrame(tick);
+  }
+  function sync(){
+    cancelAnimationFrame(frame);last=0;
+    if(!document.hidden&&!reduced.matches)frame=requestAnimationFrame(tick);else draw();
+  }
+  addEventListener('pointermove',event=>{
+    targetX=.5+(event.clientX/width-.5)*.3;
+    targetY=.42+(event.clientY/height-.5)*.25;
+  },{passive:true});
+  document.documentElement.addEventListener('pointerleave',()=>{targetX=.5;targetY=.42;});
+  addEventListener('scroll',()=>{
+    const delta=Math.abs(scrollY-previousScroll);previousScroll=scrollY;
+    if(!reduced.matches)boost=Math.min(1.6,boost+delta*.004);
+  },{passive:true});
+  addEventListener('resize',resize);
+  document.addEventListener('visibilitychange',sync);reduced.addEventListener('change',sync);
+  resize();sync();
 }
-

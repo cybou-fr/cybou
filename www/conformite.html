@@ -189,7 +189,7 @@
             <tr>
               <td><strong>Art. 25</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Privacy by Design &amp; by Default</span></td>
               <td data-i18n="cRgpdArt25Req">Garantir la protection des données dès la conception des systèmes et par défaut sans action complexe de l'utilisateur.</td>
-              <td data-i18n="cRgpdArt25Sol"><strong>Chiffrement client systématique.</strong> Aucun texte, fichier ou métadonnée ne quitte le poste de travail sans être préalablement chiffré par les clés secrètes locales de l'utilisateur.</td>
+              <td data-i18n="cRgpdArt25Sol"><strong>Chiffrement côté client.</strong> Les contenus Mail/Files et leurs schémas applicatifs sont chiffrés avant l’envoi. Les publications, racines, capsules et métadonnées de protocole doivent être distinguées du contenu privé.</td>
             </tr>
             <tr>
               <td><strong>Art. 5.1(c)</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Minimisation des données</span></td>
@@ -199,7 +199,7 @@
             <tr>
               <td><strong>Art. 17</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Droit à l'effacement (Oubli)</span></td>
               <td data-i18n="cRgpdArt17Req">Permettre l'effacement définitif et irréversible des données à caractère personnel.</td>
-              <td data-i18n="cRgpdArt17Sol"><strong>Révocation et purge gérée.</strong> Une révocation finalisée retire l'autorisation de stockage. Les nœuds conformes tentent de supprimer les fragments qui ne sont plus autorisés par une autre publication. Les capsules historiques peuvent conserver un accès aux clés : la destruction cryptographique par objet n'est pas garantie.</td>
+              <td data-i18n="cRgpdArt17Sol"><strong>Révocation et purge gérée.</strong> La révocation finalisée retire l’autorisation active et déclenche la suppression des fragments non partagés chez les fournisseurs conformes, avec suivi des échecs. Elle ne supprime pas les blocs historiques et ne prouve pas l’effacement des copies conservées ailleurs ni la destruction cryptographique par objet.</td>
             </tr>
             <tr>
               <td><strong>Art. 20</strong><br><span style="font-size: 0.8rem; color: var(--text-muted);">Portabilité des données</span></td>
@@ -238,7 +238,7 @@
         <ul>
           <li>
             <strong data-i18n="cNis2Item1Title">Sécurité de la chaîne d'approvisionnement logicielle (Supply Chain Security) :</strong><br>
-            <span data-i18n="cNis2Item1Desc">CYBOU applique la règle formelle « Don't roll your own crypto ». Aucun algorithme cryptographique fait maison n'est toléré. L'ensemble des couches symétriques, asymétriques et post-quantiques provient de la version officielle d'OpenSSL v3.5.2+, maintenue mondialement et soumise à des audits de sécurité continus.</span>
+            <span data-i18n="cNis2Item1Desc">CYBOU utilise les primitives standard d’OpenSSL, notamment ML-KEM et ML-DSA, dans des compositions de protocole documentées. Le transport hybride TLS et le profil applicatif X-Wing sont des constructions distinctes ; la revue de leur composition reste séparée de la standardisation des primitives.</span>
           </li>
           <li>
             <strong data-i18n="cNis2Item2Title">Anticipation de la menace quantique (ENISA &amp; ANSSI) :</strong><br>
@@ -271,10 +271,8 @@
           Les données médicales constituent la catégorie la plus sensible de données personnelles (« données de santé » au sens de l'art. 9 du RGPD). En France, leur traitement est encadré par le Code pénal et le Code de la santé publique.
         </p>
 
-        <h4 style="font-size: 1.1rem; color: var(--text-primary); margin-top: 14px;" data-i18n="cHdsH1">1. Respect absolu du Secret Médical (Art. 226-13 du Code Pénal)</h4>
-        <p data-i18n="cHdsP2">
-          L'article 226-13 du Code pénal sanctionne la révélation d'une information à caractère secret par une personne qui en est dépositaire. En utilisant CYBOU Mail ou CYBOU Files, un médecin, un chirurgien ou un radiologue garantit qu'<strong>aucun intermédiaire technique ne peut matériellement commettre d'indiscrétion</strong> : les correspondances et imageries médicales sont chiffrées sur le poste de consultation avant tout envoi. Les clés privées ne sont jamais transmises à des tiers.
-        </p>
+        <h4 style="font-size: 1.1rem; color: var(--text-primary); margin-top: 14px;" data-i18n="cHdsH1">1. Confidentialité des données de santé</h4>
+        <p data-i18n="cHdsP2">CYBOU chiffre les correspondances et fichiers sur le poste avant l’envoi. Pour les données de santé, ces mesures doivent être complétées par la gestion des accès, la sécurité des postes et l’évaluation des obligations applicables au traitement et aux prestataires. Le chiffrement seul ne démontre pas la conformité HDS.</p>
 
         <h4 style="font-size: 1.1rem; color: var(--text-primary); margin-top: 14px;" data-i18n="cHdsH2">2. Hébergement de Données de Santé (HDS — Art. L.1111-8 du Code de la santé publique)</h4>
         <p data-i18n="cHdsP3">
@@ -338,7 +336,7 @@
             <tr>
               <td><strong>A.5.15</strong></td>
               <td data-i18n="cIsoA515Req">Contrôle d'accès et authentification</td>
-              <td data-i18n="cIsoA515Sol">Authentification forte sans mot de passe centralisé. Signature hybride ML-DSA-44 et Ed25519 pour chaque transaction d'identité souveraine.</td>
+              <td data-i18n="cIsoA515Sol">Authentification par signatures hybrides ML-DSA-44 et Ed25519, sans mot de passe de compte centralisé. Le coffre local est protégé par un mot de passe.</td>
             </tr>
             <tr>
               <td><strong>A.8.2</strong></td>
@@ -348,7 +346,7 @@
             <tr>
               <td><strong>A.8.12</strong></td>
               <td data-i18n="cIsoA812Req">Prévention des fuites de données (DLP)</td>
-              <td data-i18n="cIsoA812Sol">Chiffrement client systématique avant toute transmission réseau. Découpage en fragments BLAKE3-256 opaques interdisant la reconstruction hors clé privée.</td>
+              <td data-i18n="cIsoA812Sol">Chiffrement côté client avant toute transmission. Les fragments déjà chiffrés sont identifiés et vérifiés par leur empreinte BLAKE3-256 ; BLAKE3 est une fonction de hachage, pas un algorithme de chiffrement.</td>
             </tr>
             <tr>
               <td><strong>A.8.14</strong></td>
@@ -397,7 +395,7 @@
 
           <div style="padding: 24px; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #fcfdfe;">
             <div style="font-size: 1.1rem; font-weight: 700; color: var(--brand-teal-dark); margin-bottom: 8px;" data-i18n="cCiaA">3. Disponibilité (D)</div>
-            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaADesc"><strong>Disponibilité contrôlée :</strong> StorageService vérifie les répliques par téléchargement et contrôle BLAKE3, puis tente de réparer les pertes depuis une copie valide. Un contrôle réussi atteste la disponibilité au moment de la vérification, pas un stockage continu ni une récupération sans interruption.</p>
+            <p style="font-size: 0.88rem; color: var(--text-secondary); line-height: 1.55;" data-i18n="cCiaADesc"><strong>Disponibilité contrôlée :</strong> StorageService utilise des confirmations signées, des audits de portions aléatoires et des téléchargements complets vérifiés par BLAKE3. La réparation nécessite une copie valide et un fournisseur disponible. Un contrôle réussi établit la disponibilité au moment du contrôle.</p>
           </div>
 
         </div>
@@ -429,7 +427,7 @@
           </li>
           <li>
             <strong data-i18n="cAnssiItem3Title">Souveraineté des données et cloud de confiance (SecNumCloud) :</strong><br>
-            <span data-i18n="cAnssiItem3Desc">Pour les déploiements destinés au secteur public et aux infrastructures sensibles, les nœuds fournisseurs de stockage CYBOU sont conçus pour être hébergés sur des infrastructures qualifiées SecNumCloud, garantissant une étanchéité totale face aux lois extraterritoriales non européennes.</span>
+            <span data-i18n="cAnssiItem3Desc">Le choix des prestataires et des infrastructures doit être évalué dans le périmètre du déploiement. Une qualification d’hébergement éventuelle doit être vérifiée auprès du prestataire ; elle ne certifie pas automatiquement CYBOU ni l’ensemble du traitement.</span>
           </li>
         </ul>
 

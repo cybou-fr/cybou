@@ -71,7 +71,7 @@
         "@type": "TechArticle",
         "@id": "https://cybou.fr/#architecture-spec",
         "headline": "Architecture du protocole et de la suite CYBOU",
-        "description": "Sécurité de transport TLS 1.3, chiffrement client de bout en bout, finalité PoA sur DEV, Identity et arbre de chunks BLAKE3.",
+        "description": "Sécurité de transport TLS 1.3, chiffrement client de bout en bout, finalité PoA sur DEVNET, Identity et arbre de chunks BLAKE3.",
         "inLanguage": "fr",
         "author": {
           "@type": "Person",
@@ -172,10 +172,6 @@
   <section class="hero-section" id="hero">
     <canvas id="hero-particles" class="hero-particles-canvas" aria-hidden="true"></canvas>
 
-    <div class="hero-logo-box" aria-hidden="true">
-      <img src="assets/cybou.png" alt="CYBOU Emblem" width="90" height="90">
-    </div>
-
     <div class="hero-tag">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
       <span data-i18n="heroTag">Cryptographie standard OpenSSL v3.5.2+ • Souveraineté France • Post-Quantique NIST</span>
@@ -186,22 +182,11 @@
       <span class="accent-text" data-i18n="heroAccent">Votre espace privé souverain. Messagerie, fichiers et identité.</span>
     </h1>
 
-    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protectrice. Zéro algorithme maison : toute la cryptographie repose sur OpenSSL v3.5.2+ et les standards post-quantiques du NIST.</p>
+    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, fichiers et identité numérique portable dans une seule application. Vos contenus sont chiffrés sur votre ordinateur avant tout envoi.</p>
 
     <div class="hero-slogan-pill">
-      <span data-i18n="heroPillSlogan">Une suite souveraine qui protège votre vie privée — sans compromis publicitaire ni surveillance.</span>
+      <span data-i18n="heroPillSlogan">Vos clés. Votre espace. Votre identité vous accompagne.</span>
     </div>
-
-    <!-- Transparent Reality Callout -->
-    <aside class="status-callout" role="note">
-      <div class="status-callout-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-      </div>
-      <div class="status-callout-text">
-        <h4 data-i18n="statusCalloutTitle">Protocole DEV opérationnel. Préparation de la version publique.</h4>
-        <p data-i18n="statusCalloutBody">Le réseau expérimental DEV fonctionne avec finalité PoA, stockage distribué et transport TLS 1.3 post-quantique. L'application de bureau CYBOU fait l'objet de tests continus de durcissement et d'intégration avant ouverture au grand public.</p>
-      </div>
-    </aside>
 
     <div class="hero-buttons">
       <a href="#showcase" class="btn-primary">
@@ -215,7 +200,7 @@
     <div class="trust-badges" aria-label="Points forts de sécurité">
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span data-i18n="badgeOpenssl">Moteur OpenSSL v3.5.2+ (Zéro crypto maison)</span>
+        <span data-i18n="badgeOpenssl">Primitives standard OpenSSL · Compositions documentées</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
@@ -227,7 +212,7 @@
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-        <span data-i18n="badgePhrase">Zéro Mot de passe / Clé 24 mots</span>
+        <span data-i18n="badgePhrase">Clés Identity · Coffre local protégé</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
@@ -422,7 +407,7 @@
                 </tbody>
               </table>
               <div style="margin-top: 24px; padding: 12px 16px; background: #f8f9fb; border-radius: var(--radius-sm); font-size: 0.82rem; color: var(--text-secondary); display: flex; justify-content: space-between;">
-                <span>Espace utilisé : <strong>519.7 Mo</strong> chiffrés en local (BLAKE3-256)</span>
+                <span>Espace utilisé : <strong>519.7 Mo</strong> chiffrés en local · intégrité BLAKE3-256</span>
                 <span>Zéro indexation Cloud Act • Zéro entraînement IA</span>
               </div>
             </div>
@@ -443,12 +428,12 @@
                 <div class="mockup-id-card">
                   <h5 data-i18n="mockupIdHeading3">Restauration de compte</h5>
                   <div class="mockup-id-value">Phrase secrète de 24 mots</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub3">Permet de recréer l'identité sur un nouveau PC sans mot de passe ni SMS.</p>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub3">Récupération sur un autre ordinateur ; le coffre local est protégé par un mot de passe.</p>
                 </div>
                 <div class="mockup-id-card">
                   <h5 data-i18n="mockupIdHeading4">Moteur cryptographique standard</h5>
                   <div class="mockup-id-value">OpenSSL v3.5.2+</div>
-                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub4">Standards officiels NIST FIPS 203/204. Zéro cryptographie maison.</p>
+                  <p style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px;" data-i18n="mockupIdSub4">Primitives ML-KEM / ML-DSA standardisées ; composition protocolaire documentée.</p>
                 </div>
               </div>
             </div>
@@ -458,7 +443,7 @@
               <div class="mockup-id-box">
                 <div class="mockup-id-card" style="grid-column: span 2;">
                   <h5 style="color: var(--brand-teal-dark);" data-i18n="mockupSecHeading1">Cryptographie éprouvée OpenSSL v3.5.2+ (Zéro crypto maison)</h5>
-                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc1">CYBOU applique la règle d'or de la sécurité : "Don't roll your own crypto". Aucun algorithme inventé : tout s'appuie sur la bibliothèque officielle OpenSSL v3.5.2+ conforme aux standards NIST FIPS 203 et FIPS 204.</p>
+                  <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 6px;" data-i18n="mockupSecDesc1">CYBOU utilise les primitives standard d’OpenSSL, notamment ML-KEM et ML-DSA, dans des compositions de protocole documentées. Le transport hybride TLS et le profil applicatif X-Wing sont des constructions distinctes ; la revue de leur composition reste séparée de la standardisation des primitives.</p>
                   <div style="margin-top: 10px; font-family: var(--font-mono); font-size: 0.78rem; color: var(--brand-teal-dark);">
                     OpenSSL 3.5.2+ • NIST FIPS 203 (ML-KEM-768) • NIST FIPS 204 (ML-DSA-44/65) • BLAKE3-256
                   </div>
@@ -517,7 +502,7 @@
         </div>
         <div class="service-card-tag" data-i18n="srvFilesTag">Stockage</div>
         <h3 data-i18n="srvFilesTitle">CYBOU Files — Vos documents sous clé en France</h3>
-        <p data-i18n="srvFilesDesc">Un espace personnel souverain hébergé hors des clouds américains. Vos fichiers sont découpés en fragments chiffrés (BLAKE3-256), répliqués avec contrôle d'intégrité cryptographique sur des nœuds indépendants en France.</p>
+        <p data-i18n="srvFilesDesc">Vos fichiers sont chiffrés et répliqués sur le réseau. Des confirmations de stockage signées, des contrôles sur des portions aléatoires et des téléchargements avec vérification BLAKE3 permettent de vérifier les copies et de réparer les pertes depuis une copie valide.</p>
         <div class="service-status-pill">
           <span class="dot wip"></span>
           <span data-i18n="srvFilesStatus">Flux intégrés — tests prolongés en cours</span>
@@ -534,7 +519,7 @@
         <p data-i18n="srvIdentityDesc">Oubliez les mots de passe vulnérables et les SMS piratables. Votre compte est sécurisé par une phrase secrète de 24 mots et un nom lisible .cybou inaliénable qui vous appartient à vie.</p>
         <div class="service-status-pill">
           <span class="dot ready"></span>
-          <span data-i18n="srvIdentityStatus">Identité et coffre intégrés au protocole DEV</span>
+          <span data-i18n="srvIdentityStatus">Identité et coffre intégrés au protocole DEVNET</span>
         </div>
       </article>
 
@@ -545,10 +530,10 @@
         </div>
         <div class="service-card-tag" data-i18n="srvContinuityTag">Continuité</div>
         <h3 data-i18n="srvContinuityTitle">Restauration &amp; Continuité</h3>
-        <p data-i18n="srvContinuityDesc">En cas de perte ou de changement d'ordinateur, votre phrase de 24 mots et les preuves finalisées permettent de reconstruire vos emails, fichiers et carnet d'adresses en toute sécurité.</p>
+        <p data-i18n="srvContinuityDesc">Le coffre Identity Vault portable et le mécanisme de récupération permettent de retrouver l’accès à votre Identity sur un autre ordinateur. La reconstruction des messages et fichiers nécessite des publications accessibles, des capsules de clé ouvrables et des copies chiffrées disponibles.</p>
         <div class="service-status-pill">
           <span class="dot ready"></span>
-          <span data-i18n="srvContinuityStatus">Reconstruction intégrée sur DEV</span>
+          <span data-i18n="srvContinuityStatus">Reconstruction intégrée sur DEVNET</span>
         </div>
       </article>
 
@@ -557,12 +542,13 @@
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
         </div>
-        <div class="service-card-tag" data-i18n="srvWalletTag">Économie</div>
-        <h3 data-i18n="srvWalletTitle">Budget de service transparent</h3>
-        <p data-i18n="srvWalletDesc">Un modèle économique déterministe et prévisible pour rémunérer le stockage et la sécurité du réseau sans abonnement caché ni exploitation de vos données.</p>
+        <div class="service-card-tag" data-i18n="srvWalletTag">Ressources</div>
+        <h3 data-i18n="srvWalletTitle">Un budget de service lisible</h3>
+        <p data-i18n="srvWalletDesc">CYBOU utilise des unités de service internes pour comptabiliser les ressources consommées par les opérations et le stockage. Votre budget permet de suivre l’utilisation de ces services.</p>
+        <p data-i18n="srvStorageEconomy">Le stockage est organisé par des leases et des contrôles de disponibilité. Le budget de service suit les ressources utilisées ; AUTH reste distinct et ne détermine pas le volume de stockage.</p>
         <div class="service-status-pill">
           <span class="dot ready"></span>
-          <span data-i18n="srvWalletStatus">Opérations de base disponibles dans le client DEV</span>
+          <span data-i18n="srvWalletStatus">Opérations de base disponibles dans le client DEVNET</span>
         </div>
       </article>
 
@@ -573,7 +559,7 @@
         </div>
         <div class="service-card-tag" style="color: #1e3a8a;" data-i18n="srvEnterpriseTag">Sur Mesure</div>
         <h3 data-i18n="srvEnterpriseTitle">CYBOU Entreprise — Réseau Privé Dédié &amp; Isolé</h3>
-        <p data-i18n="srvEnterpriseDesc">Instanciez votre propre réseau souverain étanche : bloc de genèse dédié, clé PoA sous contrôle de votre DSI, stockage sur site (On-Premise / Air-Gap) et zéro fuite externe.</p>
+        <p data-i18n="srvEnterpriseDesc">CYBOU Entreprise vise un réseau dédié à votre organisation : genèse propre, clé PoA sous votre contrôle et stockage sur l’infrastructure choisie.</p>
         <div style="margin-top: 14px;">
           <a href="entreprise.html" style="font-size: 0.85rem; font-weight: 700; color: #1e3a8a; display: inline-flex; align-items: center; gap: 6px;" data-i18n="srvEnterpriseLink">Explorer les solutions d'entreprise &rarr;</a>
         </div>
@@ -598,7 +584,7 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
         <div class="security-card-tag" data-i18n="secOpensslTag">Standard Mondial Audité</div>
-        <h3 data-i18n="secOpensslTitle">Cryptographie Standard OpenSSL v3.5.2+ (Zéro crypto maison)</h3>
+        <h3 data-i18n="secOpensslTitle">Primitives standard OpenSSL · Compositions documentées</h3>
         <p data-i18n="secOpensslDesc">CYBOU utilise les primitives ML-KEM et ML-DSA fournies par OpenSSL. Le profil hybride X-Wing reste expérimental ; sa conformité exacte et les compositions exigent une vérification. Aucune certification du produit ou du module FIPS n’est revendiquée.</p>
       </article>
 
@@ -609,7 +595,7 @@
         </div>
         <div class="security-card-tag" data-i18n="secTlsTag">Protection Réseau</div>
         <h3 data-i18n="secTlsTitle">Transport 100% Chiffré en TLS 1.3 Post-Quantique (CYBOU P2P)</h3>
-        <p data-i18n="secTlsDesc">Chaque connexion réseau impose un échange de clés hybride post-quantique combinant X25519 et le standard NIST ML-KEM-768 (Kyber). Tout repli classique sans ML-KEM est refusé net. Ni votre FAI, ni un pirate sur le Wi-Fi public, ni de futurs calculateurs quantiques ne peuvent intercepter vos échanges.</p>
+        <p data-i18n="secTlsDesc">Chaque connexion P2P impose TLS 1.3 avec échange de clés hybride X25519MLKEM768 et refuse le repli classique. Ce mécanisme protège le transport ; la sécurité dépend également des postes, des clés et de la composition du protocole.</p>
       </article>
 
       <!-- 3. Client-side E2EE & BLAKE3 -->
@@ -617,9 +603,9 @@
         <div class="card-icon" aria-hidden="true">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
         </div>
-        <div class="security-card-tag" data-i18n="secE2eeTag">Confidentialité Totale</div>
+        <div class="security-card-tag" data-i18n="secE2eeTag">Contenu privé chiffré</div>
         <h3 data-i18n="secE2eeTitle">Chiffrement Client de bout en bout &amp; Arbre BLAKE3</h3>
-        <p data-i18n="secE2eeDesc">Le TLS protège le transport, mais CYBOU protège aussi la donnée elle-même. Les messages et fichiers sont chiffrés sur votre processeur avec vos propres clés secrètes avant de partir. Le consensus de la chaîne n'enregistre aucun message, aucun nom de fichier, aucun destinataire : seuls des fragments chiffrés opaques existent.</p>
+        <p data-i18n="secE2eeDesc">Les messages, fichiers et schémas applicatifs Mail/Files sont chiffrés sur votre ordinateur avant l’envoi. Le registre conserve les publications, racines Merkle et capsules de clé, pas le contenu en clair. Les identifiants publics et les métadonnées réseau restent distincts du contenu chiffré.</p>
       </article>
 
       <!-- 4. Sovereign France P2P -->
@@ -629,7 +615,7 @@
         </div>
         <div class="security-card-tag" data-i18n="secFranceTag">Admission France</div>
         <h3 data-i18n="secFranceTitle">Souveraineté Territoriale France &amp; UE</h3>
-        <p data-i18n="secFranceDesc">Zéro serveur aux États-Unis, zéro dépendance aux géants du cloud centralisé. L'admission P2P publique est strictement limitée à la France avec contrôle géographique rigoureux (fail-closed). Infrastructure P2P souveraine en France hors juridiction cloud américaine.</p>
+        <p data-i18n="secFranceDesc">L’admission P2P publique utilise les données Geo locales pour accepter les adresses IP françaises et échoue en l’absence de données valides. Cette politique soutient la cible d’un réseau souverain français ; elle ne constitue pas, à elle seule, une preuve de localisation physique ou de juridiction.</p>
       </article>
     </div>
   </section>
@@ -640,8 +626,8 @@
   <section class="section" id="conformite">
     <div class="section-header">
       <div class="section-label" data-i18n="compSecLabel">Réglementation &amp; Normes</div>
-      <h2 class="section-title" data-i18n="compSecTitle">Conformité rigoureuse aux standards européens et français.</h2>
-      <p class="section-description" data-i18n="compSecDesc">Découvrez comment l'architecture Zero-Knowledge, la cryptographie OpenSSL v3.5.2+ et le réseau souverain France répondent point par point aux cadres légaux les plus exigeants.</p>
+      <h2 class="section-title" data-i18n="compSecTitle">Sécurité, gouvernance et références européennes</h2>
+      <p class="section-description" data-i18n="compSecDesc">Chiffrement côté client, gestion des clés et politique réseau constituent des mesures techniques. Leur évaluation doit être complétée par la gouvernance et les preuves du déploiement concerné ; aucune certification du produit n’est revendiquée.</p>
     </div>
 
     <div class="compliance-preview-grid">
@@ -651,8 +637,8 @@
           <span class="compliance-pill" data-i18n="compCardRgpdPill">Règlement UE 2016/679</span>
           <span class="compliance-status-good" data-i18n="compCardRgpdStatus">Privacy by Design</span>
         </div>
-        <h3 data-i18n="compCardRgpdTitle">RGPD — Données personnelles sous protection absolue</h3>
-        <p data-i18n="compCardRgpdDesc">Chiffrement client systématique (Art. 25). Zéro métadonnée personnelle dans le consensus. Droit à l'oubli cryptographique garanti et absence totale de transfert de données vers des pays tiers (Schrems II).</p>
+        <h3 data-i18n="compCardRgpdTitle">RGPD — Protection des données dès la conception</h3>
+        <p data-i18n="compCardRgpdDesc">Chiffrement côté client et contenu applicatif privé. La révocation retire l’autorisation active de stockage et déclenche une purge gérée chez les fournisseurs conformes. Les blocs historiques et les copies conservées par des destinataires peuvent subsister.</p>
       </article>
 
       <!-- 2. NIS 2 -->
@@ -709,21 +695,21 @@
       <!-- Card 1: vs Nextcloud -->
       <article class="compliance-card">
         <div class="compliance-badge-row">
-          <span class="compliance-pill" data-i18n="compCardNextPill">Open Source &amp; Auto-Hébergement</span>
+          <span class="compliance-pill" data-i18n="compCardNextPill">Open Source & Auto-Hébergement</span>
           <span class="compliance-status-good" data-i18n="compCardNextStatus">P2P vs. LAMP</span>
         </div>
-        <h3 data-i18n="compCardNextTitle">CYBOU vs. Nextcloud — Zéro-Knowledge vs. Serveur PHP</h3>
-        <p data-i18n="compCardNextDesc">Nextcloud chiffre côté serveur par défaut (l'administrateur peut lire vos fichiers) et dépend d'une pile fragile (MySQL/PHP/Apache). CYBOU chiffre obligatoirement sur votre terminal et fonctionne sur un binaire C++ P2P sans base de données centrale.</p>
+        <h3 data-i18n="compCardNextTitle">CYBOU et Nextcloud — Choisir son architecture</h3>
+        <p data-i18n="compCardNextDesc">CYBOU associe chiffrement côté client, clés locales et stockage P2P. Pour comparer avec une installation Nextcloud, examiner sa configuration, ses options de chiffrement et ses responsabilités d’exploitation.</p>
       </article>
 
       <!-- Card 2: vs Dropbox -->
       <article class="compliance-card">
         <div class="compliance-badge-row">
           <span class="compliance-pill" data-i18n="compCardDropPill">Stockage Cloud Américain</span>
-          <span class="compliance-status-good" data-i18n="compCardDropStatus">Cloud Act &amp; IA</span>
+          <span class="compliance-status-good" data-i18n="compCardDropStatus">Cloud Act & IA</span>
         </div>
-        <h3 data-i18n="compCardDropTitle">CYBOU vs. Dropbox — Immunité Légale vs. Scans d'IA</h3>
-        <p data-i18n="compCardDropDesc">Dropbox est soumis au US Cloud Act et intègre des outils d'IA analysant vos documents. CYBOU restreint son réseau à la France (fail-closed), isole mathématiquement chaque fragment (BLAKE3-256) et interdit tout scan ou entraînement d'IA.</p>
+        <h3 data-i18n="compCardDropTitle">CYBOU et Dropbox — Gestion des clés et du stockage</h3>
+        <p data-i18n="compCardDropDesc">CYBOU chiffre le contenu avant son envoi et conserve les clés sous le contrôle de l’Identity. Comparer les services hébergés selon l’offre, les options de chiffrement et les conditions de traitement retenues.</p>
       </article>
 
       <!-- Card 3: vs Google & Microsoft -->
@@ -732,8 +718,8 @@
           <span class="compliance-pill" data-i18n="compCardGafamPill">Suites Centralisées US</span>
           <span class="compliance-status-good" data-i18n="compCardGafamStatus">Émancipation</span>
         </div>
-        <h3 data-i18n="compCardGafamTitle">CYBOU vs. Google Workspace &amp; Microsoft 365</h3>
-        <p data-i18n="compCardGafamDesc">Les GAFAM détiennent vos clés de déchiffrement et imposent des numéros de téléphone et cartes bancaires. CYBOU vous redonne la pleine propriété de votre compte via une phrase secrète de 24 mots et des clés post-quantiques inaliénables.</p>
+        <h3 data-i18n="compCardGafamTitle">CYBOU vs. Google Workspace & Microsoft 365</h3>
+        <p data-i18n="compCardGafamDesc">CYBOU vise un espace privé fondé sur des clés locales et un protocole ouvert. Le choix face à Google Workspace ou Microsoft 365 dépend des usages, des intégrations et de la configuration de sécurité.</p>
       </article>
 
       <!-- Card 4: Cryptographie Post-Quantique -->
@@ -743,7 +729,7 @@
           <span class="compliance-status-good" data-i18n="compCardPqStatus">Post-Quantique</span>
         </div>
         <h3 data-i18n="compCardPqTitle">Résistance Quantique Immédiate (NIST FIPS 203/204)</h3>
-        <p data-i18n="compCardPqDesc">Alors que Nextcloud, Dropbox et Microsoft restent cantonnés aux algorithmes classiques (RSA/ECC) vulnérables aux interceptions futures (« Harvest Now, Decrypt Later »), CYBOU déploie dès aujourd'hui ML-KEM-768 et ML-DSA.</p>
+        <p data-i18n="compCardPqDesc">CYBOU intègre ML-KEM et ML-DSA dans une architecture hybride documentée. Une comparaison post-quantique doit vérifier les versions et les mécanismes réellement déployés dans chaque solution.</p>
       </article>
     </div>
 
@@ -767,28 +753,28 @@
     </div>
 
     <div class="bento-grid">
-      <!-- Bento 1: Current DEV trust model -->
+      <!-- Bento 1: Current DEVNET trust model -->
       <div class="bento-card bento-span-8">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento1Title">PoA DEV à opérateur unique</h3>
-          <p data-i18n="bento1Desc">CYBOU exploite l'unique signataire de finalité du réseau DEV. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.</p>
-          <div class="card-metric">DEV</div>
+          <h3 data-i18n="bento1Title">PoA DEVNET à opérateur unique</h3>
+          <p data-i18n="bento1Desc">CYBOU exploite l'unique signataire de finalité du réseau DEVNET. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.</p>
+          <div class="card-metric">DEVNET</div>
           <div class="card-metric-label" data-i18n="bento1Metric">Centralisé — pas de tolérance BFT</div>
         </div>
       </div>
 
-      <!-- Bento 2: DEV key agreement profile -->
+      <!-- Bento 2: DEVNET key agreement profile -->
       <div class="bento-card bento-span-4">
         <div class="card-icon" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
         <div class="card-content">
-          <span class="faq-badge-pq" style="margin-bottom: 10px;">DEV PROFILE</span>
-          <h3 data-i18n="bento2Title">Profil hybride X-Wing pour DEV</h3>
-          <p data-i18n="bento2Desc">Le protocole DEV publie une capacité Identity X-Wing basée sur le draft IETF -05. Le profil n'est pas automatiquement transféré à Beta/Mainnet, et son existence ne signifie pas que le service Mail/Files est livré ou audité.</p>
+          <span class="faq-badge-pq" style="margin-bottom: 10px;">DEVNET PROFILE</span>
+          <h3 data-i18n="bento2Title">Profil hybride X-Wing pour DEVNET</h3>
+          <p data-i18n="bento2Desc">Le protocole DEVNET publie une capacité Identity X-Wing basée sur le draft IETF -05. Le profil n'est pas automatiquement transféré à Beta/Mainnet, et son existence ne signifie pas que le service Mail/Files est livré ou audité.</p>
           <div class="card-metric">X-Wing</div>
           <div class="card-metric-label" data-i18n="bento2Metric">Profil de développement, revue indépendante requise</div>
         </div>
@@ -813,10 +799,10 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento4Title">Finalité PoA et économie déterministe</h3>
-          <p data-i18n="bento4Desc">DEV utilise un opérateur de finalité unique et ne revendique pas le BFT. Le plafond de l'actif est de 100 milliards d'unités sans décimales ; tous les frais du protocole vont à l’Identity de l’Autorité centrale.</p>
-          <div class="card-metric" data-i18n="bento4Value">100 Mrd</div>
-          <div class="card-metric-label" data-i18n="bento4Metric">Plafond de 100 milliards — 0 décimale</div>
+          <h3 data-i18n="bento4Title">Finalité et état vérifiable</h3>
+          <p data-i18n="bento4Desc">Un signataire PoA finalise les opérations. Chaque nœud complet vérifie indépendamment les blocs et les transitions d’état.</p>
+          <div class="card-metric" data-i18n="bento4Value">PoA</div>
+          <div class="card-metric-label" data-i18n="bento4Metric">Finalisation unique, vérification indépendante</div>
         </div>
       </div>
     </div>
@@ -832,7 +818,7 @@
       <article class="flow-step">
         <div class="step-num">02 / CAPSULE</div>
         <h4 class="step-title" data-i18n="step2Title">Protéger la clé de contenu</h4>
-        <p class="step-desc" data-i18n="step2Desc">RootPublication transporte des capsules de clé pour les capacités KEM des destinataires sans publier leur AccountID. Le profil X-Wing draft-05 est réservé au réseau DEV.</p>
+        <p class="step-desc" data-i18n="step2Desc">RootPublication transporte des capsules de clé pour les capacités KEM des destinataires sans publier leur AccountID. Le profil X-Wing draft-05 est réservé au réseau DEVNET.</p>
       </article>
 
       <article class="flow-step">
@@ -844,7 +830,7 @@
       <article class="flow-step">
         <div class="step-num">04 / FINALITÉ ET STOCKAGE</div>
         <h4 class="step-title" data-i18n="step4Title">Finaliser, admettre, retrouver</h4>
-        <p class="step-desc" data-i18n="step4Desc">PoA finalise l'opération ; les fournisseurs vérifient ensuite les preuves d'admission des chunks. Finalité ne signifie pas durabilité : le client doit mesurer la disponibilité, réessayer et reconstruire ses index locaux.</p>
+        <p class="step-desc" data-i18n="step4Desc">La finalisation autorise l’admission au stockage ; elle ne suffit pas à afficher Protégé ou Envoyé. Ces statuts exigent des copies distantes confirmées. La cible Beta est deux répliques distantes indépendantes ; le cache local ne compte pas. Des StorageId distincts ne prouvent pas l’indépendance des serveurs ou opérateurs.</p>
       </article>
     </div>
 
@@ -862,13 +848,13 @@
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtConsensus">Finalité actuelle sur DEV</dt>
-          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU sur DEV. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.</dd>
+          <dt data-i18n="dtConsensus">Finalité actuelle sur DEVNET</dt>
+          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU sur DEVNET. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.</dd>
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtBootstrap">1 à 4 identités d'amorce</dt>
-          <dd data-i18n="ddBootstrap">1 à 4 identités autorisées par la genèse (AccountID + RecoveryKeyID) pour la découverte et le relais ; aucun rôle de finalité ou de vote. Même logiciel de nœud complet.</dd>
+          <dt data-i18n="dtBootstrap">Découverte initiale des pairs</dt>
+          <dd data-i18n="ddBootstrap">Le premier contact se fait avec un Full Node ordinaire à une adresse connue, vérifiée par son épingle TLS. Les participants forment ensuite une connexion P2P directe entre pairs. Le bootstrap n’est pas un type de nœud distinct et ne confère aucune autorité de consensus.</dd>
         </div>
 
         <div class="spec-item">
@@ -876,19 +862,19 @@
           <dd data-i18n="ddAdmission">Admission P2P publique restreinte à l'espace IP français (données Geo locales, fail-closed). Filtrage VPN/proxy/Tor local optionnel.</dd>
         </div>
 
-        <div class="spec-item">
-          <dt data-i18n="dtSupply">Offre maximale</dt>
-          <dd data-i18n="ddSupply"><code>100 000 000 000</code> CYBOU, 0 décimale ; les paramètres sont liés à la définition de chaque réseau.</dd>
-        </div>
-
-        <div class="spec-item">
+<div class="spec-item">
           <dt data-i18n="dtGrant">Création de compte</dt>
-          <dd data-i18n="ddGrant"><code>AccountCreate</code> permissionless avec travail anti-Sybil ; le bonus est transféré du Trésor central <code>cybou</code> vers <code>SystemBalance</code>.</dd>
+          <dd data-i18n="ddGrant">Création d’Identity avec travail anti-Sybil et budget initial pour utiliser les services du réseau.</dd>
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtFees">Frais et répartition</dt>
-          <dd data-i18n="ddFees">Frais déterministes de publication selon la taille et le nombre de chunks ; priorité désactivée ; 100 % vers l’Identity de l’Autorité centrale.</dd>
+          <dt data-i18n="dtStorageEconomy">Gestion du stockage</dt>
+          <dd data-i18n="srvStorageEconomy">Le stockage est organisé par des leases et des contrôles de disponibilité. Le budget de service suit les ressources utilisées ; AUTH reste distinct et ne détermine pas le volume de stockage.</dd>
+        </div>
+
+        <div class="spec-item">
+          <dt data-i18n="dtFees">Comptabilisation des ressources</dt>
+          <dd data-i18n="ddFees">Les opérations et le stockage utilisent un budget de service, avec des règles de comptabilisation déterministes.</dd>
         </div>
 
         <div class="spec-item">
@@ -915,52 +901,52 @@
   <section class="section" id="statut">
     <div class="section-header">
       <div class="section-label" data-i18n="matrixLabel">Transparence technique</div>
-      <h2 class="section-title" data-i18n="matrixTitle">Matrice d'implémentation.</h2>
-      <p class="section-description" data-i18n="matrixDesc">Mail/Files et le stockage sont intégrés sur DEV. Les tests prolongés, installations propres, critères UX et revue de sécurité restent les étapes Beta.</p>
+      <h2 class="section-title" data-i18n="matrixTitle">État du projet</h2>
+      <p class="section-description" data-i18n="matrixDesc">Fonctions intégrées au code, réseau expérimental déployé et étapes de préparation à l’ouverture publique.</p>
     </div>
 
     <div class="status-grid">
       <!-- Column 1: Implemented -->
       <article class="status-card">
         <div class="status-card-header">
-          <h3 data-i18n="col1Title">Socle implémenté sur DEV</h3>
+          <h3 data-i18n="col1Title">Fonctions intégrées au code</h3>
           <span class="badge-done" data-i18n="badgeDone">IMPLÉMENTÉ</span>
         </div>
         <ul class="status-list">
           <li data-i18n="col1Item1"><strong>Identity et noms .cybou :</strong> AccountCreate avec travail anti-Sybil, rôles de clés hybrides, coffre portable et registre de noms finalisé.</li>
-          <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> un signataire DEV dédié, journal anti-équivocation durable, arrêt de sécurité en cas de conflit et validation indépendante par les nœuds complets.</li>
+          <li data-i18n="col1Item2"><strong>Finalité PoA :</strong> signataire unique, journal durable et vérification indépendante des blocs par les nœuds complets.</li>
           <li data-i18n="col1Item3"><strong>RootPublication :</strong> opération générique autorisée par Identity ; aucun objet Mail ou fichier permanent dans le consensus.</li>
           <li data-i18n="col1Item4"><strong>Arbre de contenu chiffré :</strong> chunks ROOT/INDEX/DATA ordonnés, adressés par BLAKE3-256 et construits pour le traitement en flux.</li>
           <li data-i18n="col1Item5"><strong>Admission et transport :</strong> stockage local de chunks, preuves d’inclusion liées aux publications finalisées et transport CYBOU P2P sécurisé en TLS 1.3.</li>
-          <li data-i18n="col1Item6"><strong>Économie déterministe :</strong> frais et transitions de solde validés par le state machine ; DEV, Beta et Mainnet ont des paramètres distincts.</li>
+          <li data-i18n="col1Item6"><strong>Ressources :</strong> budget de service, leases de stockage et règles déterministes de comptabilisation.</li>
         </ul>
       </article>
 
       <!-- Column 2: In Progress -->
       <article class="status-card wip">
         <div class="status-card-header">
-          <h3 data-i18n="col2Title">Durcissement et préparation Beta</h3>
-          <span class="badge-wip" data-i18n="badgeWip">EN COURS</span>
+          <h3 data-i18n="col2Title">Déploiement expérimental</h3>
+          <span class="badge-wip" data-i18n="badgeWip">DEVNET</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col2Item1"><strong>Mail intégré :</strong> publications, pièces jointes et reconstruction Inbox/Sent ; acceptation desktop à compléter.</li>
-          <li data-i18n="col2Item2"><strong>Files intégré :</strong> catalogue privé, transferts et restauration ; installations propres et UX à vérifier.</li>
-          <li data-i18n="col2Item3"><strong>Durabilité :</strong> réplication, audit et réparation intégrés. DEV : 1 copie distante ; Beta : 2 indépendantes. Le cache local ne compte pas.</li>
-          <li data-i18n="col2Item4"><strong>Preuves :</strong> tests de restauration propre et de panne multiprocessus ; soak prolongé et acceptation Beta à compléter.</li>
+          <li data-i18n="col2Item1"><strong>Réseau DEVNET :</strong> pair complet de découverte et transport P2P avec admission IP française.</li>
+          <li data-i18n="col2Item2"><strong>Bureau :</strong> intégration de Mail, Files et Identity ; publication, récupération et reconstruction des index.</li>
+          <li data-i18n="col2Item3"><strong>Stockage :</strong> confirmations signées, audits et contrôles GET/BLAKE3. Les versions déployées et leurs preuves sont suivies dans le registre d’implémentation.</li>
+          <li data-i18n="col2Item4"><strong>Périmètre :</strong> réseau de développement ; les essais techniques ne constituent pas l’ouverture d’un service public.</li>
         </ul>
       </article>
 
       <!-- Column 3: Planned -->
       <article class="status-card planned">
         <div class="status-card-header">
-          <h3 data-i18n="col3Title">Étapes ultérieures</h3>
-          <span class="badge-planned" data-i18n="badgePlanned">PLUS TARD</span>
+          <h3 data-i18n="col3Title">Prochaines étapes</h3>
+          <span class="badge-planned" data-i18n="badgePlanned">PRÉPARATION</span>
         </div>
         <ul class="status-list">
-          <li data-i18n="col3Item1"><strong>Validation facultative :</strong> signature ajoutée après exécution locale par une identité au-delà de 10 000 000 AUTH. Chaque nœud ré-exécute ; aucun effet canonique ni pouvoir PoA.</li>
-          <li data-i18n="col3Item2"><strong>Montée en charge :</strong> tests prolongés des pièces jointes et du stockage partagé déjà intégrés.</li>
+          <li data-i18n="col3Item1"><strong>Acceptation desktop :</strong> installations propres, parcours Mail/Files et récupération sur un autre ordinateur.</li>
+          <li data-i18n="col3Item2"><strong>Endurance et durabilité :</strong> essais prolongés, pertes de fournisseurs et deux répliques distantes indépendantes pour la cible Beta.</li>
           <li data-i18n="col3Item3"><strong>Sauvegarde :</strong> application post-Beta du même graphe chiffré, avec restauration vérifiable.</li>
-          <li data-i18n="col3Item4"><strong>Beta puis service public :</strong> coûts opérationnels mesurés, revue de sécurité, critères UX et exploitation documentée avant ouverture.</li>
+          <li data-i18n="col3Item4"><strong>Ouverture publique :</strong> revue de sécurité, critères UX, procédures d’exploitation et support.</li>
         </ul>
       </article>
     </div>
@@ -973,7 +959,7 @@
     <div class="section-header">
       <div class="section-label" data-i18n="faqLabel">Questions fréquentes</div>
       <h2 class="section-title" data-i18n="faqTitle">Comprendre CYBOU.</h2>
-      <p class="section-description" data-i18n="faqDesc">Ce qui fonctionne sur DEV, ce qui reste à construire et les garanties de sécurité.</p>
+      <p class="section-description" data-i18n="faqDesc">Ce qui fonctionne sur DEVNET, ce qui reste à construire et les garanties de sécurité.</p>
     </div>
 
     <div class="faq-grid">
@@ -1036,7 +1022,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-4" aria-hidden="true">
-          <p data-i18n="faqA3">Un nom .cybou (ex: alice.cybou) est votre identifiant lisible inaliénable. La phrase de 24 mots est votre clé secrète maîtresse : elle vous permet de recréer instantanément votre environnement et vos clés sur n'importe quel ordinateur, sans jamais dépendre d'un mot de passe ou d'un numéro de mobile piratable.</p>
+          <p data-i18n="faqA3">Un nom .cybou est l’adresse lisible de votre Identity. Le coffre portable conserve son AccountID stable et son secret de récupération. La phrase de récupération permet de retrouver les clés correspondantes ; le coffre local est protégé par un mot de passe. Retrouver les messages et fichiers exige aussi leurs publications, des capsules de clé ouvrables et une copie disponible du contenu chiffré.</p>
         </div>
       </article>
 
@@ -1072,7 +1058,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-7" aria-hidden="true">
-          <p data-i18n="faqA7">Le réseau DEV et le code source complet sont actifs et consultables sur GitHub. L'application CYBOU Desktop est actuellement en cours de durcissement et d'intégration continue avant sa distribution publique pour la phase Beta.</p>
+          <p data-i18n="faqA7">Le réseau DEVNET et le code source complet sont actifs et consultables sur GitHub. L'application CYBOU Desktop est actuellement en cours de durcissement et d'intégration continue avant sa distribution publique pour la phase Beta.</p>
         </div>
       </article>
     </div>
