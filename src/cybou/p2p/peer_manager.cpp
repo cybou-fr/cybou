@@ -393,7 +393,8 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
             continue;
         }
         if (session->ProveStorageIdentity()) {
-            peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerStorageId()});
+            peers.push_back(PeerInfo{it->first.first, it->first.second, *session->Peer(), session->PeerStorageId(),
+                session->PeerPayoutBinding()});
         }
         ++it;
     }

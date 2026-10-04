@@ -227,6 +227,9 @@ public:
     /// \return Закэшированный или только что доказанный `StorageId`; `std::nullopt` при любой ошибке challenge/verify.
     std::optional<StorageId> ProveStorageIdentity();
     const std::optional<StorageId>& PeerStorageId() const { return m_peer_storage_id; }
+    /// \brief Payout binding, полученный вместе с доказанным StorageId; STORAGE-подпись уже проверена.
+    /// \details Authorization-подпись проверяет runtime против finalized Identity registry.
+    const std::optional<StoragePayoutBinding>& PeerPayoutBinding() const { return m_peer_payout_binding; }
     HandshakeStatus LastHandshakeStatus() const { return m_handshake_status; }
     /// \brief Отправляет ping с nonce и ожидает ответный pong.
     /// \param nonce Ненулевой echo-marker.
@@ -318,6 +321,7 @@ private:
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
     std::optional<StorageId> m_peer_storage_id;
+    std::optional<StoragePayoutBinding> m_peer_payout_binding;
     std::optional<Hello> m_local;
     /// \brief Финализованная база, для которой уже выдавались attestation'ы этому пиру.
     cybou::Hash256 m_served_attestation_base;

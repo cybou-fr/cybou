@@ -86,9 +86,9 @@ design proposal in [Data assurance and erasure](DATA_ASSURANCE_AND_ERASURE.md).
 - Concentration: large operators capturing placements. Mitigated by random
   assignment without capacity weighting; the M6 simulation keeps the 5 largest
   of 1000 mixed nodes below 17% of replicas up to 70% demand.
-- Sybil splitting: the same uniform selection pays an operator who splits one
-  large node into many Identities (x73 share in the M6 simulation). AccountCreate
-  PoW is the only current price; the selection rule is an open Beta gate.
+- Sybil splitting: placement selects payout accounts, so many free StorageIds
+  under one account count once. Splitting into many Identities still pays (~95x
+  share in the M6 simulation); AccountCreate PoW is its only price, an open Beta gate.
 - PoA as aggregator: a dishonest PoA can misreport service; Beta accepts this
   explicit trust, bounded by escrow limits and conservation checks.
 

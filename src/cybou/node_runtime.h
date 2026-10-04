@@ -515,6 +515,8 @@ public:
         uint16_t port{0};
         /// \brief StorageId, доказанный этим peer по challenge-response.
         std::array<unsigned char, 32> storage_id{};
+        /// \brief Payout-аккаунт, если binding проверен против finalized Identity registry (DEC-280).
+        std::optional<AccountId> payout_account;
     };
     /// \brief Возвращает storage-capable peer sessions с уже доказанным StorageId.
     /// \return Список доступных storage endpoints.
@@ -542,6 +544,9 @@ public:
     /// \param message Домен-специфичное сообщение, привязанное к handshake/challenge.
     /// \return Proof bytes либо std::nullopt, если локальный storage signer недоступен.
     std::optional<std::vector<unsigned char>> SignStorageProof(std::span<const unsigned char> message) const;
+    /// \brief Payout binding этого узла: StorageId -> AccountID локальной Identity (DEC-282).
+    /// \return Binding, подписанный STORAGE- и Authorization-ключом, либо std::nullopt без Identity.
+    std::optional<StoragePayoutBinding> LocalStoragePayoutBinding() const;
     /// \brief Запрашивает у peer authorization proof для already finalized chunk.
     /// \return Authorization proof либо std::nullopt, если session недоступна/peer отказал.
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProofFromStorageEndpoint(

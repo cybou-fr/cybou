@@ -142,8 +142,15 @@ std::int64_t NowMs()
         std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+/// Экономическая идентичность provider'а: payout-аккаунт, а без binding — сам StorageId (DEC-280).
+std::array<unsigned char, 32> EconomicIdentity(const StorageEndpoint& provider)
+{
+    return provider.payout_account.value_or(provider.storage_id);
+}
+
 /// Равномерное CSPRNG-перемешивание; false означает отказ системного RNG.
-bool Shuffle(std::vector<StorageEndpoint>& items)
+template <typename T>
+bool Shuffle(std::vector<T>& items)
 {
     for (std::size_t i = items.size(); i > 1; --i) {
         const std::uint64_t bound = i;
@@ -204,6 +211,11 @@ std::vector<StorageEndpoint> RuntimeStorageTransport::Providers()
     std::vector<StorageEndpoint> providers;
     for (auto& peer : m_runtime.StorageEndpoints()) {
         StorageEndpoint endpoint{peer.storage_id, peer.address, peer.port};
+        if (peer.payout_account) {
+            std::array<unsigned char, 32> account{};
+            std::copy(peer.payout_account->Value().begin(), peer.payout_account->Value().end(), account.begin());
+            endpoint.payout_account = account;
+        }
         if (!HasProvider(providers, endpoint)) providers.push_back(std::move(endpoint));
     }
     return providers;
@@ -535,7 +547,23 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
 
     lock.unlock();
     auto providers = m_transport.Providers();
-    const bool shuffled = Shuffle(providers);
+    // Равный шанс каждой экономической идентичности, а не каждому StorageId: много узлов
+    // одного payout-аккаунта не умножают его долю placements (DEC-280).
+    bool shuffled = Shuffle(providers);
+    std::map<std::array<unsigned char, 32>, std::vector<StorageEndpoint>> groups;
+    std::vector<std::array<unsigned char, 32>> group_order;
+    for (auto& provider : providers) {
+        auto& group = groups[EconomicIdentity(provider)];
+        if (group.empty()) group_order.push_back(EconomicIdentity(provider));
+        group.push_back(std::move(provider));
+    }
+    shuffled = shuffled && Shuffle(group_order);
+    providers.clear();
+    for (const auto& key : group_order) {
+        for (auto& provider : groups[key]) providers.push_back(std::move(provider));
+    }
+    std::map<std::array<unsigned char, 32>, std::array<unsigned char, 32>> identity_of;
+    for (const auto& provider : providers) identity_of.emplace(provider.storage_id, EconomicIdentity(provider));
     lock.lock();
     if (!shuffled) return {.state = DurabilityState::SECURING, .error = "System RNG failure"};
 
@@ -557,10 +585,17 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
 
         const auto proof = commitment->Proof(static_cast<std::uint32_t>(i));
 
+        // Реплики одного чанка — у разных экономических идентичностей; неизвестный сейчас
+        // provider считается своей собственной идентичностью.
+        std::set<std::array<unsigned char, 32>> used_identities;
+        for (const auto& replica : replicas) {
+            const auto known = identity_of.find(replica.storage_id);
+            used_identities.insert(known == identity_of.end() ? replica.storage_id : known->second);
+        }
         for (const auto& provider : providers) {
             if (replicas.size() >= m_target) break;
             // Один provider key считается одной репликой независимо от числа endpoint.
-            if (HasProvider(replicas, provider)) continue;
+            if (HasProvider(replicas, provider) || used_identities.contains(EconomicIdentity(provider))) continue;
 
             const auto op_id = placement.operation_id;
             const auto chunk_id = placement.leaves[i];
@@ -593,6 +628,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                     continue;
                 }
                 replicas.push_back(provider);
+                used_identities.insert(EconomicIdentity(provider));
                 changed = true;
                 (void)Save(placement);
             }

@@ -719,6 +719,7 @@ bool PeerSession::Handshake(const Hello& local)
 {
     m_peer.reset();
     m_peer_storage_id.reset();
+    m_peer_payout_binding.reset();
     m_local.reset();
     m_handshake_status = HandshakeStatus::INVALID_LOCAL;
     if (local.network_binding.IsNull() || local.finalized_tip.IsNull() || local.nonce == 0) return false;
@@ -754,12 +755,23 @@ std::optional<StorageId> PeerSession::ProveStorageIdentity()
     if (RAND_bytes(challenge.data(), challenge.size()) != 1) return std::nullopt;
     if (!Write(Frame{MessageType::STORAGE_PROOF_REQUEST, {challenge.begin(), challenge.end()}})) return std::nullopt;
     const auto response = Read();
-    if (!response || response->type != MessageType::STORAGE_PROOF) return std::nullopt;
+    if (!response || response->type != MessageType::STORAGE_PROOF || response->payload.size() < STORAGE_PROOF_SIZE) {
+        return std::nullopt;
+    }
     auto message = StorageProofMessage(*m_peer, *m_local, m_tls_exporter);
     message.insert(message.end(), challenge.begin(), challenge.end());
+    const std::span<const unsigned char> payload{response->payload};
     // `StorageId` кэшируется только после proof, связанного и с текущим TLS
     // exporter'ом, и со свежим challenge, чтобы endpoint не мог «унаследовать» чужое доказательство.
-    m_peer_storage_id = VerifyStorageProof(response->payload, message);
+    m_peer_storage_id = VerifyStorageProof(payload.first(STORAGE_PROOF_SIZE), message);
+    // Необязательный payout binding следует за proof; неверный binding просто не используется.
+    m_peer_payout_binding.reset();
+    if (m_peer_storage_id && payload.size() > STORAGE_PROOF_SIZE) {
+        auto binding = DecodeStoragePayoutBinding(payload.subspan(STORAGE_PROOF_SIZE));
+        if (binding && VerifyStoragePayoutBindingStorageKey(*binding, m_local->network_binding, *m_peer_storage_id)) {
+            m_peer_payout_binding = std::move(binding);
+        }
+    }
     return m_peer_storage_id;
 }
 
@@ -1170,8 +1182,14 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         if (!m_local || request->payload.size() != 32) return false;
         auto message = StorageProofMessage(*m_local, *m_peer, m_tls_exporter);
         message.insert(message.end(), request->payload.begin(), request->payload.end());
-        const auto proof = runtime.SignStorageProof(message);
-        return proof && Write(Frame{MessageType::STORAGE_PROOF, *proof});
+        auto proof = runtime.SignStorageProof(message);
+        if (!proof) return false;
+        // Узел с разблокированной Identity сообщает payout-аккаунт для placement (DEC-280).
+        if (const auto binding = runtime.LocalStoragePayoutBinding()) {
+            const auto encoded = EncodeStoragePayoutBinding(*binding);
+            proof->insert(proof->end(), encoded.begin(), encoded.end());
+        }
+        return Write(Frame{MessageType::STORAGE_PROOF, *proof});
     }
     if (request->type == MessageType::PUT_AUTHORIZED_CHUNK) {
         if (request->payload.size() < 73) return false;

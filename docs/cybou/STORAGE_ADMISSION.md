@@ -191,11 +191,12 @@ credit and automatic allocation:
   `floor(2V/3)`. Nothing is physically partitioned and `V` is not consensus state.
 - **Admission** (implemented): finality-first admission additionally requires an
   active funded StorageLease. Assignment attestation is PoA's off-chain duty.
-- **Assignment**: secure random shuffle over eligible Full Nodes (valid recently
-  proven StorageId, reachable, budget available, acceptable recent behaviour),
-  taking the first that accepts, then the next distinct StorageId and payout
-  AccountID. The payer never chooses. No scores, top-k, capacity weighting or
-  storage-node role.
+- **Assignment** (implemented): providers are grouped by verified payout account
+  (a StorageId without binding is its own group); groups are taken in uniformly
+  random order and a chunk's replicas go to distinct groups, so many StorageIds of
+  one account count once. No scores, top-k, capacity weighting or storage-node
+  role. Network-side attestation that the payer did not choose remains PoA's
+  off-chain duty.
 - **Evidence** (implemented, M3): the provider association record is the
   durable obligation; signed StorageReceipt; random-offset audits and one full
   GET in eight with ChunkID recomputation; bounded in-memory rolling evidence,

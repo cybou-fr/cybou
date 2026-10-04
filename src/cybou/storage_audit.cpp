@@ -81,6 +81,58 @@ std::vector<unsigned char> StorageReceiptMessage(const cybou::Hash256& network_b
     return message;
 }
 
+std::array<unsigned char, 32> StoragePayoutBindingDigest(const cybou::Hash256& network_binding,
+    const std::array<unsigned char, 32>& storage_id, const AccountId& payout_account)
+{
+    constexpr std::string_view DOMAIN{"CYBOU/STORAGE-PAYOUT-BINDING"};
+    blake3_hasher hasher;
+    blake3_hasher_init(&hasher);
+    blake3_hasher_update(&hasher, DOMAIN.data(), DOMAIN.size());
+    blake3_hasher_update(&hasher, network_binding.begin(), 32);
+    blake3_hasher_update(&hasher, storage_id.data(), storage_id.size());
+    blake3_hasher_update(&hasher, payout_account.Value().begin(), AccountId::SIZE);
+    std::array<unsigned char, 32> digest{};
+    blake3_hasher_finalize(&hasher, digest.data(), digest.size());
+    return digest;
+}
+
+namespace {
+constexpr std::size_t AUTHORIZATION_ED25519_SIG{64};
+constexpr std::size_t AUTHORIZATION_MLDSA_SIG{2420};
+} // namespace
+
+std::vector<unsigned char> EncodeStoragePayoutBinding(const StoragePayoutBinding& binding)
+{
+    std::vector<unsigned char> out(binding.payout_account.Value().begin(), binding.payout_account.Value().end());
+    out.insert(out.end(), binding.authorization.ed25519.begin(), binding.authorization.ed25519.end());
+    out.insert(out.end(), binding.authorization.ml_dsa.begin(), binding.authorization.ml_dsa.end());
+    out.insert(out.end(), binding.storage_proof.begin(), binding.storage_proof.end());
+    return out;
+}
+
+std::optional<StoragePayoutBinding> DecodeStoragePayoutBinding(const std::span<const unsigned char> bytes)
+{
+    constexpr std::size_t prefix{AccountId::SIZE + AUTHORIZATION_ED25519_SIG + AUTHORIZATION_MLDSA_SIG};
+    if (bytes.size() <= prefix) return std::nullopt;
+    const auto account = AccountId::FromBytes(bytes.first(AccountId::SIZE));
+    if (!account) return std::nullopt;
+    StoragePayoutBinding binding{.payout_account = *account};
+    std::copy_n(bytes.begin() + AccountId::SIZE, AUTHORIZATION_ED25519_SIG, binding.authorization.ed25519.begin());
+    binding.authorization.ml_dsa.assign(bytes.begin() + AccountId::SIZE + AUTHORIZATION_ED25519_SIG,
+        bytes.begin() + prefix);
+    binding.storage_proof.assign(bytes.begin() + prefix, bytes.end());
+    return binding;
+}
+
+bool VerifyStoragePayoutBindingStorageKey(const StoragePayoutBinding& binding,
+    const cybou::Hash256& network_binding, const std::array<unsigned char, 32>& storage_id)
+{
+    // Digest уже содержит ожидаемый StorageId, а подпись обязана исходить от ключа с тем же StorageId.
+    const auto digest = StoragePayoutBindingDigest(network_binding, storage_id, binding.payout_account);
+    const auto signer = p2p::VerifyStorageProof(binding.storage_proof, digest);
+    return signer && *signer == storage_id;
+}
+
 std::optional<std::array<unsigned char, 32>> VerifyStorageReceipt(const std::span<const unsigned char> receipt,
     const cybou::Hash256& network_binding, const cybou::Hash256& publication_operation_id,
     const ChunkId& chunk_id, const std::uint32_t stored_size)

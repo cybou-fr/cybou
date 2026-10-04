@@ -53,6 +53,8 @@ struct PeerInfo {
     Hello hello;
     /// \brief Доказанный `StorageId`, если для этой сессии уже выполнялся `STORAGE_PROOF`.
     std::optional<StorageId> storage_id;
+    /// \brief Payout binding этого StorageId; Authorization-подпись ещё не проверена.
+    std::optional<StoragePayoutBinding> payout_binding;
 };
 
 /// \brief Итог отправки операции в конкретный пир или в выбранный маршрут fanout.

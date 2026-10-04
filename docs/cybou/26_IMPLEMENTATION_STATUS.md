@@ -83,10 +83,11 @@ M6 adversarial evidence (`cybou_resource_limits_tests`,
   effective provider count 678/161/43, and every home node receives work.
   Capacity-weighted selection would give the top 1% ~39% and leave 60% of home
   nodes idle at 5% demand;
-- Sybil: splitting one 15 TiB node into 100 Identities of 150 GiB raises its
-  replica share from 0.14% to 10.2% (x73) at 10% demand. Uniform per-StorageId
-  selection therefore rewards splitting; only AccountCreate PoW per Identity
-  prices it today (open question in `25_OPEN_QUESTIONS.md`).
+- Sybil: with selection by payout account (implemented, DEC-280), 100 nodes of
+  150 GiB under one account get 0.11% of replicas, the same as one 15 TiB node;
+  per-StorageId selection would have given them 10.15%. Splitting into 100
+  separate Identities still reaches 10.4% at 10% demand; only AccountCreate PoW
+  prices that (open question in `25_OPEN_QUESTIONS.md`).
 
 ## Evidence limits reviewed on 2026-10-04
 

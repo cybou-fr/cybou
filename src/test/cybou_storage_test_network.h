@@ -64,11 +64,21 @@ public:
         }
     }
 
+    /** Endpoints stay keyed without payout account; Providers() decorates them with it. */
+    static cybou::StorageEndpoint Key(cybou::StorageEndpoint endpoint)
+    {
+        endpoint.payout_account.reset();
+        return endpoint;
+    }
+
     std::vector<cybou::StorageEndpoint> Providers() override
     {
         std::vector<cybou::StorageEndpoint> out;
-        for (const auto& [endpoint, _] : m_providers) {
-            if (!offline.contains(endpoint)) out.push_back(endpoint);
+        for (const auto& [key, _] : m_providers) {
+            if (offline.contains(key)) continue;
+            auto endpoint = key;
+            if (const auto account = payout.find(endpoint.storage_id); account != payout.end()) endpoint.payout_account = account->second;
+            out.push_back(endpoint);
         }
         return out;
     }
@@ -78,16 +88,16 @@ public:
         const cybou::ChunkAuthorizationProof& proof) override
     {
         ++puts;
-        if (offline.contains(provider)) return std::nullopt;
-        return m_providers.at(provider)->PutFinalizedChunk(op_id, chunk_id, bytes, proof);
+        if (offline.contains(Key(provider))) return std::nullopt;
+        return m_providers.at(Key(provider))->PutFinalizedChunk(op_id, chunk_id, bytes, proof);
     }
 
     std::optional<std::vector<unsigned char>> Get(const cybou::StorageEndpoint& provider,
         const cybou::ChunkId& chunk_id) override
     {
-        if (offline.contains(provider)) return std::nullopt;
-        auto bytes = m_providers.at(provider)->GetFinalizedChunk(chunk_id);
-        if (bytes && corrupt.contains(provider) && !bytes->empty()) (*bytes)[0] ^= 0x01;
+        if (offline.contains(Key(provider))) return std::nullopt;
+        auto bytes = m_providers.at(Key(provider))->GetFinalizedChunk(chunk_id);
+        if (bytes && corrupt.contains(Key(provider)) && !bytes->empty()) (*bytes)[0] ^= 0x01;
         return bytes;
     }
 
@@ -98,23 +108,23 @@ public:
             if (*proof_budget==0) return std::nullopt;
             --*proof_budget;
         }
-        if (offline.contains(provider)) return std::nullopt;
-        return m_providers.at(provider)->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);
+        if (offline.contains(Key(provider))) return std::nullopt;
+        return m_providers.at(Key(provider))->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);
     }
 
     std::optional<cybou::StorageAuditAnswer> Audit(const cybou::StorageEndpoint& provider,
         const cybou::StorageAuditChallenge& challenge) override
     {
         ++audits;
-        if (offline.contains(provider)) return std::nullopt;
-        auto answer = m_providers.at(provider)->AnswerStorageAudit(challenge);
-        if (answer.held && corrupt.contains(provider)) answer.response_hash.begin()[0] ^= 0x01;
+        if (offline.contains(Key(provider))) return std::nullopt;
+        auto answer = m_providers.at(Key(provider))->AnswerStorageAudit(challenge);
+        if (answer.held && corrupt.contains(Key(provider))) answer.response_hash.begin()[0] ^= 0x01;
         return answer;
     }
 
     bool Holds(const cybou::StorageEndpoint& provider, const cybou::ChunkId& id) const
     {
-        return m_providers.at(provider)->HasFinalizedChunk(id);
+        return m_providers.at(Key(provider))->HasFinalizedChunk(id);
     }
 
     std::vector<cybou::StorageEndpoint> Endpoints() const
@@ -135,6 +145,8 @@ public:
     std::set<cybou::StorageEndpoint> offline;
     std::set<cybou::StorageEndpoint> corrupt;
     std::set<cybou::StorageEndpoint> lagging;
+    /** Verified payout account per StorageId, as the runtime transport would report it. */
+    std::map<std::array<unsigned char, 32>, std::array<unsigned char, 32>> payout;
     int puts{0};
     int audits{0};
     std::optional<std::size_t> proof_budget;

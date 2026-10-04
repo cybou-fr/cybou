@@ -5,9 +5,10 @@
 /// \file
 /// \brief M6 release gates: provider concentration and Sybil simulations of placement policy (DEC-280/283).
 ///
-/// The model mirrors StorageService::Place: for every chunk the eligible providers are taken in
-/// uniformly random order and the first ones with free provider budget (`2V/3`) receive distinct
-/// replicas. Units are 1 GiB placements so a thousand-node network runs in milliseconds.
+/// The model mirrors StorageService::Place: for every chunk a uniformly random economic identity
+/// (payout account) with free provider budget (`2V/3`) is chosen, then one of its nodes, and the
+/// replicas of a chunk go to distinct accounts. Units are 1 GiB placements so a thousand-node
+/// network runs in milliseconds.
 
 #include <boost/test/unit_test.hpp>
 
@@ -26,7 +27,8 @@ struct Node {
     int owner{0};       ///< Economic identity (payout account) for Sybil accounting.
 };
 
-enum class Policy { UNIFORM, CAPACITY_WEIGHTED };
+/// BY_ACCOUNT is the implemented rule (DEC-280); the others are rejected alternatives for comparison.
+enum class Policy { BY_ACCOUNT, BY_STORAGE_ID, CAPACITY_WEIGHTED };
 
 /// Places `chunks` logical GiB with `replicas` distinct providers each; returns false if the network is full.
 bool Place(std::vector<Node>& nodes, uint64_t chunks, int replicas, Policy policy, std::mt19937_64& rng)
@@ -39,11 +41,23 @@ bool Place(std::vector<Node>& nodes, uint64_t chunks, int replicas, Policy polic
             std::erase_if(eligible, [&](size_t i) { return nodes[i].used >= nodes[i].budget; });
             std::vector<size_t> candidates;
             for (const auto i : eligible) {
-                if (std::find(chosen.begin(), chosen.end(), i) == chosen.end()) candidates.push_back(i);
+                const bool same_account = std::any_of(chosen.begin(), chosen.end(),
+                    [&](size_t c) { return nodes[c].owner == nodes[i].owner; });
+                if (std::find(chosen.begin(), chosen.end(), i) == chosen.end() &&
+                    (policy != Policy::BY_ACCOUNT || !same_account)) candidates.push_back(i);
             }
             if (candidates.empty()) return false;
             size_t pick{0};
-            if (policy == Policy::UNIFORM) {
+            if (policy == Policy::BY_ACCOUNT) {
+                std::vector<int> owners;
+                for (const auto i : candidates) owners.push_back(nodes[i].owner);
+                std::sort(owners.begin(), owners.end());
+                owners.erase(std::unique(owners.begin(), owners.end()), owners.end());
+                const int owner = owners[rng() % owners.size()];
+                std::vector<size_t> members;
+                for (const auto i : candidates) if (nodes[i].owner == owner) members.push_back(i);
+                pick = members[rng() % members.size()];
+            } else if (policy == Policy::BY_STORAGE_ID) {
                 pick = candidates[rng() % candidates.size()];
             } else {
                 // The rejected alternative: chance proportional to free capacity.
@@ -119,7 +133,7 @@ BOOST_AUTO_TEST_CASE(uniform_placement_keeps_home_nodes_working_and_bounds_conce
         auto weighted = MixedNetwork();
         const auto chunks = static_cast<uint64_t>(TotalBudget(uniform) * demand / 2);
         std::mt19937_64 rng_a{42}, rng_b{42};
-        BOOST_REQUIRE(Place(uniform, chunks, 2, Policy::UNIFORM, rng_a));
+        BOOST_REQUIRE(Place(uniform, chunks, 2, Policy::BY_ACCOUNT, rng_a));
         BOOST_REQUIRE(Place(weighted, chunks, 2, Policy::CAPACITY_WEIGHTED, rng_b));
         const auto u = Measure(uniform, 10);
         const auto w = Measure(weighted, 10);
@@ -139,35 +153,40 @@ BOOST_AUTO_TEST_CASE(uniform_placement_keeps_home_nodes_working_and_bounds_conce
 
 BOOST_AUTO_TEST_CASE(sybil_splitting_gains_share_only_by_paying_per_identity)
 {
-    // One actor offers the same 15 TiB either as one node or split into 100 Identities of
-    // 150 GiB. Under uniform selection splitting multiplies the actor's share; the protocol
-    // charges AccountCreate PoW per Identity and pays only distinct payout accounts per chunk,
-    // so the measured gain is the price that PoW has to cover (DEC-280/283).
-    const auto run = [](bool split) {
+    // One actor offers the same 15 TiB as one node, as 100 nodes under one payout account
+    // (free: StorageIds cost nothing), or as 100 Identities with their own accounts (each
+    // priced by AccountCreate PoW). Selection by payout account removes the free gain (DEC-280).
+    enum class Shape { ONE_NODE, NODES_ONE_ACCOUNT, IDENTITIES };
+    const auto run = [](Shape shape, Policy policy) {
         std::vector<Node> nodes;
         for (int i{0}; i < 900; ++i) nodes.push_back({150 * 2 / 3, 0, i});
-        if (split) {
-            for (int i{0}; i < 100; ++i) nodes.push_back({150 * 2 / 3, 0, -1});
-        } else {
+        if (shape == Shape::ONE_NODE) {
             nodes.push_back({15 * 1024 * 2 / 3, 0, -1});
+        } else {
+            for (int i{0}; i < 100; ++i) nodes.push_back({150 * 2 / 3, 0, shape == Shape::IDENTITIES ? -1 - i : -1});
         }
         std::mt19937_64 rng{7};
         const auto chunks = static_cast<uint64_t>(TotalBudget(nodes) * 0.1 / 2);
-        BOOST_REQUIRE(Place(nodes, chunks, 2, Policy::UNIFORM, rng));
+        BOOST_REQUIRE(Place(nodes, chunks, 2, policy, rng));
         uint64_t actor{0}, total{0};
         for (const auto& node : nodes) {
             total += node.used;
-            if (node.owner == -1) actor += node.used;
+            if (node.owner < 0) actor += node.used;
         }
         return static_cast<double>(actor) / total;
     };
-    const double single = run(false);
-    const double split = run(true);
-    BOOST_TEST_MESSAGE("actor share: one node " << single << ", 100 Sybil identities " << split
-        << ", gain x" << split / single);
-    BOOST_CHECK_GT(split, single);
-    // The split actor behaves like 100 ordinary honest nodes: never more than its node count share.
-    BOOST_CHECK_LE(split, 100.0 / 1000.0 + 0.01);
+    const double single = run(Shape::ONE_NODE, Policy::BY_ACCOUNT);
+    const double farm = run(Shape::NODES_ONE_ACCOUNT, Policy::BY_ACCOUNT);
+    const double farm_by_storage_id = run(Shape::NODES_ONE_ACCOUNT, Policy::BY_STORAGE_ID);
+    const double identities = run(Shape::IDENTITIES, Policy::BY_ACCOUNT);
+    BOOST_TEST_MESSAGE("actor share: one node " << single << " | 100 nodes one account " << farm
+        << " (by StorageId would be " << farm_by_storage_id << ") | 100 Identities " << identities);
+    // Free splitting into StorageIds no longer pays: the farm counts as one account.
+    BOOST_CHECK_LE(farm, single * 1.5 + 1e-9);
+    BOOST_CHECK_GT(farm_by_storage_id, 20 * single);
+    // Splitting into real Identities still gains share; AccountCreate PoW is its price (open gate).
+    BOOST_CHECK_GT(identities, 20 * single);
+    BOOST_CHECK_LE(identities, 100.0 / 1000.0 + 0.01);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -3,6 +3,7 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/storage_service.h>
+#include <cybou/keystore.h>
 
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/inbound_server.h>
@@ -320,6 +321,36 @@ BOOST_AUTO_TEST_CASE(shadow_accounting_credits_verified_intervals_and_survives_r
     }
 }
 
+BOOST_AUTO_TEST_CASE(replicas_go_to_distinct_payout_accounts_and_nodes_of_one_account_count_once)
+{
+    // DEC-280: three StorageIds of one payout account are one economic identity. With two
+    // replicas per chunk, the single node of the second account must hold every chunk.
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture, 4};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    const auto endpoints = network.Endpoints();
+    std::array<unsigned char, 32> farm{}, independent{};
+    farm.fill(0xFA);
+    independent.fill(0x1D);
+    for (std::size_t i{0}; i < 3; ++i) network.payout[endpoints[i].storage_id] = farm;
+    network.payout[endpoints[3].storage_id] = independent;
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+    const auto placement = storage.DescribePlacement(content.operation_id);
+    BOOST_REQUIRE(placement);
+    for (std::size_t leaf{0}; leaf < content.leaves.size(); ++leaf) {
+        BOOST_CHECK(network.Holds(endpoints[3], content.leaves[leaf]));
+        int farm_replicas{0};
+        for (const auto& replica : placement->replicas[leaf]) {
+            for (std::size_t i{0}; i < 3; ++i) farm_replicas += replica.storage_id == endpoints[i].storage_id ? 1 : 0;
+        }
+        BOOST_CHECK_EQUAL(farm_replicas, 1);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(surviving_remote_copy_repairs_every_chunk_without_local_cache)
 {
     CybouServiceTestFixture fixture;
@@ -492,6 +523,8 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_p2p)
         endpoints.emplace_back(loopback.to_string(), servers.back()->Port());
         providers.push_back(std::move(provider));
     }
+    // A provider whose node runs an Identity binds its StorageId to that account (DEC-282).
+    providers[0]->SetValidationSigner(std::make_shared<cybou::CybouKeyStoreValidationSigner>(identity->GetKeyStore()));
     for (auto& server : servers) listeners.emplace_back([&stopping, s = server.get()] { s->Run(stopping); });
     {
         // A Full Node whose runtime reaches providers only through CYBOU P2P.
@@ -507,6 +540,24 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_p2p)
         std::set<std::array<unsigned char, 32>> proven;
         for (const auto& peer : client.StorageEndpoints()) proven.insert(peer.storage_id);
         BOOST_CHECK(proven == (std::set{*providers[0]->LocalStorageId(), *providers[1]->LocalStorageId()}));
+
+        // The client verified the binding against the finalized Authorization key; a node
+        // without an unlocked Identity announces no payout account.
+        for (const auto& peer : client.StorageEndpoints()) {
+            if (peer.storage_id == *providers[0]->LocalStorageId()) {
+                BOOST_CHECK(peer.payout_account == identity->GetKeyStore().GetAccountId());
+            } else {
+                BOOST_CHECK(!peer.payout_account);
+            }
+        }
+        const auto binding = providers[0]->LocalStoragePayoutBinding();
+        BOOST_REQUIRE(binding);
+        BOOST_CHECK(binding->payout_account == *identity->GetKeyStore().GetAccountId());
+        BOOST_CHECK(cybou::VerifyStoragePayoutBindingStorageKey(*binding, fixture.runtime->GetNetworkBinding(),
+            *providers[0]->LocalStorageId()));
+        BOOST_CHECK(!cybou::VerifyStoragePayoutBindingStorageKey(*binding, fixture.runtime->GetNetworkBinding(),
+            *providers[1]->LocalStorageId()));
+        BOOST_CHECK(cybou::DecodeStoragePayoutBinding(cybou::EncodeStoragePayoutBinding(*binding)) == binding);
 
         cybou::RuntimeStorageTransport transport{client};
         cybou::StorageService storage{*fixture.runtime, transport, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};

@@ -50,6 +50,8 @@ struct StorageEndpoint {
     std::string address;
     /// \brief Последний известный TCP/UDP порт этого provider endpoint.
     std::uint16_t port{0};
+    /// \brief Проверенный payout-аккаунт provider'а (DEC-280); не сохраняется в placement.
+    std::optional<std::array<unsigned char, 32>> payout_account;
     auto operator<=>(const StorageEndpoint&) const = default;
 };
 

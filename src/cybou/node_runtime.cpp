@@ -289,15 +289,53 @@ bool CybouNodeRuntime::HasFinalizedChunk(const ChunkId& chunk_id) const
 
 std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoints() const
 {
-    std::lock_guard p2p_lock(m_p2p_mutex);
+    std::vector<p2p::PeerInfo> peers;
+    {
+        std::lock_guard p2p_lock(m_p2p_mutex);
+        if (!m_peer_manager) return {};
+        peers = m_peer_manager->StorageEndpoints();
+    }
+    std::optional<CybouState> state;
+    {
+        std::lock_guard lock(m_mutex);
+        const auto loaded = m_store.LoadState();
+        if (loaded && loaded.state) state = std::move(*loaded.state);
+    }
     std::vector<StorageEndpoint> endpoints;
-    if (!m_peer_manager) return endpoints;
-    const auto peers = m_peer_manager->StorageEndpoints();
     endpoints.reserve(peers.size());
     for (const auto& peer : peers) {
-        if (peer.storage_id) endpoints.push_back({peer.address, peer.port, *peer.storage_id});
+        if (!peer.storage_id) continue;
+        StorageEndpoint endpoint{peer.address, peer.port, *peer.storage_id};
+        // Payout-аккаунт признаётся только по текущему finalized Authorization-ключу аккаунта.
+        if (peer.payout_binding && state) {
+            const auto* record = state->identities.Find(peer.payout_binding->payout_account);
+            const auto digest = StoragePayoutBindingDigest(m_network_binding, *peer.storage_id,
+                peer.payout_binding->payout_account);
+            if (record && VerifyIdentityMessage(record->authorization_key, peer.payout_binding->authorization, digest)) {
+                endpoint.payout_account = peer.payout_binding->payout_account;
+            }
+        }
+        endpoints.push_back(std::move(endpoint));
     }
     return endpoints;
+}
+
+std::optional<StoragePayoutBinding> CybouNodeRuntime::LocalStoragePayoutBinding() const
+{
+    ValidationSignerRef signer;
+    {
+        std::lock_guard lock{m_mutex};
+        signer = m_validation_signer;
+    }
+    const auto account = signer ? signer->Account() : std::nullopt;
+    const auto storage_id = LocalStorageId();
+    if (!account || !storage_id) return std::nullopt;
+    const auto digest = StoragePayoutBindingDigest(m_network_binding, *storage_id, *account);
+    auto authorization = signer->SignAuthorization(digest);
+    auto storage_proof = SignStorageProof(digest);
+    if (!authorization || !storage_proof) return std::nullopt;
+    return StoragePayoutBinding{.payout_account = *account, .authorization = std::move(*authorization),
+        .storage_proof = std::move(*storage_proof)};
 }
 
 std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStorageEndpoint(const std::string& address,
