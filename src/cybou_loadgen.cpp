@@ -12,6 +12,7 @@
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/p2p/geo_database_updater.h>
+#include <cybou/name_service.h>
 #include <boost/asio/ip/address.hpp>
 #include <algorithm>
 #include <atomic>
@@ -19,14 +20,45 @@
 #include <csignal>
 #include <fstream>
 #include <iostream>
+#include <map>
+#include <numeric>
 #include <memory>
 #include <set>
+#include <sstream>
 #include <thread>
 
 using namespace std::chrono_literals;
 namespace {
 std::atomic_bool stop{false};
 void Stop(int) { stop=true; }
+
+using Clock=std::chrono::steady_clock;
+double Ms(Clock::duration d) { return std::chrono::duration<double,std::milli>(d).count(); }
+
+/** Latency samples of one measured stage (milliseconds). */
+struct Samples {
+    std::vector<double> values;
+    void Add(double ms) { values.push_back(ms); }
+    std::string Json() const {
+        auto sorted=values;
+        std::sort(sorted.begin(),sorted.end());
+        const auto at=[&](double q) { return sorted.empty() ? 0.0 : sorted[std::min(sorted.size()-1,static_cast<size_t>(q*(sorted.size()-1)+0.5))]; };
+        const auto mean=sorted.empty() ? 0.0 : std::accumulate(sorted.begin(),sorted.end(),0.0)/sorted.size();
+        std::ostringstream out;
+        out.setf(std::ios::fixed); out.precision(1);
+        out << "{\"count\":" << sorted.size() << ",\"mean_ms\":" << mean << ",\"p50_ms\":" << at(0.5)
+            << ",\"p95_ms\":" << at(0.95) << ",\"max_ms\":" << (sorted.empty() ? 0.0 : sorted.back()) << '}';
+        return out.str();
+    }
+};
+
+/** Run-wide measurements written by --metrics. */
+struct Metrics {
+    Samples wallet_finality, publication_finality, publication_protected;
+    std::map<std::string,uint64_t> submitted, failed;
+    uint64_t bytes_published{0};
+};
+Metrics metrics;
 struct Client {
     std::atomic_bool caught_up_known_peers{false};
     std::unique_ptr<cybou::CybouNodeService> node;
@@ -43,6 +75,8 @@ struct Client {
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
     std::chrono::steady_clock::time_point next_audit{std::chrono::steady_clock::now()+30s};
+    /** Submission time of each job not yet finalized / protected (for --metrics). */
+    std::map<std::string,Clock::time_point> awaiting_finality, awaiting_protection;
     Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target, bool recovery) {
         std::filesystem::create_directories(dir);
@@ -112,6 +146,14 @@ struct Client {
                 durability && durability->state == cybou::DurabilityState::PROTECTED && replicas >= storage->RemoteReplicaTarget()
                 ? cybou::PublicationJobPhase::PROTECTED : result->finalized_height ? cybou::PublicationJobPhase::SECURING : result->phase;
             if (current != cybou::PublicationJobPhase::PROTECTED) done=false;
+            if (result->finalized_height) if (auto it=awaiting_finality.find(job); it!=awaiting_finality.end()) {
+                metrics.publication_finality.Add(Ms(Clock::now()-it->second));
+                awaiting_finality.erase(it);
+            }
+            if (current==cybou::PublicationJobPhase::PROTECTED) if (auto it=awaiting_protection.find(job); it!=awaiting_protection.end()) {
+                metrics.publication_protected.Add(Ms(Clock::now()-it->second));
+                awaiting_protection.erase(it);
+            }
             if (!phases.contains(job) || phases[job]!=current) {
                 events->Write(current==cybou::PublicationJobPhase::PROTECTED ? cybou::NodeEvent::content_protected : cybou::NodeEvent::content_securing,
                     {{"operation_id",result->operation_id.GetHex()},{"replicas",uint64_t{replicas}},{"target",uint64_t{storage->RemoteReplicaTarget()}}});
@@ -166,11 +208,16 @@ int main(int argc,char* argv[]) {
                 " [--expected-incoming-mail N] [--expected-files N] (recovery submits no operations)\n"
                 " [--recipient NAME.cybou --subject TEXT --body TEXT] (mail profile)\n"
                 " [--operations-per-second 1] [--file-size 4MiB] [--duration 15m] [--replicas 2]\n"
+                " [--metrics FILE] (JSON: latencies p50/p95/max, throughput, failures)\n"
+                " [--funder DIR] [--fund-each N] (pay N CYBOU from the funder to each synthetic Identity)\n"
+                "cybou-loadgen --profile funder --network devnet --data-dir DIR --peer IP:PORT --password-file FILE\n"
+                " [--funder-name battlefunder] creates the funder Identity, claims its name and prints its balance;\n"
+                " send it CYBOU once from the Central Authority desktop.\n"
                 "Financial profiles require pre-funded synthetic vaults; onboarding funds only System Balance.\n";
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
@@ -190,7 +237,7 @@ int main(int argc,char* argv[]) {
             throw std::runtime_error("recipient, subject and body require the mail profile");
         if (recipient_name.empty() && (opts.Has("subject") || opts.Has("body")))
             throw std::runtime_error("custom mail content requires an external recipient");
-        if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed","recovery"}.contains(profile)) throw std::runtime_error("unknown profile");
+        if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed","recovery","funder"}.contains(profile)) throw std::runtime_error("unknown profile");
         const auto expected_mail=cybou::cli::Number(opts.Get("expected-incoming-mail","0"),0,100000);
         const auto expected_files=cybou::cli::Number(opts.Get("expected-files","0"),0,100000);
         if (profile=="recovery" && !expected_mail && !expected_files)
@@ -202,6 +249,24 @@ int main(int argc,char* argv[]) {
 #ifdef _WIN32
         std::signal(SIGBREAK,Stop);
 #endif
+        if (profile=="funder") {
+            // One funded Identity per test site, named so the desktop can pay it.
+            const auto label=opts.Get("funder-name","battlefunder");
+            Client funder{*net,std::filesystem::path{opts.Require("data-dir")},peer,password,target,false};
+            if (!funder.identity->GetFinalizedPrimaryName()) {
+                cybou::CybouNameService names{funder.node->Runtime(),funder.identity->GetKeyStore(),
+                    std::filesystem::path{opts.Require("data-dir")}/"identity.vault"};
+                const auto claimed=names.ClaimSync(label,password,{},std::chrono::minutes{5});
+                if (!claimed.success) throw std::runtime_error("funder name claim failed: "+claimed.message);
+            }
+            cybou::crypto::CleanseMemory(password.data(),password.size());
+            const auto [balance,system_balance]=funder.wallet->GetBalances();
+            std::cout << "funder=" << label << ".cybou account=" << funder.identity->GetAccountId()->Value().GetHex()
+                      << " balance=" << balance << " system_balance=" << system_balance << '\n';
+            return 0;
+        }
+        std::unique_ptr<Client> funder;
+        if (opts.Has("funder")) funder=std::make_unique<Client>(*net,std::filesystem::path{opts.Require("funder")},peer,password,target,false);
         std::vector<std::unique_ptr<Client>> clients;
         for (uint64_t i=0;i<count && !stop;++i) clients.push_back(std::make_unique<Client>(*net,std::filesystem::path{opts.Require("data-dir")}/("identity-"+std::to_string(i)),peer,password,target,profile=="recovery"));
         cybou::crypto::CleanseMemory(password.data(),password.size());
@@ -217,6 +282,24 @@ int main(int argc,char* argv[]) {
             if (!accounts_ready) std::this_thread::sleep_for(100ms);
         }
         if (stop) return 1;
+        if (const auto fund=cybou::cli::Number(opts.Get("fund-each","0"),0,1'000'000'000); fund) {
+            if (!funder) throw std::runtime_error("--fund-each requires --funder");
+            for (const auto& client : clients) {
+                if (static_cast<uint64_t>(client->wallet->GetBalances().first)>=fund) continue;
+                const auto result=funder->wallet->SendPayment(*client->identity->GetAccountId(),fund);
+                if (!result) throw std::runtime_error("funding payment failed; send CYBOU to the funder first");
+                const auto deadline=Clock::now()+180s;
+                while (!stop && client->node->Runtime().GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED &&
+                       funder->node->Runtime().GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED) {
+                    if (Clock::now()>deadline) throw std::runtime_error("funding finality timeout");
+                    std::this_thread::sleep_for(100ms);
+                }
+                while (!stop && static_cast<uint64_t>(client->wallet->GetBalances().first)<fund) {
+                    if (Clock::now()>deadline) throw std::runtime_error("funding sync timeout");
+                    std::this_thread::sleep_for(100ms);
+                }
+            }
+        }
         if (profile=="payments" || profile=="system-locks" || profile=="mixed")
             for (const auto& client : clients) if (client->wallet->GetBalances().first==0)
                 throw std::runtime_error("financial profile requires pre-funded DEVNET identities; no test funding bypass exists");
@@ -234,9 +317,11 @@ int main(int argc,char* argv[]) {
             if (client.jobs.size()>=100000) throw std::runtime_error("publication job ceiling reached");
             auto actual=profile;
             if (actual=="mixed") actual=submitted%10<5 ? "payments" : submitted%10<7 ? "mail" : submitted%10<9 ? "files" : "system-locks";
+            ++metrics.submitted[actual];
             if (actual=="payments" || actual=="system-locks") {
+                const auto submitted_at=Clock::now();
                 auto result=actual=="payments" ? client.wallet->SendPayment(*clients[(submitted+1)%count]->identity->GetAccountId(),1) : client.wallet->LockToSystemBalance(1);
-                if (!result) throw std::runtime_error("wallet load operation failed");
+                if (!result) { ++metrics.failed[actual]; throw std::runtime_error("wallet load operation failed"); }
                 // Do not allocate a replacement nonce while delivery is uncertain.
                 auto deadline=std::chrono::steady_clock::now()+120s;
                 while (!stop && client.node->Runtime().GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED) {
@@ -244,6 +329,7 @@ int main(int argc,char* argv[]) {
                     if (std::chrono::steady_clock::now()>deadline) throw std::runtime_error("wallet finality timeout");
                     std::this_thread::sleep_for(100ms);
                 }
+                metrics.wallet_finality.Add(Ms(Clock::now()-submitted_at));
             } else {
                 const auto job="load-"+std::to_string(client.jobs.size());
                 cybou::PublicationJobResult result;
@@ -279,8 +365,10 @@ int main(int argc,char* argv[]) {
                     contents.emplace_back(0,std::move(content));
                     result=client.publication->PublishFiles(job,batch,std::move(contents));
                 }
-                if (result.phase==cybou::PublicationJobPhase::NEEDS_ATTENTION) throw std::runtime_error("publication submission failed: "+result.error);
+                if (result.phase==cybou::PublicationJobPhase::NEEDS_ATTENTION) { ++metrics.failed[actual]; throw std::runtime_error("publication submission failed: "+result.error); }
                 client.jobs.push_back(job);
+                client.awaiting_finality[job]=client.awaiting_protection[job]=Clock::now();
+                if (actual=="files") metrics.bytes_published+=size;
             }
             ++submitted; next+=std::chrono::microseconds{1000000/rate};
             while (!stop && std::chrono::steady_clock::now()<next) std::this_thread::sleep_for(20ms);
@@ -311,7 +399,25 @@ int main(int argc,char* argv[]) {
             if (!done) std::this_thread::sleep_for(1s);
         }
         for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping);
+        const auto elapsed_s=std::chrono::duration<double>(Clock::now()-start).count();
         std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : "INTERRUPTED") << '\n';
+        if (opts.Has("metrics")) {
+            std::ofstream out{opts.Get("metrics")};
+            const auto counts=[](const std::map<std::string,uint64_t>& m) {
+                std::string s{"{"};
+                for (const auto& [k,v] : m) s+=(s.size()>1 ? "," : "")+std::string{"\""}+k+"\":"+std::to_string(v);
+                return s+"}";
+            };
+            out << "{\"profile\":\"" << profile << "\",\"identities\":" << count << ",\"result\":\"" << (done ? "PASS" : "INTERRUPTED")
+                << "\",\"elapsed_s\":" << elapsed_s << ",\"operations\":" << submitted
+                << ",\"operations_per_s\":" << (elapsed_s>0 ? submitted/elapsed_s : 0.0)
+                << ",\"bytes_published\":" << metrics.bytes_published
+                << ",\"submitted\":" << counts(metrics.submitted) << ",\"failed\":" << counts(metrics.failed)
+                << ",\"wallet_submit_to_final\":" << metrics.wallet_finality.Json()
+                << ",\"publication_submit_to_final\":" << metrics.publication_finality.Json()
+                << ",\"publication_submit_to_protected\":" << metrics.publication_protected.Json() << "}\n";
+            if (!out) throw std::runtime_error("cannot write metrics");
+        }
         return done ? 0 : 1;
     } catch (const std::exception& e) { std::cerr << "cybou-loadgen: " << e.what() << '\n'; return 1; }
 }
