@@ -68,3 +68,8 @@ First priorities: processing/metadata inventory and roles; risk scenarios and
 control selection; recovery/retention objectives; incident and breach response;
 then technical conformance gaps. No owners or compliance status are invented by
 this document.
+
+The initial code-backed inventory is
+[`DATA_PROCESSING_INVENTORY.md`](DATA_PROCESSING_INVENTORY.md). It distinguishes
+reviewed data paths and implementation lifecycles from unresolved operational
+retention, processing roles and legal applicability.

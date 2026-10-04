@@ -5,6 +5,10 @@ not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 
 ## Governing security and privacy gates
 
+[`DATA_PROCESSING_INVENTORY.md`](DATA_PROCESSING_INVENTORY.md) records initial
+code evidence. Deployment log rotation, GUI exports, processing roles and
+retention decisions remain open; pool/cache bounds are not retention schedules.
+
 Apply [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) before narrowing work
 to technical primitives: establish processing/metadata inventory and roles,
 RGPD and NIS2 applicability, ANSSI risk scenarios, ISO control selection,
