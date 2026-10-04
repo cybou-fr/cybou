@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(finalized_chunk_store_binds_persistent_database_to_network)
         cybou::FinalizedChunkStore store(blobs, path, network_binding, 4096, true);
         BOOST_CHECK(store.UsedBytes() == 0);
     }
-    BOOST_CHECK_THROW((cybou::FinalizedChunkStore{blobs, path, other_network_id, 4096}), std::invalid_argument);
+    BOOST_CHECK_THROW((cybou::FinalizedChunkStore{blobs, path, other_network_id, 4096}), cybou::NetworkMismatchError);
     {
         cybou::FinalizedChunkStore store(blobs, path, network_binding, 4096);
         BOOST_CHECK(store.UsedBytes() == 0);
