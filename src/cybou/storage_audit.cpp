@@ -7,8 +7,11 @@
 
 #include <cybou/storage_audit.h>
 
+#include <cybou/p2p/session.h>
+
 #include <blake3.h>
 #include <algorithm>
+#include <string_view>
 
 namespace cybou {
 
@@ -64,6 +67,27 @@ bool VerifyStorageAuditProof(
     }
     const auto expected = ComputeStorageAuditResponse(chunk_bytes, proof.byte_offset, proof.nonce);
     return expected && *expected == proof.response_hash;
+}
+
+std::vector<unsigned char> StorageReceiptMessage(const cybou::Hash256& network_binding,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id, const std::uint32_t stored_size)
+{
+    constexpr std::string_view DOMAIN{"CYBOU/STORAGE-RECEIPT"};
+    std::vector<unsigned char> message(DOMAIN.begin(), DOMAIN.end());
+    message.insert(message.end(), network_binding.begin(), network_binding.end());
+    message.insert(message.end(), publication_operation_id.begin(), publication_operation_id.end());
+    message.insert(message.end(), chunk_id.begin(), chunk_id.end());
+    for (int i = 0; i < 4; ++i) message.push_back(static_cast<unsigned char>(stored_size >> (8 * i)));
+    return message;
+}
+
+std::optional<std::array<unsigned char, 32>> VerifyStorageReceipt(const std::span<const unsigned char> receipt,
+    const cybou::Hash256& network_binding, const cybou::Hash256& publication_operation_id,
+    const ChunkId& chunk_id, const std::uint32_t stored_size)
+{
+    // Receipt использует тот же формат key+signature, что и `STORAGE_PROOF`, но другой домен сообщения.
+    return p2p::VerifyStorageProof(receipt,
+        StorageReceiptMessage(network_binding, publication_operation_id, chunk_id, stored_size));
 }
 
 } // namespace cybou

@@ -102,6 +102,16 @@ public:
         return m_providers.at(provider)->GetFinalizedChunkAuthorizationProof(operation_id, chunk_id);
     }
 
+    std::optional<cybou::StorageAuditAnswer> Audit(const cybou::StorageEndpoint& provider,
+        const cybou::StorageAuditChallenge& challenge) override
+    {
+        ++audits;
+        if (offline.contains(provider)) return std::nullopt;
+        auto answer = m_providers.at(provider)->AnswerStorageAudit(challenge);
+        if (answer.held && corrupt.contains(provider)) answer.response_hash.begin()[0] ^= 0x01;
+        return answer;
+    }
+
     bool Holds(const cybou::StorageEndpoint& provider, const cybou::ChunkId& id) const
     {
         return m_providers.at(provider)->HasFinalizedChunk(id);
@@ -126,6 +136,7 @@ public:
     std::set<cybou::StorageEndpoint> corrupt;
     std::set<cybou::StorageEndpoint> lagging;
     int puts{0};
+    int audits{0};
     std::optional<std::size_t> proof_budget;
 
 private:

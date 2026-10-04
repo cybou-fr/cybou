@@ -244,6 +244,44 @@ BOOST_AUTO_TEST_CASE(storage_loss_and_corruption_are_repaired)
     BOOST_CHECK(healed.state == cybou::DurabilityState::PROTECTED);
 }
 
+BOOST_AUTO_TEST_CASE(audits_record_evidence_and_drop_a_provider_with_wrong_answers)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture, 3};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+
+    // Each counted replica came with one verified receipt.
+    std::uint64_t receipts{0};
+    for (const auto& [_, evidence] : storage.ProviderEvidence()) receipts += evidence.receipts;
+    BOOST_CHECK_EQUAL(receipts, content.leaves.size() * cybou::BETA_REMOTE_REPLICA_TARGET);
+
+    cybou::StorageEndpoint bad;
+    for (const auto& endpoint : network.Endpoints()) {
+        if (network.Holds(endpoint, content.leaves.front())) { bad = endpoint; break; }
+    }
+    BOOST_REQUIRE(bad.port != 0);
+    network.corrupt.insert(bad);
+    for (int i{0}; i < 8; ++i) BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
+    // Mostly cheap random-offset audits; a wrong answer is a failure whatever path caught it.
+    BOOST_CHECK_GT(network.audits, 0);
+    const auto evidence = storage.ProviderEvidence();
+    BOOST_REQUIRE(evidence.contains(bad.storage_id));
+    BOOST_CHECK_GT(evidence.at(bad.storage_id).failures, 0U);
+    for (const auto& [storage_id, entry] : evidence) {
+        if (storage_id != bad.storage_id) BOOST_CHECK_GT(entry.successes, 0U);
+    }
+    const auto placement = storage.DescribePlacement(content.operation_id);
+    BOOST_REQUIRE(placement);
+    for (const auto& replicas : placement->replicas) {
+        for (const auto& replica : replicas) BOOST_CHECK(!cybou::SameProvider(replica, bad));
+    }
+}
+
 BOOST_AUTO_TEST_CASE(surviving_remote_copy_repairs_every_chunk_without_local_cache)
 {
     CybouServiceTestFixture fixture;
@@ -448,6 +486,36 @@ BOOST_AUTO_TEST_CASE(runtime_transport_places_and_fetches_over_p2p)
             }
             BOOST_REQUIRE(proof);
             BOOST_CHECK(cybou::VerifyChunkAuthorizationProof(*publication, leaf, *proof));
+        }
+        // Random-offset audit over CYBOU P2P answers only from exact admitted bytes.
+        const auto local = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
+        BOOST_REQUIRE(local);
+        for (const auto& peer : client.StorageEndpoints()) {
+            const cybou::StorageEndpoint provider{peer.storage_id, peer.address, peer.port};
+            cybou::StorageAuditChallenge challenge{.chunk_id = content.leaves.front(), .byte_offset = local->size() / 2};
+            challenge.nonce.fill(0x42);
+            const auto answer = transport.Audit(provider, challenge);
+            BOOST_REQUIRE(answer);
+            BOOST_CHECK(answer->held);
+            BOOST_CHECK(answer->response_hash ==
+                *cybou::ComputeStorageAuditResponse(*local, challenge.byte_offset, challenge.nonce));
+            challenge.chunk_id.fill(0x99);
+            const auto missing = transport.Audit(provider, challenge);
+            BOOST_REQUIRE(missing);
+            BOOST_CHECK(!missing->held);
+        }
+        // Every counted replica retains a receipt signed by its own StorageId.
+        for (const auto& provider : providers) {
+            const auto storage_id = *provider->LocalStorageId();
+            const auto receipt = application_db.Get("storage/receipt/" + content.operation_id.GetHex() + '/' +
+                cybou::Hash256{std::span<const unsigned char, 32>{content.leaves.front()}}.GetHex() + '/' +
+                cybou::Hash256{std::span<const unsigned char, 32>{storage_id}}.GetHex());
+            BOOST_REQUIRE(receipt);
+            const auto size = static_cast<std::uint32_t>(local->size());
+            BOOST_CHECK(cybou::VerifyStorageReceipt(*receipt, fixture.runtime->GetNetworkBinding(),
+                content.operation_id, content.leaves.front(), size) == storage_id);
+            BOOST_CHECK(!cybou::VerifyStorageReceipt(*receipt, fixture.runtime->GetNetworkBinding(),
+                content.operation_id, content.leaves.front(), size + 1));
         }
         const auto original = fixture.runtime->GetChunkBlobStore().Get(content.leaves.back());
         BOOST_REQUIRE(original);

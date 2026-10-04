@@ -90,9 +90,9 @@ endpoints is one replica.
 Placement records live in the Identity's encrypted Application DB as an
 operational cache. `Audit` re-reads every recorded replica, drops missing or
 BLAKE3-mismatching ones and repairs from any valid copy. `Fetch` returns the
-local blob or the first valid provider copy and caches it. No signed storage
-receipts exist yet; ACK plus periodic GET/hash verification is the first
-durability path.
+local blob or the first valid provider copy and caches it. A replica counts only
+with a provider-signed storage receipt; background audits use random-offset
+challenges and periodic full GET/hash verification.
 
 ## 2. Common ChunkStore
 

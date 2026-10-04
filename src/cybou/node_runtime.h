@@ -21,6 +21,7 @@
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/storage_audit.h>
 #include <cybou/operation_relay.h>
 #include <cybou/secret32.h>
 #include <cybou/validation_pool.h>
@@ -492,6 +493,13 @@ public:
     /// \brief Проверяет наличие finalized chunk в локальном storage.
     /// \param chunk_id Идентификатор чанка.
     bool HasFinalizedChunk(const ChunkId& chunk_id) const;
+    /// \brief Отвечает на storage audit challenge по admitted chunk (DEC-276).
+    /// \return Ответ provider; `held == false`, если admitted chunk отсутствует или повреждён.
+    StorageAuditAnswer AnswerStorageAudit(const StorageAuditChallenge& challenge) const;
+    /// \brief Отправляет audit challenge только session с ожидаемым доказанным StorageId.
+    /// \return Ответ provider либо std::nullopt, если session недоступна или ответ некорректен.
+    std::optional<StorageAuditAnswer> AuditChunkAtStorageEndpoint(const std::string& address, uint16_t port,
+        const std::array<unsigned char, 32>& storage_id, const StorageAuditChallenge& challenge);
     /// \brief Connected storage peer и доказанный им по запросу StorageId.
     struct StorageEndpoint {
         /// \brief Числовой адрес peer session.

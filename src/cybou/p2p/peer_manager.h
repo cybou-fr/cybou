@@ -133,6 +133,9 @@ public:
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const std::string& address, uint16_t port, const StorageId& storage_id,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
+    /// \brief Отправляет storage audit challenge конкретному storage-пиру.
+    std::optional<StorageAuditAnswer> AuditChunk(const std::string& address, uint16_t port,
+        const StorageId& storage_id, const StorageAuditChallenge& challenge);
     /// \brief Разрывает все текущие соединения.
     /// \post Сессии и их gossip frontier удалены; новый HELLO восстановит frontier.
     void DisconnectAll();

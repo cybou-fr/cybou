@@ -11,6 +11,7 @@
 #include <cybou/account_id.h>
 #include <cybou/poa_finalizer.h>
 #include <cybou/finalized_chunk_store.h>
+#include <cybou/storage_audit.h>
 #include <cybou/operation_relay.h>
 #include <cybou/validation_pool.h>
 
@@ -71,9 +72,11 @@ enum class MessageType : uint8_t {
     VALIDATION_ATTESTATION_POLL = 24,   ///< Запрос одной `Validation` attestation из gossip-очереди пира.
     VALIDATION_ATTESTATION = 25,        ///< Gossip-сообщение с одной attestation.
     STORAGE_PROOF_REQUEST = 26,         ///< Challenge для on-demand доказательства `StorageId`.
+    STORAGE_AUDIT_CHALLENGE = 27,       ///< Random-offset audit challenge по admitted chunk (DEC-276).
+    STORAGE_AUDIT_RESPONSE = 28,        ///< Ответ на audit challenge по exact stored bytes.
 };
 /// \brief Наибольший допустимый wire-код сообщения в текущем baseline.
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_PROOF_REQUEST)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_AUDIT_RESPONSE)};
 
 /// \brief Стабильная identity storage-провайдера: BLAKE3 от его STORAGE public key.
 using StorageId = std::array<unsigned char, 32>;
@@ -266,6 +269,8 @@ public:
     /// \brief Запрашивает Merkle proof авторизации chunk'а.
     std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
+    /// \brief Отправляет storage audit challenge и возвращает ответ provider.
+    std::optional<StorageAuditAnswer> AuditChunk(const StorageAuditChallenge& challenge);
     /// \brief Обслуживает одно входящее сообщение сервера и выполняет локальный ответ.
     /// \return `false`, если сессию следует считать завершенной или небезопасной для продолжения.
     bool ServeNext(CybouNodeRuntime& runtime);

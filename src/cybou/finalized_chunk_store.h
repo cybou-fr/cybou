@@ -50,6 +50,8 @@ enum class ChunkAdmissionStatus {
 struct ChunkAdmissionResult {
     /// \brief Итоговый статус попытки admission.
     ChunkAdmissionStatus status{ChunkAdmissionStatus::INVALID};
+    /// \brief Подписанный provider `StorageReceipt` (DEC-276); пуст вне успешного admission.
+    std::vector<unsigned char> receipt;
     explicit operator bool() const
     {
         return status == ChunkAdmissionStatus::STORED || status == ChunkAdmissionStatus::ALREADY_STORED;

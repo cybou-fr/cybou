@@ -351,8 +351,9 @@ Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
 notarization and canonical reliability coefficients are unimplemented target
 work requiring an evidence/privacy/accounting design before implementation.
-Current operational checks use GET plus ChunkID verification; no new consensus
-proof or receipt format is introduced here.
+Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
+random-offset audits and periodic full GET plus ChunkID verification; none of
+it is consensus state or a canonical proof.
 
 Finalized revocation stops admission and releases the author's canonical quota.
 Compliant providers journal purge of unshared chunks, retaining physical byte

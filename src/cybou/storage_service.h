@@ -12,10 +12,12 @@
 #include <cybou/chunk_id.h>
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/private_application_store.h>
+#include <cybou/storage_audit.h>
 #include <cybou/hash256.h>
 
 #include <compare>
 #include <condition_variable>
+#include <functional>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -74,6 +76,16 @@ public:
     /// \return Proof либо \c std::nullopt, если peer его не знает или transport не получил ответ.
     virtual std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) = 0;
+    /// \brief Отправляет random-offset audit challenge конкретному provider (DEC-276).
+    /// \return Ответ provider либо \c std::nullopt, если transport не поддерживает audit или не получил ответ;
+    /// тогда StorageService проверяет реплику полным GET.
+    virtual std::optional<StorageAuditAnswer> Audit(const StorageEndpoint& provider,
+        const StorageAuditChallenge& challenge)
+    {
+        (void)provider;
+        (void)challenge;
+        return std::nullopt;
+    }
 };
 
 /// \brief Реализация StorageTransport поверх P2P peer runtime.
@@ -90,9 +102,30 @@ public:
         const ChunkId& chunk_id) override;
     std::optional<ChunkAuthorizationProof> GetProof(const StorageEndpoint& provider,
         const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id) override;
+    std::optional<StorageAuditAnswer> Audit(const StorageEndpoint& provider,
+        const StorageAuditChallenge& challenge) override;
 
 private:
     CybouNodeRuntime& m_runtime;
+};
+
+/// \brief Один полный GET из `STORAGE_FULL_GET_ONE_IN` проверок реплики; остальные — random-offset audit.
+inline constexpr std::uint32_t STORAGE_FULL_GET_ONE_IN{8};
+/// \brief Предел числа providers в локальной rolling evidence одного StorageService.
+inline constexpr std::size_t MAX_TRACKED_STORAGE_PROVIDERS{1024};
+
+/// \brief Локальная off-chain evidence по одному provider (DEC-276); не consensus state.
+struct StorageProviderEvidence {
+    /// \brief Проверенные подписанные receipts после admission.
+    std::uint64_t receipts{0};
+    /// \brief Успешные проверки реплик (audit или полный GET).
+    std::uint64_t successes{0};
+    /// \brief Неуспешные проверки: отказ, неверный ответ или недоступность.
+    std::uint64_t failures{0};
+    /// \brief Успешные полные GET с пересчётом ChunkID.
+    std::uint64_t full_verifications{0};
+    /// \brief Unix-время (ms) последнего успеха, последней неудачи и последнего полного GET.
+    std::int64_t last_success_ms{0}, last_failure_ms{0}, last_full_verification_ms{0};
 };
 
 /// \brief Логическое состояние durability публикации.
@@ -230,6 +263,9 @@ public:
     /// \par Потокобезопасность
     /// Потокобезопасен для конкурентных вызовов одного объекта.
     std::uint8_t RemoteReplicaTarget() const { return m_target; }
+    /// \brief Снимок rolling evidence по providers, с которыми работал этот сервис.
+    /// \details Evidence живёт в памяти процесса и ограничена `MAX_TRACKED_STORAGE_PROVIDERS`.
+    std::map<std::array<unsigned char, 32>, StorageProviderEvidence> ProviderEvidence();
 
 private:
     struct Placement;
@@ -239,6 +275,14 @@ private:
     PublicationDurability Summarize(const Placement& placement) const;
     std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,
         std::span<const StorageEndpoint> preferred);
+    /// Проверяет одну реплику audit challenge или полным GET; вызывается без m_mutex.
+    bool CheckReplica(const StorageEndpoint& provider, const ChunkId& chunk_id,
+        const std::optional<std::vector<unsigned char>>& local_bytes, bool force_full);
+    void RecordEvidence(const std::array<unsigned char, 32>& storage_id,
+        const std::function<void(StorageProviderEvidence&)>& update);
+    bool SaveReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
+        const StorageEndpoint& provider, std::span<const unsigned char> receipt);
+    void EraseReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id, const StorageEndpoint& provider);
 
     CybouNodeRuntime& m_runtime;
     StorageTransport& m_transport;
@@ -250,6 +294,8 @@ private:
     /// Следующий чанк для аудита по каждой публикации; перезапуск с нуля безопасен.
     std::map<cybou::Hash256, std::size_t> m_audit_cursor;
     std::size_t m_audit_placement_cursor{0};
+    std::mutex m_evidence_mutex;
+    std::map<std::array<unsigned char, 32>, StorageProviderEvidence> m_evidence;
     std::vector<cybou::Hash256> PlacementIndex() const;
 };
 

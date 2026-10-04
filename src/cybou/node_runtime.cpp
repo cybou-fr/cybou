@@ -239,8 +239,15 @@ ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id,
     const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    const auto result = m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
+    auto result = m_finalized_chunk_store->PutChunk(publication_operation_id, chunk_id, stored_bytes, proof,
         [this](const cybou::Hash256& operation_id) { return FindFinalizedRootPublication(operation_id); });
+    // Receipt подписывается только после durable admission; без подписи admission не подтверждается.
+    if (result) {
+        auto receipt = SignStorageProof(StorageReceiptMessage(m_network_binding, publication_operation_id, chunk_id,
+            static_cast<std::uint32_t>(stored_bytes.size())));
+        if (receipt) result.receipt = std::move(*receipt);
+        else result.status = ChunkAdmissionStatus::STORAGE_ERROR;
+    }
     if (m_config.event_writer) m_config.event_writer->Write(result ? NodeEvent::chunk_put : NodeEvent::chunk_verify_failed,
         {{"operation_id",publication_operation_id.GetHex()},{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{stored_bytes.size()}},
          {"error_code",std::uint64_t{static_cast<unsigned>(result.status)}}});
@@ -253,6 +260,15 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetFinalizedChunk(co
     if (m_config.event_writer) m_config.event_writer->Write(bytes ? NodeEvent::chunk_get : NodeEvent::chunk_verify_failed,
         {{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{bytes ? bytes->size() : 0}}});
     return bytes;
+}
+
+StorageAuditAnswer CybouNodeRuntime::AnswerStorageAudit(const StorageAuditChallenge& challenge) const
+{
+    // Отвечаем только по admitted provider-копии: локальный cache не является обязательством.
+    const auto bytes = m_finalized_chunk_store->GetChunk(challenge.chunk_id);
+    const auto proof = bytes ? CreateStorageAuditProof(challenge, *bytes) : std::nullopt;
+    if (!proof) return {};
+    return {.held = true, .response_hash = proof->response_hash};
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetFinalizedChunkAuthorizationProof(
@@ -296,6 +312,14 @@ std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStorageE
     std::lock_guard p2p_lock(m_p2p_mutex);
     if (!m_peer_manager) return std::nullopt;
     return m_peer_manager->GetChunkById(address, port, storage_id, chunk_id);
+}
+
+std::optional<StorageAuditAnswer> CybouNodeRuntime::AuditChunkAtStorageEndpoint(const std::string& address,
+    const uint16_t port, const std::array<unsigned char, 32>& storage_id, const StorageAuditChallenge& challenge)
+{
+    std::lock_guard p2p_lock(m_p2p_mutex);
+    if (!m_peer_manager) return std::nullopt;
+    return m_peer_manager->AuditChunk(address, port, storage_id, challenge);
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStorageEndpoint(

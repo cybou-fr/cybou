@@ -445,6 +445,20 @@ std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
     return result;
 }
 
+std::optional<StorageAuditAnswer> PeerManager::AuditChunk(const std::string& address, const uint16_t port,
+    const StorageId& storage_id, const StorageAuditChallenge& challenge)
+{
+    Endpoint endpoint;
+    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
+    if (!session) return std::nullopt;
+    auto result = session->AuditChunk(challenge);
+    if (!session->Peer()) {
+        m_peers.erase(endpoint);
+        m_peer_finalized_heights.erase(endpoint);
+    }
+    return result;
+}
+
 PeerSession* PeerManager::FindStorageSession(
     const std::string& address, const uint16_t port, const std::optional<StorageId>& storage_id, Endpoint* endpoint)
 {

@@ -306,6 +306,8 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::OP_POLL:
     case MessageType::VALIDATION_ATTESTATION_POLL:
     case MessageType::VALIDATION_ATTESTATION:
+    case MessageType::STORAGE_AUDIT_CHALLENGE:
+    case MessageType::STORAGE_AUDIT_RESPONSE:
         return true;
     default:
         return false;
@@ -1040,9 +1042,17 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
         }
     }
     const auto response = Read(deadline);
-    if (!response || response->type != MessageType::CHUNK_ADMISSION_RESULT || response->payload.size() != 1 ||
+    if (!response || response->type != MessageType::CHUNK_ADMISSION_RESULT || response->payload.empty() ||
         response->payload[0] > static_cast<uint8_t>(ChunkAdmissionStatus::STORAGE_ERROR)) return std::nullopt;
-    return ChunkAdmissionResult{static_cast<ChunkAdmissionStatus>(response->payload[0])};
+    ChunkAdmissionResult result{static_cast<ChunkAdmissionStatus>(response->payload[0])};
+    if (!result) return response->payload.size() == 1 ? std::optional{result} : std::nullopt;
+    // Успешный admission обязан нести receipt того же доказанного StorageId (DEC-276).
+    result.receipt.assign(response->payload.begin() + 1, response->payload.end());
+    if (!m_local || !m_peer_storage_id) return std::nullopt;
+    const auto signer = VerifyStorageReceipt(result.receipt, m_local->network_binding, publication_operation_id,
+        chunk_id, static_cast<uint32_t>(stored_bytes.size()));
+    if (!signer || *signer != *m_peer_storage_id) return std::nullopt;
+    return result;
 }
 
 std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkId& chunk_id)
@@ -1107,6 +1117,32 @@ std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
     return proof;
 }
 
+std::optional<StorageAuditAnswer> PeerSession::AuditChunk(const StorageAuditChallenge& challenge)
+{
+    if (!m_peer || IsZeroChunkId(challenge.chunk_id)) return std::nullopt;
+    const auto unavailable = [this]() -> std::optional<StorageAuditAnswer> {
+        m_peer.reset();
+        m_peer_storage_id.reset();
+        return std::nullopt;
+    };
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    std::vector<unsigned char> payload(challenge.chunk_id.begin(), challenge.chunk_id.end());
+    Put64(payload, challenge.byte_offset);
+    payload.insert(payload.end(), challenge.nonce.begin(), challenge.nonce.end());
+    if (!Write(Frame{MessageType::STORAGE_AUDIT_CHALLENGE, payload}, deadline)) return unavailable();
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::STORAGE_AUDIT_RESPONSE || response->payload.empty()) {
+        return unavailable();
+    }
+    if (response->payload[0] == 0) {
+        return response->payload.size() == 1 ? std::optional<StorageAuditAnswer>{StorageAuditAnswer{}} : unavailable();
+    }
+    if (response->payload[0] != 1 || response->payload.size() != 33) return unavailable();
+    StorageAuditAnswer answer{.held = true};
+    std::copy_n(response->payload.begin() + 1, 32, answer.response_hash.begin());
+    return answer;
+}
+
 bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
 {
     if (!m_peer) return false;
@@ -1116,7 +1152,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     }
     std::shared_ptr<void> transfer;
     if (request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||
-        request->type == MessageType::GET_CHUNK_BY_ID || request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
+        request->type == MessageType::GET_CHUNK_BY_ID || request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF ||
+        request->type == MessageType::STORAGE_AUDIT_CHALLENGE) {
         boost::system::error_code ec;
         const auto remote = m_socket.remote_endpoint(ec);
         if (ec || !(transfer = runtime.AcquireStorageTransfer(remote.address().to_string()))) return false;
@@ -1164,8 +1201,23 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
         }
         const auto result = runtime.PutFinalizedChunk(publication_id, chunk_id, bytes, proof);
-        return Write(Frame{MessageType::CHUNK_ADMISSION_RESULT,
-            {static_cast<unsigned char>(result.status)}} , deadline);
+        std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
+        if (result) response.insert(response.end(), result.receipt.begin(), result.receipt.end());
+        return Write(Frame{MessageType::CHUNK_ADMISSION_RESULT, response}, deadline);
+    }
+    if (request->type == MessageType::STORAGE_AUDIT_CHALLENGE) {
+        if (request->payload.size() != 72) return false;
+        StorageAuditChallenge challenge;
+        std::copy_n(request->payload.begin(), 32, challenge.chunk_id.begin());
+        challenge.byte_offset = Read64(request->payload.data() + 32);
+        std::copy_n(request->payload.begin() + 40, 32, challenge.nonce.begin());
+        // Ответ читает весь chunk для BLAKE3-проверки, поэтому бюджет учитывает его размер.
+        const auto size = runtime.FinalizedChunkSize(challenge.chunk_id).value_or(0);
+        if (!admit_storage(IngressBudget::Work::STORAGE_PROOF, size + request->payload.size())) return false;
+        const auto answer = runtime.AnswerStorageAudit(challenge);
+        std::vector<unsigned char> response{static_cast<unsigned char>(answer.held)};
+        if (answer.held) response.insert(response.end(), answer.response_hash.begin(), answer.response_hash.end());
+        return Write(Frame{MessageType::STORAGE_AUDIT_RESPONSE, response});
     }
     if (request->type == MessageType::GET_CHUNK_BY_ID) {
         if (request->payload.size() != 32) return false;

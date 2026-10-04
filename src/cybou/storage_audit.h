@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <vector>
 
 namespace cybou {
 
@@ -55,6 +56,27 @@ std::optional<StorageAuditProof> CreateStorageAuditProof(
 bool VerifyStorageAuditProof(
     const StorageAuditProof& proof,
     std::span<const unsigned char> chunk_bytes);
+
+/// \brief Ответ provider на `StorageAuditChallenge` (DEC-276).
+struct StorageAuditAnswer {
+    /// \brief \c false: provider заявил, что admitted chunk у него отсутствует.
+    bool held{false};
+    /// \brief `ComputeStorageAuditResponse` по exact bytes; значим только при \p held.
+    cybou::Hash256 response_hash{};
+};
+
+/// \brief Каноническое сообщение off-chain `StorageReceipt` (домен `CYBOU/STORAGE-RECEIPT`).
+/// \details Provider подписывает его STORAGE-ключом после admission; receipt доказывает,
+/// что держатель ключа принял exact chunk finalized публикации, но не будущую доступность.
+std::vector<unsigned char> StorageReceiptMessage(const cybou::Hash256& network_binding,
+    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id, std::uint32_t stored_size);
+
+/// \brief Проверяет подписанный receipt и возвращает StorageId подписавшего provider.
+/// \param receipt Payload формата `STORAGE_PROOF`: STORAGE public key и hybrid-подпись.
+/// \return StorageId либо \c std::nullopt при любой ошибке формата или подписи.
+std::optional<std::array<unsigned char, 32>> VerifyStorageReceipt(std::span<const unsigned char> receipt,
+    const cybou::Hash256& network_binding, const cybou::Hash256& publication_operation_id,
+    const ChunkId& chunk_id, std::uint32_t stored_size);
 
 } // namespace cybou
 

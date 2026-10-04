@@ -58,12 +58,12 @@ A local cache does not count as a remote replica.
 
 This is the durability target, not proof of physical independence in the
 current implementation. Placement deduplicates proven StorageIds; separate
-keys can belong to one host, disk or operator. Admission ACKs are operational
-observations, not durable signed obligations. StorageService checks replica
-availability with full-chunk GET and BLAKE3 verification; bounded background
-passes cover only their selected chunks. The separate randomized audit
-primitive is not integrated into that path. A successful check is evidence
-for those bytes at that time, not continuous storage. Repair requires a valid
+keys can belong to one host, disk or operator. A replica counts only with a
+receipt signed by its proven StorageId; the receipt proves acceptance, not
+later availability. Bounded background passes check selected chunks with
+random-offset audits against the owner's local copy, and one in eight checks
+(or any check without a local copy) uses full GET and BLAKE3. A successful
+check is evidence for those bytes at that time, not continuous storage. Repair requires a valid
 surviving copy and an available destination; a lost final copy cannot be repaired.
 
 Finalized revocation removes admission authorization. Compliant providers

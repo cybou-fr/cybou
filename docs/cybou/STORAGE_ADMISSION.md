@@ -16,8 +16,9 @@ Canonical state currently records publications, roots and recipient capsules,
 not provider placements or audit reliability. Mutual-audit transport, PoA
 notarization and canonical reliability coefficients are unimplemented target
 work requiring an evidence/privacy/accounting design before implementation.
-Current operational checks use GET plus ChunkID verification; no new consensus
-proof or receipt format is introduced here.
+Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
+random-offset audits and periodic full GET plus ChunkID verification; none of
+it is consensus state or a canonical proof.
 
 Finalized revocation stops admission and releases the author's canonical quota.
 Compliant providers journal purge of unshared chunks, retaining physical byte
@@ -189,9 +190,10 @@ credit and automatic allocation:
   taking the first that accepts, then the next distinct StorageId and payout
   AccountID. The payer never chooses. No scores, top-k, capacity weighting or
   storage-node role.
-- **Evidence**: durable obligation, signed StorageReceipt, frequent random-offset
-  audits and rarer full GET with ChunkID recomputation; bounded rolling evidence,
-  off-chain only.
+- **Evidence** (implemented, M3): the provider association record is the
+  durable obligation; signed StorageReceipt; random-offset audits and one full
+  GET in eight with ChunkID recomputation; bounded in-memory rolling evidence,
+  off-chain only. Persistence for shadow accounting arrives with M4.
 - **Settlement**: daily PoA-signed StorageSettlement pays verified providers
   from escrow. Failed audit -> no payment, replica degraded, repair.
 - **Protected**: active publication + active funded lease + two remote

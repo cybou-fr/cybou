@@ -91,6 +91,20 @@ private:
     std::size_t m_offset{0};
 };
 
+/// Подписанные receipts хранятся отдельно от placement, по одному на (публикация, чанк, provider).
+std::string ReceiptKey(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
+    const std::array<unsigned char, 32>& storage_id)
+{
+    return "storage/receipt/" + operation_id.GetHex() + '/' + cybou::Hash256{std::span<const unsigned char, 32>{chunk_id}}.GetHex() + '/' +
+        cybou::Hash256{std::span<const unsigned char, 32>{storage_id}}.GetHex();
+}
+
+std::int64_t NowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 /// Равномерное CSPRNG-перемешивание; false означает отказ системного RNG.
 bool Shuffle(std::vector<StorageEndpoint>& items)
 {
@@ -177,6 +191,12 @@ std::optional<ChunkAuthorizationProof> RuntimeStorageTransport::GetProof(const S
 {
     return m_runtime.GetChunkAuthorizationProofFromStorageEndpoint(provider.address, provider.port,
         provider.storage_id, publication_operation_id, chunk_id);
+}
+
+std::optional<StorageAuditAnswer> RuntimeStorageTransport::Audit(const StorageEndpoint& provider,
+    const StorageAuditChallenge& challenge)
+{
+    return m_runtime.AuditChunkAtStorageEndpoint(provider.address, provider.port, provider.storage_id, challenge);
 }
 
 /* ---- StorageService ---- */
@@ -518,7 +538,20 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                               : " did not acknowledge chunk admission");
                 continue;
             }
+            // Реплика засчитывается только с receipt, подписанным именно этим StorageId (DEC-276).
+            const auto signer = VerifyStorageReceipt(admitted->receipt, m_runtime.GetNetworkBinding(), op_id,
+                chunk_id, static_cast<std::uint32_t>(bytes->size()));
+            if (!signer || *signer != provider.storage_id) {
+                admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
+                    " returned no valid storage receipt";
+                continue;
+            }
+            RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; });
             if (!HasProvider(replicas, provider)) {
+                if (!SaveReceipt(op_id, chunk_id, provider, admitted->receipt)) {
+                    admission_error = "Cannot save storage receipt";
+                    continue;
+                }
                 replicas.push_back(provider);
                 changed = true;
                 (void)Save(placement);
@@ -558,14 +591,15 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         const auto chunk_id = placement->leaves[i];
         std::vector<StorageEndpoint> healthy;
         healthy.reserve(replicas.size());
+        lock.unlock();
+        // Локальная копия позволяет проверить дешёвый random-offset ответ без выгрузки чанка.
+        auto local = m_runtime.GetChunkBlobStore().Get(chunk_id);
+        if (local && ComputeChunkId(*local) != chunk_id) local.reset();
         for (const auto& provider : replicas) {
-            lock.unlock();
-            const auto bytes = m_transport.Get(provider, chunk_id);
-            lock.lock();
-            if (bytes && ComputeChunkId(*bytes) == chunk_id) {
-                healthy.push_back(provider);
-            }
+            if (CheckReplica(provider, chunk_id, local, false)) healthy.push_back(provider);
+            else EraseReceipt(operation_id, chunk_id, provider);
         }
+        lock.lock();
         if (healthy.size() != replicas.size()) {
             replicas = std::move(healthy);
             changed = true;
@@ -599,14 +633,13 @@ PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
         const auto chunk_id = placement->leaves[i];
         std::vector<StorageEndpoint> healthy;
         healthy.reserve(replicas.size());
+        lock.unlock();
+        // Полный audit публикации всегда проверяет exact bytes полным GET.
         for (const auto& provider : replicas) {
-            lock.unlock();
-            const auto bytes = m_transport.Get(provider, chunk_id);
-            lock.lock();
-            if (bytes && ComputeChunkId(*bytes) == chunk_id) {
-                healthy.push_back(provider);
-            }
+            if (CheckReplica(provider, chunk_id, std::nullopt, true)) healthy.push_back(provider);
+            else EraseReceipt(operation_id, chunk_id, provider);
         }
+        lock.lock();
         if (healthy.size() != replicas.size()) {
             replicas = std::move(healthy);
             changed = true;
@@ -633,6 +666,78 @@ std::optional<StorageService::PlacementView> StorageService::DescribePlacement(c
     auto placement = Load(operation_id);
     if (!placement) return std::nullopt;
     return PlacementView{std::move(placement->leaves), std::move(placement->replicas)};
+}
+
+bool StorageService::CheckReplica(const StorageEndpoint& provider, const ChunkId& chunk_id,
+    const std::optional<std::vector<unsigned char>>& local_bytes, const bool force_full)
+{
+    // Отказ RNG не наказывает provider: проверка просто становится полным GET.
+    std::uint32_t draw{0};
+    std::uint64_t offset_draw{0};
+    StorageAuditChallenge challenge{.chunk_id = chunk_id};
+    const bool full = force_full || !local_bytes || local_bytes->empty() ||
+        RAND_bytes(reinterpret_cast<unsigned char*>(&draw), sizeof(draw)) != 1 ||
+        RAND_bytes(reinterpret_cast<unsigned char*>(&offset_draw), sizeof(offset_draw)) != 1 ||
+        RAND_bytes(challenge.nonce.data(), challenge.nonce.size()) != 1 ||
+        draw % STORAGE_FULL_GET_ONE_IN == 0;
+    if (!full) {
+        challenge.byte_offset = offset_draw % local_bytes->size();
+        const auto expected = ComputeStorageAuditResponse(*local_bytes, challenge.byte_offset, challenge.nonce);
+        if (const auto answer = m_transport.Audit(provider, challenge)) {
+            const bool ok = expected && answer->held && answer->response_hash == *expected;
+            RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
+                if (ok) { ++e.successes; e.last_success_ms = NowMs(); }
+                else { ++e.failures; e.last_failure_ms = NowMs(); }
+            });
+            return ok;
+        }
+        // Transport без audit или без ответа: проверяем exact bytes полным GET.
+    }
+    const auto bytes = m_transport.Get(provider, chunk_id);
+    const bool ok = bytes && ComputeChunkId(*bytes) == chunk_id;
+    RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
+        const auto now = NowMs();
+        if (ok) { ++e.successes; ++e.full_verifications; e.last_success_ms = now; e.last_full_verification_ms = now; }
+        else { ++e.failures; e.last_failure_ms = now; }
+    });
+    return ok;
+}
+
+void StorageService::RecordEvidence(const std::array<unsigned char, 32>& storage_id,
+    const std::function<void(StorageProviderEvidence&)>& update)
+{
+    std::lock_guard lock{m_evidence_mutex};
+    auto it = m_evidence.find(storage_id);
+    if (it == m_evidence.end()) {
+        if (m_evidence.size() >= MAX_TRACKED_STORAGE_PROVIDERS) {
+            // Вытесняем provider с самой старой активностью: evidence ограничена и не является state.
+            const auto oldest = std::min_element(m_evidence.begin(), m_evidence.end(), [](const auto& a, const auto& b) {
+                return std::max(a.second.last_success_ms, a.second.last_failure_ms) <
+                    std::max(b.second.last_success_ms, b.second.last_failure_ms);
+            });
+            m_evidence.erase(oldest);
+        }
+        it = m_evidence.emplace(storage_id, StorageProviderEvidence{}).first;
+    }
+    update(it->second);
+}
+
+std::map<std::array<unsigned char, 32>, StorageProviderEvidence> StorageService::ProviderEvidence()
+{
+    std::lock_guard lock{m_evidence_mutex};
+    return m_evidence;
+}
+
+bool StorageService::SaveReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
+    const StorageEndpoint& provider, const std::span<const unsigned char> receipt)
+{
+    return m_application_db.Put(ReceiptKey(operation_id, chunk_id, provider.storage_id), receipt);
+}
+
+void StorageService::EraseReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
+    const StorageEndpoint& provider)
+{
+    (void)m_application_db.Erase(ReceiptKey(operation_id, chunk_id, provider.storage_id));
 }
 
 std::optional<std::vector<unsigned char>> StorageService::Fetch(const ChunkId& chunk_id)

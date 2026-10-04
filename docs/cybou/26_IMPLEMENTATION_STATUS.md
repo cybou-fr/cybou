@@ -40,8 +40,13 @@ DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:
 `ProviderBudgetBytes(V) = floor(2V/3)`; diagnostics report local and provider
 usage separately. The runtime still uses AUTH storage quotas, the 5 GiB
 onboarding credit and OnboardingPool; no StorageLease, StorageEscrow,
-StorageSettlement, receipts or audit transport exist. The desktop has no
-capacity picker yet and uses the 15 GiB default.
+StorageSettlement exist. The desktop has no capacity picker yet and uses the
+15 GiB default. M3 is implemented: successful admissions return a signed
+`StorageReceipt` (P2P `CHUNK_ADMISSION_RESULT`), StorageService counts a replica
+only with a receipt from that StorageId and keeps it in the encrypted
+Application DB, `STORAGE_AUDIT_CHALLENGE`/`RESPONSE` (27/28) carry random-offset
+audits, and `StorageService::ProviderEvidence()` exposes bounded in-memory
+rolling evidence. Replicas still drop on the first failed check.
 
 ## Evidence limits reviewed on 2026-10-04
 
@@ -51,13 +56,14 @@ deployment evidence. Subsequent governance commits changed documentation.
 
 - Replica placement counts distinct proven StorageIds, not independently owned
   disks, hosts or operators. Physical independence remains the Beta target.
-- StorageService operational checks use full-chunk GET and BLAKE3. Background
-  passes cover a bounded subset; randomized challenge-response, PoA notarization
-  and canonical reliability state are not integrated.
+- StorageService checks replicas with random-offset audits over CYBOU P2P and
+  full GET plus BLAKE3 one time in eight (always without a local copy). Per
+  provider evidence (receipts, successes, failures, full verifications, times)
+  is bounded and held in memory only. PoA settlement is not implemented.
 - Repair is attempted from valid surviving bytes to available providers. Finality
   and admission ACKs alone do not prove current availability or recoverability.
 - Local allocation and finalized quotas do not measure actual 1:3 reciprocal
-  contribution. Signed storage receipts are not implemented.
+  contribution. Signed storage receipts prove admission only.
 - Finalized revocation stops new admission and initiates compliant-provider
   purge of unshared chunks. It does not remove historical capsules or establish
   per-object crypto-erasure. Recipient and adversarial copies are outside purge.
