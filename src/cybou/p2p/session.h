@@ -252,6 +252,12 @@ public:
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Забирает одну relay-операцию у удаленного пира и передает ее runtime.
     bool PollOperationRelay(CybouNodeRuntime& runtime);
+    /// \brief Отправляет пиру одну ещё не доставленную ему relay-операцию из pool этого узла.
+    /// \details Pull (`OP_POLL`) работает только по сессиям, которые открыл сам опрашивающий;
+    ///          узел за NAT никто не опрашивает, поэтому кандидаты дополнительно проталкиваются
+    ///          по исходящим сессиям. Получатель исполняет операцию сам, как при любом relay.
+    /// \return true, если операция была отправлена и получен ответ.
+    bool PushOperationRelay(CybouNodeRuntime& runtime);
     /// \brief Запрашивает у пира список известных endpoint'ов.
     std::vector<std::pair<std::string, uint16_t>> RequestPeers(
         std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5});

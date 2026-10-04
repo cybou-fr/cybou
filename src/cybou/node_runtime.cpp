@@ -1269,6 +1269,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     result.caught_up_with_known_peers = all_peers_caught_up;
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
     m_peer_manager->PollOperationRelays();
+    m_peer_manager->PushOperationRelays();
     m_peer_manager->FanoutFinalizedBlocks();
     return result;
 }

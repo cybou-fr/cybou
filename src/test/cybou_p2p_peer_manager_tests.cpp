@@ -596,6 +596,39 @@ BOOST_AUTO_TEST_CASE(operation_relay_forwards_hop_by_hop_to_live_finalizer)
     BOOST_CHECK(authority.GetOperationStatus(*second_client_operation_id).kind ==
         cybou::OperationStatusKind::FINALIZED);
 
+    // NAT: the finalizer only accepts connections and never dials the relay node, so it
+    // cannot poll it. The relay node pushes the candidate over its own outbound session.
+    cybou::CybouKeyStore third_keys;
+    BOOST_REQUIRE(third_keys.GenerateNew());
+    const auto third_create = make_account_create(third_keys);
+    BOOST_REQUIRE(third_create);
+    const cybou::ProtocolOperation third_operation{*third_create};
+    const auto third_operation_id = cybou::ComputeOperationId(third_operation);
+    BOOST_REQUIRE(third_operation_id);
+    cybou::p2p::InboundPeerServer authority_server{authority, io, tcp::endpoint{loopback, 0}};
+    BOOST_REQUIRE_NE(authority_server.Port(), 0U);
+    std::atomic_bool stopping_authority{false};
+    std::jthread authority_listener{[&] { authority_server.Run(stopping_authority); }};
+    struct StopAuthorityListener {
+        std::atomic_bool& stopping;
+        std::jthread& listener;
+        ~StopAuthorityListener() {
+            stopping = true;
+            if (listener.joinable()) listener.join();
+        }
+    } stop_authority_listener{stopping_authority, authority_listener};
+    cybou::p2p::PeerManager relay_outbound{relay_node};
+    BOOST_REQUIRE(relay_outbound.Connect("127.0.0.1", authority_server.Port()));
+    const auto third_submitted = client_peers.SubmitOperationToAny({server_endpoint}, third_operation, 0);
+    BOOST_REQUIRE(third_submitted.acknowledgment);
+    BOOST_CHECK(third_submitted.acknowledgment->status == cybou::OperationSubmitStatus::RELAY_QUEUED);
+    BOOST_CHECK(authority.GetOperationStatus(*third_operation_id).kind != cybou::OperationStatusKind::LOCAL_PENDING);
+    BOOST_CHECK_GE(relay_outbound.PushOperationRelays(), 1U);
+    BOOST_CHECK(authority.GetOperationStatus(*third_operation_id).kind == cybou::OperationStatusKind::LOCAL_PENDING);
+    // Each candidate is delivered to a session once.
+    BOOST_CHECK_EQUAL(relay_outbound.PushOperationRelays(), 0U);
+    relay_outbound.DisconnectAll();
+
     client_peers.DisconnectAll();
     second_client_peers.DisconnectAll();
     relay_mesh_peers.DisconnectAll();

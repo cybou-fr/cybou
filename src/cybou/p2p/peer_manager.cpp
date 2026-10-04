@@ -355,6 +355,25 @@ size_t PeerManager::PollOperationRelays()
     return delivered;
 }
 
+size_t PeerManager::PushOperationRelays()
+{
+    size_t delivered{0};
+    constexpr size_t MAX_PUSHED_OPERATIONS_PER_PEER{4};
+    for (auto it = m_peers.begin(); it != m_peers.end();) {
+        auto& session = it->second;
+        bool failed{false};
+        for (size_t i = 0; session->Peer() && i < MAX_PUSHED_OPERATIONS_PER_PEER; ++i) {
+            if (!session->PushOperationRelay(m_runtime)) {
+                failed = !session->Peer();
+                break;
+            }
+            ++delivered;
+        }
+        it = failed ? m_peers.erase(it) : std::next(it);
+    }
+    return delivered;
+}
+
 std::vector<PeerInfo> PeerManager::Peers() const
 {
     std::vector<PeerInfo> peers;

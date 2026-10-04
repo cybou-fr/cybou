@@ -18,7 +18,7 @@ editing an included file.
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 211 | d45049d63e1af01c |
 | docs/cybou/05_CHAIN_STATE.md | 94 | b1da33878fd5a4ac |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | ee6747d95045a75c |
-| docs/cybou/08_P2P.md | 132 | 71f35a9a4dfa7b15 |
+| docs/cybou/08_P2P.md | 138 | 1b68b4bb5cf57d86 |
 | docs/cybou/09_CRYPTO_PQ.md | 27 | 9ab0c066e6c58e93 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 23d24ae7143a588f |
 | docs/cybou/18_ECONOMICS_FEES.md | 139 | 60a8ed47ff6d766e |

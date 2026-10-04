@@ -996,6 +996,21 @@ bool PeerSession::PollOperationRelay(CybouNodeRuntime& runtime)
     return result && SendOperationResult(*result, deadline) && static_cast<bool>(*result);
 }
 
+bool PeerSession::PushOperationRelay(CybouNodeRuntime& runtime)
+{
+    if (!m_peer) return false;
+    std::erase_if(m_served_operations, [&](const auto& id) { return !runtime.HasRelayedOperation(id); });
+    const auto item = runtime.NextRelayedOperation([&](const auto& id) { return m_served_operations.contains(id); });
+    if (!item) return false;
+    const auto deadline = std::chrono::steady_clock::now() + BLOCK_TRANSFER_TIMEOUT;
+    if (!SendOperation(item->exact_bytes, item->work_nonce, deadline)) return false;
+    // Any answer, accepted or not, completes delivery to this peer: it executed the exact bytes itself.
+    const auto result = ReadOperationResult(item->operation_id, deadline);
+    if (!result) return false;
+    m_served_operations.insert(item->operation_id);
+    return true;
+}
+
 std::vector<std::pair<std::string, uint16_t>> PeerSession::RequestPeers(std::chrono::steady_clock::time_point deadline)
 {
     if (!m_peer) return {};

@@ -114,6 +114,8 @@ public:
     size_t FanoutFinalizedBlocks(size_t max_per_peer = 16);
     /// \brief Запрашивает и обрабатывает новые relay-операции у подключенных пиров.
     size_t PollOperationRelays();
+    /// \brief Проталкивает relay-операции этого узла по исходящим сессиям (узлы за NAT).
+    size_t PushOperationRelays();
     size_t ConnectedCount() const { return m_peers.size(); }
     /// \brief Возвращает снимок известных подключенных пиров.
     std::vector<PeerInfo> Peers() const;
