@@ -183,7 +183,9 @@ domain (e.g., UI theme, language) may be retained.
 
 Bootstrap provides initial peer hints. Ordinary full nodes then exchange
 finalized blocks, operation relays and encrypted
-chunks directly. A bootstrap outage does not stop an already formed mesh.
+chunks directly. Every node listens and shares the peers it reaches and the
+peers that reach it (verified by connecting back, DEC-287), so the mesh does not
+depend on any node's configuration file. A bootstrap outage does not stop an already formed mesh.
 Production and DEV public inbound/outbound admission is France-only and fails
 closed when local Geo data is unavailable or corrupt; see
 `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`.

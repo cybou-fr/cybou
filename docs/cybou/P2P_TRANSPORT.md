@@ -106,4 +106,5 @@ sender's FIFO item; unsuccessful delivery preserves it for retry.
 
 Configured peers are one ordered list of endpoint and optional TLS SPKI pin.
 Compiled rendezvous locators populate that list first; discovered peers use a
-separate bounded cache. No endpoint represents the Central Authority.
+separate bounded cache, filled from `GET_PEERS` answers and from inbound peers
+verified by connecting back. No endpoint represents the Central Authority.

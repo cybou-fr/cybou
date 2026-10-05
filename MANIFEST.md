@@ -8,17 +8,17 @@ editing an included file.
 
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
-| AGENTS.md | 493 | 07a2df9037d26306 |
+| AGENTS.md | 498 | 8ae7081c016ea44b |
 | CONTRIBUTING.md | 50 | cf30228b23288058 |
 | INSTALL.md | 37 | 21b5ef259577e6d2 |
 | README.md | 149 | e1325490ec086090 |
 | SECURITY.md | 60 | 4e2f4c9f89344ebe |
 | docs/cybou/00_VISION.md | 73 | af47eb77b0dcd95d |
 | docs/cybou/02_ARCHITECTURE.md | 219 | fefba0ae9deb518d |
-| docs/cybou/04_NETWORK_LIFECYCLE.md | 211 | d45049d63e1af01c |
+| docs/cybou/04_NETWORK_LIFECYCLE.md | 213 | fb7b33f5a6ff1f0a |
 | docs/cybou/05_CHAIN_STATE.md | 94 | b1da33878fd5a4ac |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | ee6747d95045a75c |
-| docs/cybou/08_P2P.md | 138 | 1b68b4bb5cf57d86 |
+| docs/cybou/08_P2P.md | 143 | 368a8b42cceffc38 |
 | docs/cybou/09_CRYPTO_PQ.md | 27 | 9ab0c066e6c58e93 |
 | docs/cybou/10_IDENTITY_NAMES.md | 41 | 23d24ae7143a588f |
 | docs/cybou/18_ECONOMICS_FEES.md | 139 | 60a8ed47ff6d766e |
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
 | docs/cybou/24_DECISIONS.md | 227 | ac428bdd26b2feb3 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 107 | 1f42abea9b07a437 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 405 | 427018780dd38c06 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 406 | 742c110fdcb3a982 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 48 | 1e075f96cb806c7d |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -43,16 +43,16 @@ editing an included file.
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 45 | 01cfb063d090d3fc |
 | docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 44 | 565693a0e8e06e49 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | c346d8a11674248e |
-| docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | fdb80029a85ff71b |
-| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 93 | 82d3f1f94cf727c3 |
+| docs/cybou/72_DESKTOP_WALLET_UI.md | 96 | cdec29557531da51 |
+| docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 126 | 2fe956461b55b335 |
 | docs/cybou/76_IDENTITY_VAULT_RECOVERY.md | 62 | bcf313282452e2d6 |
 | docs/cybou/77_CYBOU_NAME_REGISTRY.md | 38 | 87ba6f680c627d85 |
-| docs/cybou/78_IDENTITY_DESKTOP_UX.md | 23 | 657da7da9fa3a280 |
+| docs/cybou/78_IDENTITY_DESKTOP_UX.md | 37 | f16e7e3e35e4ecb0 |
 | docs/cybou/80_CRYPTO_SOVEREIGNTY_AUDIT.md | 51 | 78ce0659bd11f6b7 |
 | docs/cybou/81_BETA_PRODUCT_SCOPE.md | 108 | ebe680ba48871036 |
-| docs/cybou/82_MAIL_UI_UX.md | 651 | 5ba34a02e81755d0 |
-| docs/cybou/83_STORAGE_UI_UX.md | 572 | ff5901b20602d23d |
-| docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 520 | 43250d708665708f |
+| docs/cybou/82_MAIL_UI_UX.md | 675 | 4eb7180bb19ea47a |
+| docs/cybou/83_STORAGE_UI_UX.md | 604 | ba8b542c74c50c46 |
+| docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 548 | 8530d55ed7da0b2c |
 | docs/cybou/85_BETA_UI_ACCEPTANCE.md | 184 | 7dedc4c3f85e53aa |
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 113 | 3dea6e6943d833b6 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
@@ -66,7 +66,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/P2P_TRANSPORT.md | 109 | 77e26b66d6792c34 |
+| docs/cybou/P2P_TRANSPORT.md | 110 | 88cb16883ec61588 |
 | docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
 | docs/cybou/README.md | 82 | 93d491eb0ae43cf7 |

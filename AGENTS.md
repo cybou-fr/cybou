@@ -290,6 +290,11 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
   peer DB, pending operations, and storage metadata.
 - Ordinary peers form a direct P2P mesh after initial discovery. Bootstrap is
   an initial rendezvous peer, not a mandatory traffic intermediary or separate node type.
+- Every Full Node, desktop included, listens for peers (default 29461, any free
+  port when taken), announces that port in HELLO and stores, relays and serves
+  like any other node. A node shares a peer that connected to it only after
+  connecting back to `IP:announced port` (DEC-287), and shares all peers it knows
+  this way. Nothing announces where the PoA key is held.
 - There is no distributed mempool and PoA owns no canonical pending state. Every
   full node keeps a bounded volatile pool of candidate operations it has itself
   executed against its finalized state, and relays only locally valid candidates
