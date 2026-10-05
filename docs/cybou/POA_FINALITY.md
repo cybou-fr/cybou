@@ -51,7 +51,9 @@ PoA MUST independently execute candidate operations.
 operation -> own validation/execution -> state root -> block -> PoA signature
 ```
 
-PoA produces blocks from its node's ordinary candidate pool. There is no
+PoA produces blocks from its node's ordinary candidate pool, and only when that
+pool holds a candidate (DEC-286): an idle network does not grow its chain. An
+explicit operator "finalize one block" may still produce an empty block. There is no
 validator, fork-choice vote, BFT voting or quorum override, and no provisional
 state for PoA finality to roll back.
 

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // Distributed under the MIT software license, see the accompanying file COPYING.
 
+#include <cybou/identity_service.h>
 #include <cybou/node_service.h>
 #include <cybou/p2p/ingress_budget.h>
 #include <cybou/p2p/session.h>
@@ -11,6 +12,8 @@
 #include <boost/test/unit_test.hpp>
 
 #include <atomic>
+#include <filesystem>
+#include <memory>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -20,6 +23,26 @@
 BOOST_FIXTURE_TEST_SUITE(cybou_node_service_tests, CybouTestSetup)
 
 namespace {
+/// Creates one Identity on \p runtime in the background; \p ok tells whether it was finalized.
+std::jthread StartAccountCreate(cybou::CybouNodeRuntime& runtime, std::filesystem::path vault,
+    std::shared_ptr<std::atomic<bool>> ok)
+{
+    return std::jthread{[&runtime, vault = std::move(vault), ok] {
+        std::filesystem::remove(vault);
+        cybou::CybouIdentityService identity{runtime, vault};
+        *ok = identity.PrepareNewIdentity() &&
+            identity.CreateIdentitySync("correct horse battery staple", nullptr, std::chrono::seconds{10}).success;
+    }};
+}
+
+/// Creates one Identity and waits until the block production worker finalized it.
+bool SubmitAccountCreate(cybou::CybouNodeRuntime& runtime, const std::filesystem::path& vault)
+{
+    auto ok = std::make_shared<std::atomic<bool>>(false);
+    StartAccountCreate(runtime, vault, ok).join();
+    return *ok;
+}
+
 class FlakySigner final : public cybou::PoaSigner {
     cybou::RecoveryEntropy m_seed;
 public:
@@ -59,15 +82,27 @@ BOOST_AUTO_TEST_CASE(worker_retries_signing_failure_and_resumes_after_unlock)
             std::this_thread::sleep_for(std::chrono::milliseconds{10});
         return service.Runtime().GetFinalizedHeight().value_or(0) >= height;
     };
+    // The worker produces no empty blocks: an idle chain does not grow.
+    std::this_thread::sleep_for(std::chrono::milliseconds{150});
+    BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), 0U);
+    // Each candidate is finalized in its own block; the first signing attempt fails once.
+    BOOST_REQUIRE(SubmitAccountCreate(service.Runtime(), local.directory / "worker-a.cybou"));
+    BOOST_REQUIRE(wait_height(1));
+    BOOST_REQUIRE(SubmitAccountCreate(service.Runtime(), local.directory / "worker-b.cybou"));
     BOOST_REQUIRE(wait_height(2));
     BOOST_CHECK(!service.Runtime().GetStatus().poa_safety_halted);
     BOOST_CHECK(signer->exact_retry);
     service.Runtime().DisablePoaSigner();
     const auto height = service.Runtime().GetFinalizedHeight().value_or(0);
+    // A pending candidate is not finalized while the signer is off, and is once it is back.
+    auto third = std::make_shared<std::atomic<bool>>(false);
+    auto pending = StartAccountCreate(service.Runtime(), local.directory / "worker-c.cybou", third);
     std::this_thread::sleep_for(std::chrono::milliseconds{150});
     BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), height);
     BOOST_REQUIRE(service.Runtime().EnablePoaSigner(signer));
     BOOST_REQUIRE(wait_height(height + 1));
+    pending.join();
+    BOOST_CHECK(*third);
     service.StopBlockProduction();
     BOOST_CHECK_GT(service.Runtime().GetDiagnostics().storage_capacity, 0U);
 }
@@ -129,6 +164,8 @@ BOOST_AUTO_TEST_CASE(desktop_finalizer_worker_produces_blocks_and_stops_cleanly)
     }};
     service.Start();
     service.StartBlockProduction(10);
+    BOOST_REQUIRE(SubmitAccountCreate(service.Runtime(), local.directory / "desktop-a.cybou"));
+    BOOST_REQUIRE(SubmitAccountCreate(service.Runtime(), local.directory / "desktop-b.cybou"));
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
     while (service.Runtime().GetFinalizedHeight().value_or(0) < 2 &&
         std::chrono::steady_clock::now() < deadline) {

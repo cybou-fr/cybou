@@ -26,7 +26,7 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
-| docs/cybou/24_DECISIONS.md | 225 | beca3d61eaa4e34f |
+| docs/cybou/24_DECISIONS.md | 226 | e8868d4698fe532a |
 | docs/cybou/25_OPEN_QUESTIONS.md | 95 | 2b7f6636be348a45 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 181 | d7c845ca4672b7cd |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
@@ -67,7 +67,7 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
 | docs/cybou/P2P_TRANSPORT.md | 98 | eb13dbb86740c4a6 |
-| docs/cybou/POA_FINALITY.md | 73 | 0da4572f0a0bbcef |
+| docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
 | docs/cybou/README.md | 82 | 93d491eb0ae43cf7 |
 | docs/cybou/ROOT_PUBLICATION.md | 138 | 2e27b102ccf69528 |

@@ -159,7 +159,11 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
         };
         while (!m_stop_block_production.load()) {
             const bool finalizer_enabled = m_runtime->IsPoaSignerActive();
-            if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block) {
+            // No empty blocks: with nothing to finalize the chain does not grow, and every new
+            // node would otherwise download and verify 86,400 empty blocks per day. The next
+            // candidate is picked up on the following 100 ms tick, so latency is unchanged.
+            if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block &&
+                m_runtime->CandidateOperationCount() > 0) {
                 const auto block = m_runtime->ProduceBlock();
                 if (!block) {
                     // Safety halt and transient retry are intentionally split:

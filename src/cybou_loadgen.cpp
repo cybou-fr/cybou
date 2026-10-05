@@ -100,7 +100,7 @@ struct Client {
             caught_up_known_peers.store(result.IsConnected() && result.caught_up_with_known_peers);
             return true;
         });
-        const auto ready_deadline = std::chrono::steady_clock::now()+120s;
+        const auto ready_deadline = std::chrono::steady_clock::now()+600s;
         while (!stop && !caught_up_known_peers.load()) {
             if (std::chrono::steady_clock::now()>ready_deadline) throw std::runtime_error("synthetic client initial sync timeout");
             std::this_thread::sleep_for(100ms);
