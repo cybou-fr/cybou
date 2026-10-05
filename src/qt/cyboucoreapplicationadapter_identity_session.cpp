@@ -84,10 +84,14 @@ void CybouCoreApplicationAdapter::IdentitySession::Refresh()
         return;
     }
     const auto progress = application->Scan();
-    catching_up = !progress.Complete();
+    // Restore progress (and the no-pause scan loop) follows the history scan only. Content that
+    // cannot be fetched is retried in the background with backoff and never keeps the restore
+    // banner up or the scan loop spinning; publication cleanup still waits for a complete index.
+    const bool history_scanned = progress.scanned_height >= progress.finalized_height;
+    catching_up = !history_scanned;
     storage_projection.Refresh(progress.Complete());
     AdvanceRotation();
-    Snapshot(progress.Complete() ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);
+    Snapshot(history_scanned ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);
 }
 
 void CybouCoreApplicationAdapter::IdentitySession::AdvanceRotation()
