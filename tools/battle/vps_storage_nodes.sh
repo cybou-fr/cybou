@@ -46,7 +46,8 @@ for i in 2 3; do
     sudo install -d -o debian -g debian -m 700 "$dir" "$dir/state"
     [ -d "$dir/state/geo" ] || sudo cp -r /var/lib/cybou/node/state/geo "$dir/state/geo"
     other=$((5 - i))
-    printf '127.0.0.1 29461\n127.0.0.1 2946%s\n' "$other" | sudo tee "$dir/peers.txt" >/dev/null
+    # Public address, not loopback: a peer reached over loopback can never be shared with others.
+    printf '51.255.46.58 29461\n51.255.46.58 2946%s\n' "$other" | sudo tee "$dir/peers.txt" >/dev/null
     sudo chown -R debian:debian "$dir"
 done
 # Open the two ports persistently and in the running ruleset.
