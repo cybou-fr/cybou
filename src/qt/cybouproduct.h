@@ -18,6 +18,20 @@
  * fill them. Identifiers are opaque strings that pages never parse.
  */
 
+/** Local application commands never imply PoA finality. */
+enum class CybouMailTaskKind { DraftSave, Move, Send };
+enum class CybouCommandState { Queued, Running, Committed, Failed };
+struct CybouMailTask {
+    QString id;
+    QString item_id;
+    QString title;
+    CybouCommandState state{CybouCommandState::Queued};
+    QString error;
+    QDateTime started;
+    CybouMailTaskKind kind{CybouMailTaskKind::DraftSave};
+    QString related_id;
+};
+
 /** Identity lifecycle as surfaced to the UI (one Identity per user). */
 enum class CybouIdentityState {
     None,
@@ -126,6 +140,7 @@ struct CybouAttachmentItem {
     QString saved_file_id;
     /** Local file chosen in Compose; device-local, never shown or published. */
     QString source_path;
+    bool operator==(const CybouAttachmentItem&) const = default;
 };
 
 enum class CybouMailFolder {
@@ -165,6 +180,7 @@ struct CybouMailItem {
     QString root_chunk_id;
     /** Operation axis of an outgoing message; incoming mail is always Finalized. */
     CybouOperationState operation_state{CybouOperationState::Finalized};
+    bool operator==(const CybouMailItem&) const = default;
 };
 
 struct CybouFileItem {
@@ -190,6 +206,7 @@ struct CybouFileItem {
     /** Operation that produced this item's latest state; empty when unknown. */
     QString operation_id;
     CybouOperationState operation_state{CybouOperationState::Finalized};
+    bool operator==(const CybouFileItem&) const = default;
 };
 
 enum class CybouActivityKind {
@@ -208,6 +225,7 @@ struct CybouActivityItem {
     QString title;
     QString subtitle;
     QDateTime time;
+    bool operator==(const CybouActivityItem&) const = default;
 };
 
 enum class CybouWalletEntryKind {
@@ -356,7 +374,9 @@ inline QString fileStatusText(const CybouFileItem& item, bool online,
     if (item.retrieval != CybouRetrievalState::Idle && item.retrieval != CybouRetrievalState::Ready)
         return retrievalText(item.retrieval);
     const QString state = item.state == CybouContentState::Securing
-        ? progressText(item.state, item.progress_percent, online)
+        ? (item.min_remote_replicas >= 0 && item.remote_replica_target > 0
+            ? QCoreApplication::translate("CybouProduct", "Protecting: %1 of %2 remote copies").arg(item.min_remote_replicas).arg(item.remote_replica_target)
+            : progressText(item.state, item.progress_percent, online))
         : contentWithOperationText(item.state, operation, online);
     if (item.state == CybouContentState::Protected && item.available_offline)
         return state + QStringLiteral("  ·  ") + localAvailabilityText(item);

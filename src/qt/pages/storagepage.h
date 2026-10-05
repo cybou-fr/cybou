@@ -115,6 +115,7 @@ private:
     /** Scrollable body of the details panel: a tall Advanced section never squeezes rows. */
     QWidget* m_details_body{nullptr};
     QString m_details_id;
+    bool m_details_advanced{false};
 
     QStringList selectedIds() const;
     void showContextMenu(const QPoint& global_pos);

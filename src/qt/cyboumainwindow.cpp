@@ -459,7 +459,10 @@ void CybouMainWindow::buildShell()
     };
     files->onSendByMail = [this, mail](const QString& file_id) {
         const auto attachment = m_desktop_model->attachmentFromFile(file_id);
-        if (!attachment) return;
+        if (!attachment) {
+            m_desktop_model->notify(tr("This file is not ready to attach. Open its details to check protection."));
+            return;
+        }
         CybouMailItem draft;
         draft.subject = attachment->name;
         draft.attachments = {*attachment};

@@ -864,14 +864,32 @@ std::vector<MailDraft> ApplicationService::ListDrafts()
     return drafts;
 }
 
-bool ApplicationService::DeleteDraft(std::string_view draft_id)
+std::optional<PrivateItemId> ApplicationService::BindDraftToMessage(std::string_view draft_id,
+    const PrivateItemId& proposed_id)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidDraftId(draft_id) || !m_application_db.Has(DraftKey(draft_id))) return std::nullopt;
+    const std::string key = "mail/draft-send/" + std::string{draft_id};
+    if (const auto saved = m_application_db.Get(key)) {
+        if (saved->size() != proposed_id.size()) return std::nullopt;
+        PrivateItemId id;
+        std::copy(saved->begin(), saved->end(), id.begin());
+        return id;
+    }
+    if (!m_application_db.Put(key, proposed_id)) return std::nullopt;
+    return proposed_id;
+}
+
+bool ApplicationService::DeleteDraft(std::string_view draft_id, bool keep_send_binding)
 {
     std::lock_guard lock{m_mutex};
     if (!ValidDraftId(draft_id)) return false;
     PrivateApplicationStore::Batch batch{m_application_db};
     auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
     std::erase(names, std::string{draft_id});
-    return m_application_db.Erase(DraftKey(draft_id)) && WriteNames(m_application_db, DRAFT_INDEX_KEY, names) &&
+    return m_application_db.Erase(DraftKey(draft_id)) &&
+        (keep_send_binding || m_application_db.Erase("mail/draft-send/" + std::string{draft_id})) &&
+        WriteNames(m_application_db, DRAFT_INDEX_KEY, names) &&
         batch.Commit();
 }
 

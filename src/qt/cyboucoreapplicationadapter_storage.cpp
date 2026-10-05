@@ -5,7 +5,7 @@
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
 #include <cybou/encrypted_chunk_tree.h>
-#include <QFile>
+#include <QSaveFile>
 #include <set>
 
 using namespace cybou::qt_detail;
@@ -13,8 +13,8 @@ using namespace cybou::qt_detail;
 QString CybouCoreApplicationAdapter::IdentitySession::StorageProjection::DownloadContent(const cybou::ChunkId& root, const cybou::ContentKey& key, std::uint64_t size,
     const QString& destination)
 {
-    const QString part = destination + QStringLiteral(".part");
-    QFile out{part};
+    QSaveFile out{destination};
+    out.setDirectWriteFallback(false);
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) return tr("The destination cannot be written.");
     std::set<cybou::ChunkId> seen;
     bool missing{false};
@@ -32,17 +32,13 @@ QString CybouCoreApplicationAdapter::IdentitySession::StorageProjection::Downloa
                 static_cast<qint64>(data.size());
         },
         std::max<std::uint64_t>(size, 1));
-    out.close();
     if (!written || *written != size) {
-        QFile::remove(part);
+        out.cancelWriting();
         return missing ? tr("This content is temporarily unavailable. Try again later.")
                        : tr("This content could not be verified.");
     }
-    QFile::remove(destination);
-    if (!QFile::rename(part, destination)) {
-        QFile::remove(part);
-        return tr("The destination cannot be written.");
-    }
+    // Atomic replacement: failed verification/write/commit preserves the old destination.
+    if (!out.commit()) return tr("The destination cannot be written.");
     return {};
 }
 

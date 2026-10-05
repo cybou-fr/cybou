@@ -614,6 +614,11 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     BOOST_REQUIRE(owner.application->SaveDraft(newer));
     BOOST_CHECK(!owner.application->SaveDraft({.draft_id = "Bad/Id"}));
     const auto height = fixture.runtime->GetFinalizedHeight();
+    const auto outgoing = cybou::NewPrivateItemId();
+    const auto other = cybou::NewPrivateItemId();
+    BOOST_REQUIRE(outgoing && other);
+    BOOST_CHECK(!owner.application->BindDraftToMessage("missing", *outgoing));
+    BOOST_REQUIRE(owner.application->BindDraftToMessage(draft.draft_id, *outgoing) == outgoing);
 
     // Survives reopening the Application DB (a restart).
     owner.Open(fixture, network);
@@ -621,6 +626,7 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     BOOST_REQUIRE_EQUAL(drafts.size(), 2U);
     BOOST_CHECK(drafts[0] == newer); // newest first
     BOOST_CHECK(drafts[1] == draft);
+    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
     draft.body = "Edited";
     BOOST_REQUIRE(owner.application->SaveDraft(draft));
     BOOST_CHECK_EQUAL(owner.application->ListDrafts().size(), 2U);
@@ -628,6 +634,14 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     drafts = owner.application->ListDrafts();
     BOOST_REQUIRE_EQUAL(drafts.size(), 1U);
     BOOST_CHECK_EQUAL(drafts[0].body, "Edited");
+    // Durable handoff tombstone survives draft removal and a stale compose replay.
+    BOOST_REQUIRE(owner.application->DeleteDraft(draft.draft_id, true));
+    owner.Open(fixture, network);
+    BOOST_REQUIRE(owner.application->SaveDraft(draft));
+    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
+    BOOST_REQUIRE(owner.application->DeleteDraft(draft.draft_id));
+    BOOST_REQUIRE(owner.application->SaveDraft(draft));
+    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == other);
     // Never published: no operation was submitted and no chunk left the device.
     BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
     BOOST_CHECK(!fixture.runtime->ProduceBlock() || fixture.runtime->GetBlockAtHeight(*height + 1)->block.operations.empty());

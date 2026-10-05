@@ -14,6 +14,7 @@
 #include <QHash>
 #include <QLocale>
 #include <QObject>
+#include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -209,16 +210,19 @@ public:
     /* Mailbox organization: backend commands; the projection follows its reply. */
     void requestMailRead(const QString& id, bool read);
     void requestMailStarred(const QString& id, bool starred);
-    void requestMoveMail(const QString& id, CybouMailFolder folder);
+    using CommandDone = std::function<void(bool, const QString&)>;
+    void requestMoveMail(const QString& id, CybouMailFolder folder, CommandDone done = {});
+    const QVector<CybouMailTask>& mailTasks() const { return m_mail_tasks; }
+    QString resolvedMailId(const QString& id) const { return m_mail_ids.value(id, id); }
     /** Saves a draft in the Identity's private mailbox; returns its id. */
-    QString requestSaveMailDraft(CybouMailItem draft);
+    QString requestSaveMailDraft(CybouMailItem draft, CommandDone done = {});
     void requestDeleteMail(const QString& id);
     /**
      * Hands a composed message to the Mail backend. The message appears in
      * Sent as Preparing at once (optimistic); every later state comes from
      * the backend. Returns the message id, or empty when Mail is unavailable.
      */
-    QString requestSendMail(CybouMailItem message);
+    QString requestSendMail(CybouMailItem message, CommandDone done = {});
     /** Adapter entry: lifecycle update for an outgoing message. */
     void setMailState(const QString& id, CybouContentState state);
     /** Adapter entry: per-attachment lifecycle and optional progress. */
@@ -402,6 +406,7 @@ Q_SIGNALS:
     void mailIdReplaced(const QString& old_id, const QString& new_id);
     void filesChanged();
     void activityChanged();
+    void mailTasksChanged();
     void walletChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
@@ -466,6 +471,12 @@ private:
     /** Opens or closes the backend's Identity session to match identity_state. */
     void syncIdentitySession();
     bool m_session_open{false};
+    quint64 m_mail_generation{0};
+    QVector<CybouMailTask> m_mail_tasks;
+    QHash<QString, QString> m_mail_ids;
+    std::function<void(CybouCommandState, const QString&)> mailCommand(
+        const QString& item_id, const QString& title, CommandDone done,
+        CybouMailTaskKind kind = CybouMailTaskKind::DraftSave, const QString& related_id = {});
     /** Mail/Files featureAvailability never exceed what the backend can do. */
     CybouFeatureAvailability honest(CybouFeatureAvailability featureAvailability) const;
     CybouFeatureAvailability m_requested_availability;

@@ -9,6 +9,21 @@
 
 using namespace cybou::qt_detail;
 
+namespace {
+cybou::MailDraft StoredDraft(const CybouMailItem& draft, const QString& id)
+{
+    cybou::MailDraft stored{.draft_id = id.toStdString(), .to = draft.to_name.toStdString(),
+        .subject = draft.subject.toStdString(), .body = draft.body.toStdString(),
+        .updated_ms = static_cast<std::uint64_t>(std::max<qint64>(0, draft.time.toMSecsSinceEpoch()))};
+    for (const auto& attachment : draft.attachments) {
+        stored.attachments.push_back({.name = attachment.name.toStdString(), .logical_size = attachment.logical_size,
+            .source_path = attachment.source_path.toStdString(),
+            .reference_id = attachment.source_path.isEmpty() ? attachment.id.toStdString() : std::string{}});
+    }
+    return stored;
+}
+}
+
 QVector<CybouMailItem> CybouCoreApplicationAdapter::IdentitySession::MailProjection::Snapshot()
 {
     const auto loaded = session.runtime.GetStore().GetStateSnapshot();
@@ -131,119 +146,181 @@ std::optional<cybou::AccountId> CybouCoreApplicationAdapter::IdentitySession::Ma
     return std::nullopt;
 }
 
-void CybouCoreApplicationAdapter::saveMailDraft(const CybouMailItem& draft)
+void CybouCoreApplicationAdapter::saveMailDraft(const CybouMailItem& draft, CommandProgress progress)
 {
-    if (!m_session) return;
+    if (!m_session) {
+        if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable."));
+        return;
+    }
     m_pending_drafts.insert(draft.id, draft);
     m_deleted_drafts.remove(draft.id);
     Q_EMIT mailItemChanged(draft);
-    cybou::MailDraft stored{.draft_id = draft.id.toStdString(), .to = draft.to_name.toStdString(),
-        .subject = draft.subject.toStdString(), .body = draft.body.toStdString(),
-        .updated_ms = static_cast<std::uint64_t>(std::max<qint64>(0, draft.time.toMSecsSinceEpoch()))};
-    for (const auto& attachment : draft.attachments) {
-        stored.attachments.push_back({.name = attachment.name.toStdString(), .logical_size = attachment.logical_size,
-            .source_path = attachment.source_path.toStdString(),
-            .reference_id = attachment.source_path.isEmpty() ? attachment.id.toStdString() : std::string{}});
-    }
-    m_session->Post([stored = std::move(stored)](IdentitySession& s) {
-        if (!s.application->SaveDraft(stored)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The draft could not be saved.")); });
-        }
+    m_session->Post([stored = StoredDraft(draft, draft.id), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+        bool ok{false};
+        try { ok = s.application->SaveDraft(stored); } catch (const std::exception&) { }
+        s.StateToGui([owner = s.owner, progress, ok] {
+            const auto error = ok ? QString{} : tr("The draft could not be saved. Your text is kept open; try again.");
+            if (progress) progress(ok ? CybouCommandState::Committed : CybouCommandState::Failed, error);
+            else if (!ok) Q_EMIT owner->commandFailed(error);
+        });
     });
 }
 
-void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message)
+void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const QString& draft_id, CommandProgress progress)
 {
-    if (!m_session) return;
+    if (!m_session) {
+        if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable."));
+        return;
+    }
     const QString client_id = message.id;
     CybouMailItem pending = message;
+    // Re-editing/retrying one draft replaces its previous failed temporary row.
+    for (auto it = m_send_drafts.begin(); it != m_send_drafts.end();) {
+        if (!draft_id.isEmpty() && it.value() == draft_id && it.key() != client_id) {
+            const auto previous = it.key();
+            m_pending_sends.remove(previous);
+            it = m_send_drafts.erase(it);
+            Q_EMIT mailItemRemoved(previous);
+        } else ++it;
+    }
     m_pending_sends.insert(client_id, pending);
-    m_session->Post([client_id, message](IdentitySession& s) {
-        const auto recipient = s.mail.ResolveRecipient(message.to_name);
-        auto message_id = cybou::NewPrivateItemId();
-        if (!recipient || !message_id) {
-            s.ToGui([owner = s.owner, client_id, found = recipient.has_value()] {
-                if (auto it = owner->m_pending_sends.find(client_id); it != owner->m_pending_sends.end()) {
-                    it->state = CybouContentState::NeedsAttention;
-                }
+    if (!draft_id.isEmpty()) m_send_drafts.insert(client_id, draft_id);
+    m_session->Post([client_id, message, draft_id, progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+        const auto fail = [&](const QString& error) {
+            s.StateToGui([owner = s.owner, client_id, progress, error] {
+                if (auto it = owner->m_pending_sends.find(client_id); it != owner->m_pending_sends.end()) it->state = CybouContentState::NeedsAttention;
                 Q_EMIT owner->mailStateChanged(client_id, CybouContentState::NeedsAttention);
-                Q_EMIT owner->commandFailed(found ? tr("Could not prepare the message.")
-                                                  : tr("No CYBOU Identity has this name."));
+                if (progress) progress(CybouCommandState::Failed, error);
+                else Q_EMIT owner->commandFailed(error);
             });
-            return;
-        }
-        cybou::MailMessage mail;
-        mail.message_id = *message_id;
-        mail.recipient_account_id = *recipient;
-        mail.client_timestamp_ms = static_cast<std::uint64_t>(message.time.toMSecsSinceEpoch());
-        mail.subject = message.subject.toStdString();
-        mail.body = message.body.toStdString();
-        // New local files become encrypted child trees of this publication; Files
-        // references reuse their protected content without re-upload.
-        std::vector<std::pair<std::size_t, cybou::NewContent>> new_content;
-        QString attachment_error;
-        for (const auto& attachment : message.attachments) {
-            const auto attachment_id = cybou::NewPrivateItemId();
-            if (!attachment_id) {
-                attachment_error = tr("Could not prepare the message.");
-                break;
+        };
+        try {
+            // No UI acknowledgement precedes durable backup and job ownership.
+            if (!draft_id.isEmpty() && !s.application->SaveDraft(StoredDraft(message, draft_id))) {
+                fail(tr("The draft could not be saved. The message has not been sent."));
+                return;
             }
-            cybou::MailAttachment descriptor{.attachment_id = *attachment_id, .filename = attachment.name.toStdString(),
-                .logical_size = attachment.logical_size};
-            if (!attachment.source_path.isEmpty()) {
-                auto file = std::make_shared<QFile>(attachment.source_path);
-                if (!file->open(QIODevice::ReadOnly)) {
-                    attachment_error = tr("%1 could not be read.").arg(attachment.name);
+            if (!draft_id.isEmpty()) {
+                CybouMailItem backup = message;
+                backup.id = draft_id;
+                backup.draft = true;
+                backup.outgoing = false;
+                backup.folder = CybouMailFolder::Drafts;
+                s.StateToGui([owner = s.owner, backup] {
+                    owner->m_deleted_drafts.remove(backup.id);
+                    owner->m_known_drafts.insert(backup.id, backup);
+                    Q_EMIT owner->mailItemChanged(backup);
+                });
+            }
+            auto message_id = cybou::NewPrivateItemId();
+            if (message_id && !draft_id.isEmpty()) message_id = s.application->BindDraftToMessage(draft_id.toStdString(), *message_id);
+            if (!message_id) {
+                fail(tr("Could not save the outgoing message. Your draft is kept."));
+                return;
+            }
+            const auto job_id = ToHex(*message_id);
+            const auto accept = [&](const cybou::PublicationJobResult& job, CybouMailItem outgoing) {
+                if (job.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
+                    fail(tr("The message needs attention. Your draft is kept; retry continues the same publication."));
+                    return;
+                }
+                outgoing.id = QString::fromStdString(job_id);
+                outgoing.state = StateOf(job);
+                outgoing.operation_state = OperationOf(job);
+                s.mail.outbox[job_id] = outgoing;
+                const bool removed = !draft_id.isEmpty() && s.application->DeleteDraft(draft_id.toStdString(), true);
+                s.StateToGui([owner = s.owner, client_id, draft_id, removed, outgoing, progress] {
+                    owner->m_pending_sends.remove(client_id);
+                    owner->m_send_drafts.remove(client_id);
+                    if (removed) {
+                        owner->m_pending_drafts.remove(draft_id);
+                        owner->m_known_drafts.remove(draft_id);
+                        owner->m_deleted_drafts.insert(draft_id);
+                        Q_EMIT owner->mailItemRemoved(draft_id);
+                    }
+                    Q_EMIT owner->mailItemRemoved(client_id);
+                    Q_EMIT owner->mailItemChanged(outgoing);
+                    Q_EMIT owner->mailItemReplaced(client_id, outgoing.id);
+                    if (progress) progress(CybouCommandState::Committed, {});
+                });
+            };
+            if (s.publication->GetJob(job_id)) {
+                const auto job = s.publication->Resume(job_id);
+                s.storage_projection.jobs[job_id] = job;
+                accept(job, message);
+                return;
+            }
+            const auto recipient = s.mail.ResolveRecipient(message.to_name);
+            if (!recipient) {
+                fail(tr("No CYBOU Identity has this name. Your draft is kept."));
+                return;
+            }
+            cybou::MailMessage mail;
+            mail.message_id = *message_id;
+            mail.recipient_account_id = *recipient;
+            mail.client_timestamp_ms = static_cast<std::uint64_t>(message.time.toMSecsSinceEpoch());
+            mail.subject = message.subject.toStdString();
+            mail.body = message.body.toStdString();
+            // New local files become encrypted child trees of this publication; Files
+            // references reuse their protected content without re-upload.
+            std::vector<std::pair<std::size_t, cybou::NewContent>> new_content;
+            QString attachment_error;
+            for (const auto& attachment : message.attachments) {
+                const auto attachment_id = cybou::NewPrivateItemId();
+                if (!attachment_id) {
+                    attachment_error = tr("Could not prepare the message.");
                     break;
                 }
-                new_content.emplace_back(mail.attachments.size(), cybou::NewContent{
-                    [file](std::span<unsigned char> out) -> std::optional<std::size_t> {
-                        const auto n = file->read(reinterpret_cast<char*>(out.data()), static_cast<qint64>(out.size()));
-                        if (n < 0) return std::nullopt;
-                        return static_cast<std::size_t>(n);
-                    }});
-            } else if (const auto reused = s.files.ContentOfAttachmentSource(attachment.id)) {
-                descriptor.root_chunk_id = reused->first;
-                descriptor.content_key = reused->second.first;
-                descriptor.logical_size = reused->second.second;
-            } else {
-                attachment_error = tr("%1 is not protected yet.").arg(attachment.name);
-                break;
-            }
-            mail.attachments.push_back(descriptor);
-        }
-        if (!attachment_error.isEmpty()) {
-            s.ToGui([owner = s.owner, client_id, attachment_error] {
-                if (auto it = owner->m_pending_sends.find(client_id); it != owner->m_pending_sends.end()) {
-                    it->state = CybouContentState::NeedsAttention;
+                cybou::MailAttachment descriptor{.attachment_id = *attachment_id, .filename = attachment.name.toStdString(),
+                    .logical_size = attachment.logical_size};
+                if (!attachment.source_path.isEmpty()) {
+                    auto file = std::make_shared<QFile>(attachment.source_path);
+                    if (!file->open(QIODevice::ReadOnly)) {
+                        attachment_error = tr("%1 could not be read.").arg(attachment.name);
+                        break;
+                    }
+                    new_content.emplace_back(mail.attachments.size(), cybou::NewContent{
+                        [file](std::span<unsigned char> out) -> std::optional<std::size_t> {
+                            const auto n = file->read(reinterpret_cast<char*>(out.data()), static_cast<qint64>(out.size()));
+                            if (n < 0) return std::nullopt;
+                            return static_cast<std::size_t>(n);
+                        }});
+                } else if (const auto reused = s.files.ContentOfAttachmentSource(attachment.id)) {
+                    descriptor.root_chunk_id = reused->first;
+                    descriptor.content_key = reused->second.first;
+                    descriptor.logical_size = reused->second.second;
+                } else {
+                    attachment_error = tr("%1 is not protected yet.").arg(attachment.name);
+                    break;
                 }
-                Q_EMIT owner->mailStateChanged(client_id, CybouContentState::NeedsAttention);
-                Q_EMIT owner->commandFailed(attachment_error);
-            });
-            return;
-        }
-        // The job ID is the message ID, so the outbox and Sent entries line up.
-        const auto job_id = ToHex(*message_id);
-        CybouMailItem outgoing = message;
-        outgoing.id = QString::fromStdString(job_id);
-        outgoing.state = CybouContentState::Local;
-        outgoing.operation_state = CybouOperationState::Preparing;
-        for (int i = 0; i < outgoing.attachments.size(); ++i) {
-            auto& shown = outgoing.attachments[i];
-            shown.id = QString::fromStdString(ToHex(mail.attachments[static_cast<std::size_t>(i)].attachment_id));
-            shown.source_path.clear();
-            if (!CybouProduct::contentOnNetwork(shown.state)) shown.state = CybouContentState::Local;
-        }
-        s.mail.outbox[job_id] = outgoing;
-        s.ToGui([owner = s.owner, client_id, outgoing] {
-            owner->m_pending_sends.remove(client_id);
-            Q_EMIT owner->mailItemRemoved(client_id);
-            Q_EMIT owner->mailItemChanged(outgoing);
-            Q_EMIT owner->mailItemReplaced(client_id, outgoing.id);
-        });
-        s.storage_projection.jobs[job_id] = s.publication->PublishMail(job_id, std::move(mail), std::move(new_content));
-        if (s.storage_projection.jobs[job_id].phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The message could not be sent.")); });
+                mail.attachments.push_back(descriptor);
+            }
+            if (!attachment_error.isEmpty()) {
+                fail(attachment_error);
+                return;
+            }
+            CybouMailItem outgoing = message;
+            outgoing.id = QString::fromStdString(job_id);
+            outgoing.state = CybouContentState::Local;
+            outgoing.operation_state = CybouOperationState::Preparing;
+            for (int i = 0; i < outgoing.attachments.size(); ++i) {
+                auto& shown = outgoing.attachments[i];
+                shown.id = QString::fromStdString(ToHex(mail.attachments[static_cast<std::size_t>(i)].attachment_id));
+                shown.source_path.clear();
+                if (!CybouProduct::contentOnNetwork(shown.state)) shown.state = CybouContentState::Local;
+            }
+            const auto job = s.publication->PublishMail(job_id, std::move(mail), std::move(new_content));
+            s.storage_projection.jobs[job_id] = job;
+            // GetJob verifies durable job state; a transient return value is not ownership.
+            if (!s.publication->GetJob(job_id)) {
+                fail(tr("The outgoing message could not be saved. Your draft is kept."));
+                return;
+            }
+            accept(job, outgoing);
+        } catch (const std::exception&) {
+            fail(tr("Could not prepare the message. Your draft is kept."));
         }
     });
 }
@@ -254,7 +331,7 @@ void CybouCoreApplicationAdapter::retryMail(const QString& id)
     // Refused before publication: send the same message again.
     if (const auto pending = m_pending_sends.find(id); pending != m_pending_sends.end()) {
         CybouMailItem message = *pending;
-        sendMail(message);
+        sendMail(message, m_send_drafts.value(id));
         return;
     }
     m_session->Post([job_id = id.toStdString()](IdentitySession& s) { s.storage_projection.jobs[job_id] = s.publication->Resume(job_id); });
@@ -274,15 +351,24 @@ void CybouCoreApplicationAdapter::setMailStarred(const QString& id, bool starred
     m_session->Post([message_id = *message_id, starred](IdentitySession& s) { s.application->SetMailStarred(message_id, starred); });
 }
 
-void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder folder)
+void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress)
 {
     const auto message_id = FromHex(id);
     const auto target = CoreFolder(folder);
-    if (!m_session || !message_id || !target) return;
-    m_session->Post([owner = this, message_id = *message_id, target = *target](IdentitySession& s) {
-        if (!s.application->MoveMail(message_id, target)) {
-            s.ToGui([owner] { Q_EMIT owner->commandFailed(tr("This message cannot be moved there.")); });
-        }
+    if (!m_session || !message_id || !target) {
+        if (progress) progress(CybouCommandState::Failed, tr("This message cannot be moved there."));
+        return;
+    }
+    m_session->Post([message_id = *message_id, target = *target, progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+        bool ok{false};
+        try { ok = s.application->MoveMail(message_id, target); } catch (const std::exception&) { }
+        // Report the durable local commit without waiting for a full history/storage refresh.
+        s.StateToGui([owner = s.owner, progress, ok] {
+            const auto error = ok ? QString{} : tr("This message could not be moved. Try again.");
+            if (progress) progress(ok ? CybouCommandState::Committed : CybouCommandState::Failed, error);
+            else if (!ok) Q_EMIT owner->commandFailed(error);
+        });
     });
 }
 

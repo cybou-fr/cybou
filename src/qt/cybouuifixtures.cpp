@@ -68,6 +68,7 @@ CybouFileItem File(const QString& id, const QString& name, const QString& parent
     item.modified = modified;
     item.state = state;
     if (state == CybouContentState::Protected) {
+        item.min_remote_replicas = item.remote_replica_target = 2;
         item.content_root_id = QStringLiteral("b81f0c4e92d7a35e6f1c0d8b4a29e7f3c5d61a08e9b2f4c7d0a3e5b6f1c8d924");
         item.finalized_height = 1100 + static_cast<quint64>(qHash(id) % 120);
     }
@@ -196,6 +197,8 @@ QVector<CybouFileItem> FixtureFiles()
     auto archive = File(QStringLiteral("f-archive"), QStringLiteral("archive.zip"), {}, 1288490189ULL,
         At(4, 14, 3), CybouContentState::Securing);
     archive.progress_percent = 42;
+    archive.min_remote_replicas = 1;
+    archive.remote_replica_target = 2;
     archive.available_offline = true; // still uploading from this device
     files.append(archive);
     files.append(File(QStringLiteral("f-budget"), QStringLiteral("budget-2026.xlsx"), QStringLiteral("f-docs"), 245760, At(2, 11, 30)));

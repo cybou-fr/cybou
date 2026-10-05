@@ -33,6 +33,12 @@
 #include <QResizeEvent>
 #include <QStackedWidget>
 #include <QScrollArea>
+#include <QScrollBar>
+#include <QPointer>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QComboBox>
+#include <QSet>
 #include <QToolButton>
 #include <QTimer>
 #include <QTreeWidget>
@@ -940,17 +946,34 @@ void StoragePage::promptRename(const QString& id)
 
 void StoragePage::promptMove(const QString& id)
 {
-    QStringList labels{tr("My files")};
-    QStringList ids{QString{}};
+    QDialog dialog{this};
+    dialog.setWindowTitle(tr("Move"));
+    auto* layout = new QVBoxLayout{&dialog};
+    layout->addWidget(new QLabel{tr("Move to"), &dialog});
+    auto* folders = new QComboBox{&dialog};
+    folders->addItem(tr("My files"), QString{});
     for (const auto& item : m_model->fileItems()) {
-        if (item.folder && !item.trashed && item.id != id) {
-            labels << item.name;
-            ids << item.id;
+        if (!item.folder || item.trashed || item.id == id) continue;
+        QStringList path{item.name};
+        QString parent = item.parent_id;
+        QSet<QString> visited{item.id};
+        bool valid = true;
+        while (!parent.isEmpty()) {
+            if (parent == id || visited.contains(parent)) { valid = false; break; }
+            visited.insert(parent);
+            const auto* ancestor = m_model->fileItem(parent);
+            if (!ancestor || ancestor->trashed) { valid = false; break; }
+            path.prepend(ancestor->name);
+            parent = ancestor->parent_id;
         }
+        if (valid) folders->addItem(path.join(QStringLiteral(" / ")), item.id);
     }
-    bool ok{false};
-    const QString choice = QInputDialog::getItem(this, tr("Move"), tr("Move to"), labels, 0, false, &ok);
-    if (ok) m_model->requestMoveFile(id, ids.at(labels.indexOf(choice)));
+    layout->addWidget(folders);
+    auto* buttons = new QDialogButtonBox{QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog};
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() == QDialog::Accepted) m_model->requestMoveFile(id, folders->currentData().toString());
 }
 
 void StoragePage::download(const QString& id)
@@ -1017,6 +1040,8 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     if (!item->folder) {
         auto* send = menu.addAction(tr("Send by CYBOU Mail"), this, [this, id] { if (onSendByMail) onSendByMail(id); });
         send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->featureAvailability().mail);
+        send->setToolTip(!m_model->featureAvailability().mail || !onSendByMail ? tr("Mail is unavailable.")
+            : item->state != CybouContentState::Protected ? tr("This file must reach Protected before it can be attached by reference.") : QString{});
     }
     menu.addSeparator();
     menu.addAction(tr("Move to Trash"), this, [this, ids] {
@@ -1031,6 +1056,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
 
 void StoragePage::showDetails(const QString& id)
 {
+    if (m_details_id != id) m_details_advanced = false;
     m_details_id = id;
     m_details->setVisible(!id.isEmpty());
     rebuildDetails();
@@ -1070,6 +1096,8 @@ void DetailPair(QVBoxLayout* layout, const QString& key, const QString& value, Q
 void StoragePage::rebuildDetails()
 {
     if (!m_details->isVisible()) return;
+    auto* scroll = m_details->findChild<QScrollArea*>();
+    const int scroll_value = scroll ? scroll->verticalScrollBar()->value() : 0;
     auto* layout = static_cast<QVBoxLayout*>(m_details_body->layout());
     while (QLayoutItem* entry = layout->takeAt(0)) {
         if (entry->layout()) {
@@ -1085,6 +1113,8 @@ void StoragePage::rebuildDetails()
     layout->setSpacing(6);
     const auto* item = m_model->fileItem(m_details_id);
     if (!item) {
+        m_details_id.clear();
+        m_details_advanced = false;
         m_details->setVisible(false);
         return;
     }
@@ -1112,13 +1142,8 @@ void StoragePage::rebuildDetails()
     layout->addSpacing(8);
     if (!item->folder) {
         const bool online = m_model->status().online;
-        const QString retrieval = CybouProduct::retrievalText(item->retrieval);
-        DetailPair(layout, tr("Status"), retrieval.isEmpty()
-            ? (item->state == CybouContentState::Securing
-                ? CybouProduct::progressText(item->state, item->progress_percent, online)
-                : CybouProduct::contentWithOperationText(item->state,
-                    m_model->displayedOperationState(item->operation_id, item->operation_state), online))
-            : retrieval, m_details);
+        DetailPair(layout, tr("Status"), CybouProduct::fileStatusText(*item, online,
+            m_model->displayedOperationState(item->operation_id, item->operation_state)), m_details);
         DetailPair(layout, tr("On this computer"), CybouProduct::localAvailabilityText(*item), m_details);
         if (const QString saved = downloadedPath(item->id); !saved.isEmpty()) {
             // Short form (full path in the tooltip); this copy can be dragged out of CYBOU.
@@ -1130,7 +1155,7 @@ void StoragePage::rebuildDetails()
             m_details->setToolTip({});
         }
         DetailPair(layout, tr("On the network"), item->min_remote_replicas < 0
-            ? tr("Not stored on the network yet")
+            ? tr("Remote copies have not been measured yet")
             : item->remote_replica_target > 0
                 ? tr("Encrypted copies: %1 of %2").arg(item->min_remote_replicas).arg(item->remote_replica_target)
                 : tr("Encrypted copies: %1").arg(item->min_remote_replicas), m_details);
@@ -1181,12 +1206,15 @@ void StoragePage::rebuildDetails()
         dl->setProperty("cybouId", QStringLiteral("fileDownload"));
         dl->setEnabled(item->state == CybouContentState::Protected &&
             (item->retrieval == CybouRetrievalState::Idle || item->retrieval == CybouRetrievalState::Ready));
+        dl->setToolTip(item->state != CybouContentState::Protected ? tr("Download is available when network protection is complete.") : QString{});
         connect(dl, &QPushButton::clicked, this, [this, id = item->id] { download(id); });
         layout->addWidget(dl);
         auto* send = new QPushButton{tr("Send by Mail"), m_details};
         send->setObjectName(QStringLiteral("secondaryButton"));
         send->setProperty("cybouId", QStringLiteral("fileSendByMail"));
         send->setEnabled(item->state == CybouContentState::Protected && onSendByMail && m_model->featureAvailability().mail);
+        send->setToolTip(!m_model->featureAvailability().mail || !onSendByMail ? tr("Mail is unavailable.")
+            : item->state != CybouContentState::Protected ? tr("This file must reach Protected before it can be attached by reference.") : QString{});
         connect(send, &QPushButton::clicked, this, [this, id = item->id] { if (onSendByMail) onSendByMail(id); });
         layout->addWidget(send);
     }
@@ -1213,10 +1241,16 @@ void StoragePage::rebuildDetails()
         DetailPair(box_layout, tr("Local availability"), CybouProduct::localAvailabilityText(*item), box);
         DetailPair(box_layout, tr("Retrieval status"), item->retrieval == CybouRetrievalState::Idle
             ? tr("Not retrieved on this computer") : CybouProduct::retrievalText(item->retrieval), box);
-        box->setVisible(false);
+        advanced->setProperty("cybouId", QStringLiteral("fileAdvanced"));
+        advanced->setChecked(m_details_advanced);
+        box->setVisible(m_details_advanced);
         connect(advanced, &QToolButton::toggled, box, &QWidget::setVisible);
+        connect(advanced, &QToolButton::toggled, this, [this](bool open) { m_details_advanced = open; });
         layout->addWidget(box);
     }
+    QTimer::singleShot(0, this, [scroll = QPointer<QScrollArea>{scroll}, scroll_value] {
+        if (scroll) scroll->verticalScrollBar()->setValue(scroll_value);
+    });
 }
 
 void StoragePage::dragEnterEvent(QDragEnterEvent* event)

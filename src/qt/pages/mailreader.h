@@ -45,9 +45,11 @@ public:
 private:
     CybouDesktopModel* const m_model;
     QString m_id;
+    QString m_moving_id;
     QToolButton* m_back{nullptr};
     QToolButton* m_star{nullptr};
     QToolButton* m_archive{nullptr};
+    QToolButton* m_trash{nullptr};
     QLabel* m_subject{nullptr};
     QLabel* m_avatar{nullptr};
     QLabel* m_sender{nullptr};
@@ -65,6 +67,7 @@ private:
     QPushButton* m_forward{nullptr};
 
     void refresh();
+    void moveTo(CybouMailFolder folder);
 };
 
 #endif // CYBOU_QT_PAGES_MAILREADER_H

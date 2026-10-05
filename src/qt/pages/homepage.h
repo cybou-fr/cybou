@@ -9,6 +9,7 @@
 
 #include <QCoreApplication>
 #include <QWidget>
+#include <QStringList>
 
 #include <functional>
 
@@ -67,6 +68,7 @@ private:
     QLabel* m_wallet_caption{nullptr};
     QVBoxLayout* m_activity_rows{nullptr};
     QLabel* m_activity_empty{nullptr};
+    QStringList m_activity_presentation;
     QFrame* m_first_steps{nullptr};
     QVBoxLayout* m_first_steps_rows{nullptr};
     const std::function<void()> m_identity_requested;

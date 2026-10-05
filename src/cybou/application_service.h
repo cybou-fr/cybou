@@ -188,7 +188,11 @@ public:
     std::vector<MailDraft> ListDrafts();
     /// Удаляет локальный черновик по `draft_id`.
     /// \return `true`, если черновик удалён или отсутствовал.
-    bool DeleteDraft(std::string_view draft_id);
+    bool DeleteDraft(std::string_view draft_id, bool keep_send_binding = false);
+    /// Persist a stable outgoing message ID before publishing a saved draft.
+    /// A retry/restart returns the same ID, never a second publication.
+    std::optional<PrivateItemId> BindDraftToMessage(std::string_view draft_id,
+        const PrivateItemId& proposed_id);
 
     /// Возвращает собственные RecoveryBridge в каноническом порядке.
     /// \return Список мостов, пригодных для восстановления исторических KEM epoch.

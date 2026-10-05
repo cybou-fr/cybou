@@ -146,6 +146,13 @@ QVector<CybouFileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjec
             out.progress_percent = status->second.phase == cybou::PublicationJobPhase::SECURING
                 ? status->second.durability_percent : -1;
             out.finalized_height = status->second.finalized_height;
+            if (!status->second.operation_id.IsNull()) {
+                const auto durability = session.storage->GetDurability(status->second.operation_id);
+                if (durability) {
+                    out.min_remote_replicas = static_cast<int>(durability->min_replicas);
+                    out.remote_replica_target = session.storage->RemoteReplicaTarget();
+                }
+            }
         } else if (const auto op = operations.find(hex); op != operations.end()) {
             // Protected only when remote durability is known, never merely finalized.
             const auto durability = session.storage->GetDurability(op->second);

@@ -30,6 +30,13 @@ QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel&
         (operation.attention ? attention : running).append(std::move(operation));
     };
 
+    for (const auto& task : model.mailTasks()) {
+        if (task.state == CybouCommandState::Committed) continue;
+        add({Kind::LocalMail, task.item_id, task.title,
+            task.state == CybouCommandState::Failed ? task.error :
+                task.state == CybouCommandState::Running ? tr("Saving changes on this computer…") : tr("Waiting to save changes…"),
+            task.state == CybouCommandState::Failed});
+    }
     for (const auto& file : model.fileItems()) {
         if (file.folder || file.trashed) continue;
         if (file.retrieval != CybouRetrievalState::Idle && file.retrieval != CybouRetrievalState::Ready) {
@@ -93,6 +100,7 @@ CybouActivityButton::CybouActivityButton(CybouDesktopModel* model, QWidget* pare
              &CybouDesktopModel::walletChanged, &CybouDesktopModel::statusChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
+    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this, [this] { refresh(); });
     refresh();
 }
@@ -174,6 +182,7 @@ void CybouActivityButton::rebuildRows()
         switch (operation.kind) {
         case CybouActivityOperation::Kind::File: glyph = Glyph::Upload; break;
         case CybouActivityOperation::Kind::Download: glyph = Glyph::Download; break;
+        case CybouActivityOperation::Kind::LocalMail:
         case CybouActivityOperation::Kind::Mail: glyph = Glyph::Envelope; break;
         case CybouActivityOperation::Kind::Payment: glyph = Glyph::WalletCard; break;
         case CybouActivityOperation::Kind::Name: glyph = Glyph::User; break;
@@ -224,6 +233,7 @@ void CybouActivityButton::open(const CybouActivityOperation& operation)
     case CybouActivityOperation::Kind::Download:
         if (onOpenFile) onOpenFile(operation.id);
         break;
+    case CybouActivityOperation::Kind::LocalMail:
     case CybouActivityOperation::Kind::Mail:
         if (onOpenMail) onOpenMail(operation.id);
         break;

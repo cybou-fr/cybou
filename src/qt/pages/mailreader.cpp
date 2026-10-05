@@ -16,9 +16,12 @@
 #include <QLocale>
 #include <QMenu>
 #include <QPushButton>
+#include <QPointer>
 #include <QScrollArea>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 using namespace CybouUi;
 
@@ -116,33 +119,21 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     toolbar->addWidget(m_back);
     toolbar->addStretch();
     m_archive = Action(Glyph::Archive, tr("Archive"), this);
-    auto* trash = Action(Glyph::Trash, tr("Move to Trash"), this);
+    m_archive->setProperty("cybouId", QStringLiteral("readerArchive"));
+    m_trash = Action(Glyph::Trash, tr("Move to Trash"), this);
     m_star = Action(Glyph::Star, tr("Star"), this);
     m_star->setCheckable(true);
     toolbar->addWidget(m_archive);
-    toolbar->addWidget(trash);
+    toolbar->addWidget(m_trash);
     toolbar->addWidget(m_star);
     root->addLayout(toolbar);
     connect(m_archive, &QToolButton::clicked, this, [this] {
         const auto* item = m_model->mailItem(m_id);
         if (!item) return;
-        const QString id = m_id;
-        const auto from = item->folder;
-        const auto to = from == CybouMailFolder::Archive ? CybouMailFolder::Inbox : CybouMailFolder::Archive;
-        m_model->requestMoveMail(id, to);
-        m_model->notify(to == CybouMailFolder::Archive ? tr("Conversation archived") : tr("Moved to Inbox"),
-            tr("Undo"), [model = m_model, id, from] { model->requestMoveMail(id, from); });
-        if (onBack) onBack();
+        moveTo(item->folder == CybouMailFolder::Archive
+            ? item->outgoing ? CybouMailFolder::Sent : CybouMailFolder::Inbox : CybouMailFolder::Archive);
     });
-    connect(trash, &QToolButton::clicked, this, [this] {
-        const auto* item = m_model->mailItem(m_id);
-        if (!item) return;
-        const QString id = m_id;
-        const auto from = item->folder;
-        m_model->requestMoveMail(id, CybouMailFolder::Trash);
-        m_model->notify(tr("Moved to Trash"), tr("Undo"), [model = m_model, id, from] { model->requestMoveMail(id, from); });
-        if (onBack) onBack();
-    });
+    connect(m_trash, &QToolButton::clicked, this, [this] { moveTo(CybouMailFolder::Trash); });
     connect(m_star, &QToolButton::clicked, this, [this](bool on) { m_model->requestMailStarred(m_id, on); });
 
     m_subject = new QLabel{this};
@@ -263,6 +254,14 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     connect(m_forward, &QPushButton::clicked, this, [this] { if (onForward) onForward(m_id); });
 
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
+        const auto& tasks = m_model->mailTasks();
+        if (!std::any_of(tasks.begin(), tasks.end(), [this](const auto& task) {
+            return task.item_id == m_moving_id && task.kind == CybouMailTaskKind::Move &&
+                (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running);
+        })) m_moving_id.clear();
+        refresh();
+    });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
         if (m_id != old_id) return;
         m_id = new_id;
@@ -281,6 +280,29 @@ void MailReader::showMessage(const QString& id)
     refresh();
 }
 
+void MailReader::moveTo(CybouMailFolder folder)
+{
+    const auto* item = m_model->mailItem(m_id);
+    if (!item || m_moving_id == m_id) return;
+    const auto id = m_id;
+    const auto from = item->folder;
+    m_moving_id = id;
+    refresh();
+    m_model->notify(folder == CybouMailFolder::Archive ? tr("Archiving…") : tr("Moving message…"));
+    const QPointer<MailReader> guard{this};
+    m_model->requestMoveMail(id, folder, [guard, id, from, folder](bool ok, const QString& error) {
+        if (!guard) return;
+        if (guard->m_moving_id == id) guard->m_moving_id.clear();
+        guard->refresh();
+        if (!ok) { guard->m_model->notify(error); return; }
+        const auto text = folder == CybouMailFolder::Archive ? tr("Conversation archived")
+            : folder == CybouMailFolder::Trash ? tr("Moved to Trash")
+            : folder == CybouMailFolder::Sent ? tr("Moved to Sent") : tr("Moved to Inbox");
+        guard->m_model->notify(text, tr("Undo"), [model = guard->m_model, id, from] { model->requestMoveMail(id, from); });
+        if (guard->m_id == id && guard->onBack) guard->onBack();
+    });
+}
+
 void MailReader::refresh()
 {
     const auto* item = m_model->mailItem(m_id);
@@ -293,8 +315,11 @@ void MailReader::refresh()
     m_recipient->setText(tr("To: %1").arg(item->to_name));
     m_time->setText(QLocale{}.toString(item->time, QStringLiteral("MMM d, HH:mm")));
     m_star->setChecked(item->starred);
+    m_archive->setEnabled(m_moving_id != m_id);
+    m_trash->setEnabled(m_moving_id != m_id);
     m_star->setIcon(QIcon{glyphPixmap(Glyph::Star, {18, 18}, CybouTheme::color(item->starred ? CybouTheme::AMBER : CybouTheme::TEXT_SECONDARY))});
-    m_archive->setToolTip(item->folder == CybouMailFolder::Archive ? tr("Move to Inbox") : tr("Archive"));
+    m_archive->setToolTip(item->folder == CybouMailFolder::Archive
+        ? item->outgoing ? tr("Move to Sent") : tr("Move to Inbox") : tr("Archive"));
 
     if (item->state == CybouContentState::Received) {
         // Finalized and opened here; the sender's storage durability is not claimed.

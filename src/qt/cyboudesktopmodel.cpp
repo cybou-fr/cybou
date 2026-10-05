@@ -24,6 +24,9 @@
 #include <QCryptographicHash>
 #include <QFileInfo>
 #include <QHash>
+#include <QPointer>
+#include <QTimer>
+#include <QUuid>
 #include <QSettings>
 #include <QRegularExpression>
 
@@ -253,6 +256,10 @@ void CybouDesktopModel::syncIdentitySession()
         state == CybouIdentityState::NeedsAttention;
     if (open == m_session_open) return;
     m_session_open = open;
+    ++m_mail_generation;
+    m_mail_tasks.clear();
+    m_mail_ids.clear();
+    Q_EMIT mailTasksChanged();
     if (!open) {
         // Private semantic data never outlives the unlocked Identity.
         const bool had_mail = !m_mail.isEmpty();
@@ -293,7 +300,12 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
             if (m_session_open) upsertMailItem(item);
         });
         connect(m_backend, &B::mailItemRemoved, this, &CybouDesktopModel::removeMailItem);
-        connect(m_backend, &B::mailItemReplaced, this, &CybouDesktopModel::mailIdReplaced);
+        connect(m_backend, &B::mailItemReplaced, this, [this](const QString& old_id, const QString& new_id) {
+            if (!m_session_open) return;
+            m_mail_ids.insert(old_id, new_id);
+            for (auto& task : m_mail_tasks) if (task.related_id == old_id) task.related_id = new_id;
+            Q_EMIT mailIdReplaced(old_id, new_id);
+        });
         connect(m_backend, &B::mailStateChanged, this, &CybouDesktopModel::setMailState);
         connect(m_backend, &B::attachmentStateChanged, this, &CybouDesktopModel::setAttachmentState);
         connect(m_backend, &B::attachmentRetrievalChanged, this, &CybouDesktopModel::setAttachmentRetrieval);
@@ -357,6 +369,7 @@ void CybouDesktopModel::setNames(QVector<CybouNameItem> names)
 
 void CybouDesktopModel::setMailItems(QVector<CybouMailItem> items)
 {
+    if (items == m_mail) return;
     m_mail = std::move(items);
     Q_EMIT mailChanged();
 }
@@ -412,18 +425,34 @@ void CybouDesktopModel::requestMailStarred(const QString& id, bool starred)
     if (mailReady() && item && item->starred != starred) m_backend->setMailStarred(id, starred);
 }
 
-void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folder)
+void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folder, CommandDone done)
 {
     const auto* item = mailItem(id);
-    if (mailReady() && item && item->folder != folder) m_backend->moveMail(id, folder);
+    if (!mailReady() || !item) {
+        if (done) QTimer::singleShot(0, this, [done] { done(false, tr("Mail is unavailable.")); });
+        return;
+    }
+    // Do not skip an apparent no-op: an earlier queued move may still commit.
+    const QString title = folder == CybouMailFolder::Archive ? tr("Archiving message")
+        : folder == CybouMailFolder::Trash ? tr("Moving message to Trash") : tr("Moving message");
+    const QPointer<CybouDesktopModel> guard{this};
+    m_backend->moveMail(id, folder, mailCommand(id, title, [guard, id, folder, done](bool ok, const QString& error) {
+        if (guard && ok) {
+            if (const auto* current = guard->mailItem(id)) {
+                auto changed = *current;
+                changed.folder = folder;
+                guard->upsertMailItem(changed);
+            }
+        }
+        if (done) done(ok, error);
+        else if (!ok && guard) guard->notify(error);
+    }, CybouMailTaskKind::Move));
 }
 
 namespace {
 QString NewLocalId(const char* prefix)
 {
-    static quint64 counter = 0;
-    return QStringLiteral("%1-%2-%3").arg(QLatin1String{prefix})
-        .arg(QDateTime::currentMSecsSinceEpoch()).arg(++counter);
+    return QStringLiteral("%1-%2").arg(QLatin1String{prefix}, QUuid::createUuid().toString(QUuid::WithoutBraces));
 }
 
 QString PreviewOf(const QString& body)
@@ -432,7 +461,45 @@ QString PreviewOf(const QString& body)
 }
 } // namespace
 
-QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft)
+std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::mailCommand(
+    const QString& item_id, const QString& title, CommandDone done, CybouMailTaskKind kind, const QString& related_id)
+{
+    const QString command_id = NewLocalId("command");
+    const auto generation = m_mail_generation;
+    m_mail_tasks.removeIf([&](const auto& task) { return task.item_id == item_id && task.title == title &&
+        (task.state == CybouCommandState::Committed || task.state == CybouCommandState::Failed); });
+    m_mail_tasks.append({command_id, item_id, title, CybouCommandState::Queued, {}, QDateTime::currentDateTime(), kind, related_id});
+    Q_EMIT mailTasksChanged();
+    const QPointer<CybouDesktopModel> guard{this};
+    return [guard, generation, command_id, done = std::move(done)](CybouCommandState state, const QString& error) {
+        if (!guard) return;
+        // Queued delivery also makes synchronous fixtures behave like the worker.
+        QTimer::singleShot(0, guard, [guard, generation, command_id, state, error, done] {
+            if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
+            auto& tasks = guard->m_mail_tasks;
+            const auto it = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == command_id; });
+            if (it == tasks.end() || it->state == CybouCommandState::Committed || it->state == CybouCommandState::Failed) return;
+            it->state = state;
+            it->error = error;
+            Q_EMIT guard->mailTasksChanged();
+            // A listener may lock the Identity or destroy the model reentrantly.
+            if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
+            if (state == CybouCommandState::Committed || state == CybouCommandState::Failed) {
+                if (done) done(state == CybouCommandState::Committed, error);
+                else if (state == CybouCommandState::Failed) guard->notify(error);
+                if (!guard || guard->m_mail_generation != generation) return;
+                // Bound completed/failed task retention without dropping active work.
+                int terminal = 0;
+                for (auto i = tasks.end(); i != tasks.begin();) {
+                    --i;
+                    if ((i->state == CybouCommandState::Committed || i->state == CybouCommandState::Failed) && ++terminal > 32) i = tasks.erase(i);
+                }
+            }
+        });
+    };
+}
+
+QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft, CommandDone done)
 {
     if (!mailReady()) return {};
     if (draft.id.isEmpty()) draft.id = NewLocalId("draft");
@@ -443,7 +510,7 @@ QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft)
     draft.from_name = m_status.primary_name;
     draft.time = QDateTime::currentDateTime();
     draft.preview = PreviewOf(draft.body);
-    m_backend->saveMailDraft(draft);
+    m_backend->saveMailDraft(draft, mailCommand(draft.id, tr("Saving draft"), std::move(done)));
     return draft.id;
 }
 
@@ -452,11 +519,11 @@ void CybouDesktopModel::requestDeleteMail(const QString& id)
     if (mailReady() && mailItem(id)) m_backend->deleteMail(id);
 }
 
-QString CybouDesktopModel::requestSendMail(CybouMailItem message)
+QString CybouDesktopModel::requestSendMail(CybouMailItem message, CommandDone done)
 {
     if (!mailReady()) return {};
-    // A sent draft becomes the outgoing message.
-    if (!message.id.isEmpty() && mailItem(message.id)) m_backend->deleteMail(message.id);
+    // The backend saves the payload before preparing a publication.
+    const QString draft_id = message.id.startsWith(QStringLiteral("draft-")) ? message.id : NewLocalId("draft");
     message.id = NewLocalId("out");
     message.folder = CybouMailFolder::Sent;
     message.outgoing = true;
@@ -473,7 +540,7 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message)
     // Optimistic Preparing; the backend is the authority from here on and
     // never reports Sent before the content is Protected.
     upsertMailItem(message);
-    m_backend->sendMail(message);
+    m_backend->sendMail(message, draft_id, mailCommand(draft_id, tr("Preparing message"), std::move(done), CybouMailTaskKind::Send, message.id));
     return message.id;
 }
 
@@ -565,6 +632,7 @@ CybouAttachmentItem CybouDesktopModel::localAttachment(const QString& path) cons
 
 void CybouDesktopModel::setFileItems(QVector<CybouFileItem> items)
 {
+    if (items == m_files) return;
     m_files = std::move(items);
     Q_EMIT filesChanged();
 }

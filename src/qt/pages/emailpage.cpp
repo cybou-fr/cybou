@@ -15,6 +15,8 @@
 #include <QDropEvent>
 #include <QFrame>
 #include <QMenu>
+#include <QPointer>
+#include <memory>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
@@ -127,6 +129,8 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
 {
     auto* row = new QWidget{parent};
     row->setObjectName(QStringLiteral("mailRow"));
+    // List selection and dragging belong to the viewport, including presses on child labels.
+    row->setAttribute(Qt::WA_TransparentForMouseEvents);
     row->setAccessibleName(EmailPage::tr("%1, %2%3").arg(RowPeer(item), item.subject,
         item.unread ? EmailPage::tr(", unread") : QString{}));
     auto* layout = new QHBoxLayout{row};
@@ -400,8 +404,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     shortcut(QKeySequence::Delete, [this, typing] {
         if (typing() || m_detail->currentWidget() != m_reader) return;
-        m_model->requestMoveMail(m_reader->messageId(), CybouMailFolder::Trash);
-        closeDetail();
+        moveMessagesTo({m_reader->messageId()}, View::Trash);
     });
     shortcut(QKeySequence{Qt::Key_Escape}, [this] {
         if (m_detail->currentWidget() == m_reader) closeDetail();
@@ -437,43 +440,43 @@ int EmailPage::folderRowAt(const QPoint& viewport_pos) const
 
 void EmailPage::moveMessagesTo(const QStringList& ids, View target)
 {
-    struct Before { QString id; CybouMailFolder folder; bool starred; };
+    struct Before { QString id; CybouMailFolder folder; };
+    struct Batch { QVector<Before> succeeded; int remaining{0}; int failed{0}; };
     QVector<Before> before;
     for (const auto& id : ids) {
         const auto* item = m_model->mailItem(id);
-        if (!item || item->draft) continue;
-        before.append({id, item->folder, item->starred});
+        if (!item || item->draft || (target == View::Inbox && (item->outgoing || item->folder == CybouMailFolder::Sent))) continue;
+        before.append({id, item->folder});
     }
-    if (before.isEmpty()) return;
-    QString text;
+    if (before.isEmpty() || target == View::Sent || target == View::Drafts) return;
+    if (target == View::Starred) {
+        for (const auto& entry : before) m_model->requestMailStarred(entry.id, true);
+        return;
+    }
+    const auto batch = std::make_shared<Batch>();
+    batch->remaining = before.size();
+    const auto folder = target == View::Archive ? CybouMailFolder::Archive
+        : target == View::Trash ? CybouMailFolder::Trash : CybouMailFolder::Inbox;
+    m_model->notify(target == View::Archive ? tr("Archiving…") : tr("Moving messages…"));
+    const QPointer<EmailPage> guard{this};
     for (const auto& entry : before) {
-        switch (target) {
-        case View::Starred: m_model->requestMailStarred(entry.id, true); break;
-        case View::Archive: m_model->requestMoveMail(entry.id, CybouMailFolder::Archive); break;
-        case View::Trash: m_model->requestMoveMail(entry.id, CybouMailFolder::Trash); break;
-        case View::Inbox:
-            // Only received mail belongs in Inbox; sent mail stays in Sent.
-            if (entry.folder != CybouMailFolder::Sent) m_model->requestMoveMail(entry.id, CybouMailFolder::Inbox);
-            break;
-        case View::Sent:
-        case View::Drafts:
-            return;
-        }
+        m_model->requestMoveMail(entry.id, folder, [guard, batch, entry, target](bool ok, const QString&) {
+            if (!guard) return;
+            if (ok) {
+                batch->succeeded.append(entry);
+                if (entry.id == guard->m_current_id) guard->closeDetail();
+            } else ++batch->failed;
+            if (--batch->remaining != 0) return;
+            const int count = batch->succeeded.size();
+            QString text = target == View::Archive ? tr("%1 conversations archived").arg(count)
+                : target == View::Trash ? tr("%1 conversations moved to Trash").arg(count)
+                : tr("%1 conversations moved to Inbox").arg(count);
+            if (batch->failed) text += tr(" · %1 could not be moved. Try again.").arg(batch->failed);
+            guard->m_model->notify(text, count ? tr("Undo") : QString{}, count ? std::function<void()>{[model = guard->m_model, batch] {
+                for (const auto& previous : batch->succeeded) model->requestMoveMail(previous.id, previous.folder);
+            }} : std::function<void()>{});
+        });
     }
-    const int count = static_cast<int>(before.size());
-    switch (target) {
-    case View::Starred: text = count == 1 ? tr("Starred") : tr("%1 conversations starred").arg(count); break;
-    case View::Archive: text = count == 1 ? tr("Conversation archived") : tr("%1 conversations archived").arg(count); break;
-    case View::Trash: text = count == 1 ? tr("Moved to Trash") : tr("%1 conversations moved to Trash").arg(count); break;
-    default: text = count == 1 ? tr("Moved to Inbox") : tr("%1 conversations moved to Inbox").arg(count); break;
-    }
-    if (before.size() == 1 && before.first().id == m_current_id && target != View::Starred) closeDetail();
-    m_model->notify(text, tr("Undo"), [model = m_model, before] {
-        for (const auto& entry : before) {
-            model->requestMoveMail(entry.id, entry.folder);
-            model->requestMailStarred(entry.id, entry.starred);
-        }
-    });
 }
 
 void EmailPage::deleteForever(const QStringList& ids)

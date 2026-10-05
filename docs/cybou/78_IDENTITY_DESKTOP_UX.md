@@ -21,3 +21,17 @@ Restore accepts 24 words on a clean machine, derives the key roles, locates Acco
 Identity rotation confirms a new 24-word phrase, saves and reopens a candidate vault, journals exact IdentityRotate bytes, and keeps the current vault until verified finality. An interrupted rotation resumes from the encrypted candidate and exact journal. Phrase viewing remains behind reauthentication. Distinguish local errors, network rejection, and pending finality without leaking secrets.
 
 Acceptance requires interrupted-creation recovery, clean-machine restore, wrong-password/tamper rejection, exact retry after uncertain delivery, and continuity of AccountID, name, and balances through IdentityRotate.
+
+## Product readiness and onboarding (delivery target)
+
+Explain explicit Full Node local storage capacity (default 15 GiB, minimum
+15 GiB), disk availability and service budget in plain language. No storage
+role selector exists. Do not require completed peer sync to create an Identity
+or imply that peer sync proves globally current state. Separate Identity
+creation, name registration and Mail/Files readiness with resumable progress.
+
+Distinguish password/vault, current recovery phrase, published content recovery
+and device-local drafts/preferences. Record phrase confirmation as a local user
+action, not evidence of a recoverable external backup. Clean-machine restore
+acceptance needs actual available encrypted content and historical-KEM recovery,
+not only a successfully opened vault.

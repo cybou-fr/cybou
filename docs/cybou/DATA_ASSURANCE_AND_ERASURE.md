@@ -8,6 +8,14 @@ This document does not introduce a wire format, consensus operation, service,
 network, key role or change to frozen decisions. Proposed mechanisms below are
 unimplemented and require an architecture decision before implementation.
 
+Source alignment note (2026-10-05): the original baseline below is dated.
+The active storage economy now implements provider-signed receipts, off-chain
+audit evidence and payout-binding verification; these are not proposals to
+start from zero. Canonical mutual reliability, independent failure-domain
+evidence, remote purge receipts and crypto-erasure remain unestablished.
+Current implementation truth is `26_IMPLEMENTATION_STATUS.md`; desktop evidence
+presentation and its remaining APIs follow `DESKTOP_UX_DELIVERY_PLAN.md`.
+
 ## Evidence contract
 
 A security status must identify the property, evidence, verification scope and
@@ -25,12 +33,12 @@ check cannot prove that the endpoint is uncompromised or that no key ever leaked
 | Content confidentiality | `encrypted_chunk.cpp`: ContentKey, per-chunk salt, HKDF, ChaCha20-Poly1305, network/header AAD; `root_publication.cpp`: KEM-wrapped key | Providers receive encrypted content; authorized clients can authenticate decryption | Does not establish absence of endpoint compromise, key export or traffic metadata leakage | Trace plaintext/key flow through staging, transport, logging and failure paths; reject altered ciphertext/AAD |
 | Integrity | Exact encrypted bytes hashed to ChunkID; finalized authorization Merkle root; AEAD verification | Retrieved bytes match the authorized encrypted object and decrypt authentically | Does not establish availability or authorship merely from a hash | Corrupted chunk, wrong inclusion proof and wrong decryption context must fail before application use |
 | Publication authenticity/finality | Identity operation authorization and locally executed PoA-finalized block | Authorized publication included in canonical state | PoA may censor or stop; a peer ACK is not finality | Verify inclusion and state transition locally; keep pending/unknown distinct |
-| Remote admission | `StorageService::Place`: STORED/ALREADY_STORED and encrypted local placement records | Client observed successful admission to the recorded provider | No durable signed provider receipt; ACK is not proof of continued possession | Read each required chunk back and verify ChunkID; distinguish admission from subsequent checks |
+| Remote admission | `StorageService` admission validates a receipt signed by the proven StorageId, bound to network/publication/chunk/size, and saves it with local evidence before counting a new placement | Signed admission evidence from the recorded provider | A receipt is not proof of continued possession, independent failure domains or canonical reliability | Verify signer/binding/persistence failures; GET plus ChunkID checks establish subsequent possession only at the observed time |
 | Replica diversity | On-demand storage-key proof; placement deduplicates StorageId | Different proven storage keys | Different keys do not prove separate disks, hosts, operators or failure domains | One key on multiple endpoints counts once; investigate correlated-provider selection |
 | Availability | `Audit` reads all recorded chunks; `AuditNextPlacement` rotates through a bounded subset; GET plus ChunkID verification | Checked chunks were retrievable and intact during the check | Bounded pass does not check the whole object at once; no continuous-availability proof or persisted per-replica freshness guarantee established by this review | Report checked scope and time; exercise timeout, corruption and partial-object failure |
 | Repair/recoverability | `StorageService` removes failed placements and attempts replacement from valid local/remote bytes | Can restore the target when a valid source and admitting destination are reachable | Lost final replica is unrecoverable; cache is evictable and not a remote replica; finality alone says nothing about recoverability | Restore after a provider failure; fail honestly when no valid source exists; test clean-machine recovery separately |
 | Reciprocal storage | Explicit local capacity and paid finalized storage leases | Local capacity policy plus canonical paid lease | Allocation and signed promises would not prove actual 1:3 service contribution | Define measured contribution, Identity binding and Sybil resistance before claiming enforced reciprocity |
-| Revocation | Finalized author-only RevokePublication; admission rejects revoked publications | Publication no longer authorizes new storage admission and quota is freed | Finalization depends on PoA; historical block bytes remain | Verify author checks, finality, quota release and rejection of revoked admission |
+| Revocation | Finalized author-only RevokePublication; admission rejects revoked publications | Publication no longer authorizes new admission; author's lease closes after the current period | Finalization depends on PoA; historical block bytes remain and failed purge retains physical byte accounting | Verify author checks, finality, lease closure and rejection of revoked admission |
 | Provider purge | `FinalizedChunkStore::PurgePublication` removes associations and unshared admitted blobs | Compliant provider attempts managed deletion after revocation | Shared chunks remain; failed unlink retains byte accounting and a durable purge marker for retry; no remote purge receipt; hidden copies are unknowable | Covered by locked-blob, restart-boundary, missed-revocation and shared-reference regressions; filesystem power-loss durability remains unverified |
 | Per-object crypto-erasure | No complete mechanism established | No current crypto-erasure guarantee | Historical self/recipient capsules and retained KEM material can recover ContentKey if corresponding bytes survive | Attempt unwrap from historical capsules after catalog deletion, revocation and rotation |
 | Mail deletion | Local semantic deletion and author revocation of eligible publications | Removes managed references according to implemented policy | Cannot revoke plaintext or keys already held by recipients | Separate deletion of own copy, publication revocation and recipient retention |
@@ -162,11 +170,12 @@ whether crypto-erasure is available.
    replica/audit language explicitly rather than changing lower-level documents
    into a competing architecture.
 4. Verify purge crash/failure behavior and repair/recovery scenarios above.
-5. Specify provider-signed durable receipts as a proposal: network/publication
-   binding, exact chunk coverage, signer proof, persistence-before-signing,
-   lifetime, replay bounds and revocation semantics. Signatures prove an
-   obligation; continued storage needs independent checks. Decide whether a
-   canonical register is necessary only after defining accounting consequences.
+5. Validate the implemented provider-signed receipts and off-chain evidence:
+   network/publication/chunk/size binding, signer proof, persistence, replay
+   bounds and revocation semantics. Signatures do not prove continued storage;
+   subsequent checks need declared scope and freshness. Any further canonical
+   register requires an accounting/evidence decision; do not introduce per-audit
+   records contrary to the frozen storage economy through a UI feature.
 6. Resolve mutable recovery-store durability and erasure semantics before
    changing RootPublication or discovery. Review consensus/history compatibility
    explicitly; any provisioning or cutover remains separately authorized.

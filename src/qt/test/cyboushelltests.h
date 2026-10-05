@@ -67,6 +67,9 @@ private Q_SLOTS:
     void runtimeStartupFailureCanBeRetried();
     void runtimeRetiresStateFromAnotherNetwork();
     void backendCommandsDriveProjection();
+    void localMailCommandsWaitForCommit();
+    void composerKeepsTextOnSaveAndSendFailure();
+    void fileAdvancedSurvivesRefresh();
     void liveFeatureAvailabilityStayHonest();
     void fixtureLifecycleFollowsBackend();
     void filesShowLocalAvailability();

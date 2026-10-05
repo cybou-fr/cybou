@@ -37,7 +37,7 @@ must satisfy both.
 ```text
 [ ] drag/drop PDF or photo into Compose
 [ ] UI shows Preparing / Uploading / Securing / Protected
-[ ] Send is not treated as ready while required attachment durability is missing
+[ ] Send can begin after local preparation; Sent is never shown before finality and required remote durability
 [ ] attachment bytes are encrypted before Object Storage upload and never enter consensus content
 [ ] recipient offline during send can later retrieve/decrypt attachment
 [ ] corrupted ciphertext/integrity failure never opens plaintext
@@ -68,7 +68,7 @@ must satisfy both.
 [ ] Send never blocks the Qt event loop
 [ ] pending/uncertain/finalized states remain distinct
 [ ] finalized ledger survives restart
-[ ] Service Balance language remains consistent with docs 52 and 72
+[ ] System Balance language remains consistent with docs 52 and 72
 [ ] concurrent Name and Wallet requests serialize through the shared coordinator
 [ ] no second account operation is issued while Identity has an unresolved operation
 [ ] uncertain operations survive restart and reconcile/retry with the same bytes and OperationID
@@ -182,3 +182,68 @@ Stan opens Files
 The demonstration should feel like familiar productivity software. The
 protocol, PQ cryptography, PoA finality and distributed storage should improve
 trust and resilience without becoming mandatory UI concepts.
+
+## 12. Durable local actions and draft loss prevention
+
+```text
+[ ] slow archive/trash shows immediate pending feedback and stays responsive
+[ ] Archived/Saved appears only after the relevant local durable commit
+[ ] injected DB/save failure retains content and does not show success
+[ ] multi-item failure identifies completed/failed items and retry is bounded
+[ ] Undo issued during a pending move produces the intended final folder
+[ ] autosave/close/lock/restart retain acknowledged drafts without duplicate send
+[ ] recipient-resolution/preparation failure retains the previous draft payload
+[ ] native mouse drag from real rows to Archive/Trash works at supported DPI
+[ ] toolbar/context menu/keyboard/drop share the same outcome and error handling
+```
+
+## 13. Stable views and complete Files evidence
+
+```text
+[ ] unchanged snapshots do not flicker or rebuild visible rows
+[ ] Advanced, scroll, selection and focus survive refresh and indexed-ID replacement
+[ ] lock clears private details, compose and any diagnostic output
+[ ] 1/2, unknown, stale, repair and failure states remain distinct and actionable
+[ ] absent replica measurement never renders as zero copies
+[ ] local availability, finality, protection and retrieval remain separate
+[ ] Protected Files → Mail opens Compose or shows a specific actionable failure
+[ ] unsupported pending reference is explained rather than silently enabled
+[ ] duplicate destination names cannot cause the wrong folder ID to be used
+[ ] recursive folder upload enumeration does not block the GUI
+[ ] failed destination replacement leaves an existing downloaded file intact
+[ ] Last updated/manual Refresh requests bounded work without full audit/rescan
+```
+
+## 14. Network and Advanced extensions
+
+Run these when the corresponding surface is delivered; mark unavailable target
+features explicitly instead of counting them as passed Beta acceptance.
+
+```text
+[ ] map positions are labeled illustrative and only real observed peers appear
+[ ] LAN/unknown peers are not invented French city locations
+[ ] local peer count/availability is never called total network/global uptime
+[ ] any top-N ranking has a window/sample scope and cannot affect paid placement
+[ ] quiet network/block age alone does not show false outage
+[ ] map has a readable list and keyboard-accessible non-color-only states
+[ ] explorer separates verified finalized facts, local candidates and off-chain evidence
+[ ] displayed name/IP cannot grant signer or settlement authority
+[ ] own-content inspector/console cannot enumerate foreign chunks or expose keys
+[ ] running jobs and private output clear safely on lock/session replacement
+[ ] output size, traversal, history retention and exports are bounded/redacted
+[ ] production UI cannot launch BUILD_TESTS loadgen/smoke/soak implicitly
+```
+
+## 15. Assurance and deletion scope
+
+```text
+[ ] security labels identify capability, evidence scope and freshness
+[ ] mnemonic/vault recovery distinguishes published data from local drafts/preferences
+[ ] two distinct storage identities are not claimed as independent failure domains
+[ ] Beta acceptance records real independent remote domains, not colocated DEV peers
+[ ] Trash, finalized deletion, revocation/lease closure and purge are distinguished
+[ ] missing remote purge evidence remains unknown, never a fabricated receipt
+[ ] shared-reference/unlink-failure/restart purge tests preserve byte accounting
+[ ] historical capsules, recipient copies and backups are disclosed as erasure limits
+[ ] no blanket RGPD/certification/crypto-erasure badge is inferred from encryption
+```

@@ -1,6 +1,55 @@
 # Implementation status
 
-Status: code/evidence reviewed on 2026-10-04; deployment statements retain their stated scope.
+Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
+desktop updates below; deployment statements retain their stated scope.
+
+## Desktop UX source review (2026-10-05)
+
+Source inspection at HEAD `cc6c18e` plus the current worktree confirms live
+Mail/Files, encrypted local drafts, attachment references, application history
+indexes, the extracted Identity worker/projections and existing Authority
+finalizer/settlement controls. The Files product contract's former statement
+that the encrypted catalog was not connected was obsolete.
+
+The first implementation slice, based on HEAD `77a29d2`, is now in the working
+tree: correlated Queued/Running/Committed/Failed Mail tasks, archive batch
+acknowledgement and Undo after commit, debounced draft autosave with save-error
+retention, and send acknowledgement after durable publication-job ownership.
+An encrypted draft-to-message binding survives restart/stale compose replay;
+successful handoff retains this local binding, explicit discard removes it.
+One failed worker command no longer drops the remaining dequeued batch.
+
+Files Advanced and detail scroll survive snapshot updates; active-job copy
+counts are filled and unknown counts are explicit. Disabled Files-to-Mail and
+download actions explain their protection gates. Folder destinations use IDs
+and breadcrumbs. Downloads use atomic QSaveFile commit, preserving an existing
+destination on retrieval/write/commit failure. Unchanged semantic Mail/Files
+snapshots suppress signals and Home avoids unchanged activity reconstruction.
+Mail row children pass mouse input to the existing drag/select viewport.
+
+Remaining delivery work includes native drag acceptance, incremental row/ID
+replacement behavior, manual refresh and evidence timestamps, asynchronous
+folder enumeration and measured worker/shutdown latency. Files-to-Mail remains
+restricted to Protected references; pending-content compose needs the durable
+reference design in the delivery plan. Map/explorer/console and the broader
+assurance packages remain target work.
+
+Current diagnostics do not supply a global node census, city locations, remote
+uptime or canonical placement reliability. A schematic local-peer map and
+scoped metrics are feasible targets; broader observability and ranking require
+new evidence/privacy design. Existing distinct DEV storage peers share a host
+and do not prove Beta failure-domain independence.
+
+See [`DESKTOP_UX_DELIVERY_PLAN.md`](DESKTOP_UX_DELIVERY_PLAN.md) for delivery
+dependencies and [`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md) for
+new product boundaries. Validation for this slice: all 53 Qt shell tests passed
+(including three new failure/acknowledgement/Advanced regression cases), and
+all 12 ApplicationService tests passed. Logs are under
+`artifacts/uiux-implementation-20261005/`. A separately linked/deployed GUI
+review build avoids replacing the executable/DLLs held by the running desktop.
+These are local component/Qt checks, not distributed durability, native drag
+or live-network acceptance. The implementation is not deployed to the running
+desktop or VPS.
 This page describes
 implementation and deployment reality; `AGENTS.md` and the frozen architecture
 define the target. The changes described here include committed local development; commit status is not release or deployment evidence.

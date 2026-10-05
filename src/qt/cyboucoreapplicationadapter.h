@@ -52,12 +52,12 @@ public:
     void openIdentity() override;
     void closeIdentity() override;
 
-    void saveMailDraft(const CybouMailItem& draft) override;
-    void sendMail(const CybouMailItem& message) override;
+    void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) override;
+    void sendMail(const CybouMailItem& message, const QString& draft_id = {}, CommandProgress progress = {}) override;
     void retryMail(const QString& id) override;
     void setMailRead(const QString& id, bool read) override;
     void setMailStarred(const QString& id, bool starred) override;
-    void moveMail(const QString& id, CybouMailFolder folder) override;
+    void moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress = {}) override;
     void deleteMail(const QString& id) override;
     void downloadAttachment(const QString& message_id, const QString& attachment_id,
         const QString& destination) override;
@@ -111,6 +111,7 @@ private:
     QSet<QString> m_deleted_mail;
     /** Sends not yet taken over by the worker (or refused before publication). */
     QHash<QString, CybouMailItem> m_pending_sends;
+    QHash<QString, QString> m_send_drafts;
     /** Model client IDs of created items -> private item IDs. */
     QHash<QString, QString> m_client_ids;
     /** Starred is local-only Files state. */

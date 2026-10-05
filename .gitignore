@@ -44,3 +44,7 @@ target/
 
 # Private offline secrets (network root keys, identity seed material, private provisioning artifacts)
 /private/
+
+# Local run artifacts (binaries, logs, screenshots, tokens) and generated battle reports
+/artifacts/
+/docs/cybou/battle/

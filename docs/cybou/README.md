@@ -38,6 +38,7 @@ from or conflicting with higher levels:
 | [`20_PROTOCOL_SERIALIZATION.md`](20_PROTOCOL_SERIALIZATION.md) | Deterministic wire formats and bounded binary schemas | Level 2 | Active |
 | [`21_RELEASE_SECURITY.md`](21_RELEASE_SECURITY.md) | Release signing and distribution integrity | Level 2 | Active |
 | [`22_ROADMAP.md`](22_ROADMAP.md) | Protocol and product roadmap | Level 4 | Active |
+| [`DESKTOP_UX_DELIVERY_PLAN.md`](DESKTOP_UX_DELIVERY_PLAN.md) | Source-aligned desktop work packages and evidence gates | Level 4 | Active plan |
 | [`24_DECISIONS.md`](24_DECISIONS.md) | Frozen architecture decisions and superseded history | Level 1 | Frozen |
 | [`25_OPEN_QUESTIONS.md`](25_OPEN_QUESTIONS.md) | Open architectural trade-offs and research questions | Level 4 | Active |
 | [`26_IMPLEMENTATION_STATUS.md`](26_IMPLEMENTATION_STATUS.md) | Implemented code truth, prototype gap, and test evidence | Level 3 | Implementation status |
@@ -66,6 +67,7 @@ from or conflicting with higher levels:
 | [`83_STORAGE_UI_UX.md`](83_STORAGE_UI_UX.md) | Files client UX contract and interaction patterns | Level 5 | Product target |
 | [`84_PRODUCT_DESIGN_SYSTEM.md`](84_PRODUCT_DESIGN_SYSTEM.md) | Desktop design tokens, components, and patterns | Level 5 | Product target |
 | [`85_BETA_UI_ACCEPTANCE.md`](85_BETA_UI_ACCEPTANCE.md) | Acceptance test scenarios for desktop Beta | Level 5 | Product target |
+| [`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md) | Scoped France map, Authority explorer, own-content diagnostics and evidence UX | Level 5 | Product target |
 | [`86_IDENTITY_SECURITY_SUBSTRATE.md`](86_IDENTITY_SECURITY_SUBSTRATE.md) | Identity security substrate and key store boundaries | Level 2 | Active |
 | [`87_IDENTITY_OPERATION_COORDINATOR.md`](87_IDENTITY_OPERATION_COORDINATOR.md) | In-flight identity operation serialization and retry | Level 2 | Active |
 | [`89_IDENTITY_KEM_PUBLICATION.md`](89_IDENTITY_KEM_PUBLICATION.md) | Public KEM package commitment and epoch publication | Level 2 | Active |

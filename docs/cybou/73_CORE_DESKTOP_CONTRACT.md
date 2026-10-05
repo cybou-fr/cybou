@@ -26,7 +26,7 @@ network-bound item: chain/state, genesis, Identity, vault, AccountID, signing
 and KEM keys, Wallet, Names, Mail, Files, Application DB, peer DB, storage
 metadata. The GUI neither approves nor migrates old
 Identity data; it reports the completed transition, for example « Le réseau
-CYBOU a été réinitialisé pour une nouvelle version ». Theme, language, other
+CYBOU a changé de réseau ». Theme, language, other
 application-global preferences and validated Geo cache live outside the network domain.
 
 ## Data and request boundaries
@@ -64,12 +64,16 @@ When a new finalized block arrives, the node re-executes held candidates
 against it; one that is no longer valid becomes Failed. There is no
 provisional state to roll back.
 
-The separate content axis includes:
-`Local → Preparing → Securing → Protected → Received`, or `Temporarily unavailable` / `Needs attention`.
+The separate outgoing content axis includes:
+`Local → Securing → Protected`, or `Temporarily unavailable` / `Needs attention`.
+Preparing belongs to operation/local preparation progress, not a distinct
+content enum. Received is an incoming Mail state, not a successor to Protected.
 Outgoing content remains Local until finality.
 Finalized content enters Securing while remote replicas are placed/repaired.
 Development requires 1 remote full replica; Beta requires 2 independent remote full replicas
 (plus local copy = 3 physical copies total). Local encrypted cache does not count toward remote durability.
+Retrieval has its own progress: Idle / Downloading / Verifying / Decrypting /
+Ready. Local offline availability is independent of remote protection.
 Mail maps Protected to Sent. Incoming Mail is Received after verified finality and decryption;
 the recipient does not claim proof of sender durability.
 
@@ -77,7 +81,7 @@ the recipient does not claim proof of sender durability.
 
 A UI feature becomes available only when its backend path is live. Mail needs
 publication, scanning, retrieval and mailbox projection. Files needs private
-catalog publication, retrieval and durability. Storage is intrinsic to each Full Node with a local quota. PoA finalization
+catalog publication, retrieval and durability. Storage is intrinsic to each Full Node with explicit local capacity, not a canonical storage quota. PoA finalization
 requires the private key matching genesis. Bootstrap is an ordinary CYBOU full peer
 with a known locator. France-only public P2P admission is mandatory in DEV and production;
 optional VPN/proxy/Tor filtering is local policy. Qt displays core decisions.
@@ -91,3 +95,41 @@ System Balance: Y CYBOU
 
 The controller shows no AUTH, Age, Activity, System contribution or
 scanned-height fields.
+
+## Local command acknowledgements and stable projections (delivery target)
+
+Archive, mailbox trash and draft save are local encrypted Application DB
+commands; they do not wait for PoA finality. Their UI success requires a
+successful durable local commit. Files catalog mutations and publication
+revocations have a separate network lifecycle. Never reuse a local success
+toast as evidence of finality, remote replication or purge.
+
+SaveDraft, send preparation and mailbox moves now accept queued GUI progress
+callbacks; the desktop model correlates them with opaque local command IDs and
+the current Identity session generation. Other command paths still require
+equivalent acknowledgement work. Use a correlated command identifier,
+affected semantic item identifiers, session generation and queued/running/
+committed/failed results. A UI/task identifier is not an OperationID and never
+enters the wire or canonical state. Item identifiers must survive pending-to-
+indexed reconciliation through an explicit mapping. Serialize dependent edits
+and Undo; retain failed draft content and expose retry without duplicate send.
+
+Draft send handoff keeps an encrypted local draft-to-message binding before
+publication. A retry uses the bound message/job ID and resumes an existing
+durable job. Successful handoff removes draft content while retaining its
+binding to prevent stale compose replay from creating a second publication;
+explicit draft discard removes the binding. This is local application state,
+not a protocol object or canonical pending state.
+
+Progress and evidence DTOs distinguish unknown, checking, measured, stale and
+failed observations, including observation time and scope. Replica count is
+the minimum over required chunks; absence of a measurement is not zero. Proven
+StorageId/payout identity diversity is not proof of independent failure domains.
+Expose safe blocker reasons rather than interpreting elapsed time as failure.
+
+Unchanged projections must not emit wholesale replacement notifications.
+Pages preserve selection, expanded Advanced, focus, scroll and input across
+updates; lock clears private state. Manual Refresh requests a bounded snapshot
+refresh; it does not implicitly run full audits, repair or history rebuilds.
+Long worker tasks, shutdown drain and join must be measured for GUI stalls and
+kept visibly asynchronous without violating existing service ownership.

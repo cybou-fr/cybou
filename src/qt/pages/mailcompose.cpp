@@ -24,12 +24,15 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QPointer>
+#include <QTimer>
 #include <QRegularExpression>
 #include <QStandardItemModel>
 #include <QTextEdit>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <memory>
 
 using namespace CybouUi;
 
@@ -67,6 +70,7 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     title_row->addWidget(title, 1);
     auto* close = new QToolButton{this};
     close->setObjectName(QStringLiteral("iconButton"));
+    close->setProperty("cybouId", QStringLiteral("keepDraftAndClose"));
     close->setText(QStringLiteral("✕"));
     close->setFixedSize(34, 34);
     close->setToolTip(tr("Close and keep the draft"));
@@ -172,6 +176,13 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     connect(discard_button, &QPushButton::clicked, this, [this] { discard(); });
     actions->addWidget(discard_button);
     root->addLayout(actions);
+    m_save_hint = MutedText({}, this);
+    m_save_hint->setObjectName(QStringLiteral("draftSaveStatus"));
+    root->addWidget(m_save_hint);
+    m_autosave = new QTimer{this};
+    m_autosave->setSingleShot(true);
+    m_autosave->setInterval(700);
+    connect(m_autosave, &QTimer::timeout, this, [this] { saveDraft(false); });
 
     setTabOrder(m_to, m_subject);
     setTabOrder(m_subject, m_body);
@@ -179,10 +190,27 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     connect(m_to, &QLineEdit::textChanged, this, [this] {
         if (!m_reply_address.isEmpty() && m_to->text()!=CybouProduct::shortId(m_reply_address)) m_reply_address.clear();
         updateGates();
+        edited();
     });
-    connect(m_subject, &QLineEdit::textChanged, this, [this] { updateGates(); });
-    connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); });
+    connect(m_subject, &QLineEdit::textChanged, this, [this] { updateGates(); edited(); });
+    connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); edited(); });
     connect(m_send, &QPushButton::clicked, this, [this] { send(); });
+    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
+        if (!m_following_send || m_draft_id.isEmpty()) return;
+        for (const auto& task : m_model->mailTasks()) {
+            if (task.kind != CybouMailTaskKind::Send || task.item_id != m_draft_id) continue;
+            if (task.state == CybouCommandState::Committed) {
+                const auto id = m_model->resolvedMailId(task.related_id);
+                clearCompose();
+                if (onSent) onSent(id);
+            } else if (task.state == CybouCommandState::Failed) {
+                m_following_send = m_sending = false;
+                updateGates();
+                m_send_hint->setText(task.error);
+            }
+            return;
+        }
+    });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { updateGates(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { updateGates(); });
     updateGates();
@@ -209,6 +237,12 @@ void MailCompose::rebuildCompleter()
 
 void MailCompose::start(const CybouMailItem& draft)
 {
+    m_loading = true;
+    ++m_compose_generation;
+    m_autosave->stop();
+    m_saving = m_sending = m_close_requested = m_following_send = false;
+    m_revision = m_saved_revision = 0;
+    m_save_hint->clear();
     rebuildCompleter();
     m_draft_id = draft.draft ? draft.id : QString{};
     m_reply_address.clear();
@@ -218,8 +252,17 @@ void MailCompose::start(const CybouMailItem& draft)
     m_subject->setText(draft.subject);
     m_body->setPlainText(draft.body);
     m_attachments = draft.attachments;
+    m_loading = false;
+    m_following_send = false;
+    for (const auto& task : m_model->mailTasks()) {
+        if (task.kind == CybouMailTaskKind::Send && task.item_id == m_draft_id &&
+            (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running)) {
+            m_sending = m_following_send = true;
+        }
+    }
     rebuildAttachments();
     updateGates();
+    if (!m_sending && hasContent() && m_draft_id.isEmpty()) edited();
     if (draft.to_name.isEmpty()) {
         m_to->setFocus();
     } else {
@@ -236,19 +279,23 @@ bool MailCompose::hasContent() const
 
 void MailCompose::addAttachments(const QStringList& paths)
 {
+    if (m_sending || m_close_requested) return;
     for (const auto& path : paths) {
         if (path.isEmpty()) continue;
         m_attachments.append(m_model->localAttachment(path));
     }
     rebuildAttachments();
     updateGates();
+    edited();
 }
 
 void MailCompose::addProtectedAttachment(const CybouAttachmentItem& attachment)
 {
+    if (m_sending || m_close_requested) return;
     m_attachments.append(attachment);
     rebuildAttachments();
     updateGates();
+    edited();
 }
 
 void MailCompose::chooseCybouFiles()
@@ -345,7 +392,9 @@ void MailCompose::rebuildAttachments()
         auto* remove = IconButton(Glyph::Trash, chip, tr("Remove %1").arg(attachment.name));
         remove->setAccessibleName(tr("Remove %1").arg(attachment.name));
         connect(remove, &QToolButton::clicked, this, [this, id = attachment.id] {
+            if (m_sending || m_close_requested) return;
             m_attachments.removeIf([&id](const CybouAttachmentItem& item) { return item.id == id; });
+            edited();
             rebuildAttachments();
             updateGates();
         });
@@ -432,7 +481,10 @@ void MailCompose::updateGates()
     } else if (m_body->toPlainText().trimmed().isEmpty()) {
         reason = tr("Write a message.");
     }
-    m_send->setEnabled(to_problem.isEmpty() && !m_body->toPlainText().trimmed().isEmpty() &&
+    m_to->setEnabled(!m_sending && !m_close_requested);
+    m_subject->setEnabled(!m_sending && !m_close_requested);
+    m_body->setEnabled(!m_sending && !m_close_requested);
+    m_send->setEnabled(!m_sending && !m_close_requested && to_problem.isEmpty() && !m_body->toPlainText().trimmed().isEmpty() &&
         status.identity_state == CybouIdentityState::Active && m_model->featureAvailability().mail);
     m_send_hint->setText(reason);
 }
@@ -455,47 +507,118 @@ CybouMailItem MailCompose::snapshotForRebuild() const
     return item;
 }
 
-void MailCompose::send()
+void MailCompose::edited()
 {
-    if (!m_send->isEnabled()) return;
-    const QString id = m_model->requestSendMail(currentMessage());
-    if (id.isEmpty()) {
-        m_send_hint->setText(tr("This message has not been sent. It stays in Drafts."));
-        return;
-    }
+    if (m_loading || m_sending || m_close_requested) return;
+    ++m_revision;
+    m_save_hint->setText(tr("Unsaved changes"));
+    m_autosave->start();
+}
+
+void MailCompose::clearCompose()
+{
+    m_loading = true;
+    ++m_compose_generation;
+    m_autosave->stop();
     m_draft_id.clear();
     m_to->clear();
     m_subject->clear();
     m_body->clear();
     m_attachments.clear();
+    m_saving = m_sending = m_close_requested = m_following_send = false;
+    m_revision = m_saved_revision = 0;
+    m_save_hint->clear();
     rebuildAttachments();
-    if (onSent) onSent(id);
+    m_loading = false;
+    updateGates();
+}
+
+void MailCompose::saveDraft(bool close)
+{
+    if (m_sending) return;
+    m_close_requested = m_close_requested || close;
+    m_autosave->stop();
+    if (!hasContent() && m_draft_id.isEmpty()) {
+        if (close) { clearCompose(); if (onClosed) onClosed(); }
+        return;
+    }
+    if (m_saving) { updateGates(); return; }
+    m_saving = true;
+    const auto revision = m_revision;
+    const auto generation = m_compose_generation;
+    m_save_hint->setText(tr("Saving draft…"));
+    updateGates();
+    const QPointer<MailCompose> guard{this};
+    const auto id = m_model->requestSaveMailDraft(currentMessage(), [guard, revision, generation](bool ok, const QString& error) {
+        if (!guard || guard->m_compose_generation != generation) return;
+        guard->m_saving = false;
+        if (!ok) {
+            guard->m_close_requested = false;
+            guard->m_save_hint->setText(tr("Save failed. Your text is kept here; close again to retry."));
+            guard->m_model->notify(error);
+            guard->updateGates();
+            return;
+        }
+        guard->m_saved_revision = revision;
+        if (guard->m_revision != revision) {
+            if (guard->m_close_requested) guard->saveDraft(true);
+            else guard->m_autosave->start();
+            return;
+        }
+        guard->m_save_hint->setText(tr("Draft saved on this computer"));
+        if (guard->m_close_requested) {
+            guard->clearCompose();
+            if (guard->onClosed) guard->onClosed();
+        }
+        guard->updateGates();
+    });
+    if (id.isEmpty()) {
+        m_saving = m_close_requested = false;
+        m_save_hint->setText(tr("Draft not saved. Mail is unavailable; your text is kept here."));
+        updateGates();
+    } else m_draft_id = id;
+}
+
+void MailCompose::send()
+{
+    if (!m_send->isEnabled()) return;
+    // Assign a durable draft identity before handing off, also for a new compose.
+    if (m_draft_id.isEmpty()) saveDraft(false);
+    if (m_draft_id.isEmpty()) return;
+    m_sending = true;
+    m_autosave->stop();
+    updateGates();
+    m_send_hint->setText(tr("Preparing message. Your draft is kept until it is saved."));
+    const QPointer<MailCompose> guard{this};
+    const auto generation = m_compose_generation;
+    const auto outgoing_id = std::make_shared<QString>();
+    *outgoing_id = m_model->requestSendMail(currentMessage(), [guard, generation, outgoing_id](bool ok, const QString& error) {
+        if (!guard || guard->m_compose_generation != generation) return;
+        guard->m_sending = false;
+        if (!ok) {
+            guard->updateGates();
+            guard->m_send_hint->setText(error);
+            return;
+        }
+        guard->clearCompose();
+        if (guard->onSent) guard->onSent(guard->m_model->resolvedMailId(*outgoing_id));
+    });
+    if (outgoing_id->isEmpty()) {
+        m_sending = false;
+        updateGates();
+        m_send_hint->setText(tr("This message has not been sent. Your text is kept here."));
+    }
 }
 
 void MailCompose::saveDraftAndClose()
 {
-    if (hasContent() && m_model->status().identity_state == CybouIdentityState::Active) {
-        m_draft_id = m_model->requestSaveMailDraft(currentMessage());
-        m_model->notify(tr("Draft saved"));
-    }
-    m_draft_id.clear();
-    m_to->clear();
-    m_subject->clear();
-    m_body->clear();
-    m_attachments.clear();
-    rebuildAttachments();
-    if (onClosed) onClosed();
+    saveDraft(true);
 }
 
 void MailCompose::discard()
 {
+    if (m_sending || m_close_requested) return;
     if (!m_draft_id.isEmpty()) m_model->requestDeleteMail(m_draft_id);
-    if (hasContent()) m_model->notify(tr("Draft discarded"));
-    m_draft_id.clear();
-    m_to->clear();
-    m_subject->clear();
-    m_body->clear();
-    m_attachments.clear();
-    rebuildAttachments();
+    clearCompose();
     if (onClosed) onClosed();
 }

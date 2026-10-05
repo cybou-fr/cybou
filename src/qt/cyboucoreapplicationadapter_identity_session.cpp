@@ -55,8 +55,12 @@ void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
     while (!stop.stop_requested()) {
         // Recovery scans back to back; caught-up sessions wait for commands or the tick.
         auto pending = scheduler.Take(stop, catching_up ? 0 : refresh_ms);
+        // One failing command must not drop the rest of an already dequeued batch.
+        for (auto& task : pending) {
+            try { task(*this); }
+            catch (const std::exception&) { qWarning() << "CYBOU application command failed"; }
+        }
         try {
-            for (auto& task : pending) task(*this);
             if (!stop.stop_requested()) Refresh();
         } catch (const std::exception& e) {
             // A failed refresh leaves the last snapshot in place; the next tick retries.
@@ -66,9 +70,9 @@ void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
     }
     // Commands issued just before locking (a saved draft, a send) still run.
     auto remaining = scheduler.Drain();
-    try {
-        for (auto& task : remaining) task(*this);
-    } catch (const std::exception&) {
+    for (auto& task : remaining) {
+        try { task(*this); }
+        catch (const std::exception&) { qWarning() << "CYBOU application command failed during shutdown"; }
     }
 }
 

@@ -22,6 +22,7 @@ class QLineEdit;
 class QPushButton;
 class QTextEdit;
 class QToolButton;
+class QTimer;
 class QVBoxLayout;
 
 /**
@@ -74,6 +75,19 @@ private:
     QLabel* m_drop_hint{nullptr};
     QPushButton* m_send{nullptr};
     QLabel* m_send_hint{nullptr};
+    QLabel* m_save_hint{nullptr};
+    QTimer* m_autosave{nullptr};
+    bool m_loading{false};
+    bool m_saving{false};
+    bool m_sending{false};
+    bool m_following_send{false};
+    bool m_close_requested{false};
+    quint64 m_revision{0};
+    quint64 m_saved_revision{0};
+    quint64 m_compose_generation{0};
+    void edited();
+    void saveDraft(bool close);
+    void clearCompose();
 
     CybouMailItem currentMessage() const;
     const CybouContact* resolvedContact() const;

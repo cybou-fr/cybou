@@ -12,6 +12,26 @@ Files
 
 Backup remains post-Beta.
 
+## UX delivery priorities and staged extensions
+
+Beta acceptance first requires reliable familiar Mail/Files/Wallet workflows:
+durable local action acknowledgements, recoverable drafts, stable details and
+activity, working native drag/drop, attachment reuse, honest evidence and
+responsive keyboard/DPI behavior. Existing live integration is not full
+acceptance. Home composition may evolve when readability improves.
+
+A bounded Network overview with a schematic France map is a target addition;
+it initially shows this node's observed connections and scoped statistics.
+The existing Authority page is extended, not recreated. Wider top100/200/300
+uptime observation, richer explorer, own-content console and optional test-build
+benchmarks are staged extensions with separate data/privacy gates, not assumed
+implemented Beta features. Provider placement remains randomized; display
+ranking never chooses paid storage providers.
+
+Delivery order: `DESKTOP_UX_DELIVERY_PLAN.md`. Product boundaries:
+`NETWORK_AND_ADVANCED_UX.md`. No interface claims universal erasure, verified
+independent failure domains or blanket RGPD conformity without evidence.
+
 ## Mail
 
 Beta Mail provides familiar desktop Mail workflows over private
@@ -95,6 +115,11 @@ Files
 ```
 
 without the old Application DB.
+
+This applies to finalized published semantic data whose encrypted content and
+recovery material remain available. Device-local drafts, mailbox organization,
+star/offline preferences and console history are not reconstructed merely from
+public history and the mnemonic; explain that scope in onboarding and recovery.
 
 Historical KEM recovery after Identity rotation uses the protected
 RecoveryBridge flow.

@@ -24,7 +24,7 @@ or certification claims.
 ## Network and cryptographic identity
 
 - apply the primary-source review gates in [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md), starting with the actual X-Wing construction/vectors and current TLS requirements;
-- coordinated DEV VPS cutover to an ordinary headless `cybou` node on the re-provisioned DEVNET, serving a TLS certificate that matches the compiled SPKI pin (or a re-pinned locator);
+- continuing live acceptance of the ordinary headless DEV VPS/current DEVNET and compiled transport pin; the VPS cutover itself is completed as recorded in `AGENTS.md`;
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
 ## Candidate pool
@@ -46,7 +46,7 @@ implicitly. Storage settlement periods retain their explicit UTC semantics.
 
 ## Application data plane
 
-- exact encrypted Application DB implementation and crash-recovery strategy;
+- crash/restart acceptance of the implemented encrypted Application DB, durable draft acknowledgement and loss-safe draft-to-outgoing-job handoff;
 - cross-implementation vectors for typed binary private profiles for Mail, Files mutations and RecoveryBridge;
 - ApplicationService scan bounds and rebuild performance;
 - interruption-safe PublicationService staging/journal behavior.
@@ -85,7 +85,7 @@ Storage economy (DEC-274–DEC-283) open items:
 - Sybil splitting into separate Identities: selection by payout account removed
   the free StorageId gain, but 100 Identities still reach ~95x the share of one
   large node; measure whether AccountCreate PoW prices that sufficiently before Beta;
-- StoragePayoutBinding format and its off-chain verification;
+- integration/acceptance of implemented StoragePayoutBinding verification in evidence aggregation and settlement preparation;
 - lease renewal UX before expiry (renewal after expiry already works);
 - Beta rate (5 CYBOU/GiB/day/replica) validation by shadow accounting;
 - MiCA and French qualification of transferable CYBOU earned for storage service.
@@ -105,3 +105,21 @@ change frozen protocol decisions. Gates before implementing stronger claims:
 - verify managed purge under blob deletion failure, crashes and shared chunks;
 - justify any canonical storage obligation register by concrete accounting
   transitions; commitments alone do not prove physical 1:3 contribution.
+
+## Desktop product extension gates (2026-10-05)
+
+See `DESKTOP_UX_DELIVERY_PLAN.md` and `NETWORK_AND_ADVANCED_UX.md`.
+
+- pending Files-to-Mail references: source retention, durable ownership,
+  restart and no duplicate staging before removing Protected-only gating;
+- wider network observability: trustworthy source, minimization/retention,
+  pseudonyms, session churn and sampled availability window; local peers are
+  not a global census and illustrative France positions are not geolocation;
+- per-object protection blockers/freshness: safe service-owned evidence
+  without exposing provider topology or interpreting missing data as failure;
+- per-object remote purge outcomes: actual available acknowledgements, privacy,
+  shared references, retries and recovery interaction before stronger labels;
+- own-content inspector/console: semantic authorization, bounded traversal,
+  lock-safe output/history and redacted exports; no foreign ChunkStore browsing;
+- active diagnostic/benchmark panel: bounded resources/cost and DEVNET test-build
+  scope before connecting BUILD_TESTS tooling to any desktop surface.

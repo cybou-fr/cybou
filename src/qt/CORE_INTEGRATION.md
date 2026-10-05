@@ -30,8 +30,9 @@ reach core.
 - **Live Files:** create folder, upload (streamed from disk into encrypted
   chunks), rename, move, copy (same protected content), trash, restore and
   delete, each as one `FILES_MUTATION_BATCH` publication; download streams
-  verified content through StorageService into `<destination>.part`, renamed
-  only on success. A pending change shows immediately and stays visible until
+  verified content through StorageService into a QSaveFile temporary file and
+  atomically commits it only on success (no direct-write fallback). Failed
+  verification/commit preserves an existing destination. A pending change shows immediately and stays visible until
   history reflects that exact publication; a change made while another
   Identity operation is unconfirmed queues behind it. Trash does not keep the
   old location, so Restore returns items to My files. Starred and
@@ -65,6 +66,30 @@ reach core.
   publication every few ticks; lost copies return it to Securing and the next
   pass repairs it.
 
-## Not connected yet
+## Connected operator surface and remaining UX work
 
-- Authority (read-only) once core implements it.
+The existing NetworkAuthorityPage already binds finalizer controls and a
+one-period settlement action through the desktop model/controller. It is not
+an absent read-only service waiting for a new core. A richer verified explorer,
+scoped map/uptime observations and own-content console remain product targets.
+
+Mail draft save/send preparation and mailbox move now report Running /
+Committed / Failed through GUI callbacks correlated by the model's local task
+ID/session generation. Committed is local durable work, never Sent/finality.
+Compose autosaves, waits before clearing on close/send and retains failed text.
+An encrypted draft-to-message binding survives restart/stale compose replay;
+publication retry resumes that job rather than preparing a second publication.
+Successful handoff retains the binding while deleting the draft; explicit
+discard removes it. Shell rebuilds follow pending send tasks through the model.
+
+Files Advanced expansion is retained during details refresh, active-job replica
+counts are populated and identical semantic snapshots suppress replacement
+signals. Home skips unchanged activity presentation rebuilds. Full incremental
+rows, pending Files-ID reconciliation, evidence freshness, native drag/drop
+acceptance and broader command acknowledgements remain delivery work.
+The worker/session split already exists; profile
+queue and stop/join latency before changing scheduling or ownership.
+
+See `docs/cybou/DESKTOP_UX_DELIVERY_PLAN.md` and the product contracts for
+source-reviewed gaps, dependencies and acceptance. This note records source
+integration, not current-worktree build or live Beta validation.

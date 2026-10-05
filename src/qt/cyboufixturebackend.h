@@ -41,12 +41,12 @@ public:
     void openIdentity() override;
     void closeIdentity() override;
 
-    void saveMailDraft(const CybouMailItem& draft) override;
-    void sendMail(const CybouMailItem& message) override;
+    void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) override;
+    void sendMail(const CybouMailItem& message, const QString& draft_id = {}, CommandProgress progress = {}) override;
     void retryMail(const QString& id) override;
     void setMailRead(const QString& id, bool read) override;
     void setMailStarred(const QString& id, bool starred) override;
-    void moveMail(const QString& id, CybouMailFolder folder) override;
+    void moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress = {}) override;
     void deleteMail(const QString& id) override;
     void downloadAttachment(const QString& message_id, const QString& attachment_id,
         const QString& destination) override;

@@ -75,6 +75,7 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_deleted_drafts.clear();
     m_deleted_mail.clear();
     m_pending_sends.clear();
+    m_send_drafts.clear();
     m_client_ids.clear();
     m_last_files.clear();
     m_pending_files.clear();

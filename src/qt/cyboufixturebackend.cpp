@@ -107,20 +107,23 @@ void CybouFixtureApplicationBackend::later(int steps, std::function<void()> acti
 
 /* ---- Mail ---- */
 
-void CybouFixtureApplicationBackend::saveMailDraft(const CybouMailItem& draft)
+void CybouFixtureApplicationBackend::saveMailDraft(const CybouMailItem& draft, CommandProgress progress)
 {
     if (!m_open) return;
     if (auto* existing = mail(draft.id)) *existing = draft;
     else m_mail.prepend(draft);
     changed(draft);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::sendMail(const CybouMailItem& message)
+void CybouFixtureApplicationBackend::sendMail(const CybouMailItem& message, const QString& draft_id, CommandProgress progress)
 {
     if (!m_open) return;
     if (auto* existing = mail(message.id)) *existing = message;
     else m_mail.prepend(message);
     changed(message);
+    if (!draft_id.isEmpty()) deleteMail(draft_id);
+    if (progress) progress(CybouCommandState::Committed, {});
     runSend(message.id);
 }
 
@@ -153,12 +156,16 @@ void CybouFixtureApplicationBackend::setMailStarred(const QString& id, bool star
     changed(*item);
 }
 
-void CybouFixtureApplicationBackend::moveMail(const QString& id, CybouMailFolder folder)
+void CybouFixtureApplicationBackend::moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress)
 {
     auto* item = mail(id);
-    if (!m_open || !item || item->folder == folder) return;
+    if (!m_open || !item) {
+        if (progress) progress(CybouCommandState::Failed, tr("This message cannot be moved there."));
+        return;
+    }
     item->folder = folder;
     changed(*item);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
 void CybouFixtureApplicationBackend::deleteMail(const QString& id)

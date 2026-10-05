@@ -41,6 +41,7 @@ class CybouApplicationBackend : public QObject
 
 public:
     using QObject::QObject;
+    using CommandProgress = std::function<void(CybouCommandState, const QString&)>;
     ~CybouApplicationBackend() override = default;
 
     /** True when real Mail/Files work can be carried out right now. */
@@ -54,13 +55,13 @@ public:
     virtual void closeIdentity() = 0;
 
     /* ---- Mail commands. ---- */
-    virtual void saveMailDraft(const CybouMailItem& draft) = 0;
+    virtual void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) = 0;
     /** message.id is the client id; the backend drives its lifecycle. */
-    virtual void sendMail(const CybouMailItem& message) = 0;
+    virtual void sendMail(const CybouMailItem& message, const QString& draft_id = {}, CommandProgress progress = {}) = 0;
     virtual void retryMail(const QString& id) = 0;
     virtual void setMailRead(const QString& id, bool read) = 0;
     virtual void setMailStarred(const QString& id, bool starred) = 0;
-    virtual void moveMail(const QString& id, CybouMailFolder folder) = 0;
+    virtual void moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress = {}) = 0;
     virtual void deleteMail(const QString& id) = 0;
     /** Removes messages that are in Trash from this mailbox for good (local; history is not erased). */
     virtual void deleteMailForever(const QStringList& ids) { Q_UNUSED(ids); }

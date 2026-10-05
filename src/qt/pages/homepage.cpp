@@ -285,7 +285,11 @@ void HomePage::refresh()
         status.identity_state == CybouIdentityState::Syncing;
     const bool show_dashboard = active && !m_onboarding->holdsActiveIdentity();
     m_stack->setCurrentWidget(show_dashboard ? m_dashboard : static_cast<QWidget*>(m_onboarding));
-    if (!show_dashboard) return;
+    if (!show_dashboard) {
+        m_activity_presentation.clear();
+        ClearLayout(m_activity_rows);
+        return;
+    }
 
     m_identity_name->setText(status.primary_name.isEmpty()
         ? CybouProduct::shortId(status.account_id) : status.primary_name);
@@ -321,9 +325,16 @@ void HomePage::refresh()
     m_wallet_value->setText(cybouAmountText(status.balance));
     m_wallet_caption->setText(tr("System Balance %1").arg(cybouAmountText(status.system_balance)));
 
-    ClearLayout(m_activity_rows);
     auto items = m_model->activity();
-    std::sort(items.begin(), items.end(), [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
+    std::stable_sort(items.begin(), items.end(), [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
+    QStringList presentation;
+    for (const auto& item : items.mid(0, 8)) {
+        presentation << QString::number(static_cast<int>(item.kind)) << item.title << item.subtitle
+                     << item.time.date().toString(Qt::ISODate) << shortTime(item.time);
+    }
+    if (presentation == m_activity_presentation) { rebuildFirstSteps(); return; }
+    m_activity_presentation = presentation;
+    ClearLayout(m_activity_rows);
     const QDate today = QDate::currentDate();
     QString group;
     int shown = 0;

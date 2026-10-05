@@ -55,6 +55,8 @@
 #include <QTest>
 #include <QToolButton>
 #include <QDialog>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
 #include <QTimer>
@@ -127,6 +129,15 @@ namespace {
  * the model issues each command once and changes nothing until the backend
  * reports a result.
  */
+template <typename T>
+T* FindById(QWidget* parent, const QString& id)
+{
+    for (auto* widget : parent->findChildren<T*>()) {
+        if (widget->property("cybouId").toString() == id && widget->isVisibleTo(parent)) return widget;
+    }
+    return nullptr;
+}
+
 class RecordingBackend final : public CybouApplicationBackend
 {
 public:
@@ -134,17 +145,21 @@ public:
     QStringList commands;
     bool available{true};
     bool open{false};
+    QHash<QString, CommandProgress> draft_results;
+    QVector<CommandProgress> move_results;
+    CommandProgress send_result;
+    QString send_draft_id;
 
     bool mailAvailable() const override { return available; }
     bool filesAvailable() const override { return available; }
     void openIdentity() override { open = true; commands << QStringLiteral("open"); }
     void closeIdentity() override { open = false; commands << QStringLiteral("close"); }
-    void saveMailDraft(const CybouMailItem& d) override { commands << QStringLiteral("draft:") + d.id; }
-    void sendMail(const CybouMailItem& m) override { commands << QStringLiteral("send:") + m.id; }
+    void saveMailDraft(const CybouMailItem& d, CommandProgress progress = {}) override { commands << QStringLiteral("draft:") + d.id; draft_results.insert(d.id, progress); }
+    void sendMail(const CybouMailItem& m, const QString& draft_id = {}, CommandProgress progress = {}) override { commands << QStringLiteral("send:") + m.id; send_result = progress; send_draft_id = draft_id; }
     void retryMail(const QString& id) override { commands << QStringLiteral("retry:") + id; }
     void setMailRead(const QString& id, bool) override { commands << QStringLiteral("read:") + id; }
     void setMailStarred(const QString& id, bool) override { commands << QStringLiteral("starMail:") + id; }
-    void moveMail(const QString& id, CybouMailFolder) override { commands << QStringLiteral("moveMail:") + id; }
+    void moveMail(const QString& id, CybouMailFolder, CommandProgress progress = {}) override { commands << QStringLiteral("moveMail:") + id; move_results.append(progress); }
     void deleteMail(const QString& id) override { commands << QStringLiteral("deleteMail:") + id; }
     void downloadAttachment(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("attachment:") + m; }
     void saveAttachmentToFiles(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("saveAttachment:") + m; }
@@ -459,6 +474,7 @@ void CybouShellTests::composeGatesAndSends()
     QCOMPARE(sent.state, CybouContentState::Local);
     QCOMPARE(CybouProduct::mailStateText(sent), QStringLiteral("Preparing…"));
 
+    QTRY_VERIFY(body->toPlainText().isEmpty());
     // Attachments stay local until Send, then follow the message lifecycle.
     auto* composer = mail->composer();
     mail->openCompose();
@@ -1245,7 +1261,7 @@ void CybouShellTests::notificationsOfferUndo()
     QCOMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder, CybouMailFolder::Trash);
     auto* notifier = window->notifier();
     QVERIFY(notifier->isVisible());
-    QCOMPARE(notifier->text(), QStringLiteral("Moved to Trash"));
+    QTRY_COMPARE(notifier->text(), QStringLiteral("Moved to Trash"));
     QVERIFY(notifier->hasAction());
     notifier->trigger();
     QCOMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder, CybouMailFolder::Inbox);
@@ -1401,11 +1417,29 @@ void CybouShellTests::mailContextMenuAndMoves()
     QVERIFY(!model->mailItem(QStringLiteral("m-dinner"))->unread);
     mail->moveMessagesTo(ids, EmailPage::View::Archive);
     QCOMPARE(model->mailItem(QStringLiteral("m-alina"))->folder, CybouMailFolder::Archive);
-    window->notifier()->trigger(); // Undo
-    QCOMPARE(model->mailItem(QStringLiteral("m-alina"))->folder, CybouMailFolder::Inbox);
+    QTRY_VERIFY(window->notifier()->findChild<QPushButton*>(QStringLiteral("notifierAction"))->isVisible());
+    window->notifier()->trigger(); // Undo after durable acknowledgement
+    QTRY_COMPARE(model->mailItem(QStringLiteral("m-alina"))->folder, CybouMailFolder::Inbox);
     // Sent mail never lands in Inbox.
     mail->moveMessagesTo({QStringLiteral("m-sent-1")}, EmailPage::View::Inbox);
     QCOMPARE(model->mailItem(QStringLiteral("m-sent-1"))->folder, CybouMailFolder::Sent);
+    // Exercise the actual folder viewport event route, rather than calling the
+    // move helper. The OS mouse-drag/DPI path still needs separate acceptance.
+    auto* folders = mail->findChild<QListWidget*>(QStringLiteral("folderList"));
+    QVERIFY(folders);
+    QMimeData data;
+    data.setData(CybouUi::mailIdsMime(), QByteArrayLiteral("m-dinner"));
+    for (const auto view : {EmailPage::View::Trash, EmailPage::View::Archive}) {
+        const QPoint pos = folders->visualItemRect(folders->item(static_cast<int>(view))).center();
+        QDragEnterEvent enter{pos, Qt::MoveAction, &data, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(folders->viewport(), &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop{QPointF{pos}, Qt::MoveAction, &data, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(folders->viewport(), &drop);
+        QVERIFY(drop.isAccepted());
+        QTRY_COMPARE(model->mailItem(QStringLiteral("m-dinner"))->folder,
+            view == EmailPage::View::Trash ? CybouMailFolder::Trash : CybouMailFolder::Archive);
+    }
 }
 
 void CybouShellTests::filesDropIntoFolders()
@@ -1621,6 +1655,155 @@ void CybouShellTests::backendCommandsDriveProjection()
     QVERIFY(model.mailItems().isEmpty());
     Q_EMIT backend.mailItemChanged(message); // late replies are not shown while locked
     QVERIFY(model.mailItems().isEmpty());
+}
+
+void CybouShellTests::localMailCommandsWaitForCommit()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    CybouMailItem mail;
+    mail.id = QStringLiteral("mail-1");
+    model.setMailItems({mail});
+    int completed = 0;
+    model.requestMoveMail(mail.id, CybouMailFolder::Archive, [&](bool ok, const QString&) { QVERIFY(!ok); ++completed; });
+    QCOMPARE(completed, 0);
+    QCOMPARE(model.mailTasks().last().state, CybouCommandState::Queued);
+    backend.move_results.last()(CybouCommandState::Running, {});
+    QTRY_COMPARE(model.mailTasks().last().state, CybouCommandState::Running);
+    QCOMPARE(completed, 0);
+    backend.move_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
+    QTRY_COMPARE(completed, 1);
+    QCOMPARE(model.mailItem(mail.id)->folder, CybouMailFolder::Inbox);
+    MailReader reader{&model};
+    reader.showMessage(mail.id);
+    reader.show();
+    int closed = 0;
+    reader.onBack = [&] { ++closed; };
+    auto* archive = FindById<QToolButton>(&reader, QStringLiteral("readerArchive"));
+    QVERIFY(archive);
+    archive->click();
+    QCOMPARE(closed, 0);
+    QVERIFY(!archive->isEnabled());
+    backend.move_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
+    QTRY_VERIFY(archive->isEnabled());
+    QCOMPARE(closed, 0);
+    archive->click();
+    backend.move_results.last()(CybouCommandState::Committed, {});
+    QTRY_COMPARE(closed, 1);
+    QCOMPARE(model.mailItem(mail.id)->folder, CybouMailFolder::Archive);
+    // An Undo-like request to the currently displayed folder still queues:
+    // an earlier move could already be waiting on the worker.
+    const auto command_count = backend.move_results.size();
+    model.requestMoveMail(mail.id, CybouMailFolder::Archive);
+    QCOMPARE(backend.move_results.size(), command_count + 1);
+    const auto late = backend.move_results.last();
+    model.requestLockVault();
+    late(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QVERIFY(model.mailTasks().isEmpty());
+    QVERIFY(model.mailItems().isEmpty());
+    // A result listener can lock synchronously while the task signal is emitted.
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    model.setMailItems({mail});
+    bool stale_done = false;
+    model.requestMoveMail(mail.id, CybouMailFolder::Archive, [&](bool, const QString&) { stale_done = true; });
+    connect(&model, &CybouDesktopModel::mailTasksChanged, &model, [&] {
+        if (!model.mailTasks().isEmpty() && model.mailTasks().last().state == CybouCommandState::Committed)
+            model.requestLockVault();
+    });
+    backend.move_results.last()(CybouCommandState::Committed, {});
+    QTRY_VERIFY(model.mailItems().isEmpty());
+    QVERIFY(!stale_done);
+}
+
+void CybouShellTests::composerKeepsTextOnSaveAndSendFailure()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    MailCompose composer{&model};
+    composer.start();
+    auto* to = composer.findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+    auto* body = composer.findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    auto* close = FindById<QToolButton>(&composer, QStringLiteral("keepDraftAndClose"));
+    QVERIFY(to && body && close);
+    int closed = 0;
+    composer.onClosed = [&] { ++closed; };
+    to->setText(QStringLiteral("alice.cybou"));
+    body->setPlainText(QStringLiteral("Never lose this text"));
+    QTRY_COMPARE_WITH_TIMEOUT(backend.draft_results.size(), 1, 2000); // autosave
+    const QString draft_id = backend.draft_results.constBegin().key();
+    close->click(); // waits for the in-flight save, does not clear
+    QCOMPARE(closed, 0);
+    backend.draft_results.value(draft_id)(CybouCommandState::Failed, QStringLiteral("Save failed"));
+    QTRY_VERIFY(body->isEnabled());
+    QCOMPARE(body->toPlainText(), QStringLiteral("Never lose this text"));
+    QCOMPARE(closed, 0);
+    close->click();
+    backend.draft_results.value(draft_id)(CybouCommandState::Committed, {});
+    QTRY_COMPARE(closed, 1);
+    QVERIFY(body->toPlainText().isEmpty());
+
+    composer.start();
+    to->setText(QStringLiteral("alice.cybou"));
+    body->setPlainText(QStringLiteral("Keep on send failure"));
+    composer.findChild<QPushButton*>(QStringLiteral("sendButton"))->click();
+    QVERIFY(backend.send_result);
+    QVERIFY(!backend.send_draft_id.isEmpty());
+    QVERIFY(!backend.commands.contains(QStringLiteral("deleteMail:") + backend.send_draft_id));
+    backend.send_result(CybouCommandState::Failed, QStringLiteral("Recipient unavailable"));
+    QTRY_VERIFY(body->isEnabled());
+    QCOMPARE(body->toPlainText(), QStringLiteral("Keep on send failure"));
+    QVERIFY(model.mailTasks().last().state == CybouCommandState::Failed);
+    // A rebuilt shell follows the model's pending handoff, not a dead widget callback.
+    auto first = std::make_unique<MailCompose>(&model);
+    first->start();
+    first->findChild<QLineEdit*>(QStringLiteral("recipientEdit"))->setText(QStringLiteral("alice.cybou"));
+    first->findChild<QTextEdit*>(QStringLiteral("composeBody"))->setPlainText(QStringLiteral("Survive rebuild while sending"));
+    first->findChild<QPushButton*>(QStringLiteral("sendButton"))->click();
+    const auto preserved = first->snapshotForRebuild();
+    first.reset();
+    MailCompose rebuilt{&model};
+    rebuilt.start(preserved);
+    QVERIFY(!rebuilt.findChild<QTextEdit*>(QStringLiteral("composeBody"))->isEnabled());
+    int accepted = 0;
+    rebuilt.onSent = [&](const QString&) { ++accepted; };
+    backend.send_result(CybouCommandState::Committed, {});
+    QTRY_COMPARE(accepted, 1);
+    QVERIFY(rebuilt.findChild<QTextEdit*>(QStringLiteral("composeBody"))->toPlainText().isEmpty());
+
+}
+
+void CybouShellTests::fileAdvancedSurvivesRefresh()
+{
+    auto window = makeWindow();
+    QVERIFY(CybouUiFixtures::apply(*window->desktopModel(), QStringLiteral("files")));
+    window->showPage(CybouPage::Files);
+    window->show();
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    const auto item = std::find_if(window->desktopModel()->fileItems().begin(), window->desktopModel()->fileItems().end(),
+        [](const auto& f) { return !f.folder && !f.trashed; });
+    QVERIFY(item != window->desktopModel()->fileItems().end());
+    const QString id = item->id;
+    files->showDetails(id);
+    QToolButton* advanced = nullptr;
+    QTRY_VERIFY((advanced = FindById<QToolButton>(files, QStringLiteral("fileAdvanced"))) != nullptr);
+    advanced->click();
+    QVERIFY(advanced->isChecked());
+    auto updated = window->desktopModel()->fileItems();
+    for (auto& file : updated) if (file.id == id) file.min_remote_replicas = 1;
+    window->desktopModel()->setFileItems(updated);
+    QCoreApplication::processEvents();
+    auto* refreshed = FindById<QToolButton>(files, QStringLiteral("fileAdvanced"));
+    QVERIFY(refreshed && refreshed->isChecked());
+    QSignalSpy changed{window->desktopModel(), &CybouDesktopModel::filesChanged};
+    window->desktopModel()->setFileItems(updated);
+    QCOMPARE(changed.size(), 0);
 }
 
 void CybouShellTests::liveFeatureAvailabilityStayHonest()

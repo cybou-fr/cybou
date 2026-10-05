@@ -178,8 +178,9 @@ Unread count appears only where meaningful, primarily Inbox.
 Inbox, Sent, Drafts, read state, and search indexes are local client data. Any
 persisted mailbox content or index containing message plaintext or identifying
 metadata MUST be encrypted at rest under the local identity/vault security
-model. The current Mail page is capability-gated; this is a target contract,
-not an implemented storage guarantee.
+model. The live adapter uses the encrypted per-Identity Application DB; search
+and local mailbox state remain capability-gated. This does not mean that drafts
+or local organization are reconstructible from public finalized history.
 
 The top search field is a normal product feature, not a protocol query editor.
 Beta search should support local indexed search over data that the client can
@@ -527,7 +528,16 @@ Do not expose storage-node addresses or chunk IDs in the normal message view.
 Draft text and attachment metadata are local/private user data. Do not place
 plaintext drafts in consensus or provider-visible storage.
 
-Autosave should not block the UI.
+Autosave must be debounced and run off the UI thread, with Saving / Saved /
+Save failed states backed by durable acknowledgement. The current composer
+requires this delivery work; optimistic insertion is not successful persistence.
+Closing must retain content until save succeeds or the user explicitly discards
+it. A send failure during recipient resolution or publication preparation keeps
+the draft recoverable. Remove the draft only after a durable outgoing job owns
+the payload; uncertain delivery reconciles the exact outgoing operation.
+Drafts are device-local and are not reconstructed on a clean machine from
+finalized history. Lock/shutdown drains must preserve acknowledged commands
+without freezing interaction or leaking private content.
 
 ## 15. Delete, archive, and trash
 
@@ -543,6 +553,20 @@ consensus history:
 
 The UI should describe user-visible behavior, not make false global deletion
 claims.
+
+Archive/trash requests immediately show a pending row/task state. Show Archived
+or Moved to Trash only after the local encrypted DB commit; no PoA progress is
+needed for this command. Correlate failures with affected items and retain the
+prior view on failure. Batch operations show completed/failed counts and retry
+only failed items. Undo must serialize behind an unfinished move and remain
+correct through refresh, lock and error reconciliation.
+
+Context menu, keyboard, toolbar and drag/drop use the same move command path.
+Mail ID drag/drop already exists in Qt; acceptance requires actual mouse drag
+from populated row widgets to Archive/Trash, visible drop feedback and correct
+selection at supported DPI. Invalid drops give feedback without changing state.
+Use the common task panel for slow operations rather than a blocking modal for
+every archive. Technical logs are optional, redacted Advanced details.
 
 ## 16. Notifications
 

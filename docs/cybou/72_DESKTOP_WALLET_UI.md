@@ -79,3 +79,18 @@ ledger mutex is held only for short entry updates and snapshots. A network wait
 for peer synchronization or operation acknowledgment therefore does not block
 the Qt event loop or ledger readers; results return to the page through a
 queued UI callback.
+
+## Review, service budget and evidence (delivery target)
+
+Build on the existing review and asynchronous pending-operation coordinator.
+Review shows resolved recipient, whole-number amount, exact known fee, affected
+Balance and irreversible System Balance lock before signing. Prevent duplicate
+submission; uncertain delivery uses the same OperationID/bytes. Local sync
+completion is not a proof of global freshness.
+
+Show finalized service budget separately from current lease/rent observations.
+Any forecast declares its assumptions and observation time. A count derived
+only from payment fees is not an estimate of Mail/Files capacity: storage rent,
+publication size, replicas and lease duration also cost CYBOU. Hide unsupported
+estimates rather than presenting false precision. Storage earnings come from
+verified foreign service and finalized settlements, not capacity declarations.

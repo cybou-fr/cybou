@@ -55,6 +55,14 @@
         <source>Waiting for confirmation. Keep both the old and the new words until it is done.</source>
         <translation>En attente de confirmation. Conservez l’ancienne et la nouvelle phrase jusqu’à la fin.</translation>
     </message>
+    <message>
+        <source>Saving changes on this computer…</source>
+        <translation>Enregistrement sur cet ordinateur…</translation>
+    </message>
+    <message>
+        <source>Waiting to save changes…</source>
+        <translation>En attente d’enregistrement…</translation>
+    </message>
 </context>
 <context>
     <name>CybouActivityButton</name>
@@ -286,6 +294,42 @@
         <location line="+31"/>
         <source>The item could not be deleted.</source>
         <translation>Impossible de supprimer cet élément.</translation>
+    </message>
+    <message>
+        <source>Mail is unavailable.</source>
+        <translation>Le courrier est indisponible.</translation>
+    </message>
+    <message>
+        <source>Could not prepare the message. Your draft is kept.</source>
+        <translation>Impossible de préparer le message. Votre brouillon est conservé.</translation>
+    </message>
+    <message>
+        <source>Could not save the outgoing message. Your draft is kept.</source>
+        <translation>Impossible d’enregistrer le message sortant. Votre brouillon est conservé.</translation>
+    </message>
+    <message>
+        <source>No CYBOU Identity has this name. Your draft is kept.</source>
+        <translation>Aucune identité CYBOU ne porte ce nom. Votre brouillon est conservé.</translation>
+    </message>
+    <message>
+        <source>The draft could not be saved. The message has not been sent.</source>
+        <translation>Impossible d’enregistrer le brouillon. Le message n’a pas été envoyé.</translation>
+    </message>
+    <message>
+        <source>The draft could not be saved. Your text is kept open; try again.</source>
+        <translation>Impossible d’enregistrer le brouillon. Votre texte reste ouvert ; réessayez.</translation>
+    </message>
+    <message>
+        <source>The message needs attention. Your draft is kept; retry continues the same publication.</source>
+        <translation>Le message nécessite votre attention. Votre brouillon est conservé ; une nouvelle tentative poursuit la même publication.</translation>
+    </message>
+    <message>
+        <source>The outgoing message could not be saved. Your draft is kept.</source>
+        <translation>Impossible d’enregistrer le message sortant. Votre brouillon est conservé.</translation>
+    </message>
+    <message>
+        <source>This message could not be moved. Try again.</source>
+        <translation>Impossible de déplacer ce message. Réessayez.</translation>
     </message>
 </context>
 <context>
@@ -588,6 +632,30 @@
         <source>This device held data of a previous CYBOU network. It was moved aside; restore your Identity with its phrase.</source>
         <translation>Cet appareil contenait les données d’un ancien réseau CYBOU. Elles ont été mises de côté ; restaurez votre identité avec sa phrase.</translation>
     </message>
+    <message>
+        <source>Archiving message</source>
+        <translation>Archivage du message</translation>
+    </message>
+    <message>
+        <source>Mail is unavailable.</source>
+        <translation>Le courrier est indisponible.</translation>
+    </message>
+    <message>
+        <source>Moving message</source>
+        <translation>Déplacement du message</translation>
+    </message>
+    <message>
+        <source>Moving message to Trash</source>
+        <translation>Déplacement du message dans la corbeille</translation>
+    </message>
+    <message>
+        <source>Preparing message</source>
+        <translation>Préparation du message</translation>
+    </message>
+    <message>
+        <source>Saving draft</source>
+        <translation>Enregistrement du brouillon</translation>
+    </message>
 </context>
 <context>
     <name>CybouFixtureApplicationBackend</name>
@@ -857,6 +925,10 @@ Stan</translation>
         <source>Central Authority</source>
         <translation>Autorité centrale</translation>
     </message>
+    <message>
+        <source>This file is not ready to attach. Open its details to check protection.</source>
+        <translation>Ce fichier n’est pas prêt à être joint. Consultez ses détails pour vérifier sa protection.</translation>
+    </message>
 </context>
 <context>
     <name>CybouProduct</name>
@@ -989,6 +1061,10 @@ Stan</translation>
         <location line="+1"/>
         <source>%1 GB</source>
         <translation>%1 Go</translation>
+    </message>
+    <message>
+        <source>Protecting: %1 of %2 remote copies</source>
+        <translation>Protection : %1 copies distantes sur %2</translation>
     </message>
 </context>
 <context>
@@ -1783,6 +1859,18 @@ Objet : %3
         <location line="+11"/>
         <source>Write to %1</source>
         <translation>Écrire à %1</translation>
+    </message>
+    <message>
+        <source>Archiving…</source>
+        <translation>Archivage…</translation>
+    </message>
+    <message>
+        <source>Moving messages…</source>
+        <translation>Déplacement des messages…</translation>
+    </message>
+    <message>
+        <source> · %1 could not be moved. Try again.</source>
+        <translation> · %1 n’ont pas pu être déplacés. Réessayez.</translation>
     </message>
 </context>
 <context>
@@ -2682,6 +2770,34 @@ Objet : %3
         <source>Draft discarded</source>
         <translation>Brouillon supprimé</translation>
     </message>
+    <message>
+        <source>Draft not saved. Mail is unavailable; your text is kept here.</source>
+        <translation>Brouillon non enregistré. Le courrier est indisponible ; votre texte reste ici.</translation>
+    </message>
+    <message>
+        <source>Draft saved on this computer</source>
+        <translation>Brouillon enregistré sur cet ordinateur</translation>
+    </message>
+    <message>
+        <source>Preparing message. Your draft is kept until it is saved.</source>
+        <translation>Préparation du message. Votre brouillon est conservé jusqu’à l’enregistrement.</translation>
+    </message>
+    <message>
+        <source>Save failed. Your text is kept here; close again to retry.</source>
+        <translation>Échec de l’enregistrement. Votre texte reste ici ; fermez à nouveau pour réessayer.</translation>
+    </message>
+    <message>
+        <source>Saving draft…</source>
+        <translation>Enregistrement du brouillon…</translation>
+    </message>
+    <message>
+        <source>This message has not been sent. Your text is kept here.</source>
+        <translation>Ce message n’a pas été envoyé. Votre texte reste ici.</translation>
+    </message>
+    <message>
+        <source>Unsaved changes</source>
+        <translation>Modifications non enregistrées</translation>
+    </message>
 </context>
 <context>
     <name>MailReader</name>
@@ -2985,6 +3101,22 @@ Objet : %3
     <message>
         <source>Included in a finalized operation</source>
         <translation>Inclus dans une opération finalisée</translation>
+    </message>
+    <message>
+        <source>Archiving…</source>
+        <translation>Archivage…</translation>
+    </message>
+    <message>
+        <source>Moving message…</source>
+        <translation>Déplacement du message…</translation>
+    </message>
+    <message>
+        <source>Moved to Sent</source>
+        <translation>Déplacé dans les messages envoyés</translation>
+    </message>
+    <message>
+        <source>Move to Sent</source>
+        <translation>Déplacer dans les messages envoyés</translation>
     </message>
 </context>
 <context>
@@ -4884,6 +5016,22 @@ Enregistrer quand même ?</translation>
     <message>
         <source>Encrypted copies: %1</source>
         <translation>Copies chiffrées : %1</translation>
+    </message>
+    <message>
+        <source>Remote copies have not been measured yet</source>
+        <translation>Les copies distantes n’ont pas encore été mesurées</translation>
+    </message>
+    <message>
+        <source>Mail is unavailable.</source>
+        <translation>Le courrier est indisponible.</translation>
+    </message>
+    <message>
+        <source>This file must reach Protected before it can be attached by reference.</source>
+        <translation>Ce fichier doit être protégé avant de pouvoir être joint par référence.</translation>
+    </message>
+    <message>
+        <source>Download is available when network protection is complete.</source>
+        <translation>Le téléchargement sera disponible lorsque la protection réseau sera complète.</translation>
     </message>
 </context>
 <context>

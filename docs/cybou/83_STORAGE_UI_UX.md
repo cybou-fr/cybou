@@ -1,11 +1,11 @@
 # 83 — CYBOU Files UI/UX
 
 Status: canonical Beta Files/Storage product UX contract. The Qt Files page
-implements this UX over the desktop product model and is fully usable with
-deterministic UI fixtures (`CYBOU_UI_FIXTURE`). The encrypted Files catalog,
-its finalized RootPublication and the Beta durability contract are not
-connected yet; in live mode the page says so and never shows local-only
-content as `Protected`.
+implements a live encrypted catalog, publication, retrieval and durability
+projection through CybouCoreApplicationAdapter as well as deterministic UI
+fixtures (`CYBOU_UI_FIXTURE`). Connection is not full Beta acceptance: see
+`26_IMPLEMENTATION_STATUS.md` and `DESKTOP_UX_DELIVERY_PLAN.md` for remaining
+interaction and evidence gaps. Local-only content is never `Protected`.
 
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file
@@ -17,8 +17,40 @@ there is no separate post-Beta Drive product. Private catalogs and content
 publication use the shared encrypted chunk substrate described in
 `ROOT_PUBLICATION.md` and `ENCRYPTED_CHUNK_TREE.md`.
 
-The user manages files and folders. The user does not manage chunks, provider
-nodes, repair queues, proofs, leases, or replication topology.
+The normal user manages files and folders. Advanced may inspect owned content
+and scoped evidence; StorageService still manages assignment and repair.
+Pages never enumerate foreign hosted chunks or the provider DB.
+
+## Stable details and actionable protection (delivery target)
+
+Keep the selected semantic file, details scroll and Advanced expansion stable
+across snapshot refresh and pending-to-indexed item replacement. Lock clears
+private state. An actual removed/inaccessible item closes details with a reason.
+Folder pickers use unique IDs with breadcrumb labels; duplicate names must not
+choose the wrong destination. Recursive folder enumeration runs off the UI thread.
+
+Show separate fields for confirmation, local availability, remote replicas and
+retrieval/integrity. Examples: Waiting for confirmation; Protecting — 1 of 2
+remote copies confirmed; Checking copies — no recent measurement; Repairing
+protection; Needs attention — with a safe reason and retry. Unknown count is
+never rendered as Not stored on network yet. Show measurement freshness and
+whether the count is a local observation. Two distinct StorageIds/payout
+accounts do not establish separate hosts or failure domains.
+
+Download/Open/Send capabilities have explicit reasons, consistently across the
+toolbar, details and context menu. The existing Files-to-Mail reference path
+requires Protected; first make that path reliable and explain missing replicas.
+A future compose-from-pending-file flow is separate gated work: define durable
+content references, preparation/source lifetime and recovery before enabling it.
+Do not bypass the current gate merely to make a disabled action clickable.
+Local verified access may be considered separately from remote protection;
+core availability, authorization and verification decide whether it is safe.
+
+Deletion separates local Trash, finalized catalog deletion, publication
+revocation/lease closure and managed purge of unshared provider chunks. Report
+only evidence actually available. Retained recipient/shared copies, historical
+capsules and backups prevent a promise of universal deletion or crypto-erasure.
+See `DATA_ASSURANCE_AND_ERASURE.md` and `NETWORK_AND_ADVANCED_UX.md`.
 
 ## 0. Content lifecycle (finality first)
 
@@ -338,14 +370,19 @@ Normal presentation:
 
 ```text
 Storage
-12.4 GB used of 100 GB
+12.4 GB of logical files
+System Balance: finalized CYBOU service budget
 ```
 
-A secondary details panel may explain contribution/entitlement policy.
+A secondary details panel shows current lease/rent assumptions and separately
+the explicit local physical capacity and provider budget. Do not invent a
+canonical GB entitlement from local capacity or System Balance. Show an upper
+limit only when a real application policy defines and measures it.
 
 Do not mix the user-facing logical capacity display with physical replication
-or coding overhead. `3:1 contribution : entitlement` is an economics/accounting
-policy and is not the same thing as three physical replicas.
+or coding overhead. The reciprocal 1:3 baseline is a capacity/service objective,
+not a measured proof of contribution, storage entitlement or three-replica
+evidence. Paid publication leases govern service under the active economy.
 
 ## 13. Mail integration
 

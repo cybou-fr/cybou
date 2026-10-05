@@ -66,9 +66,10 @@ Recommended shell:
 +-------------+-----------------------------------------------------------------+
 ```
 
-The existing Home composition should keep its clear vertical service cards
-with Recent Activity as a secondary column rather than turning all service
-cards into a dense horizontal strip.
+Home composition is flexible: keep service entry points readable, Identity
+readiness clear and Recent Activity secondary. Vertical cards, a compact row
+or a responsive grid are acceptable when task discovery, density and DPI
+acceptance pass. Difference from a previous layout is not itself a defect.
 
 ## 4. Navigation
 
@@ -79,6 +80,7 @@ Home
 Mail
 Files
 Wallet
+Network (when its bounded diagnostics surface is connected)
 ```
 
 Capability-gated services must not look operational before backend support is
@@ -91,7 +93,7 @@ Identity/security is accessed through the identity chip/menu and Settings.
 
 Search follows context:
 
-- Home/global search may later route to service-specific search;
+- global search routes to available Mail/Files results with explicit scope;
 - Mail search operates over private local Mail indexes;
 - Files search operates over private local Files metadata;
 - search terms must not be leaked to peers/providers merely for UX parity.
@@ -290,6 +292,18 @@ are reserved for states backed by the core's verified/finalized truth.
 
 Before then use pending vocabulary.
 
+Local words such as Saved, Archived and Moved to Trash require acknowledgement
+of the corresponding local durable commit. A queued request is not success.
+Archive is local mailbox organization, not a PoA operation. Network Files
+mutations retain their separate confirmation/protection lifecycle.
+
+Short background actions use an inline pending indicator and a non-blocking
+task panel. After roughly one second show that work continues; this is a UX
+feedback target, not a promised completion time. Offer details and actionable
+errors. Avoid a mandatory modal for every archive; use a modal only when the
+user must decide or acknowledge a destructive action. Do not invent an ETA
+or percentage for an unmeasured phase.
+
 ## 15. Delivery uncertainty
 
 `delivery_uncertain` is a first-class product state.
@@ -410,6 +424,7 @@ Storage upload/download
 large file hashing/chunking
 PQ KEM/signature generation if it can stall interaction
 long DB migrations
+recursive folder enumeration and large filesystem scans
 ```
 
 Pages issue requests through controllers/services and consume model snapshots,
@@ -417,6 +432,13 @@ progress, and completion states.
 
 A user click gets immediate local acknowledgement even if the real operation
 continues asynchronously.
+
+Keep widgets and item identity stable. Coalesce frequent signals, update only
+changed rows/fields and preserve expanded details, selection, focus, scroll and
+compose text. Reducing polling alone does not fix destructive widget rebuilds.
+Activity and diagnostics show Last updated and a manual Refresh action;
+unchanged snapshots cause no visible redraw. Important failures/completion
+remain event-driven. See `DESKTOP_UX_DELIVERY_PLAN.md` for implementation order.
 
 ## 22. Home
 
@@ -444,7 +466,7 @@ Mail confidentiality: unavailable until verified hybrid recipient keys are publi
 
 Mail       12 unread
 Files      12.4 GB used / Protected
-Recovery words  Backed up
+Recovery words  Confirmation completed on this installation
 
 Recent activity
 Alice sent "Project files"
@@ -452,7 +474,9 @@ report.pdf protected
 100 CYBOU sent to bob.cybou
 ```
 
-Raw peer/finality/network metrics remain in Network Diagnostics.
+Phrase confirmation is not proof that an external backup remains available.
+Normal Home uses concise summaries; Network provides scoped network statistics
+and an optional schematic France map. Raw evidence remains in Advanced.
 
 ## 23. Settings structure
 
@@ -474,7 +498,7 @@ Network diagnostics
 Cryptography
 Storage diagnostics
 Logs
-Protocol/version details
+Protocol and implementation details
 ```
 
 ## 24. Technical transparency
@@ -515,6 +539,10 @@ distributed storage
 independent verification/finality
 ```
 
-The differentiator is not a more complicated interface. The differentiator is
-that familiar workflows are implemented without a central provider owning the
-identity, plaintext, or canonical state.
+Familiar workflows preserve user-held Identity and encrypted content with
+independent local verification. Canonical finality remains centralized under
+the genesis-authorized PoA key; the UI must describe this trust boundary honestly.
+
+Network, operator tools and the own-content console follow
+[`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md). Security and deletion
+labels follow scoped evidence, never an unconditional RGPD/certification badge.
