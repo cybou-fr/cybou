@@ -98,7 +98,10 @@ struct Client {
         node->Start();
         // A synthetic client is an ordinary Full Node: it accepts peers on any free port.
         node->StartNetwork({.sync_interval=500ms,.listen_endpoint=std::make_pair(std::string{"0.0.0.0"},uint16_t{0}),.listen_optional=true},[&](const auto& result,const auto&,size_t){
-            caught_up_known_peers.store(result.IsConnected() && result.caught_up_with_known_peers);
+            // Ready once a peer confirms there is nothing newer: requiring every connected peer to
+            // answer cleanly in one pass never happens in a large mesh with busy peers.
+            if (result.IsConnected() && (result.caught_up_with_known_peers ||
+                    result.status == cybou::SyncPeerStatus::UP_TO_DATE)) caught_up_known_peers.store(true);
             return true;
         });
         const auto ready_deadline = std::chrono::steady_clock::now()+600s;
