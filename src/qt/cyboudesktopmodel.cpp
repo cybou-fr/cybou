@@ -686,17 +686,17 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
 {
     // Counterparties arrive as AccountIDs; show their finalized .cybou name when they have one.
     if (m_identity_service && !m_fixture_mode) {
-        std::optional<cybou::CybouState> state;
+        cybou::StateSnapshotResult loaded;
         for (auto& entry : entries) {
             if (entry.counterparty_name.size() != 64) continue;
             const auto raw = cybou::ParseHash256UserHex(entry.counterparty_name.toStdString());
             if (!raw) continue;
-            if (!state) {
-                const auto loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
-                if (!loaded || !loaded.state) break;
-                state = *loaded.state;
+            // Hold the shared snapshot: copying the whole state on the GUI thread stalls it.
+            if (!loaded) {
+                loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
+                if (!loaded) break;
             }
-            if (const auto* name = state->names.PrimaryName(cybou::AccountId{*raw})) {
+            if (const auto* name = loaded.state->names.PrimaryName(cybou::AccountId{*raw})) {
                 entry.counterparty_name = QString::fromStdString(*name) + QStringLiteral(".cybou");
             } else {
                 entry.counterparty_name = CybouProduct::shortId(entry.counterparty_name);
