@@ -141,6 +141,12 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
             return OperationSubmitResult{.status = admission == PoolAdmission::ACCEPTED ?
                 OperationSubmitStatus::ACCEPTED : OperationSubmitStatus::ALREADY_PENDING, .op_id = op_id};
         }
+        // The author's own candidate also enters its relay queue, like any relayed one: it is
+        // then pushed to every connected peer and served to pollers, so a single dead-end peer
+        // (a lagging node, another client) acknowledging it first cannot strand it.
+        if (const auto own_bytes = SerializeProtocolOperation(op)) {
+            (void)m_chain.operation_relay.Enqueue(*own_bytes, work_nonce, true);
+        }
     }
     configured_endpoints = GetConfiguredPeerEndpoints();
     if (m_network.peer_manager) {
