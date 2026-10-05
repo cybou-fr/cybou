@@ -432,10 +432,10 @@ public:
     size_t ConnectedPeerCount() const;
     /// \brief Локальный encrypted staging/cache, присутствующий на каждом Full Node.
     /// \warning Возвращаемый объект не получает автоматической синхронизации сверх гарантий этого метода.
-    ChunkBlobStore& GetChunkBlobStore() { return *m_chunk_blob_store; }
+    ChunkBlobStore& GetChunkBlobStore() { return *m_provider.chunk_blob_store; }
     /// \brief Реестр pin/cache причин удержания локальных blob'ов без прикладной семантики.
     /// \warning Вызывающая сторона должна сама соблюдать lock discipline при прямой работе с реестром.
-    ChunkRetentionRegistry& GetChunkRetention() { return *m_chunk_retention; }
+    ChunkRetentionRegistry& GetChunkRetention() { return *m_provider.chunk_retention; }
     /// \brief Эвиктит LRU unpinned cache blobs сверх cache_budget_bytes; pinned и admitted blobs не трогает.
     /// \param cache_budget_bytes Желаемый потолок для кэшированных неприбитых blob'ов.
     /// \param now_ms Текущее время в миллисекундах для age/grace расчётов.
@@ -444,7 +444,7 @@ public:
     ChunkRetentionRegistry::CollectResult CollectChunkGarbage(std::uint64_t cache_budget_bytes,
         std::uint64_t now_ms, std::size_t max_removals = 256);
     /// \brief Константный доступ к локальному ChunkBlobStore.
-    const ChunkBlobStore& GetChunkBlobStore() const { return *m_chunk_blob_store; }
+    const ChunkBlobStore& GetChunkBlobStore() const { return *m_provider.chunk_blob_store; }
     /// \brief Пытается принять уже финализованный чанк в локальное storage.
     /// \param publication_operation_id Finalized OperationID RootPublication.
     /// \param chunk_id Идентификатор сохраняемого чанка.
@@ -523,18 +523,18 @@ public:
     /// \brief Локальный pre-parse abuse limiter; не имеет protocol или Authority effect.
     /// \return Известный размер финализованного чанка либо std::nullopt.
     std::optional<uint64_t> FinalizedChunkSize(const ChunkId& id) const
-    { return m_finalized_chunk_store->StoredSize(id); }
+    { return m_provider.finalized_chunk_store->StoredSize(id); }
     /// \brief Резервирует один слот активной storage transfer для address.
     /// \return RAII-handle или nullptr, если лимит по адресу исчерпан.
     std::shared_ptr<void> AcquireStorageTransfer(const std::string& address)
-    { return m_ingress.AcquireStorageTransfer(address); }
+    { return m_network.ingress.AcquireStorageTransfer(address); }
     /// \brief Применяет локальный ingress budget до выделения памяти и чтения payload.
     /// \param address Адрес удалённой стороны.
     /// \param work Категория работы ingress limiter.
     /// \param bytes Заявленный объём байт, подлежащий резервированию.
     /// \return true, если локальная policy допускает такую работу сейчас.
     bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
-    { return m_ingress.Admit(address, work, bytes); }
+    { return m_network.ingress.Admit(address, work, bytes); }
     /// \brief Проверяет peer address через локальную admission policy.
     /// \param numeric_address Числовой IP-адрес пира.
     /// \return true только если policy готова и разрешает адрес.
@@ -564,9 +564,9 @@ public:
 
     /// \brief Доступ к underlying local state store.
     /// \warning Низкоуровневый store не становится автоматически потокобезопасным после возврата ссылки.
-    CybouStateStore& GetStore() { return m_store; }
+    CybouStateStore& GetStore() { return m_chain.store; }
     /// \brief Константный доступ к underlying local state store.
-    const CybouStateStore& GetStore() const { return m_store; }
+    const CybouStateStore& GetStore() const { return m_chain.store; }
 
 private:
     enum class PeerFailureClass : uint8_t { TEMPORARY, PROTOCOL, WRONG_NETWORK };
@@ -591,39 +591,59 @@ private:
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
     void RevalidateCandidates();
+    // Internal ownership domains; these are parts of one uniform Full Node.
+    // Network I/O may call chain methods: never nest chain -> network locks.
+    struct ChainCore {
+        explicit ChainCore(const NodeRuntimeConfig& config);
+        ~ChainCore();
+        std::unique_ptr<KVStore> db;
+        CybouStateStore store;
+        OperationPool operation_pool;
+        std::map<cybou::Hash256, uint64_t> solved_work;
+        std::unique_ptr<PoaFinalizer> poa_finalizer;
+        // Preserve the exact journaled candidate across signing/commit retries.
+        BlockProductionStatus production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};
+        std::optional<CybouBlock> production_candidate;
+        std::optional<FinalizedBlock> production_finalized;
+        IdentitySignerRef identity_signer;
+        OperationRelay operation_relay;
+        std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> identity_operation_coordinators;
+        std::map<cybou::Hash256, OperationStatus> recent_operation_status;
+        std::deque<cybou::Hash256> recent_operation_status_order;
+        mutable std::mutex mutex;
+    };
+    struct ProviderCore {
+        ~ProviderCore();
+        void Initialize(const NodeRuntimeConfig& config, const cybou::Hash256& network_binding);
+        std::unique_ptr<ChunkBlobStore> chunk_blob_store;
+        std::unique_ptr<FinalizedChunkStore> finalized_chunk_store;
+        std::unique_ptr<ChunkRetentionRegistry> chunk_retention;
+        std::optional<std::array<unsigned char, 32>> storage_secret;
+        std::optional<std::array<unsigned char, 32>> storage_id;
+    };
+    using Endpoint = std::pair<std::string, uint16_t>;
+    struct NetworkCore {
+        explicit NetworkCore(const NodeRuntimeConfig& config);
+        ~NetworkCore();
+        std::unique_ptr<p2p::PeerManager> peer_manager;
+        mutable std::mutex mutex;
+        std::map<Endpoint, PeerRetryState> peer_retry_after;
+        std::chrono::steady_clock::time_point next_peer_ping{};
+        std::chrono::steady_clock::time_point next_peer_discovery{};
+        // Peer callbacks can consult routes while session I/O owns mutex.
+        // Routing access never acquires the session or chain mutex.
+        mutable std::mutex routing_mutex;
+        std::vector<ConfiguredPeer> configured_peers;
+        std::optional<Endpoint> advertised_endpoint;
+        p2p::IngressBudget ingress;
+        std::set<Endpoint> discovered_peer_endpoints;
+    };
     NodeRuntimeConfig m_config;
     cybou::Hash256 m_network_binding;
-    std::unique_ptr<KVStore> m_db;
-    std::unique_ptr<ChunkBlobStore> m_chunk_blob_store;
-    std::unique_ptr<FinalizedChunkStore> m_finalized_chunk_store;
-    std::unique_ptr<ChunkRetentionRegistry> m_chunk_retention;
-    /// \brief Секрет storage provider key, сохраняемый рядом с provider data.
-    std::optional<std::array<unsigned char, 32>> m_storage_secret;
-    std::optional<std::array<unsigned char, 32>> m_storage_id;
-    CybouStateStore m_store;
-    /// \brief Собственный volatile candidate pool Full Node; PoA-узел собирает блоки только из него.
-    OperationPool m_operation_pool{m_store, OperationPoolLimits{.operation_work_bits = m_config.operation_work_bits}};
-    /// \brief Решённые relay-PoW nonce локально отправленных операций, чтобы повтор не решал заново.
-    std::map<cybou::Hash256, uint64_t> m_solved_work;
-    std::unique_ptr<PoaFinalizer> m_poa_finalizer;
-    // Preserve the exact journaled candidate across signing/commit retries.
-    BlockProductionStatus m_production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};
-    std::optional<CybouBlock> m_production_candidate;
-    std::optional<FinalizedBlock> m_production_finalized;
-    IdentitySignerRef m_identity_signer;
-    OperationRelay m_operation_relay;
-    std::map<const CybouKeyStore*, std::unique_ptr<IdentityOperationCoordinator>> m_identity_operation_coordinators;
-    std::map<cybou::Hash256, OperationStatus> m_recent_operation_status;
-    std::deque<cybou::Hash256> m_recent_operation_status_order;
-    std::unique_ptr<p2p::PeerManager> m_peer_manager;
-    mutable std::mutex m_p2p_mutex;
-    std::map<std::pair<std::string, uint16_t>, PeerRetryState> m_peer_retry_after;
-    std::chrono::steady_clock::time_point m_next_peer_ping{};
-    std::chrono::steady_clock::time_point m_next_peer_discovery{};
-    mutable std::mutex m_mutex;
-    using Endpoint = std::pair<std::string, uint16_t>;
-    p2p::IngressBudget m_ingress;
-    std::set<Endpoint> m_discovered_peer_endpoints;
+    // Reverse destruction order closes peers before provider/chain storage.
+    ChainCore m_chain;
+    ProviderCore m_provider;
+    NetworkCore m_network;
 };
 
 } // namespace cybou

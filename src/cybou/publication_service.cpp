@@ -264,7 +264,7 @@ PublicationJobResult PublicationService::BuildAndSubmit(const std::string_view l
     const auto& future_self = intent.future_self;
     const auto account = m_identity.GetAccountId();
     if (!account) return Failure("Identity is locked");
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* sender = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
     if (!sender || sender->nonce == std::numeric_limits<std::uint64_t>::max()) {
         return Failure("Publisher Identity is not finalized or nonce is exhausted");
@@ -828,7 +828,7 @@ PublicationJobResult PublicationService::PublishRecoveryBridge(const std::string
     if (IsCancellationPending(local_job_id)) return Failure("Publication cancellation is pending cleanup");
     if (auto existing = Load(local_job_id)) return ResumeLocked(local_job_id, *existing);
     const auto me = m_identity.GetAccountId();
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* record = me && loaded && loaded.state ? loaded.state->identities.Find(*me) : nullptr;
     if (!record) return Failure("Identity is not finalized");
     const std::uint64_t current_epoch = record->key_epoch;

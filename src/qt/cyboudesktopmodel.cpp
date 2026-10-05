@@ -624,7 +624,7 @@ void CybouDesktopModel::setWalletEntries(QVector<CybouWalletEntry> entries)
             const auto raw = cybou::ParseHash256UserHex(entry.counterparty_name.toStdString());
             if (!raw) continue;
             if (!state) {
-                const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+                const auto loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
                 if (!loaded || !loaded.state) break;
                 state = *loaded.state;
             }
@@ -748,7 +748,7 @@ bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
         // Resolve the finalized name owner, then submit from Balance.
         std::optional<cybou::AccountId> recipient;
         {
-            const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+            const auto loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
             if (loaded && loaded.state) {
                 if (const auto* owner = loaded.state->names.Resolve(label)) recipient = *owner;
             }
@@ -887,7 +887,7 @@ void CybouDesktopModel::rebuildContacts()
     // Everyone can reach support by default, once the authority claimed the name.
     bool support_available = false;
     if (m_identity_service) {
-        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().LoadState();
+        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
         support_available = loaded && loaded.state && cybou::SupportAccount(*loaded.state).has_value();
     }
     const QString support = supportName();

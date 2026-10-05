@@ -427,7 +427,7 @@ void CybouDesktopController::publishNetworkAuthority()
             : !status.signer_enabled ? CybouFinalizerState::SignerUnavailable
             : m_production_paused ? CybouFinalizerState::Paused
             : CybouFinalizerState::Finalizing;
-        const auto loaded = m_node_service->Runtime().GetStore().LoadState();
+        const auto loaded = m_node_service->Runtime().GetStore().GetStateSnapshot();
         if (loaded && loaded.state) {
             const auto& state = *loaded.state;
             status.proven = true;
@@ -514,7 +514,7 @@ void CybouDesktopController::publishAuthority()
     std::lock_guard identity_access{m_identity_access_mutex};
     quint64 quota_used{0};
     if (const auto account = m_identity_service->GetAccountId()) {
-        const auto loaded = m_node_service->Runtime().GetStore().LoadState();
+        const auto loaded = m_node_service->Runtime().GetStore().GetStateSnapshot();
         if (loaded && loaded.state) {
             // Сетевое хранение — billing units действующих публикаций (DEC-279).
             for (const auto& [id, publication] : loaded.state->publications) {

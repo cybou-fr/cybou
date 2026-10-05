@@ -90,6 +90,11 @@ add_library(cybou_node STATIC
   cybou/finalized_chunk_store.cpp
   cybou/publication_service.cpp
   cybou/storage_service.cpp
+  cybou/storage_service_repair.cpp
+  cybou/storage_placement_repository.cpp
+  cybou/storage_evidence_ledger.cpp
+  cybou/storage_replica_verifier.cpp
+  cybou/storage_provider_selector.cpp
   cybou/application_service.cpp
   cybou/secret_file.cpp
   cybou/poa_conflict_detector.cpp
@@ -102,6 +107,9 @@ add_library(cybou_node STATIC
   cybou/identity_operation_coordinator.cpp
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp
+  cybou/node_runtime_chain.cpp
+  cybou/node_runtime_network.cpp
+  cybou/node_runtime_provider.cpp
   cybou/node_service.h
   cybou/node_service.cpp
   cybou/operation_relay.cpp

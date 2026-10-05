@@ -393,7 +393,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     }
     // The current KEM epoch comes from canonical state, never from local data.
     const auto me = m_identity.GetAccountId();
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* identity = me && loaded && loaded.state ? loaded.state->identities.Find(*me) : nullptr;
     if (!identity) {
         progress.scanned_height = height;

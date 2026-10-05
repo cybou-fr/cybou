@@ -321,6 +321,38 @@ BOOST_AUTO_TEST_CASE(shadow_accounting_credits_verified_intervals_and_survives_r
     }
 }
 
+BOOST_AUTO_TEST_CASE(corrupt_persisted_evidence_is_not_reused_for_service_or_settlement)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("storage-owner.cybou");
+    ProviderNetwork network{fixture, 2};
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    const auto content = Publish(fixture, *identity, application_db, true);
+    network.Sync();
+    std::map<std::array<unsigned char, 32>, cybou::StorageProviderEvidence> recorded;
+    {
+        cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+        BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+        recorded = storage.ProviderEvidence();
+    }
+    BOOST_REQUIRE_EQUAL(recorded.size(), 2U);
+    unsigned damaged{0};
+    for (const auto& [storage_id, evidence] : recorded) {
+        const auto key = "storage/evidence/" + cybou::Hash256{std::span<const unsigned char, 32>{storage_id}}.GetHex();
+        auto bytes = application_db.Get(key);
+        BOOST_REQUIRE(bytes && bytes->size() >= 8);
+        if (damaged++ == 0) bytes->pop_back(); // truncated record
+        else std::fill(bytes->end() - 8, bytes->end(), 0xff); // invalid carried rent remainder
+        BOOST_REQUIRE(application_db.Put(key, *bytes));
+    }
+    cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_CHECK(reopened.ProviderEvidence().empty());
+    BOOST_REQUIRE(reopened.DescribePlacement(content.operation_id));
+    const auto lease = fixture.runtime->GetStorageLease(content.operation_id);
+    BOOST_REQUIRE(lease);
+    BOOST_CHECK(reopened.SettlementEntries(lease->first_period, 0).empty());
+}
+
 BOOST_AUTO_TEST_CASE(settlement_pays_verified_replicas_of_leased_publications)
 {
     // DEC-282: each verified replica earns one replica share of the period cap; unverified
@@ -366,6 +398,14 @@ BOOST_AUTO_TEST_CASE(settlement_pays_verified_replicas_of_leased_publications)
     BOOST_CHECK(storage.SettlementEntries(period, std::numeric_limits<std::int64_t>::max()).empty());
     // Outside the lease nothing is owed.
     BOOST_CHECK(storage.SettlementEntries(lease->end_period, 0).empty());
+
+    // Persisted placement/evidence never carries live verification into a new session.
+    cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
+    BOOST_REQUIRE(reopened.DescribePlacement(content.operation_id));
+    BOOST_CHECK(!reopened.ProviderEvidence().empty());
+    BOOST_CHECK(reopened.SettlementEntries(period, 0).empty());
+    BOOST_REQUIRE(reopened.Audit(content.operation_id).state == cybou::DurabilityState::PROTECTED);
+    BOOST_CHECK(!reopened.SettlementEntries(period, 0).empty());
 }
 
 BOOST_AUTO_TEST_CASE(replicas_go_to_distinct_payout_accounts_and_nodes_of_one_account_count_once)

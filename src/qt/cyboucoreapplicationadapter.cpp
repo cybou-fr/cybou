@@ -369,7 +369,7 @@ struct CybouCoreApplicationAdapter::Session {
 
     void Snapshot(CybouRestoreStepState mail_restore)
     {
-        const auto loaded = runtime.GetStore().LoadState();
+        const auto loaded = runtime.GetStore().GetStateSnapshot();
         const cybou::CybouState* state = loaded && loaded.state ? &*loaded.state : nullptr;
         QVector<CybouMailItem> items;
         std::map<cybou::ChunkId, std::string> saved_roots;
@@ -677,7 +677,7 @@ struct CybouCoreApplicationAdapter::Session {
     {
         QString label = name.trimmed().toLower();
         if (label.endsWith(QStringLiteral(".cybou"))) label.chop(6);
-        const auto loaded = runtime.GetStore().LoadState();
+        const auto loaded = runtime.GetStore().GetStateSnapshot();
         if (!loaded || !loaded.state) return std::nullopt;
         if (const auto* account = loaded.state->names.Resolve(label.toStdString())) return *account;
         // An Identity without a name can be addressed by its full AccountID.

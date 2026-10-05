@@ -32,6 +32,18 @@ or certification claims.
 - bounds of the per-node candidate pool, gossip rate limits and TTL;
 - re-execution policy for held candidates when the finalized base advances.
 
+## Block depth and elapsed time after DEC-286
+
+AccountCreate `work_epoch` is derived from finalized block height, and name
+commit lifetime/reveal windows are block depths. With candidate-only automatic
+block production, these impose no upper bound in elapsed time: a quiet network
+can leave an onboarding work epoch valid for arbitrarily long. Before MAINNET,
+measure advance-work stockpiling and Identity Sybil economics and decide whether
+the challenge needs a protocol change. Preserve existing epoch validation and
+name depth rules until a reviewed decision exists; never substitute local
+wall-clock time into deterministic execution or restore periodic empty blocks
+implicitly. Storage settlement periods retain their explicit UTC semantics.
+
 ## Application data plane
 
 - exact encrypted Application DB implementation and crash-recovery strategy;

@@ -73,7 +73,8 @@ std::optional<cybou::Hash256> CybouStateStore::ComputeCandidateStateRoot(
     const std::vector<ProtocolOperation>& operations,
     const uint64_t height) const
 {
-    const auto loaded = LoadState();
+    const std::lock_guard lock{m_snapshot_mutex};
+    const auto loaded = GetStateSnapshotLocked();
     const auto head = GetFinalizedHead();
     if (!loaded || !head || height != head->height + 1 ||
         height == 0) {
@@ -99,6 +100,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     const CybouState& genesis_state,
     const bool sync)
 {
+    const std::lock_guard lock{m_snapshot_mutex};
     if (m_db.Exists(STATE_KEY) || m_db.Exists(HASH_KEY) || m_db.Exists(HEAD_KEY) ||
         m_db.Exists(NETWORK_ID_KEY)) {
         return {GenesisInitError::ALREADY_INITIALIZED};
@@ -121,11 +123,38 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_binding);
     batch.Write(StateHeightKey(0), *serialized_state);
+    auto snapshot = std::make_shared<const CybouState>(genesis_state);
     m_db.WriteBatch(batch, sync);
+    m_state_snapshot.store(std::move(snapshot));
     return {};
 }
 
+StateSnapshotResult CybouStateStore::GetStateSnapshot() const
+{
+    if (auto snapshot = m_state_snapshot.load()) return {StateLoadError::NONE, std::move(snapshot)};
+    const std::lock_guard lock{m_snapshot_mutex};
+    return GetStateSnapshotLocked();
+}
+
+StateSnapshotResult CybouStateStore::GetStateSnapshotLocked() const
+{
+    auto snapshot = m_state_snapshot.load();
+    if (!snapshot) {
+        auto loaded = LoadStateLocked();
+        if (!loaded) return {loaded.error, nullptr};
+        snapshot = std::make_shared<const CybouState>(std::move(*loaded.state));
+        m_state_snapshot.store(snapshot);
+    }
+    return {StateLoadError::NONE, std::move(snapshot)};
+}
+
 StateLoadResult CybouStateStore::LoadState() const
+{
+    const std::lock_guard lock{m_snapshot_mutex};
+    return LoadStateLocked();
+}
+
+StateLoadResult CybouStateStore::LoadStateLocked() const
 {
     std::vector<unsigned char> bytes;
     cybou::Hash256 stored_hash;
@@ -199,7 +228,8 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
     const FinalizedBlock& finalized_block,
     const bool sync)
 {
-    const auto loaded{LoadState()};
+    const std::lock_guard lock{m_snapshot_mutex};
+    const auto loaded{GetStateSnapshotLocked()};
     if (!loaded) {
         if (loaded.error == StateLoadError::NETWORK_MISMATCH) {
             return {BlockTransitionError::NETWORK_MISMATCH};
@@ -304,7 +334,9 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
                 batch.Write(OperationKey(*op_id), block_id);
             }
         }
+        auto snapshot = std::make_shared<const CybouState>(std::move(*execution.state));
         m_db.WriteBatch(batch, sync);
+        m_state_snapshot.store(std::move(snapshot));
         return {};
     }
 
@@ -378,7 +410,10 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         // нужд; каноническая истина всё равно определяется последним финализированным состоянием.
         batch.Erase(StateHeightKey(block.height - 16));
     }
+    auto snapshot = is_empty_noop_block ? loaded.state :
+        std::make_shared<const CybouState>(std::move(*next_state));
     m_db.WriteBatch(batch, sync);
+    m_state_snapshot.store(std::move(snapshot));
     return {};
 }
 

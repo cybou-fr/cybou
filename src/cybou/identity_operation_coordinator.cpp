@@ -324,7 +324,7 @@ IdentityOperationResult IdentityOperationCoordinator::Reconcile(JournalEntry& en
         ClearJournal();
         return {.phase = IdentityOperationPhase::REJECTED, .op_id = id, .error = "Operation was explicitly rejected"};
     }
-    const auto state = m_runtime.GetStore().LoadState();
+    const auto state = m_runtime.GetStore().GetStateSnapshot();
     const auto* record = state && state.state ? state.state->identities.Find(entry.account_id) : nullptr;
     if (!record) return {.phase = IdentityOperationPhase::UNCERTAIN, .op_id = entry.op_id,
         .error = "Identity state is unavailable; journal retained"};
@@ -394,7 +394,7 @@ IdentityOperationResult IdentityOperationCoordinator::Execute(IdentityOperationK
         if (m_entry) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = previous.op_id,
             .error = previous.error.empty() ? "Another Identity operation is unresolved" : previous.error};
     }
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* record = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
     const auto auth_key = m_keystore.GetAuthorizationPublicKey();
     const auto root_key = m_keystore.GetRecoveryPublicKey();
@@ -444,7 +444,7 @@ IdentityOperationResult IdentityOperationCoordinator::RotateIdentity(
         if (m_entry) return {.phase = IdentityOperationPhase::CONFLICT, .op_id = m_entry->op_id,
             .error = "Another Identity operation is unresolved"};
     }
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* record = loaded && loaded.state ? loaded.state->identities.Find(*account) : nullptr;
     const auto old_root = m_keystore.GetRecoveryPublicKey();
     if (!record || !old_root || record->recovery_key != *old_root) {

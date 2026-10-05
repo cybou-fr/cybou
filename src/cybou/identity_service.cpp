@@ -67,7 +67,7 @@ std::optional<std::string> CybouIdentityService::GetFinalizedPrimaryName() const
 {
     const auto account_id = GetAccountId();
     if (!account_id) return std::nullopt;
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     if (!loaded || !loaded.state) return std::nullopt;
     const auto* name = loaded.state->names.PrimaryName(*account_id);
     return name ? std::optional<std::string>{*name} : std::nullopt;
@@ -143,7 +143,7 @@ bool IsAuthorizedIdentity(const CybouNodeRuntime& runtime, const AccountId& acco
     const auto recovery_key = keystore.GetRecoveryPublicKey();
     const auto kem_public = keystore.GetIdentityXWingPublicKey();
     const auto package = kem_public ? EncodeIdentityKemPackage(*kem_public) : std::nullopt;
-    const auto loaded = runtime.GetStore().LoadState();
+    const auto loaded = runtime.GetStore().GetStateSnapshot();
     // Сначала локально подтверждаем, что keystore самосогласован, и только потом
     // сравниваем его с финализированным состоянием, чтобы не принять повреждённый секрет.
     if (!authorization_key || !recovery_key || !package || !keystore.ValidateIdentityXWingKeyPair() || !loaded || !loaded.state) return false;
@@ -337,7 +337,7 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
                 reason = "The network rejected the new Identity";
                 const auto next_height = m_runtime.GetFinalizedHeight().value_or(0) + 1;
                 const auto check = ValidateAccountCreateOp(op, network_binding, next_height, params);
-                const auto loaded = m_runtime.GetStore().LoadState();
+                const auto loaded = m_runtime.GetStore().GetStateSnapshot();
                 if (check != AccountCreateError::NONE) {
                     reason += " (operation check " + std::to_string(static_cast<int>(check)) + ")";
                 } else if (loaded && loaded.state) {
@@ -436,7 +436,7 @@ IdentityCreationResult CybouIdentityService::RestoreIdentitySync(
         m_phase.store(IdentityCreationPhase::FAILED);
         return Failure(IdentityCreationPhase::FAILED, "Cannot derive Identity key roles");
     }
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto account = loaded && loaded.state ? loaded.state->identities.FindByRecoveryKeyId(*recovery_id) : std::nullopt;
     if (!account && loaded && loaded.state) {
         // A genesis allocation names this recovery key but no Identity claimed
@@ -604,7 +604,7 @@ IdentityOperationResult CybouIdentityService::RotateIdentitySync(
                 .error = "Recovery rotation finalized but the candidate vault could not be promoted and loaded"};
         }
         const auto promoted_root = m_keystore.GetRecoveryPublicKey();
-        const auto finalized = m_runtime.GetStore().LoadState();
+        const auto finalized = m_runtime.GetStore().GetStateSnapshot();
         const auto* finalized_identity = finalized && finalized.state && active_account ?
             finalized.state->identities.Find(*active_account) : nullptr;
         if (!promoted_root || *promoted_root != *new_root || !finalized_identity ||
@@ -654,7 +654,7 @@ IdentityOperationResult CybouIdentityService::ResumeIdentityRotationSync(std::st
     auto& coordinator = m_runtime.GetIdentityOperationCoordinator(m_keystore);
     const auto active_root = m_keystore.GetRecoveryPublicKey();
     const auto account = m_keystore.GetAccountId();
-    const auto loaded = m_runtime.GetStore().LoadState();
+    const auto loaded = m_runtime.GetStore().GetStateSnapshot();
     const auto* record = loaded && loaded.state && account ? loaded.state->identities.Find(*account) : nullptr;
     if (!candidate_exists && active_root && record && record->recovery_key == *active_root) {
         if (!coordinator.HasPendingIdentityRotation() || coordinator.CompleteIdentityRotation(*record)) {

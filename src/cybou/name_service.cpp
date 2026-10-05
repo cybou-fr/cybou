@@ -118,7 +118,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     }
     const auto network = m_runtime.GetNetworkBinding();
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    auto state = m_runtime.GetStore().LoadState();
+    auto state = m_runtime.GetStore().GetStateSnapshot();
     if (!state || !state.state || !state.state->accounts.contains(*account)) return Fail("Account is not finalized");
     if (const auto* owned = state.state->names.PrimaryName(*account)) {
         return *owned == label ? NameClaimResult{true, NameClaimPhase::ACTIVE, {}} : Fail("Account already owns a name");
@@ -160,7 +160,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     }
     if (on_phase) on_phase(NameClaimPhase::WAITING_FOR_COMMIT, "Waiting for finalized NameCommit...");
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
-        state = m_runtime.GetStore().LoadState();
+        state = m_runtime.GetStore().GetStateSnapshot();
         if (state && state.state) {
             pending = state.state->names.pending_commits.find(commitment);
             if (pending != state.state->names.pending_commits.end()) break;
@@ -197,7 +197,7 @@ NameClaimResult CybouNameService::ClaimSync(std::string label, std::string passw
     if (m_runtime.GetStatus().poa_signer_active) m_runtime.ProduceBlock();
     if (on_phase) on_phase(NameClaimPhase::WAITING_FOR_NAME, "Waiting for finalized name ownership...");
     while (!m_cancelled.load() && std::chrono::steady_clock::now() < deadline) {
-        state = m_runtime.GetStore().LoadState();
+        state = m_runtime.GetStore().GetStateSnapshot();
         if (state && state.state) {
             const auto* owned = state.state->names.PrimaryName(*account);
             if (owned && *owned == label) return {true, NameClaimPhase::ACTIVE, {}};

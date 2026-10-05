@@ -15,8 +15,10 @@
 #include <cybou/protocol_operation.h>
 #include <cybou/state.h>
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -67,6 +69,14 @@ struct StateLoadResult {
     std::optional<CybouState> state;
 
     explicit operator bool() const { return error == StateLoadError::NONE && state.has_value(); }
+};
+
+/// Immutable process-local view; disk remains the durable source of truth.
+struct StateSnapshotResult {
+    StateLoadError error{StateLoadError::NONE};
+    std::shared_ptr<const CybouState> state;
+
+    explicit operator bool() const { return error == StateLoadError::NONE && state != nullptr; }
 };
 
 /// \brief Ошибки первичной инициализации genesis.
@@ -125,6 +135,10 @@ public:
     /// \return `CORRUPT`, если состояние на диске нельзя канонически десериализовать или его hash не совпадает.
     StateLoadResult LoadState() const;
 
+    /// Validates disk on first access, then shares immutable finalized state.
+    /// Direct database mutation is unsupported while the store is in use.
+    StateSnapshotResult GetStateSnapshot() const;
+
     /// \brief Возвращает текущий канонический state root.
     std::optional<cybou::Hash256> GetStateRoot() const;
 
@@ -178,6 +192,10 @@ public:
 
 
 private:
+    StateLoadResult LoadStateLocked() const;
+    StateSnapshotResult GetStateSnapshotLocked() const;
+    mutable std::mutex m_snapshot_mutex;
+    mutable std::atomic<std::shared_ptr<const CybouState>> m_state_snapshot;
     KVStore& m_db;
     const VerifiedNetworkGenesis m_network_genesis;
     const cybou::Hash256 m_network_binding;

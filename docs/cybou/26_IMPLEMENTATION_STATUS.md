@@ -27,6 +27,102 @@ define the target. The changes described here include committed local developmen
 | Operation routing | Uniform CYBOU P2P Full Node mesh | HELLO has no capability field. No PoA transport proof or special route. Sync completion is advisory. Storage is intrinsic; StorageId is challenged only for storage interaction. |
 | PoA | Sole independent canonical finalizer | Single-operator PoA re-executes every candidate through the node pool and finalizes; a multi-node CYBOU P2P test covers ordinary nodes and PoA. |
 
+## Finalized-state runtime snapshot (2026-10-05)
+
+`CybouStateStore::GetStateSnapshot()` shares immutable finalized state through
+an atomic `shared_ptr<const CybouState>`. First access validates the persisted
+state, hash and network binding; genesis initialization and both ordinary and
+min(BlockID) conflict commits publish a replacement only after the KV batch
+succeeds. Allocation precedes the durable write. Empty no-op blocks retain the
+same state object. Existing readers can retain the previous immutable state.
+Runtime, operation admission, Identity/application services and desktop state
+reads use this snapshot; `LoadState()` remains an explicit disk integrity read
+and is retained at runtime startup. Direct mutation of the underlying database
+while its StateStore is active is unsupported. Wire bytes, genesis, consensus
+execution and durable PoA safety checks are unchanged.
+
+Local validation: Windows MinGW Release headless and Qt GUI builds passed;
+87 selected runtime/state/PoA/Identity/application/publication/storage regression
+tests passed with 1,600 assertions. Snapshot-specific checks cover pointer reuse,
+retained-reader immutability, commit/reopen equivalence, rejected/empty blocks,
+corrupt persisted hash on reopen, and min(BlockID) conflict publication. This is
+local component evidence, not deployment, battle, soak or throughput evidence.
+
+This implements R1 of the performance refactoring proposal. Bounded storage
+I/O, PoA event wakeups, application history indexes, Qt projection extraction
+and battle/soak profiling remain separate work; no throughput improvement is
+claimed without measurement.
+
+## Runtime ownership domains (2026-10-05)
+
+R2 retains `CybouNodeRuntime` as the desktop/headless facade, with three private
+owners inside the same Full Node: `ChainCore` owns the database, state store,
+candidate pool, PoA signing/retry state, Identity coordinators and operation
+relay/status; `NetworkCore` owns sessions, peer retry/discovery, ingress limits
+and routing hints; `ProviderCore` owns encrypted blobs, provider admission,
+retention and the stable storage secret. Their implementations live in
+`node_runtime_chain.cpp`, `node_runtime_network.cpp` and
+`node_runtime_provider.cpp`. The facade keeps construction, aggregate diagnostics and cross-domain
+admission/relay, finalized purge events and storage payout binding orchestration. These are internal ownership boundaries, not network roles or
+independently exposed services.
+
+Routing hints have a short dedicated NetworkCore mutex instead of the chain
+mutex: peer callbacks can consult routes while session I/O owns its mutex,
+and route access does not acquire chain/session locks. Existing session ->
+chain callbacks and separate diagnostic lock scopes are retained. Provider
+storage retains its own store locks. Destruction closes sessions before
+provider and chain stores and cleanses the provider secret even if facade
+construction fails after provider initialization. Storage endpoint binding
+verification shares R1's immutable state rather than copying it.
+
+Local R2 validation: Windows MinGW Release headless and Qt GUI builds passed;
+the complete core suite passed all 252 cases and 100,542 assertions, including
+routing/discovery, synchronization, operation relay, provider admission,
+revocation/purge, Identity recovery and PoA conflict/signing safety. The facade
+implementation is 237 lines after extraction. No deployment or performance
+benchmark is implied by this component evidence.
+
+
+## StorageService responsibility extraction (2026-10-05)
+
+R3 retains one Identity `StorageService` and the existing `StorageTransport`
+interface. Private components have distinct ownership:
+
+- `PlacementRepository` owns encrypted placement/rebuild records, exact-consumption
+  decoding and atomic placement/index persistence;
+- `EvidenceLedger` owns signed receipt persistence, bounded provider evidence,
+  volatile replica verification times, shadow accrual and verified-slot counting;
+- `ReplicaVerifier` owns random-offset challenges, full GET/ChunkID validation
+  and evidence updates over the existing transport;
+- `ProviderSelector` owns CSPRNG ordering by verified payout account (falling back
+  to StorageId) and endpoint shuffling for recovery GET.
+
+Their implementations are separate translation units; `storage_service_internal.h`
+contains private declarations. Placement/audit/repair coordination lives in
+`storage_service_repair.cpp`; recovery, public projections and settlement
+preparation remain in the main service. No independently exposed storage service,
+provider role, wire entity or canonical evidence is introduced.
+
+Application DB keys and current binary layouts are unchanged. The ledger retains
+its own evidence mutex; placement coordination retains the service mutex and
+per-publication guard, releasing it during remote I/O. Existing rent caps, integer
+rounding, payer exclusion, distinct economic identities, first-failure replica
+downgrade and restart closure of credited intervals are preserved. Settlement
+preparation obtains aggregate verified slots from the ledger without accessing
+its maps or mutex directly. No evidence transport to PoA or parallel storage I/O
+is implemented by this extraction.
+
+Local R3 validation: Windows MinGW Release headless and Qt GUI builds passed;
+the complete core suite passed all 253 cases and 104,023 assertions. Added
+regressions verify that persisted counters/placements do not authorize settlement
+after reopen until fresh replica checks, and truncated evidence or an invalid
+rent remainder are rejected without deleting valid placement metadata. Existing
+coverage verifies signed receipts, restart accrual, repair without local cache,
+partial rebuild persistence, payout identity deduplication, concurrent inspection
+while placement I/O runs and P2P PUT/GET/audit. The main service implementation is
+378 lines after extraction. This is component evidence, not deployment, soak or
+measured concurrency/throughput evidence.
+
 ## Storage economy status (2026-10-04)
 
 DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:

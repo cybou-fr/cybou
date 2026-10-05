@@ -56,7 +56,7 @@ std::optional<uint64_t> OperationPool::WorkNonce(const cybou::Hash256& id) const
 void OperationPool::EnsureWorkingContext(const FinalizedHead& head)
 {
     if (m_working && m_working->head.block_id == head.block_id) return;
-    const auto loaded = m_store.LoadState();
+    const auto loaded = m_store.GetStateSnapshot();
     if (!loaded || !loaded.state) {
         m_working.reset();
         return;

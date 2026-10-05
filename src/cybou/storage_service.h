@@ -22,6 +22,7 @@
 #include <functional>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <set>
@@ -185,6 +186,7 @@ public:
     StorageService(CybouNodeRuntime& runtime, StorageTransport& transport,
         PrivateApplicationStore& application_db,
         std::uint8_t remote_replica_target = DEVELOPMENT_REMOTE_REPLICA_TARGET);
+    ~StorageService();
 
     /// \brief Размещает каждый чанк finalized публикации до remote target.
     /// \param publication_operation_id OperationID finalized RootPublication.
@@ -293,43 +295,27 @@ public:
 
 private:
     struct Placement;
-    std::optional<Placement> Load(const cybou::Hash256& operation_id, bool rebuilding = false) const;
-    bool Save(const Placement& placement, bool rebuilding = false);
+    class PlacementRepository;
+    class EvidenceLedger;
+    class ReplicaVerifier;
+    class ProviderSelector;
     PublicationDurability Place(std::unique_lock<std::mutex>& lock, Placement& placement);
     PublicationDurability Summarize(const Placement& placement) const;
     std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,
         std::span<const StorageEndpoint> preferred);
-    /// Проверяет одну реплику audit challenge или полным GET; вызывается без m_mutex.
-    bool CheckReplica(const StorageEndpoint& provider, const ChunkId& chunk_id,
-        const std::optional<std::vector<unsigned char>>& local_bytes, bool force_full);
-    void RecordEvidence(const std::array<unsigned char, 32>& storage_id,
-        const std::function<void(StorageProviderEvidence&)>& update);
-    /// Засчитывает непрерывное хранение реплики с прошлой успешной проверки (shadow, M4).
-    void CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
-        std::uint64_t stored_bytes, std::int64_t now_ms);
-    void ForgetReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id);
-    void LoadEvidence();
-    /// Требует m_evidence_mutex.
-    void SaveEvidenceIndex();
-    bool SaveReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id,
-        const StorageEndpoint& provider, std::span<const unsigned char> receipt);
-    void EraseReceipt(const cybou::Hash256& operation_id, const ChunkId& chunk_id, const StorageEndpoint& provider);
-
     CybouNodeRuntime& m_runtime;
     StorageTransport& m_transport;
-    PrivateApplicationStore& m_application_db;
     const std::uint8_t m_target;
+    std::unique_ptr<PlacementRepository> m_placements;
+    std::unique_ptr<EvidenceLedger> m_evidence;
+    std::unique_ptr<ReplicaVerifier> m_verifier;
     std::mutex m_mutex;
     std::set<cybou::Hash256> m_active_placements;
     std::condition_variable m_placement_cv;
     /// Следующий чанк для аудита по каждой публикации; перезапуск с нуля безопасен.
     std::map<cybou::Hash256, std::size_t> m_audit_cursor;
     std::size_t m_audit_placement_cursor{0};
-    std::mutex m_evidence_mutex;
-    std::map<std::array<unsigned char, 32>, StorageProviderEvidence> m_evidence;
-    /// Время последней успешной проверки реплики; теряется при рестарте (консервативный недосчёт).
-    std::map<std::pair<ChunkId, std::array<unsigned char, 32>>, std::int64_t> m_replica_verified_ms;
-    std::vector<cybou::Hash256> PlacementIndex() const;
+
 };
 
 } // namespace cybou

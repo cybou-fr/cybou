@@ -26,6 +26,42 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(finalized_snapshot_is_shared_immutable_and_reopens_from_disk)
+{
+    CybouServiceTestFixture fixture;
+    auto& store = fixture.runtime->GetStore();
+    const auto before = store.GetStateSnapshot();
+    BOOST_REQUIRE(before);
+    BOOST_CHECK(before.state == store.GetStateSnapshot().state);
+    const auto before_bytes = cybou::SerializeCybouState(*before.state);
+    const auto alice = fixture.CreateIdentity("snapshot-alice.cybou");
+    const auto after = store.GetStateSnapshot();
+    BOOST_REQUIRE(after);
+    BOOST_CHECK(before.state != after.state);
+    BOOST_CHECK(before_bytes == cybou::SerializeCybouState(*before.state));
+    BOOST_CHECK(cybou::SerializeCybouState(*after.state) ==
+        cybou::SerializeCybouState(*store.LoadState().state));
+
+    cybou::CybouStateStore reopened{store.GetDatabase(), fixture.definition};
+    const auto restored = reopened.GetStateSnapshot();
+    BOOST_REQUIRE(restored);
+    BOOST_CHECK(cybou::SerializeCybouState(*restored.state) ==
+        cybou::SerializeCybouState(*after.state));
+
+    const auto block = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(block);
+    BOOST_CHECK(!fixture.runtime->CommitBlock(*block));
+    BOOST_CHECK(after.state == store.GetStateSnapshot().state);
+    BOOST_REQUIRE(fixture.runtime->ProduceBlock()); // explicit empty block
+    BOOST_CHECK(after.state == store.GetStateSnapshot().state);
+
+    // Raw mutation simulates offline corruption; a new owner must fail closed.
+    store.GetDatabase().Write(std::string{"cybou/hash"}, cybou::Hash256{});
+    BOOST_CHECK(store.LoadState().error == cybou::StateLoadError::CORRUPT);
+    cybou::CybouStateStore corrupt{store.GetDatabase(), fixture.definition};
+    BOOST_CHECK(corrupt.GetStateSnapshot().error == cybou::StateLoadError::CORRUPT);
+}
+
 BOOST_AUTO_TEST_CASE(secret_files_are_private_and_reject_links)
 {
     CybouServiceTestFixture fixture;
@@ -252,6 +288,8 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     const auto conflicting = alternate.runtime->GetBlockAtHeight(1);
     BOOST_REQUIRE(conflicting);
     const auto& conflicting_block = conflicting->block;
+    const auto previous_snapshot = fixture.runtime->GetStore().GetStateSnapshot();
+    const auto previous_bytes = cybou::SerializeCybouState(*previous_snapshot.state);
     const auto result = fixture.runtime->CommitBlock(*conflicting);
     const bool conflicting_wins = cybou::ComputeBlockId(conflicting_block) < cybou::ComputeBlockId(canonical->block);
     if (conflicting_wins) {
@@ -261,6 +299,12 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
         BOOST_CHECK(result.error == cybou::BlockTransitionError::POA_EQUIVOCATION_DETECTED);
         BOOST_CHECK(fixture.runtime->GetFinalizedTip() == cybou::ComputeBlockId(canonical->block));
     }
+    const auto current_snapshot = fixture.runtime->GetStore().GetStateSnapshot();
+    BOOST_REQUIRE(current_snapshot);
+    BOOST_CHECK(cybou::SerializeCybouState(*current_snapshot.state) ==
+        cybou::SerializeCybouState(*fixture.runtime->GetStore().LoadState().state));
+    BOOST_CHECK(previous_bytes == cybou::SerializeCybouState(*previous_snapshot.state));
+    BOOST_CHECK((current_snapshot.state != previous_snapshot.state) == conflicting_wins);
     const auto status = fixture.runtime->GetStatus();
     BOOST_CHECK(!status.poa_safety_halted);
     BOOST_CHECK(status.runtime_state != cybou::NodeRuntimeState::SAFETY_HALTED);
