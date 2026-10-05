@@ -116,7 +116,7 @@ def cmd_funder(args: argparse.Namespace) -> None:
     FUNDER_DIR.mkdir(parents=True, exist_ok=True)
     seed_geo(FUNDER_DIR / "node")
     command = [str(WIN_BIN / "cybou-loadgen.exe"), "--profile", "funder", "--network", "devnet",
-               "--data-dir", str(FUNDER_DIR), "--peer", f"{BOOTSTRAP[0]}:{BOOTSTRAP[1]}",
+               "--data-dir", str(FUNDER_DIR), "--peer", getattr(args, "peer", None) or f"{BOOTSTRAP[0]}:{BOOTSTRAP[1]}",
                "--password-file", str(PASSWORD_FILE), "--funder-name", args.name]
     if args.pay_accounts:
         command += ["--pay-accounts", args.pay_accounts, "--fund-each", str(args.fund_each)]
@@ -250,7 +250,10 @@ class Battle:
         listing = self.dir / "accounts.txt"
         listing.write_text("\n".join(accounts) + "\n", encoding="ascii")
         log(f"funding: {self.args.fund_each} CYBOU to each of {len(accounts)} Identities from battlefunder.cybou")
-        cmd_funder(argparse.Namespace(name="battlefunder", pay_accounts=str(listing), fund_each=self.args.fund_each))
+        # A local battle node: the bootstrap caps inbound sessions per public IP, and the
+        # battle nodes on this host already use most of them.
+        local = f"127.0.0.1:{WIN_PORT}" if self.endpoints()["win"] else None
+        cmd_funder(argparse.Namespace(name="battlefunder", pay_accounts=str(listing), fund_each=self.args.fund_each, peer=local))
 
     def load(self) -> None:
         log(f"load: profile={self.args.profile} rate={self.args.rate}/s per client duration={self.args.duration}")
