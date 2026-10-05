@@ -59,7 +59,7 @@ struct Samples {
 
 /** Run-wide measurements written by --metrics. */
 struct Metrics {
-    Samples wallet_finality, publication_finality, publication_protected;
+    Samples wallet_finality, publication_finality, publication_protected, publication_queue_wait, publication_signed_to_final;
     std::map<std::string,uint64_t> submitted, failed, busy;
     uint64_t bytes_published{0};
 };
@@ -84,7 +84,7 @@ struct Client {
     std::shared_ptr<cybou::EventWriter> events;
     std::chrono::steady_clock::time_point next_audit{std::chrono::steady_clock::now()+30s};
     /** Submission time of each job not yet finalized / protected (for --metrics). */
-    std::map<std::string,Clock::time_point> awaiting_finality, awaiting_protection;
+    std::map<std::string,Clock::time_point> awaiting_finality, awaiting_protection, awaiting_sign, signed_at;
     Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target, bool recovery) {
         std::filesystem::create_directories(dir);
@@ -169,6 +169,16 @@ struct Client {
                 durability && durability->state == cybou::DurabilityState::PROTECTED && replicas >= storage->RemoteReplicaTarget()
                 ? cybou::PublicationJobPhase::PROTECTED : result->finalized_height ? cybou::PublicationJobPhase::SECURING : result->phase;
             if (current != cybou::PublicationJobPhase::PROTECTED) done=false;
+            // Queue wait ends when the job is signed and submitted (it has an operation id).
+            if (!result->operation_id.IsNull()) if (auto it=awaiting_sign.find(job); it!=awaiting_sign.end()) {
+                metrics.publication_queue_wait.Add(Ms(Clock::now()-it->second));
+                signed_at[job]=Clock::now();
+                awaiting_sign.erase(it);
+            }
+            if (result->finalized_height) if (auto it=signed_at.find(job); it!=signed_at.end()) {
+                metrics.publication_signed_to_final.Add(Ms(Clock::now()-it->second));
+                signed_at.erase(it);
+            }
             if (result->finalized_height) if (auto it=awaiting_finality.find(job); it!=awaiting_finality.end()) {
                 metrics.publication_finality.Add(Ms(Clock::now()-it->second));
                 awaiting_finality.erase(it);
@@ -455,7 +465,7 @@ int main(int argc,char* argv[]) {
                 }
                 if (result.phase==cybou::PublicationJobPhase::NEEDS_ATTENTION) { ++metrics.failed[actual]; throw std::runtime_error("publication submission failed: "+result.error); }
                 client.jobs.push_back(job);
-                client.awaiting_finality[job]=client.awaiting_protection[job]=Clock::now();
+                client.awaiting_finality[job]=client.awaiting_protection[job]=client.awaiting_sign[job]=Clock::now();
                 if (actual=="files") metrics.bytes_published+=size;
             }
             ++submitted; next+=std::chrono::microseconds{1000000/rate};
@@ -506,7 +516,9 @@ int main(int argc,char* argv[]) {
                 << ",\"busy\":" << counts(metrics.busy)
                 << ",\"wallet_submit_to_final\":" << metrics.wallet_finality.Json()
                 << ",\"publication_submit_to_final\":" << metrics.publication_finality.Json()
-                << ",\"publication_submit_to_protected\":" << metrics.publication_protected.Json() << "}\n";
+                << ",\"publication_submit_to_protected\":" << metrics.publication_protected.Json()
+                << ",\"publication_queue_wait\":" << metrics.publication_queue_wait.Json()
+                << ",\"publication_signed_to_final\":" << metrics.publication_signed_to_final.Json() << "}\n";
             if (!out) throw std::runtime_error("cannot write metrics");
         }
         return done ? 0 : 1;
