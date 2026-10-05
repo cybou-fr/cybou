@@ -43,6 +43,8 @@ struct CybouNetworkServiceConfig {
     uint64_t block_interval_ms{1000};
     /// \brief Optional listener endpoint для входящих CYBOU P2P connections.
     std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
+    /// \brief true: a busy listen port falls back to any free port; if none binds the node stays outbound-only.
+    bool listen_optional{false};
 };
 
 /// \brief Управляет запуском runtime и сетевым жизненным циклом Full Node.

@@ -108,6 +108,10 @@ struct Hello {
     cybou::Hash256 finalized_tip;
     /// \brief Случайный nonce рукопожатия для защиты от зеркального self-echo.
     uint64_t nonce{0};
+    /// \brief TCP-порт, на котором отправитель принимает входящие сессии; 0, если не слушает.
+    /// \details IP получатель берёт из самого соединения (узел за NAT своего внешнего IP не знает)
+    ///          и делится этим адресом только после успешного обратного подключения.
+    uint16_t listen_port{0};
 
     friend bool operator==(const Hello&, const Hello&) = default;
 };

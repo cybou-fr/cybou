@@ -86,7 +86,7 @@ BOOST_AUTO_TEST_CASE(hello_has_only_baseline_fields_and_rejects_unknown_message_
     hello.finalized_tip = cybou::Hash256::ONE;
     hello.nonce = 456;
     const auto encoded = cybou::p2p::EncodeHello(hello);
-    BOOST_CHECK_EQUAL(encoded.size(), 80U);
+    BOOST_CHECK_EQUAL(encoded.size(), 82U);
     const auto decoded = cybou::p2p::DecodeHello(encoded);
     BOOST_REQUIRE(decoded);
     BOOST_CHECK(decoded->network_binding == hello.network_binding);
@@ -222,6 +222,48 @@ BOOST_AUTO_TEST_CASE(pinned_tls_identity_gates_an_ordinary_p2p_handshake)
     BOOST_CHECK(!rejected.first);
     std::filesystem::remove(identity->certificate);
     std::filesystem::remove(identity->private_key);
+}
+
+BOOST_AUTO_TEST_CASE(listening_inbound_peer_is_verified_by_connect_back_then_shared)
+{
+    // A (the known node) only ever accepts B's connection. B announces its listen port in
+    // HELLO; A connects back to it, and only then shares B with others.
+    CybouServiceTestFixture fixture;
+    boost::asio::io_context io;
+    using boost::asio::ip::tcp;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    auto b = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+        .network_genesis = fixture.definition, .data_dir = fixture.directory / "listener-b", .memory_only = true,
+        .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0});
+    BOOST_REQUIRE(b->InitializeGenesis(fixture.genesis));
+    cybou::p2p::InboundPeerServer server_a{*fixture.runtime, io, tcp::endpoint{loopback, 0}};
+    cybou::p2p::InboundPeerServer server_b{*b, io, tcp::endpoint{loopback, 0}};
+    std::atomic_bool stopping{false};
+    std::jthread listen_a{[&] { server_a.Run(stopping); }};
+    std::jthread listen_b{[&] { server_b.Run(stopping); }};
+    struct Stop {
+        std::atomic_bool& stopping;
+        std::jthread& a;
+        std::jthread& b;
+        ~Stop() { stopping = true; if (a.joinable()) a.join(); if (b.joinable()) b.join(); }
+    } stop{stopping, listen_a, listen_b};
+    b->SetListenPort(server_b.Port());
+    b->SetConfiguredPeerEndpoints({{"127.0.0.1", server_a.Port()}});
+    BOOST_REQUIRE(b->SyncFromConfiguredPeer(1).caught_up_with_known_peers);
+    const auto b_endpoint = std::make_pair(std::string{"127.0.0.1"}, server_b.Port());
+    const auto shared = [&] {
+        const auto gossip = fixture.runtime->GetPeerEndpointsForGossip();
+        return std::find(gossip.begin(), gossip.end(), b_endpoint) != gossip.end();
+    };
+    // Announced, but not yet verified: not shared.
+    BOOST_CHECK(!shared());
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{10};
+    while (!shared() && std::chrono::steady_clock::now() < deadline) {
+        fixture.runtime->SyncFromConfiguredPeer(1);
+        std::this_thread::sleep_for(std::chrono::milliseconds{50});
+    }
+    BOOST_CHECK(shared());
+    b.reset();
 }
 
 BOOST_AUTO_TEST_CASE(poa_signer_toggles_preserve_the_full_node_session)

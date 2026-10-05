@@ -94,10 +94,26 @@ void CybouNodeService::StartNetwork(
     try {
         if (config.listen_endpoint) {
             const auto address = boost::asio::ip::make_address(config.listen_endpoint->first);
-            if (config.listen_endpoint->second == 0) throw std::invalid_argument("network listener port must be nonzero");
-            m_network_listener = std::make_unique<NetworkListener>(*m_runtime,
-                boost::asio::ip::tcp::endpoint{address, config.listen_endpoint->second});
-            m_listener_thread = std::thread{[this] { m_network_listener->server.Run(m_stop_network); }};
+            if (config.listen_endpoint->second == 0 && !config.listen_optional) throw std::invalid_argument("network listener port must be nonzero");
+            try {
+                m_network_listener = std::make_unique<NetworkListener>(*m_runtime,
+                    boost::asio::ip::tcp::endpoint{address, config.listen_endpoint->second});
+            } catch (const std::exception& e) {
+                if (!config.listen_optional) throw;
+                // Port taken (another node on this machine): listen on any free port instead and
+                // announce that one in HELLO, so this node still accepts peers.
+                try {
+                    m_network_listener = std::make_unique<NetworkListener>(*m_runtime,
+                        boost::asio::ip::tcp::endpoint{address, 0});
+                } catch (const std::exception& retry) {
+                    std::cerr << "CYBOU listener unavailable, continuing outbound-only: " << e.what()
+                              << " / " << retry.what() << '\n';
+                }
+            }
+            if (m_network_listener) {
+                m_runtime->SetListenPort(m_network_listener->server.Port());
+                m_listener_thread = std::thread{[this] { m_network_listener->server.Run(m_stop_network); }};
+            }
         }
         m_sync_thread = std::thread{[this, config, update = std::move(update)] {
         while (!m_stop_network.load()) {

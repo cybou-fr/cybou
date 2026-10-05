@@ -558,6 +558,13 @@ public:
     /// \param endpoints Уже отфильтрованные discovered endpoints.
     /// \post Локальный discovered cache остаётся bounded и не содержит self-endpoint.
     void AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints);
+    /// \brief Порт локального listener'а для HELLO; 0, если узел не принимает входящие сессии.
+    uint16_t ListenPort() const { return m_network.listen_port.load(); }
+    void SetListenPort(uint16_t port) { m_network.listen_port.store(port); }
+    /// \brief Запоминает входящего пира, объявившего listen-порт, для обратной проверки.
+    /// \details Адрес становится известным (и передаётся другим) только после успешного
+    ///          исходящего подключения и рукопожатия в той же сети.
+    void NoteListeningPeer(const std::string& address, uint16_t port);
     /// \brief Возвращает compiled SPKI pin bootstrap locator'а либо nullopt для любого иного peer.
     /// \param address Адрес проверяемого peer.
     /// \param port Порт проверяемого peer.
@@ -655,6 +662,9 @@ private:
         std::optional<Endpoint> advertised_endpoint;
         p2p::IngressBudget ingress;
         std::set<Endpoint> discovered_peer_endpoints;
+        /// Inbound peers that announced a listen port, not yet verified by connecting back.
+        std::set<Endpoint> listener_candidates;
+        std::atomic<uint16_t> listen_port{0};
     };
     NodeRuntimeConfig m_config;
     cybou::Hash256 m_network_binding;

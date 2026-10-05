@@ -243,6 +243,11 @@ void CybouDesktopController::start()
             const auto bind_address = boost::asio::ip::make_address(listen_host.toStdString());
             const auto listener = std::make_pair(bind_address.to_string(), static_cast<uint16_t>(listen_port));
             network_config.listen_endpoint = listener;
+        } else {
+            // Every Full Node, the desktop included, accepts peers: reachable machines store and
+            // relay like any other. Behind NAT the connect-back check fails and nobody is told.
+            network_config.listen_endpoint = std::make_pair(std::string{"0.0.0.0"}, uint16_t{29461});
+            network_config.listen_optional = true;
         }
         auto peer_admission = DesktopPeerAdmissionPolicy(m_data_directory);
         m_geo_database_updater = peer_admission.updater;
@@ -250,7 +255,8 @@ void CybouDesktopController::start()
         m_model->setGeoAdmissionStatus(geo_policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting);
         auto config = cybou::MakeNodeRuntimeConfig(network, data_dir);
         if (configured_p2p) config.configured_peers.push_back({*configured_p2p, std::nullopt});
-        config.advertised_endpoint = network_config.listen_endpoint;
+        // A wildcard bind is not an address others can dial; only an explicit listener is advertised.
+        if (listen_port_ok) config.advertised_endpoint = network_config.listen_endpoint;
         config.peer_admission_policy = std::move(peer_admission.policy);
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime = std::move(config),

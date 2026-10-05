@@ -576,7 +576,10 @@ int RunNode(const Options& opts)
     std::atomic<std::uint64_t> last_height{0};
     // Пишем только смену исхода синхронизации и применённые блоки: тик раз в 250 мс без пиров не событие.
     std::optional<SyncPeerStatus> last_sync;
-    node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval, .listen_endpoint = listen},
+    // Every Full Node accepts peers: without --listen it binds the default port, or any free one.
+    node->StartNetwork(CybouNetworkServiceConfig{.sync_interval = std::chrono::milliseconds{250}, .block_interval_ms = interval,
+        .listen_endpoint = listen ? listen : std::optional{std::make_pair(std::string{"0.0.0.0"}, uint16_t{29461})},
+        .listen_optional = !listen},
         [&last_height, &last_sync, &node](const SyncPeerResult& sync, const NodeRuntimeStatus& status, size_t peers) {
             if (status.runtime_state == NodeRuntimeState::NETWORK_MISMATCH ||
                 status.runtime_state == NodeRuntimeState::CORRUPT) {

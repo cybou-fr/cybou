@@ -38,7 +38,7 @@
 namespace cybou::p2p {
 namespace {
 constexpr size_t HEADER_SIZE{9};
-constexpr size_t HELLO_SIZE{80};
+constexpr size_t HELLO_SIZE{82};
 /// OP_META: exact operation size u32 + relay-PoW nonce u64.
 constexpr size_t OP_META_SIZE{4 + 8};
 constexpr auto BLOCK_TRANSFER_TIMEOUT{std::chrono::seconds{5}};
@@ -351,6 +351,8 @@ std::vector<unsigned char> EncodeHello(const Hello& hello)
     Put64(out, hello.finalized_height);
     out.insert(out.end(), hello.finalized_tip.begin(), hello.finalized_tip.end());
     Put64(out, hello.nonce);
+    out.push_back(static_cast<unsigned char>(hello.listen_port & 0xff));
+    out.push_back(static_cast<unsigned char>(hello.listen_port >> 8));
     return out;
 }
 
@@ -362,6 +364,7 @@ std::optional<Hello> DecodeHello(std::span<const unsigned char> bytes)
     hello.finalized_height = Read64(bytes.data() + 32);
     std::copy_n(bytes.begin() + 40, 32, hello.finalized_tip.begin());
     hello.nonce = Read64(bytes.data() + 72);
+    hello.listen_port = static_cast<uint16_t>(bytes[80] | (bytes[81] << 8));
     if (hello.network_binding.IsNull() || hello.finalized_tip.IsNull() || hello.nonce == 0) return std::nullopt;
     return hello;
 }

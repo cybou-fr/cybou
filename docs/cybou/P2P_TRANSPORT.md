@@ -16,7 +16,7 @@ Frame header: four-byte magic `CYBP`, message-type byte, little-endian uint32
 payload length (nine bytes total). Ordinary payloads remain bounded to 65,536 bytes. Larger content
 uses the existing bounded chunk sequences.
 
-HELLO is exactly 80 bytes:
+HELLO is exactly 82 bytes:
 
 | Field | Bytes |
 |---|---:|
@@ -24,11 +24,22 @@ HELLO is exactly 80 bytes:
 | finalized_height (little-endian) | 8 |
 | finalized_tip | 32 |
 | nonce (nonzero, little-endian) | 8 |
+| listen_port (little-endian; 0 = not listening) | 2 |
 
 NetworkBinding is SHA-256("CYBOU/NETWORK-ID" || NetworkID). HELLO contains
 neither StorageId nor a PoA proof. Heights and peer tips are untrusted hints;
 only independently executed, correctly PoA-signed blocks change canonical state.
 No IP, endpoint, TLS session or peer declaration grants consensus authority.
+
+Every Full Node, desktop included, listens (default port 29461, or any free port
+when it is taken) and announces that port in HELLO (DEC-287). The receiver takes
+the IP from the connection itself and records `IP:listen_port` only as a
+candidate: it connects back, and only after a successful handshake on the same
+network does the address join its known peers and its `GET_PEERS` answers. An
+unreachable node (NAT without port forwarding) is therefore never advertised.
+The bootstrap is an ordinary node whose address everyone knows in advance; it
+shares inbound peers like any other node. No node announces that it holds the
+PoA key.
 
 ## On-demand storage proof
 

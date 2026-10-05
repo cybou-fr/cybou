@@ -26,9 +26,9 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 40 | 57772fe861d4f333 |
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
-| docs/cybou/24_DECISIONS.md | 226 | e8868d4698fe532a |
-| docs/cybou/25_OPEN_QUESTIONS.md | 95 | 2b7f6636be348a45 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 183 | e1dbbd301bd2a5ee |
+| docs/cybou/24_DECISIONS.md | 227 | ac428bdd26b2feb3 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 107 | 1f42abea9b07a437 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 405 | 427018780dd38c06 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 48 | 1e075f96cb806c7d |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -57,7 +57,7 @@ editing an included file.
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 113 | 3dea6e6943d833b6 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | a5ebc90bd1cb068b |
-| docs/cybou/APPLICATION_DATA_PLANE.md | 508 | b431afea2a2d072d |
+| docs/cybou/APPLICATION_DATA_PLANE.md | 536 | 85c2b1079dbf91cd |
 | docs/cybou/DATA_ASSURANCE_AND_ERASURE.md | 347 | e408f14f4e71147d |
 | docs/cybou/DATA_PROCESSING_INVENTORY.md | 76 | d37b639cba196d25 |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |
@@ -66,7 +66,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/P2P_TRANSPORT.md | 98 | eb13dbb86740c4a6 |
+| docs/cybou/P2P_TRANSPORT.md | 109 | 77e26b66d6792c34 |
 | docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
 | docs/cybou/README.md | 82 | 93d491eb0ae43cf7 |

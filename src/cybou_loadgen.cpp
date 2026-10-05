@@ -96,7 +96,8 @@ struct Client {
         node=std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime=std::move(config),.genesis=net.genesis_state});
         node->Start();
-        node->StartNetwork({.sync_interval=500ms},[&](const auto& result,const auto&,size_t){
+        // A synthetic client is an ordinary Full Node: it accepts peers on any free port.
+        node->StartNetwork({.sync_interval=500ms,.listen_endpoint=std::make_pair(std::string{"0.0.0.0"},uint16_t{0}),.listen_optional=true},[&](const auto& result,const auto&,size_t){
             caught_up_known_peers.store(result.IsConnected() && result.caught_up_with_known_peers);
             return true;
         });

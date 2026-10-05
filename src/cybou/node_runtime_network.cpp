@@ -223,6 +223,21 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         m_network.peer_manager->PingSome(1);
     }
 
+    // Verify one inbound listener per pass by connecting back; a working address joins the mesh.
+    if (m_network.peer_manager->ConnectedCount() < p2p::MAX_OUTBOUND_PEERS) {
+        std::optional<Endpoint> listener;
+        {
+            std::lock_guard routing(m_network.routing_mutex);
+            if (!m_network.listener_candidates.empty()) {
+                listener = *m_network.listener_candidates.begin();
+                m_network.listener_candidates.erase(m_network.listener_candidates.begin());
+            }
+        }
+        if (listener && m_network.peer_manager->Connect(listener->first, listener->second)) {
+            AddDiscoveredPeerEndpoints({*listener});
+        }
+    }
+
     const auto targets = GetPeerEndpointsForGossip();
     const auto connected_before_dial = m_network.peer_manager->Peers();
     if (connected_before_dial.size() < p2p::MAX_OUTBOUND_PEERS) {
@@ -374,6 +389,19 @@ std::vector<std::pair<std::string, uint16_t>> CybouNodeRuntime::GetConfiguredPee
     for (const auto& peer : m_network.configured_peers)
         if (m_network.advertised_endpoint != peer.endpoint) result.push_back(peer.endpoint);
     return result;
+}
+
+void CybouNodeRuntime::NoteListeningPeer(const std::string& address, const uint16_t port)
+{
+    constexpr size_t MAX_LISTENER_CANDIDATES{256};
+    boost::system::error_code ec;
+    const auto addr = boost::asio::ip::make_address(address, ec);
+    if (ec || port == 0) return;
+    const Endpoint endpoint{addr.to_string(), port};
+    std::lock_guard lock(m_network.routing_mutex);
+    if (m_network.discovered_peer_endpoints.contains(endpoint) ||
+        m_network.listener_candidates.size() >= MAX_LISTENER_CANDIDATES) return;
+    m_network.listener_candidates.insert(endpoint);
 }
 
 void CybouNodeRuntime::AddDiscoveredPeerEndpoints(const std::vector<std::pair<std::string, uint16_t>>& endpoints)

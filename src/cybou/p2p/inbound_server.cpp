@@ -42,7 +42,7 @@ std::optional<Hello> LocalHello(const CybouNodeRuntime& runtime)
     if (!nonce) return std::nullopt;
     return Hello{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
         .finalized_tip = status.finalized_tip,
-        .nonce = *nonce};
+        .nonce = *nonce, .listen_port = runtime.ListenPort()};
 }
 
 } // namespace
@@ -88,7 +88,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             continue;
         }
         auto done = std::make_shared<std::atomic_bool>(false);
-        m_workers.push_back(Worker{done, address, std::jthread{[this, &stopping, done, socket = std::move(socket)]() mutable {
+        m_workers.push_back(Worker{done, address, std::jthread{[this, &stopping, done, address, socket = std::move(socket)]() mutable {
             TlsSessionConfig tls;
             if (const auto& identity = m_runtime.GetTlsServerIdentity()) {
                 tls.certificate_chain_file = identity->certificate_chain_file;
@@ -101,6 +101,9 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
             // сам себе противоречит на финализованной базе.
             if (hello && session.Handshake(*hello) &&
                 MatchesKnownFinalizedChain(m_runtime, *session.Peer())) {
+                // An inbound peer that listens becomes a candidate peer; it is shared only after
+                // this node connects back to it (the announced port is never trusted as such).
+                if (session.Peer()->listen_port != 0) m_runtime.NoteListeningPeer(address, session.Peer()->listen_port);
                 while (!stopping && session.ServeNext(m_runtime)) {}
             }
             done->store(true);
