@@ -355,7 +355,8 @@ class Battle:
             for site in ("wsl", "vps"):
                 rss = sum(int(line.split()[-1]) for line in s[site] if line.strip())
                 peak[f"{site}_mib"] = max(peak[f"{site}_mib"], rss / 1024)
-        lines = [f"# CYBOU battle test {self.run_id}", "",
+        revision = sh(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], check=False).strip() or "unknown"
+        lines = [f"# CYBOU battle test {self.run_id}", "", f"Revision: `{revision}`", "",
                  f"Topology: Windows nodes {self.args.win_nodes}, WSL nodes {self.args.wsl_nodes}, "
                  f"VPS extra nodes {self.args.vps_nodes} + bootstrap; clients Windows {self.args.win_clients}, "
                  f"WSL {self.args.wsl_clients} × {self.args.identities} Identities.",
@@ -389,6 +390,10 @@ class Battle:
                       f"WSL {peak['wsl_mib']:.0f} MiB, VPS {peak['vps_mib']:.0f} MiB.",
                   "", f"Raw data: `{self.dir}` (metrics.json, events.jsonl, node.log, samples.json)."]
         (self.dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # Acceptance evidence lives in Git: a compact copy per run under docs/cybou/battle/.
+        archive = REPO / "docs" / "cybou" / "battle"
+        archive.mkdir(parents=True, exist_ok=True)
+        (archive / f"{self.run_id}.md").write_text("\n".join(lines[:-2]) + "\n", encoding="utf-8")
         print("\n".join(lines))
 
     def stop(self) -> None:
