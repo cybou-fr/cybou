@@ -315,7 +315,16 @@ void CybouDesktopController::start()
                         : QStringLiteral("A peer failed CYBOU protocol verification; retrying other peers.");
                     qWarning() << sync_error;
                 }
-                try {
+                // Sync passes run several times a second; the wallet and authority
+                // views only change with a new block, so refresh them on one (or every 5 s).
+                const auto now = std::chrono::steady_clock::now();
+                const bool refresh = runtime_status.finalized_height != m_refreshed_height ||
+                    now - m_last_refresh >= std::chrono::seconds{5};
+                if (refresh) {
+                    m_refreshed_height = runtime_status.finalized_height;
+                    m_last_refresh = now;
+                }
+                if (refresh) try {
                     std::lock_guard identity_access{m_identity_access_mutex};
                     if (m_wallet_service && m_identity_service && m_identity_service->IsUnlocked()) {
                         m_wallet_service->SyncLedger();
@@ -358,12 +367,12 @@ void CybouDesktopController::start()
                 } catch (const std::exception& e) {
                     qWarning() << "cybou desktop service refresh error:" << e.what();
                 }
-                try {
+                if (refresh) try {
                     publishAuthority();
                 } catch (const std::exception& e) {
                     qWarning() << "cybou authority refresh error:" << e.what();
                 }
-                try {
+                if (refresh) try {
                     publishNetworkAuthority();
                 } catch (const std::exception& e) {
                     qWarning() << "cybou network authority refresh error:" << e.what();
@@ -389,6 +398,8 @@ void CybouDesktopController::start()
         if (m_node_service) m_node_service->StopNetwork();
         if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);
         m_identity_signer_enabled = false;
+        m_identity_signer_state.reset();
+        m_poa_signer_state.reset();
         m_model->setApplicationBackend(nullptr);
         m_application.reset();
         m_model->setIdentityService(nullptr);
@@ -471,6 +482,9 @@ void CybouDesktopController::lockIdentity()
 void CybouDesktopController::updateIdentitySigner()
 {
     if (!m_model || !m_node_service || !m_identity_service) return;
+    const int identity_state = static_cast<int>(m_model->status().identity_state);
+    if (m_identity_signer_state == identity_state) return;
+    m_identity_signer_state = identity_state;
     std::lock_guard identity_access{m_identity_access_mutex};
     const bool active = m_model->status().identity_state == CybouIdentityState::Active &&
         m_identity_service->IsUnlocked();
@@ -485,6 +499,9 @@ void CybouDesktopController::updateIdentitySigner()
 void CybouDesktopController::updatePoaSigner()
 {
     if (!m_model || !m_node_service || !m_identity_service) return;
+    const std::pair<int, bool> applied{static_cast<int>(m_model->status().identity_state), m_production_paused.load()};
+    if (m_poa_signer_state == applied) return;
+    m_poa_signer_state = applied;
     std::lock_guard identity_access{m_identity_access_mutex};
     try {
         // The genesis Identity finalizes its own AccountCreate: the signer runs
@@ -534,6 +551,8 @@ void CybouDesktopController::publishAuthority()
 
 void CybouDesktopController::stop()
 {
+    m_identity_signer_state.reset();
+    m_poa_signer_state.reset();
     if (m_node_service) m_node_service->StopNetwork();
     // The signer references the Identity key store; never let it outlive it.
     if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);

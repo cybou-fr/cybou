@@ -6,6 +6,11 @@
 #define CYBOU_QT_CYBOUDESKTOPCONTROLLER_H
 
 #include <atomic>
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <optional>
+#include <utility>
 #include <filesystem>
 #include <memory>
 #include <thread>
@@ -48,6 +53,13 @@ private:
     std::shared_ptr<cybou::p2p::GeoDatabaseUpdater> m_geo_database_updater;
     std::mutex m_identity_access_mutex;
     bool m_identity_signer_enabled{false};
+    /** Identity state (and pause) last applied to the signers: status changes several times a
+        second, and re-applying them takes the chain lock on the GUI thread (GUI thread only). */
+    std::optional<int> m_identity_signer_state;
+    std::optional<std::pair<int, bool>> m_poa_signer_state;
+    /** Network-thread throttle of the wallet and authority refresh. */
+    std::uint64_t m_refreshed_height{std::numeric_limits<std::uint64_t>::max()};
+    std::chrono::steady_clock::time_point m_last_refresh{};
     /** Operator pause of the local block production loop (GUI thread). */
     std::atomic<bool> m_production_paused{false};
     /** Runs one operator command (finalize now) off the GUI thread. */
