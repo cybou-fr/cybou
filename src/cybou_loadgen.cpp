@@ -66,6 +66,9 @@ struct Metrics {
 Metrics metrics;
 struct Client {
     std::atomic_bool caught_up_known_peers{false};
+    std::atomic<unsigned> last_sync_status{0};
+    std::atomic<size_t> last_sync_peers{0};
+    std::atomic<std::uint64_t> sync_passes{0};
     std::unique_ptr<cybou::CybouNodeService> node;
     std::unique_ptr<cybou::CybouIdentityService> identity;
     std::unique_ptr<cybou::PrivateApplicationStore> db;
@@ -97,7 +100,10 @@ struct Client {
             .runtime=std::move(config),.genesis=net.genesis_state});
         node->Start();
         // A synthetic client is an ordinary Full Node: it accepts peers on any free port.
-        node->StartNetwork({.sync_interval=500ms,.listen_endpoint=std::make_pair(std::string{"0.0.0.0"},uint16_t{0}),.listen_optional=true},[&](const auto& result,const auto&,size_t){
+        node->StartNetwork({.sync_interval=500ms,.listen_endpoint=std::make_pair(std::string{"0.0.0.0"},uint16_t{0}),.listen_optional=true},[&](const auto& result,const auto&,size_t peers){
+            last_sync_status.store(static_cast<unsigned>(result.status));
+            last_sync_peers.store(peers);
+            sync_passes.fetch_add(1);
             // Ready once a peer confirms there is nothing newer: requiring every connected peer to
             // answer cleanly in one pass never happens in a large mesh with busy peers.
             if (result.IsConnected() && (result.caught_up_with_known_peers ||
@@ -105,7 +111,15 @@ struct Client {
             return true;
         });
         const auto ready_deadline = std::chrono::steady_clock::now()+600s;
+        auto next_report = std::chrono::steady_clock::now()+30s;
         while (!stop && !caught_up_known_peers.load()) {
+            if (std::chrono::steady_clock::now()>=next_report) {
+                // Initial sync diagnostics: a stuck pass shows as a frozen pass count.
+                std::cerr << "initial sync: height=" << node->Runtime().GetFinalizedHeight().value_or(0)
+                          << " passes=" << sync_passes.load() << " last_status=" << last_sync_status.load()
+                          << " peers=" << last_sync_peers.load() << std::endl;
+                next_report += 30s;
+            }
             if (std::chrono::steady_clock::now()>ready_deadline) throw std::runtime_error("synthetic client initial sync timeout");
             std::this_thread::sleep_for(100ms);
         }

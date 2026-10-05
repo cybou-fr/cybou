@@ -18,6 +18,7 @@
 #include <cybou/network_genesis.h>
 #include <cybou/official_networks.h>
 #include <cybou/p2p/ingress_budget.h>
+#include <cybou/p2p/peer_admission.h>
 #include <cybou/state_store.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/finalized_chunk_store.h>
@@ -539,7 +540,11 @@ public:
     /// \param bytes Заявленный объём байт, подлежащий резервированию.
     /// \return true, если локальная policy допускает такую работу сейчас.
     bool AdmitIngress(const std::string& address, p2p::IngressBudget::Work work, size_t bytes = 0)
-    { return m_network.ingress.Admit(address, work, bytes); }
+    {
+        // Local-network peers are the operator's own machines (DEC-285): sharing one per-IP bucket,
+        // a dozen local nodes starved each other of connections and operations.
+        return p2p::IsLocalNetworkAddress(address) || m_network.ingress.Admit(address, work, bytes);
+    }
     /// \brief Проверяет peer address через локальную admission policy.
     /// \param numeric_address Числовой IP-адрес пира.
     /// \return true только если policy готова и разрешает адрес.

@@ -252,6 +252,12 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
             if (m_network.peer_manager->Connect(candidate->first, candidate->second)) {
                 m_network.peer_retry_after.erase(*candidate);
             } else {
+                if (const auto log = EventLog()) {
+                    try {
+                        log->Write(NodeEvent::peer_rejected, {{"peer", candidate->first + ":" + std::to_string(candidate->second)},
+                            {"error_code", std::uint64_t{static_cast<unsigned>(m_network.peer_manager->LastConnectStatus())}}});
+                    } catch (const std::exception&) {}
+                }
                 switch (m_network.peer_manager->LastConnectStatus()) {
                 case p2p::PeerConnectStatus::UNAVAILABLE:
                     SchedulePeerRetry(*candidate, PeerFailureClass::TEMPORARY);
