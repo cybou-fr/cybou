@@ -14,7 +14,9 @@
 
 #include <cybou/hash256.h>
 
+#include <chrono>
 #include <cstdint>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -126,6 +128,9 @@ struct MailDraft {
     bool operator==(const MailDraft&) const = default;
 };
 
+/// Попыток, после которых недоступный корень перестаёт держать восстановление незавершённым.
+inline constexpr unsigned UNAVAILABLE_GIVE_UP_ATTEMPTS{3};
+
 /// Текущий прогресс сканирования финализированной истории приложения.
 struct ApplicationScanProgress {
     /// Последняя полностью обработанная финализированная высота.
@@ -134,7 +139,10 @@ struct ApplicationScanProgress {
     std::uint64_t finalized_height{0};
     /// Число корней, ожидающих повторной попытки из-за временной недоступности.
     std::uint32_t unavailable_roots{0};
-    bool Complete() const { return scanned_height >= finalized_height && unavailable_roots == 0; }
+    /// Из них недоступны после `UNAVAILABLE_GIVE_UP_ATTEMPTS` попыток: повторяются редко и
+    /// больше не держат восстановление незавершённым (их chunks, скорее всего, утрачены).
+    std::uint32_t lost_roots{0};
+    bool Complete() const { return scanned_height >= finalized_height && unavailable_roots <= lost_roots; }
 };
 
 
@@ -230,6 +238,13 @@ private:
     std::mutex m_mutex;
     /// Установлен на однократном проходе ремонта старых индексов.
     bool m_repairing{false};
+    /// Backoff повторов недоступных корней (в памяти; после рестарта несколько попыток снова).
+    struct UnavailableRetry {
+        unsigned attempts{0};
+        std::chrono::steady_clock::time_point next{};
+    };
+    std::map<cybou::Hash256, UnavailableRetry> m_unavailable_retry;
+    std::uint32_t LostRootsLocked() const;
 };
 
 } // namespace cybou

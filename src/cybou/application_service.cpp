@@ -381,13 +381,22 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         height = 0;
         m_repairing = true;
     }
-    // Retry roots that were unavailable earlier; later blocks never wait for them.
+    // Retry roots that were unavailable earlier, with backoff (30 s doubling to 1 h): each retry
+    // fetches over the network, and lost content must not be requested on every pass.
+    const auto now = std::chrono::steady_clock::now();
     for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
+        auto& retry = m_unavailable_retry[operation_id];
+        if (now < retry.next) continue;
         // The indexed records, the new state and the retry list change together.
         PrivateApplicationStore::Batch batch{m_application_db};
         auto accessible = LoadAccessible(operation_id);
         if (!accessible || Index(operation_id, *accessible) != AccessibleRootState::TEMPORARILY_UNAVAILABLE) {
             RemoveId(m_application_db, UNAVAILABLE_KEY, operation_id);
+            m_unavailable_retry.erase(operation_id);
+        } else {
+            retry.attempts = std::min(retry.attempts + 1, 8U);
+            retry.next = now + std::min(std::chrono::seconds{30} * (1U << (retry.attempts - 1)),
+                std::chrono::seconds{std::chrono::hours{1}});
         }
         batch.Commit();
     }
@@ -445,7 +454,18 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     if (progress.scanned_height >= progress.finalized_height) m_repairing = false;
     RecoverOwnPublications(4);
     progress.unavailable_roots = static_cast<std::uint32_t>(ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY).size());
+    progress.lost_roots = LostRootsLocked();
     return progress;
+}
+
+std::uint32_t ApplicationService::LostRootsLocked() const
+{
+    std::uint32_t lost{0};
+    for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
+        const auto retry = m_unavailable_retry.find(operation_id);
+        if (retry != m_unavailable_retry.end() && retry->second.attempts >= UNAVAILABLE_GIVE_UP_ATTEMPTS) ++lost;
+    }
+    return lost;
 }
 
 ApplicationScanProgress ApplicationService::Progress()
@@ -453,7 +473,8 @@ ApplicationScanProgress ApplicationService::Progress()
     std::lock_guard lock{m_mutex};
     return {.scanned_height = Checkpoint(),
         .finalized_height = m_runtime.GetFinalizedHeight().value_or(0),
-        .unavailable_roots = static_cast<std::uint32_t>(ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY).size())};
+        .unavailable_roots = static_cast<std::uint32_t>(ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY).size()),
+        .lost_roots = LostRootsLocked()};
 }
 
 bool ApplicationService::ProcessBlock(const std::uint64_t height, const std::uint64_t my_key_epoch)
