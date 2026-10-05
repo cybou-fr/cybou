@@ -222,7 +222,7 @@ void NetworkAuthorityPage::refresh()
     case CybouFinalizerState::Finalizing:
         m_finalizer_state->setText(tr("Finalizing"));
         SetTint(m_finalizer_state, Tint::Mint);
-        m_finalizer_detail->setText(tr("Valid candidates are executed and signed into a block about every second."));
+        m_finalizer_detail->setText(tr("Valid candidates are executed and signed into a block as soon as one is waiting."));
         break;
     case CybouFinalizerState::Paused:
         m_finalizer_state->setText(tr("Paused"));

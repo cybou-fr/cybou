@@ -3252,8 +3252,8 @@ Objet : %3
     </message>
     <message>
         <location line="+2"/>
-        <source>Valid candidates are executed and signed into a block about every second.</source>
-        <translation>Les candidats valides sont exécutés et signés dans un bloc environ chaque seconde.</translation>
+        <source>Valid candidates are executed and signed into a block as soon as one is waiting.</source>
+        <translation>Les candidats valides sont exécutés et signés dans un bloc dès qu’il y en a un en attente.</translation>
     </message>
     <message>
         <location line="+3"/>
