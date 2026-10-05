@@ -323,9 +323,13 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     }
     result.caught_up_with_known_peers = all_peers_caught_up;
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
-    m_network.peer_manager->PollOperationRelays();
-    m_network.peer_manager->PushOperationRelays();
-    m_network.peer_manager->FanoutFinalizedBlocks();
+    // While catching up (a full batch arrived) serve nobody: polling operations and fanning
+    // blocks out to other lagging peers would stretch every pass of our own initial sync.
+    if (result.blocks_applied < max_blocks) {
+        m_network.peer_manager->PollOperationRelays();
+        m_network.peer_manager->PushOperationRelays();
+        m_network.peer_manager->FanoutFinalizedBlocks();
+    }
     return result;
 }
 
