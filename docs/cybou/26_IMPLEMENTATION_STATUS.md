@@ -224,6 +224,31 @@ private Application DB deletion. Existing rotation, revocation, storage admissio
 bridge recovery and receipt/settlement tests also pass. This is local component
 and integration evidence; long-history recovery timing remains R8 profiling work.
 
+## Qt Identity session responsibilities (2026-10-05)
+
+R7 splits the Qt adapter's implementation into private Identity session,
+scheduler, Mail, Files and storage translation units. `IdentitySession` owns the
+encrypted Application DB and the existing three core services, plus rotation
+preparation. `SessionScheduler` owns the sole Identity worker, command queue,
+stop-aware interval wait and shutdown drain. The session stops and joins it
+before destroying any service or projection.
+
+`MailProjection` owns the unindexed outgoing Mail overlay and semantic Mail
+snapshot construction. `FilesProjection` owns pending catalog mutations,
+item-to-job associations and the local availability cache. `StorageProjection`
+owns shared publication job results and the existing audit, GC, durability,
+reference-revocation and settlement preparation work. Mail/Files command entry
+points remain the same adapter API; their implementations live with the relevant
+projection. GUI draft/delete/star reconciliation stays on the GUI thread, and
+queued state delivery retains the session-generation check. No extra Identity
+worker or core service is introduced.
+
+Local R7 validation: Windows MinGW Release GUI and native Qt test targets built
+successfully. The full offscreen desktop suite passed all 50 cases, including
+live Mail/Files publication, draft/delete/star reconciliation, close/reopen,
+private-content locking and recovery-phrase rotation with the live session.
+This is local regression evidence; battle/soak and profiling remain R8 work.
+
 ## Storage economy status (2026-10-04)
 
 DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:

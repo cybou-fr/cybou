@@ -56,6 +56,12 @@ qt6_add_resources(CYBOU_QRC cybou.qrc)
 add_library(cybou_qt STATIC
   cybouapplicationbackend.h
   cyboucoreapplicationadapter.cpp
+  cyboucoreapplicationadapter_identity_session.cpp
+  cyboucoreapplicationadapter_session_scheduler.cpp
+  cyboucoreapplicationadapter_mail.cpp
+  cyboucoreapplicationadapter_files.cpp
+  cyboucoreapplicationadapter_storage.cpp
+  cyboucoreapplicationadapter_internal.h
   cyboucoreapplicationadapter.h
   cyboudesktopcontroller.cpp
   cyboudesktopcontroller.h

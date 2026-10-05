@@ -90,11 +90,11 @@ public:
     void discardFile(const QString& id) override;
 
 private:
-    struct Session;
+    struct IdentitySession;
     cybou::CybouNodeRuntime& m_runtime;
     cybou::CybouIdentityService& m_identity;
     const std::filesystem::path m_data_directory;
-    std::unique_ptr<Session> m_session;
+    std::unique_ptr<IdentitySession> m_session;
     bool m_mail_ready{false};
     cybou::StorageTransport* m_transport_override{nullptr};
     bool m_reopening{false};

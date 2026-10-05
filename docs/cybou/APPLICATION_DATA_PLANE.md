@@ -25,6 +25,17 @@ common encrypted ChunkStore
 
 The number of architectural services is intentionally small.
 
+The Qt adapter owns one `IdentitySession` with one `SessionScheduler` worker.
+Its private `MailProjection` builds semantic Mail snapshots and tracks outgoing
+messages until indexed; `FilesProjection` owns the intended catalog, pending
+file mutations and local-content availability; `StorageProjection` advances
+publication durability, audits, cache maintenance, reference revocation and
+settlement preparation. These are Qt implementation components, not additional
+core services. The adapter reconciles GUI edits on the GUI thread. Queued state
+results carry a session generation, and closing/replacing a session joins its
+worker before destroying the private DB and services. Existing queued commands
+are drained at shutdown; an obsolete session cannot publish a new GUI snapshot.
+
 The Full Node maintains a rebuildable local finalized-event index. It records
 public operation coordinates, publication-bearing block heights and KEM package
 coordinates by public AccountID/key epoch. It does not index capsule recipients,
