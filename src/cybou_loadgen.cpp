@@ -472,7 +472,7 @@ int main(int argc,char* argv[]) {
             while (!stop && std::chrono::steady_clock::now()<next) std::this_thread::sleep_for(20ms);
         }
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds{cybou::cli::Quantity(opts.Get("drain-timeout","5m"),true)};
-        bool done=false;
+        bool done=false, drain_timeout=false;
         while (!stop && !done) {
             done=true;
             for (auto& client : clients) {
@@ -493,14 +493,19 @@ int main(int argc,char* argv[]) {
                     }
                 }
             }
-            if (!done && std::chrono::steady_clock::now()>deadline) throw std::runtime_error("drain timeout: unfinished publications retained for restart");
+            if (!done && std::chrono::steady_clock::now()>deadline) {
+                // Keep the measurements of a partly drained run; the result says what happened.
+                std::cerr << "cybou-loadgen: drain timeout: unfinished publications retained for restart\n";
+                drain_timeout=true;
+                break;
+            }
             if (!done) std::this_thread::sleep_for(1s);
         }
         for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping);
         const auto elapsed_s=std::chrono::duration<double>(Clock::now()-start).count();
         // Attempts refused because the account was busy are not operations.
         for (const auto& [_,n] : metrics.busy) submitted-=std::min<uint64_t>(submitted,n);
-        std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : "INTERRUPTED") << '\n';
+        std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : drain_timeout ? "DRAIN_TIMEOUT" : "INTERRUPTED") << '\n';
         if (opts.Has("metrics")) {
             std::ofstream out{opts.Get("metrics")};
             const auto counts=[](const std::map<std::string,uint64_t>& m) {
@@ -508,7 +513,7 @@ int main(int argc,char* argv[]) {
                 for (const auto& [k,v] : m) s+=(s.size()>1 ? "," : "")+std::string{"\""}+k+"\":"+std::to_string(v);
                 return s+"}";
             };
-            out << "{\"profile\":\"" << profile << "\",\"identities\":" << count << ",\"result\":\"" << (done ? "PASS" : "INTERRUPTED")
+            out << "{\"profile\":\"" << profile << "\",\"identities\":" << count << ",\"result\":\"" << (done ? "PASS" : drain_timeout ? "DRAIN_TIMEOUT" : "INTERRUPTED")
                 << "\",\"elapsed_s\":" << elapsed_s << ",\"operations\":" << submitted
                 << ",\"operations_per_s\":" << (elapsed_s>0 ? submitted/elapsed_s : 0.0)
                 << ",\"bytes_published\":" << metrics.bytes_published
