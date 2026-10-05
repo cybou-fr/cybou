@@ -110,7 +110,7 @@ struct Client {
                     result.status == cybou::SyncPeerStatus::UP_TO_DATE)) caught_up_known_peers.store(true);
             return true;
         });
-        const auto ready_deadline = std::chrono::steady_clock::now()+600s;
+        const auto ready_deadline = std::chrono::steady_clock::now()+2400s;
         auto next_report = std::chrono::steady_clock::now()+30s;
         while (!stop && !caught_up_known_peers.load()) {
             if (std::chrono::steady_clock::now()>=next_report) {

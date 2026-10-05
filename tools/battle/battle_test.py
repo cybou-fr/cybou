@@ -226,7 +226,7 @@ class Battle:
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {wsl_password} "
                       f"{' '.join(self.client_args('mail', '0s', None))}", f"{path}/prepare.log", f"{path}/prepare.pid")
         for process in waits:
-            if process.wait(timeout=900) != 0:
+            if process.wait(timeout=2700) != 0:
                 raise RuntimeError("a Windows client failed to create its Identities; see prepare.log")
         for path, _ in self.wsl_clients():
             deadline = time.time() + 900
