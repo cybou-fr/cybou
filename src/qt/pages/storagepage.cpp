@@ -1049,6 +1049,9 @@ QString TypeText(const CybouFileItem& item)
     return suffix.isEmpty() ? StoragePage::tr("File") : StoragePage::tr("%1 file").arg(suffix);
 }
 
+/// Text width inside the 300 px details card after its margins and the scroll bar.
+constexpr int DETAILS_TEXT_WIDTH{246};
+
 void DetailPair(QVBoxLayout* layout, const QString& key, const QString& value, QWidget* parent)
 {
     auto* k = new QLabel{key, parent};
@@ -1056,6 +1059,8 @@ void DetailPair(QVBoxLayout* layout, const QString& key, const QString& value, Q
     auto* v = new QLabel{value, parent};
     v->setObjectName(QStringLiteral("rowTitle"));
     v->setWordWrap(true);
+    // Wrapped text takes the panel width; an unbreakable word is clipped instead of widening it.
+    v->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     v->setTextInteractionFlags(Qt::TextSelectableByMouse);
     layout->addWidget(k);
     layout->addWidget(v);
@@ -1084,9 +1089,12 @@ void StoragePage::rebuildDetails()
         return;
     }
     auto* head = new QHBoxLayout;
-    auto* title = new QLabel{item->name, m_details};
+    // A file name without spaces cannot wrap; elide it so it never widens the panel.
+    auto* title = new QLabel{m_details};
     title->setObjectName(QStringLiteral("sectionTitle"));
-    title->setWordWrap(true);
+    title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    title->setText(title->fontMetrics().elidedText(item->name, Qt::ElideMiddle, DETAILS_TEXT_WIDTH - 90));
+    title->setToolTip(item->name);
     head->addWidget(title, 1);
     auto* close = new QPushButton{tr("Close"), m_details};
     close->setObjectName(QStringLiteral("softButton"));
