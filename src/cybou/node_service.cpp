@@ -158,12 +158,11 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
             catch (const std::exception&) { std::cerr << "CYBOU block production event log unavailable\n"; }
         };
         while (!m_stop_block_production.load()) {
-            const bool finalizer_enabled = m_runtime->IsPoaSignerActive();
-            // No empty blocks: with nothing to finalize the chain does not grow, and every new
-            // node would otherwise download and verify 86,400 empty blocks per day. The next
-            // candidate is picked up on the following 100 ms tick, so latency is unchanged.
-            if (finalizer_enabled && std::chrono::steady_clock::now() >= next_block &&
-                m_runtime->CandidateOperationCount() > 0) {
+            // Read the revision before readiness: admission/signer/head changes
+            // between inspection and wait are observed by the CV predicate.
+            const auto revision = m_runtime->BlockProductionRevision();
+            const bool ready = m_runtime->IsPoaSignerActive() && m_runtime->CandidateOperationCount() > 0;
+            if (ready && std::chrono::steady_clock::now() >= next_block) {
                 const auto block = m_runtime->ProduceBlock();
                 if (!block) {
                     // Safety halt and transient retry are intentionally split:
@@ -181,9 +180,12 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
                     retry_ms = 100;
                     next_block = std::chrono::steady_clock::now() + std::chrono::milliseconds{block_interval_ms};
                 }
+                continue;
             }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds{100});
+            // Idle nodes have no production timer. Pending work waits only for
+            // its block interval/retry deadline, state change, or shutdown.
+            m_runtime->WaitForBlockProductionChange(revision, m_stop_block_production,
+                ready ? next_block : std::chrono::steady_clock::time_point::max());
         }
     }};
 }
@@ -191,6 +193,7 @@ void CybouNodeService::StartBlockProduction(const uint64_t block_interval_ms)
 void CybouNodeService::StopBlockProduction()
 {
     m_stop_block_production.store(true);
+    m_runtime->WakeBlockProduction();
     if (m_block_production_thread.joinable() && m_block_production_thread.get_id() != std::this_thread::get_id()) {
         m_block_production_thread.join();
     }

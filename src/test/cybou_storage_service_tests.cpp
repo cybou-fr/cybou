@@ -3,6 +3,9 @@
 // file COPYING or https://opensource.org/license/mit/.
 
 #include <cybou/storage_service.h>
+#include <cybou/hex.h>
+#include <cybou/storage_io_scheduler.h>
+#include <cybou/p2p/storage_session_pool.h>
 #include <cybou/keystore.h>
 
 #include <cybou/node_runtime.h>
@@ -137,7 +140,7 @@ BOOST_AUTO_TEST_CASE(nothing_leaves_the_node_before_finality)
     cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     const auto result = storage.Secure(content.operation_id, content.leaves);
     BOOST_CHECK(result.state == cybou::DurabilityState::SECURING);
-    BOOST_CHECK_EQUAL(network.puts, 0);
+    BOOST_CHECK_EQUAL(network.puts.load(), 0);
     BOOST_CHECK(!storage.GetDurability(content.operation_id));
 }
 
@@ -155,7 +158,7 @@ BOOST_AUTO_TEST_CASE(beta_target_places_two_distinct_remote_replicas)
     auto wrong = content.leaves;
     std::swap(wrong.front(), wrong.back());
     BOOST_CHECK(storage.Secure(content.operation_id, wrong).state == cybou::DurabilityState::NEEDS_ATTENTION);
-    BOOST_CHECK_EQUAL(network.puts, 0);
+    BOOST_CHECK_EQUAL(network.puts.load(), 0);
 
     const auto result = storage.Secure(content.operation_id, content.leaves);
     BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
@@ -170,7 +173,7 @@ BOOST_AUTO_TEST_CASE(beta_target_places_two_distinct_remote_replicas)
     // Idempotent: no further PUTs once protected, and the state survives reopen.
     const int puts = network.puts;
     BOOST_CHECK(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
-    BOOST_CHECK_EQUAL(network.puts, puts);
+    BOOST_CHECK_EQUAL(network.puts.load(), puts);
     cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     const auto durability = reopened.GetDurability(content.operation_id);
     BOOST_REQUIRE(durability);
@@ -269,7 +272,7 @@ BOOST_AUTO_TEST_CASE(audits_record_evidence_and_drop_a_provider_with_wrong_answe
     network.corrupt.insert(bad);
     for (int i{0}; i < 8; ++i) BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
     // Mostly cheap random-offset audits; a wrong answer is a failure whatever path caught it.
-    BOOST_CHECK_GT(network.audits, 0);
+    BOOST_CHECK_GT(network.audits.load(), 0);
     const auto evidence = storage.ProviderEvidence();
     BOOST_REQUIRE(evidence.contains(bad.storage_id));
     BOOST_CHECK_GT(evidence.at(bad.storage_id).failures, 0U);
@@ -846,6 +849,215 @@ BOOST_AUTO_TEST_CASE(concurrency_inspection_not_blocked_during_placement)
     slow_transport.cv.notify_all();
     worker.join();
     BOOST_CHECK(secure_done.load());
+}
+
+
+BOOST_AUTO_TEST_CASE(storage_io_budgets_provider_exclusion_exception_and_drain)
+{
+    std::mutex mutex;
+    std::condition_variable cv;
+    bool release{false};
+    int active{0}, reads{0}, peak{0}, read_peak{0}, completed{0};
+    bool duplicate{false};
+    std::set<std::array<unsigned char, 32>> providers;
+    std::vector<std::future<void>> jobs;
+    {
+        cybou::StorageIoScheduler scheduler;
+        for (unsigned char i = 0; i < 8; ++i) {
+            std::array<unsigned char, 32> provider{};
+            provider[0] = i < 4 ? i / 2 : i;
+            const bool read = i < 4;
+            jobs.push_back(scheduler.Submit(provider, read ? cybou::StorageIoScheduler::Kind::READ
+                                                         : cybou::StorageIoScheduler::Kind::WRITE,
+                [&, provider, read] {
+                    std::unique_lock lock{mutex};
+                    if (!providers.insert(provider).second) duplicate = true;
+                    ++active;
+                    if (read) ++reads;
+                    peak = std::max(peak, active);
+                    read_peak = std::max(read_peak, reads);
+                    cv.notify_all();
+                    cv.wait(lock, [&] { return release; });
+                    providers.erase(provider);
+                    --active;
+                    if (read) --reads;
+                    ++completed;
+                }));
+        }
+        bool overlapped;
+        {
+            std::unique_lock lock{mutex};
+            overlapped = cv.wait_for(lock, std::chrono::seconds(3), [&] { return active == 4 && reads == 2; });
+            release = true;
+        }
+        cv.notify_all();
+        BOOST_CHECK(overlapped);
+        for (auto& job : jobs) job.get();
+        std::array<unsigned char, 32> provider{};
+        auto failing = scheduler.Submit(provider, cybou::StorageIoScheduler::Kind::READ,
+            []() -> int { throw std::runtime_error("injected transport failure"); });
+        BOOST_CHECK_THROW(failing.get(), std::runtime_error);
+        BOOST_CHECK_EQUAL(scheduler.Submit(provider, cybou::StorageIoScheduler::Kind::READ,
+            [] { return 7; }).get(), 7);
+        // Destruction drains queued jobs rather than discarding them.
+        for (int i = 0; i < 8; ++i) {
+            jobs.push_back(scheduler.Submit(provider, cybou::StorageIoScheduler::Kind::WRITE,
+                [&] { std::lock_guard lock{mutex}; ++completed; }));
+        }
+    }
+    BOOST_CHECK_EQUAL(completed, 16);
+    BOOST_CHECK_EQUAL(peak, 4);
+    BOOST_CHECK_EQUAL(read_peak, 2);
+    BOOST_CHECK(!duplicate);
+}
+
+BOOST_AUTO_TEST_CASE(placement_and_audit_overlap_replicas_without_losing_receipts)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("parallel-storage.cybou");
+    ProviderNetwork network{fixture, 2};
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "parallel-app"};
+    const auto content = Publish(fixture, *identity, db, true);
+    network.Sync();
+    class PairedTransport : public cybou::StorageTransport {
+    public:
+        ProviderNetwork& base;
+        std::mutex mutex;
+        std::condition_variable cv;
+        int entered{0};
+        bool timeout{false};
+        explicit PairedTransport(ProviderNetwork& network) : base{network} {}
+        void Pair() {
+            std::unique_lock lock{mutex};
+            const int pair = entered / 2;
+            ++entered;
+            cv.notify_all();
+            if (!cv.wait_for(lock, std::chrono::seconds(3), [&] { return entered >= (pair + 1) * 2; })) timeout = true;
+        }
+        std::vector<cybou::StorageEndpoint> Providers() override { return base.Providers(); }
+        std::optional<cybou::ChunkAdmissionResult> Put(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk, std::span<const unsigned char> bytes,
+            const cybou::ChunkAuthorizationProof& proof) override
+        { Pair(); return base.Put(provider, op, chunk, bytes, proof); }
+        std::optional<std::vector<unsigned char>> Get(const cybou::StorageEndpoint& provider,
+            const cybou::ChunkId& chunk) override { Pair(); return base.Get(provider, chunk); }
+        std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk) override
+        { return base.GetProof(provider, op, chunk); }
+    } transport{network};
+    cybou::StorageService storage{*fixture.runtime, transport, db, 2};
+    BOOST_CHECK(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
+    BOOST_CHECK(storage.Audit(content.operation_id).state == cybou::DurabilityState::PROTECTED);
+    BOOST_CHECK(!transport.timeout);
+    BOOST_CHECK_EQUAL(transport.entered, 4 * content.leaves.size());
+    for (const auto& [provider, evidence] : storage.ProviderEvidence()) {
+        BOOST_CHECK_EQUAL(evidence.receipts, content.leaves.size());
+        BOOST_CHECK_EQUAL(evidence.full_verifications, content.leaves.size());
+    }
+}
+
+BOOST_AUTO_TEST_CASE(ordinary_storage_sessions_overlap_and_reuse_proven_connections)
+{
+    CybouServiceTestFixture fixture;
+    using boost::asio::ip::tcp;
+    boost::asio::io_context io;
+    const auto loopback = boost::asio::ip::address_v4::loopback();
+    std::array<std::unique_ptr<cybou::CybouNodeRuntime>, 2> providers;
+    std::array<std::unique_ptr<tcp::acceptor>, 2> acceptors;
+    std::array<std::jthread, 2> servers;
+    std::array<bool, 2> served{};
+    for (size_t i = 0; i < 2; ++i) {
+        providers[i] = std::make_unique<cybou::CybouNodeRuntime>(cybou::NodeRuntimeConfig{
+            .network_genesis = fixture.definition, .data_dir = fixture.directory / ("parallel-peer-" + std::to_string(i)),
+            .memory_only = true, .wipe_data = true, .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0});
+        BOOST_REQUIRE(providers[i]->InitializeGenesis(fixture.genesis));
+        acceptors[i] = std::make_unique<tcp::acceptor>(io, tcp::endpoint{loopback, 0});
+        servers[i] = std::jthread{[&, i] {
+            tcp::socket socket{io};
+            acceptors[i]->accept(socket);
+            cybou::p2p::PeerSession session{std::move(socket), cybou::p2p::TransportRole::SERVER};
+            const bool handshake = fixture.HandshakeAsPeer(session, {
+                .network_binding = fixture.runtime->GetNetworkBinding(), .finalized_height = 0,
+                .finalized_tip = fixture.definition.GetGenesisAnchor(), .nonce = 7100 + i});
+            served[i] = handshake && session.ServeNext(*providers[i]) && session.AnswerPing() && session.AnswerPing();
+        }};
+    }
+    std::mutex mutex;
+    std::condition_variable cv;
+    int entered{0};
+    bool timeout{false};
+    cybou::p2p::StorageSessionPool pool{*fixture.runtime};
+    std::array<std::future<std::optional<bool>>, 2> jobs;
+    for (size_t i = 0; i < 2; ++i) {
+        jobs[i] = std::async(std::launch::async, [&, i] {
+            return pool.Run(loopback.to_string(), acceptors[i]->local_endpoint().port(), *providers[i]->LocalStorageId(),
+                [&](cybou::p2p::PeerSession& session) -> std::optional<bool> {
+                    {
+                        std::unique_lock lock{mutex};
+                        ++entered;
+                        cv.notify_all();
+                        if (!cv.wait_for(lock, std::chrono::seconds(3), [&] { return entered == 2; })) timeout = true;
+                    }
+                    return session.Ping(9001);
+                });
+        });
+    }
+    for (auto& job : jobs) BOOST_CHECK(job.get().value_or(false));
+    for (size_t i = 0; i < 2; ++i) {
+        // A second request reuses the cached, already-proven ordinary session.
+        BOOST_CHECK(pool.Run(loopback.to_string(), acceptors[i]->local_endpoint().port(), *providers[i]->LocalStorageId(),
+            [](cybou::p2p::PeerSession& session) -> std::optional<bool> { return session.Ping(9002); }).value_or(false));
+        servers[i].join();
+        BOOST_CHECK(served[i]);
+    }
+    BOOST_CHECK(!timeout);
+    BOOST_CHECK_EQUAL(entered, 2);
+}
+
+
+BOOST_AUTO_TEST_CASE(parallel_placement_rejects_invalid_receipt_and_resumes_missing_replica)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("receipt-parallel.cybou");
+    ProviderNetwork network{fixture, 2};
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "receipt-app"};
+    const auto content = Publish(fixture, *identity, db, true);
+    network.Sync();
+    class BadReceiptTransport : public cybou::StorageTransport {
+    public:
+        ProviderNetwork& base;
+        cybou::StorageEndpoint bad;
+        bool damage{true};
+        explicit BadReceiptTransport(ProviderNetwork& network) : base{network}, bad{network.Providers().front()} {}
+        std::vector<cybou::StorageEndpoint> Providers() override { return base.Providers(); }
+        std::optional<cybou::ChunkAdmissionResult> Put(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk, std::span<const unsigned char> bytes,
+            const cybou::ChunkAuthorizationProof& proof) override
+        {
+            auto result = base.Put(provider, op, chunk, bytes, proof);
+            if (damage && cybou::SameProvider(provider, bad) && result && !result->receipt.empty()) result->receipt[0] ^= 1;
+            return result;
+        }
+        std::optional<std::vector<unsigned char>> Get(const cybou::StorageEndpoint& provider,
+            const cybou::ChunkId& chunk) override { return base.Get(provider, chunk); }
+        std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& provider,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk) override { return base.GetProof(provider, op, chunk); }
+    } transport{network};
+    cybou::StorageService storage{*fixture.runtime, transport, db, 2};
+    const auto partial = storage.Secure(content.operation_id, content.leaves);
+    BOOST_CHECK(partial.state == cybou::DurabilityState::SECURING);
+    BOOST_CHECK_EQUAL(partial.min_replicas, 1);
+    BOOST_CHECK(!storage.ProviderEvidence().contains(transport.bad.storage_id));
+    for (const auto& chunk : content.leaves) {
+        const auto receipt_key = "storage/receipt/" + content.operation_id.GetHex() + '/' +
+            cybou::HexEncode(chunk) + '/' + cybou::HexEncode(transport.bad.storage_id);
+        BOOST_CHECK(!db.Get(receipt_key));
+    }
+    const auto puts_before = network.puts.load();
+    transport.damage = false;
+    BOOST_CHECK(storage.Resume(content.operation_id).state == cybou::DurabilityState::PROTECTED);
+    BOOST_CHECK_EQUAL(network.puts.load() - puts_before, content.leaves.size());
+    for (const auto& [provider, evidence] : storage.ProviderEvidence()) BOOST_CHECK_EQUAL(evidence.receipts, content.leaves.size());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(text_mail_reaches_offline_recipient_and_rebuilds_sent)
     auto sent = alice.publication->PublishMail("mail-hello", hello);
     BOOST_REQUIRE_MESSAGE(sent.phase == cybou::PublicationJobPhase::WAITING_FINALITY, sent.error);
     // Before finality nothing is remote and the job is not Protected.
-    BOOST_CHECK_EQUAL(network.puts, 0);
+    BOOST_CHECK_EQUAL(network.puts.load(), 0);
     Finalize(fixture, network);
     auto jobs = alice.publication->ProcessDurability(*alice.storage);
     BOOST_REQUIRE_EQUAL(jobs.size(), 1U);
@@ -631,7 +631,7 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     // Never published: no operation was submitted and no chunk left the device.
     BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
     BOOST_CHECK(!fixture.runtime->ProduceBlock() || fixture.runtime->GetBlockAtHeight(*height + 1)->block.operations.empty());
-    BOOST_CHECK_EQUAL(network.puts, 0);
+    BOOST_CHECK_EQUAL(network.puts.load(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(interrupted_indexing_is_repaired_on_the_next_scan)

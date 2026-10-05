@@ -214,6 +214,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitStorageSettlement(const uint64_t p
     }
     const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(cybou::Hash256{})};
     if (result.status == OperationSubmitStatus::ACCEPTED) {
+        NotifyBlockProductionLocked();
         RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
     }
     return result;
@@ -240,6 +241,8 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         // forwards an operation it could not execute itself.
         switch (m_chain.operation_pool.Admit(*operation, work_nonce, std::move(source_peer))) {
         case PoolAdmission::ACCEPTED:
+            NotifyBlockProductionLocked();
+            break;
         case PoolAdmission::ALREADY_PENDING:
             break;
         case PoolAdmission::ALREADY_FINALIZED:
@@ -249,6 +252,33 @@ OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(
         }
     }
     return m_chain.operation_relay.Enqueue(exact_bytes, work_nonce, allow_seen_retry);
+}
+
+void CybouNodeRuntime::NotifyBlockProductionLocked()
+{
+    ++m_chain.production_revision;
+    m_chain.production_cv.notify_all();
+}
+
+uint64_t CybouNodeRuntime::BlockProductionRevision() const
+{
+    std::lock_guard lock{m_chain.mutex};
+    return m_chain.production_revision;
+}
+
+void CybouNodeRuntime::WaitForBlockProductionChange(const uint64_t revision,
+    const std::atomic_bool& stop, const std::chrono::steady_clock::time_point deadline)
+{
+    std::unique_lock lock{m_chain.mutex};
+    const auto changed = [&] { return stop.load() || m_chain.production_revision != revision; };
+    if (deadline == std::chrono::steady_clock::time_point::max()) m_chain.production_cv.wait(lock, changed);
+    else m_chain.production_cv.wait_until(lock, deadline, changed);
+}
+
+void CybouNodeRuntime::WakeBlockProduction()
+{
+    std::lock_guard lock{m_chain.mutex};
+    NotifyBlockProductionLocked();
 }
 
 size_t CybouNodeRuntime::CandidateOperationCount() const
@@ -272,6 +302,7 @@ bool CybouNodeRuntime::HasCandidateOperation(const cybou::Hash256& operation_id)
 void CybouNodeRuntime::RevalidateCandidates()
 {
     for (const auto& dropped : m_chain.operation_pool.Revalidate()) m_chain.operation_relay.ForgetFinalized(dropped);
+    NotifyBlockProductionLocked();
 }
 
 void CybouNodeRuntime::SetIdentitySigner(IdentitySignerRef signer)
@@ -461,6 +492,7 @@ bool CybouNodeRuntime::EnablePoaSigner(std::shared_ptr<PoaSigner> signer)
             m_chain.store.GetNetworkGenesis().GetGenesisAnchor(), m_chain.store.GetNetworkGenesis().GetPoaPublicKey());
         if (m_chain.production_status == BlockProductionStatus::SAFETY_HALT || m_chain.store.PoaSafetyHalted()) return false;
         enabled = m_chain.poa_finalizer->EnableSigner(std::move(signer));
+        if (enabled) NotifyBlockProductionLocked();
     }
     return enabled;
 }
@@ -470,6 +502,7 @@ void CybouNodeRuntime::DisablePoaSigner()
     {
         std::lock_guard lock(m_chain.mutex);
         if (m_chain.poa_finalizer) m_chain.poa_finalizer->DisableSigner();
+        NotifyBlockProductionLocked();
     }
 
 }

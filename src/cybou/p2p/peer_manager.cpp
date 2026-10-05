@@ -46,6 +46,62 @@ std::optional<Endpoint> CanonicalEndpoint(const std::string_view numeric_address
 
 } // namespace
 
+std::unique_ptr<PeerSession> DialPeer(CybouNodeRuntime& runtime, boost::asio::io_context& io,
+    const std::string& address, const uint16_t port, PeerConnectStatus& status_out)
+{
+    status_out = PeerConnectStatus::INVALID_REQUEST;
+    const auto endpoint = CanonicalEndpoint(address, port);
+    if (!endpoint) return nullptr;
+    if (!runtime.AdmitPeerAddress(endpoint->first)) {
+        status_out = PeerConnectStatus::ADMISSION_REJECTED;
+        return nullptr;
+    }
+    const auto status = runtime.GetStatus();
+    if (!status.is_initialized) return nullptr;
+    const auto nonce = RandomNonce();
+    if (!nonce) { status_out = PeerConnectStatus::LOCAL_FAILURE; return nullptr; }
+    boost::asio::ip::tcp::socket socket{io};
+    boost::asio::steady_timer timer{io};
+    timer.expires_after(std::chrono::seconds(5));
+    std::optional<boost::system::error_code> connect_result;
+    const auto ip = boost::asio::ip::make_address(endpoint->first);
+    socket.async_connect({ip, endpoint->second}, [&](const boost::system::error_code& result) {
+        connect_result = result;
+        timer.cancel();
+    });
+    timer.async_wait([&](const boost::system::error_code& result) {
+        if (!result) {
+            boost::system::error_code ignored;
+            socket.close(ignored);
+        }
+    });
+    io.restart();
+    io.run();
+    if (!connect_result || *connect_result) {
+        status_out = PeerConnectStatus::UNAVAILABLE;
+        return nullptr;
+    }
+    Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
+        .finalized_tip = status.finalized_tip, .nonce = *nonce};
+    TlsSessionConfig tls;
+    tls.expected_server_spki_sha256 = runtime.PinnedSpki(endpoint->first, endpoint->second);
+    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
+    if (!peer->Handshake(local)) {
+        switch (peer->LastHandshakeStatus()) {
+        case HandshakeStatus::UNAVAILABLE: status_out = PeerConnectStatus::UNAVAILABLE; break;
+        case HandshakeStatus::WRONG_NETWORK: status_out = PeerConnectStatus::WRONG_NETWORK; break;
+        default: status_out = PeerConnectStatus::HANDSHAKE_FAILED; break;
+        }
+        return nullptr;
+    }
+    if (!MatchesKnownFinalizedChain(runtime, *peer->Peer())) {
+        status_out = PeerConnectStatus::HANDSHAKE_FAILED;
+        return nullptr;
+    }
+    status_out = PeerConnectStatus::CONNECTED;
+    return peer;
+}
+
 PeerManager::PeerManager(CybouNodeRuntime& runtime) : m_runtime{runtime}
 {
     SetExplicitEndpoints(m_runtime.GetConfiguredPeerEndpoints());
@@ -80,48 +136,8 @@ bool PeerManager::Connect(const std::string& numeric_address, const uint16_t por
         m_peer_finalized_heights.erase(victim->first);
         m_peers.erase(victim);
     }
-    const auto status = m_runtime.GetStatus();
-    if (!status.is_initialized) return false;
-    const auto nonce = RandomNonce();
-    if (!nonce) { m_last_connect_status = PeerConnectStatus::LOCAL_FAILURE; return false; }
-    boost::asio::ip::tcp::socket socket{m_io};
-    boost::asio::steady_timer timer{m_io};
-    timer.expires_after(std::chrono::seconds(5));
-    std::optional<boost::system::error_code> connect_result;
-    const auto address = boost::asio::ip::make_address(endpoint->first);
-    socket.async_connect({address, endpoint->second}, [&](const boost::system::error_code& result) {
-        connect_result = result;
-        timer.cancel();
-    });
-    timer.async_wait([&](const boost::system::error_code& result) {
-        if (!result) {
-            boost::system::error_code ignored;
-            socket.close(ignored);
-        }
-    });
-    m_io.restart();
-    m_io.run();
-    if (!connect_result || *connect_result) {
-        m_last_connect_status = PeerConnectStatus::UNAVAILABLE;
-        return false;
-    }
-    Hello local{.network_binding = status.network_binding, .finalized_height = status.finalized_height,
-        .finalized_tip = status.finalized_tip, .nonce = *nonce};
-    TlsSessionConfig tls;
-    tls.expected_server_spki_sha256 = m_runtime.PinnedSpki(endpoint->first, endpoint->second);
-    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
-    if (!peer->Handshake(local)) {
-        switch (peer->LastHandshakeStatus()) {
-        case HandshakeStatus::UNAVAILABLE: m_last_connect_status = PeerConnectStatus::UNAVAILABLE; break;
-        case HandshakeStatus::WRONG_NETWORK: m_last_connect_status = PeerConnectStatus::WRONG_NETWORK; break;
-        default: m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED; break;
-        }
-        return false;
-    }
-    if (!MatchesKnownFinalizedChain(m_runtime, *peer->Peer())) {
-        m_last_connect_status = PeerConnectStatus::HANDSHAKE_FAILED;
-        return false;
-    }
+    auto peer = DialPeer(m_runtime, m_io, endpoint->first, endpoint->second, m_last_connect_status);
+    if (!peer) return false;
     // Reconnect obtains a fresh frontier: an endpoint may now serve a different node.
     m_peer_finalized_heights[*endpoint] = peer->Peer()->finalized_height;
     m_peers.emplace(*endpoint, std::move(peer));
@@ -403,87 +419,6 @@ std::vector<PeerInfo> PeerManager::StorageEndpoints()
         ++it;
     }
     return peers;
-}
-
-std::optional<ChunkAdmissionResult> PeerManager::PutAuthorizedChunk(
-    const std::string& address, const uint16_t port, const StorageId& storage_id,
-    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes,
-    const ChunkAuthorizationProof& proof)
-{
-    Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
-    if (!session) return std::nullopt;
-    auto result = session->PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
-    if (!result) {
-        m_peers.erase(endpoint);
-        m_peer_finalized_heights.erase(endpoint);
-    }
-    return result;
-}
-
-std::optional<std::vector<unsigned char>> PeerManager::GetChunkById(
-    const std::string& address, const uint16_t port, const StorageId& storage_id, const ChunkId& chunk_id)
-{
-    Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
-    if (!session) return std::nullopt;
-    auto result = session->GetChunkById(chunk_id);
-    if (!session->Peer()) {
-        m_peers.erase(endpoint);
-        m_peer_finalized_heights.erase(endpoint);
-    }
-    return result;
-}
-
-std::optional<ChunkAuthorizationProof> PeerManager::GetChunkAuthorizationProof(
-    const std::string& address, const uint16_t port, const StorageId& storage_id,
-    const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
-{
-    Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
-    if (!session) return std::nullopt;
-    auto result = session->GetChunkAuthorizationProof(publication_operation_id, chunk_id);
-    if (!session->Peer()) {
-        m_peers.erase(endpoint);
-        m_peer_finalized_heights.erase(endpoint);
-    }
-    return result;
-}
-
-std::optional<StorageAuditAnswer> PeerManager::AuditChunk(const std::string& address, const uint16_t port,
-    const StorageId& storage_id, const StorageAuditChallenge& challenge)
-{
-    Endpoint endpoint;
-    auto* session = FindStorageSession(address, port, storage_id, &endpoint);
-    if (!session) return std::nullopt;
-    auto result = session->AuditChunk(challenge);
-    if (!session->Peer()) {
-        m_peers.erase(endpoint);
-        m_peer_finalized_heights.erase(endpoint);
-    }
-    return result;
-}
-
-PeerSession* PeerManager::FindStorageSession(
-    const std::string& address, const uint16_t port, const std::optional<StorageId>& storage_id, Endpoint* endpoint)
-{
-    const auto key = CanonicalEndpoint(address, port);
-    if (!key) return nullptr;
-    const auto it = m_peers.find(*key);
-    if (it == m_peers.end()) return nullptr;
-    if (!it->second->Peer()) {
-        m_peer_finalized_heights.erase(*key);
-        m_peers.erase(it);
-        return nullptr;
-    }
-    if (!it->second->ProveStorageIdentity()) {
-        return nullptr;
-    }
-    // Иной provider на том же endpoint недопустим: реплика идентифицируется
-    // доказанным `StorageId`, а не только адресом и портом.
-    if (storage_id && *it->second->PeerStorageId() != *storage_id) return nullptr;
-    if (endpoint) *endpoint = *key;
-    return it->second.get();
 }
 
 void PeerManager::DisconnectAll()

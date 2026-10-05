@@ -10,6 +10,43 @@
 
 namespace cybou {
 
+class ActivePlacementGuard {
+public:
+    ActivePlacementGuard(std::unique_lock<std::mutex>& lock,
+                         std::set<cybou::Hash256>& active,
+                         std::condition_variable& cv,
+                         const cybou::Hash256& id)
+        : m_lock{lock}, m_active{active}, m_cv{cv}, m_id{id}
+    {
+        m_active.insert(m_id);
+    }
+
+    ~ActivePlacementGuard() { Finish(); }
+
+    void Finish()
+    {
+        if (m_finished) return;
+        m_finished = true;
+        if (!m_lock.owns_lock()) {
+            m_lock.lock();
+        }
+        m_active.erase(m_id);
+        m_cv.notify_all();
+    }
+
+    ActivePlacementGuard(const ActivePlacementGuard&) = delete;
+    ActivePlacementGuard& operator=(const ActivePlacementGuard&) = delete;
+
+private:
+    std::unique_lock<std::mutex>& m_lock;
+    std::set<cybou::Hash256>& m_active;
+    std::condition_variable& m_cv;
+    const cybou::Hash256 m_id;
+    bool m_finished{false};
+};
+
+
+
 inline constexpr std::size_t MAX_REPLICAS_PER_CHUNK{16};
 /// Дедупликация идёт по StorageId, потому что один Full Node может отвечать с нескольких endpoint.
 inline bool HasProvider(std::span<const StorageEndpoint> replicas, const StorageEndpoint& provider)

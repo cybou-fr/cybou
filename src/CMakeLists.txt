@@ -91,6 +91,7 @@ add_library(cybou_node STATIC
   cybou/publication_service.cpp
   cybou/storage_service.cpp
   cybou/storage_service_repair.cpp
+  cybou/storage_io_scheduler.cpp
   cybou/storage_placement_repository.cpp
   cybou/storage_evidence_ledger.cpp
   cybou/storage_replica_verifier.cpp
@@ -121,6 +122,7 @@ add_library(cybou_node STATIC
   cybou/p2p/peer_admission.cpp
   cybou/p2p/inbound_server.cpp
   cybou/p2p/peer_manager.cpp
+  cybou/p2p/storage_session_pool.cpp
 )
 if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_node PUBLIC CYBOU_ENABLE_TEST_HOOKS=1)

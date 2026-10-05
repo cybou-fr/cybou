@@ -13,6 +13,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <chrono>
 #include <condition_variable>
@@ -105,6 +106,91 @@ BOOST_AUTO_TEST_CASE(worker_retries_signing_failure_and_resumes_after_unlock)
     BOOST_CHECK(*third);
     service.StopBlockProduction();
     BOOST_CHECK_GT(service.Runtime().GetDiagnostics().storage_capacity, 0U);
+}
+
+BOOST_AUTO_TEST_CASE(production_wait_preserves_early_events_deadlines_and_stop)
+{
+    CybouServiceTestFixture local;
+    auto& runtime = *local.runtime;
+    std::atomic_bool stop{false};
+    const auto forever = std::chrono::steady_clock::time_point::max();
+    const auto revision = runtime.BlockProductionRevision();
+    // An event before entering wait must not be lost.
+    runtime.DisablePoaSigner();
+    auto early = std::async(std::launch::async, [&] { runtime.WaitForBlockProductionChange(revision, stop, forever); });
+    const bool early_ready = early.wait_for(std::chrono::seconds{2}) == std::future_status::ready;
+    if (!early_ready) { stop = true; runtime.WakeBlockProduction(); }
+    early.get();
+    BOOST_CHECK(early_ready);
+    stop = false;
+    const auto idle_revision = runtime.BlockProductionRevision();
+    auto idle = std::async(std::launch::async, [&] { runtime.WaitForBlockProductionChange(idle_revision, stop, forever); });
+    BOOST_CHECK(idle.wait_for(std::chrono::milliseconds{150}) == std::future_status::timeout);
+    stop = true;
+    runtime.WakeBlockProduction();
+    const bool stopped = idle.wait_for(std::chrono::seconds{2}) == std::future_status::ready;
+    idle.get();
+    BOOST_CHECK(stopped);
+    stop = false;
+    const auto timed_revision = runtime.BlockProductionRevision();
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{100};
+    runtime.WaitForBlockProductionChange(timed_revision, stop, deadline);
+    BOOST_CHECK(std::chrono::steady_clock::now() >= deadline);
+}
+
+BOOST_AUTO_TEST_CASE(relay_admission_wakes_production_but_duplicate_does_not)
+{
+    CybouServiceTestFixture local;
+    auto identity = local.CreateIdentity("wakeup-source.cybou");
+    const auto block = local.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(block && !block->block.operations.empty());
+    const auto bytes = cybou::SerializeProtocolOperation(block->block.operations.front());
+    BOOST_REQUIRE(bytes);
+    cybou::CybouNodeRuntime receiver{{.network_genesis = local.definition,
+        .data_dir = local.directory / "wakeup-receiver", .memory_only = true,
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}};
+    BOOST_REQUIRE(receiver.InitializeGenesis(local.genesis));
+    const auto before = receiver.BlockProductionRevision();
+    BOOST_CHECK(receiver.EnqueueRelayedOperation(*bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
+    BOOST_CHECK_NE(receiver.BlockProductionRevision(), before);
+    const auto admitted = receiver.BlockProductionRevision();
+    receiver.EnqueueRelayedOperation(*bytes, 0);
+    BOOST_CHECK_EQUAL(receiver.BlockProductionRevision(), admitted);
+    BOOST_CHECK_EQUAL(receiver.CandidateOperationCount(), 1U);
+}
+
+BOOST_AUTO_TEST_CASE(production_interval_does_not_block_shutdown_or_pending_restart)
+{
+    CybouServiceTestFixture local;
+    auto first = local.CreateIdentity("interval-a.cybou");
+    auto second = local.CreateIdentity("interval-b.cybou");
+    const auto first_block = local.runtime->GetBlockAtHeight(1);
+    const auto second_block = local.runtime->GetBlockAtHeight(2);
+    BOOST_REQUIRE(first_block && second_block);
+    cybou::CybouNodeService service{{.runtime = cybou::NodeRuntimeConfig{
+        .network_genesis = local.definition, .data_dir = local.directory / "interval-service",
+        .poa_finalizer_recovery_entropy = local.validator_seed, .memory_only = true,
+        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}, .genesis = local.genesis}};
+    service.Start();
+    service.StartBlockProduction(60000);
+    BOOST_REQUIRE(service.Runtime().SubmitOperation(first_block->block.operations.front()));
+    const auto wait_height = [&](uint64_t target) {
+        const auto until = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+        while (service.Runtime().GetFinalizedHeight().value_or(0) < target && std::chrono::steady_clock::now() < until)
+            std::this_thread::sleep_for(std::chrono::milliseconds{10});
+        return service.Runtime().GetFinalizedHeight().value_or(0) >= target;
+    };
+    BOOST_REQUIRE(wait_height(1));
+    BOOST_REQUIRE(service.Runtime().SubmitOperation(second_block->block.operations.front()));
+    std::this_thread::sleep_for(std::chrono::milliseconds{150});
+    BOOST_CHECK_EQUAL(service.Runtime().GetFinalizedHeight().value_or(0), 1U);
+    auto shutdown = std::async(std::launch::async, [&] { service.StopBlockProduction(); });
+    BOOST_CHECK(shutdown.wait_for(std::chrono::seconds{2}) == std::future_status::ready);
+    shutdown.get();
+    BOOST_CHECK_EQUAL(service.Runtime().CandidateOperationCount(), 1U);
+    service.StartBlockProduction(10);
+    BOOST_CHECK(wait_height(2));
+    service.StopBlockProduction();
 }
 
 BOOST_AUTO_TEST_CASE(storage_budgets_are_separate_and_bytes_are_reserved_before_work)

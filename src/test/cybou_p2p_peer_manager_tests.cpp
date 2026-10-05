@@ -787,14 +787,10 @@ BOOST_AUTO_TEST_CASE(proof_request_is_bound_to_the_discovered_storage_id)
             .nonce = 0x3102});
         if (second_handshake) request_served = session.ServeNext(*second);
     }};
-    BOOST_REQUIRE(manager.Connect(address, port));
-    const auto current = manager.StorageEndpoints();
-    BOOST_REQUIRE_EQUAL(current.size(), 1U);
-    BOOST_CHECK(current.front().storage_id == second_id);
     cybou::ChunkId chunk{};
     chunk[0] = 1;
     const auto operation = cybou::Hash256::ONE;
-    BOOST_CHECK(!manager.GetChunkAuthorizationProof(address, port, *first_id, operation, chunk));
+    BOOST_CHECK(!fixture.runtime->GetChunkAuthorizationProofFromStorageEndpoint(address, port, *first_id, operation, chunk));
     manager.DisconnectAll();
     second_server.join();
     BOOST_CHECK(second_handshake.load());

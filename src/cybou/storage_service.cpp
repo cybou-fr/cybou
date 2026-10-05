@@ -6,6 +6,7 @@
 
 #include <cybou/storage_service_internal.h>
 #include <cybou/node_runtime.h>
+#include <cybou/storage_io_scheduler.h>
 #include <cybou/root_publication.h>
 #include <algorithm>
 #include <limits>
@@ -129,6 +130,7 @@ PublicationDurability StorageService::Secure(const cybou::Hash256& operation_id,
     if (!summary || summary->root != publication->chunk_authorization_root) {
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Chunk list does not match the publication"};
     }
+    m_placement_cv.wait(lock, [&] { return !m_active_placements.contains(operation_id); });
     auto placement = m_placements->Load(operation_id);
     if (!placement || placement->leaves.size() != leaves.size() ||
         !std::equal(leaves.begin(), leaves.end(), placement->leaves.begin())) {
@@ -149,7 +151,8 @@ std::optional<ChunkAuthorizationProof> StorageService::GetAuthorizationProof(
     const auto publication = m_runtime.FindFinalizedRootPublication(operation_id);
     if (!publication) return std::nullopt;
     for (const auto& provider : m_transport.Providers()) {
-        const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+        const auto proof = m_runtime.StorageIo().Submit(provider.storage_id, StorageIoScheduler::Kind::READ,
+            [this, provider, operation_id, chunk_id] { return m_transport.GetProof(provider, operation_id, chunk_id); }).get();
         // Доверяем не provider-ответу самому по себе, а локальной повторной проверке proof против finalized state.
         if (proof && VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) return proof;
     }
@@ -170,6 +173,8 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Candidate chunk set is invalid"};
     }
 
+    m_placement_cv.wait(lock, [&] { return !m_active_placements.contains(operation_id); });
+    ActivePlacementGuard guard{lock, m_active_placements, m_placement_cv, operation_id};
     Placement placement{.operation_id = operation_id,
         .leaves = std::vector<ChunkId>(publication->chunk_count),
         .replicas = std::vector<std::vector<StorageEndpoint>>(publication->chunk_count)};
@@ -190,7 +195,8 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
         if (verified.contains(chunk_id)) continue;
         for (const auto& provider : providers) {
             lock.unlock();
-            const auto proof = m_transport.GetProof(provider, operation_id, chunk_id);
+            const auto proof = m_runtime.StorageIo().Submit(provider.storage_id, StorageIoScheduler::Kind::READ,
+            [this, provider, operation_id, chunk_id] { return m_transport.GetProof(provider, operation_id, chunk_id); }).get();
             lock.lock();
             // Rebuild принимает только те кандидаты, которые достижимый provider может доказать против finalized publication.
             if (!proof || !VerifyChunkAuthorizationProof(*publication, chunk_id, *proof)) continue;
@@ -228,6 +234,7 @@ PublicationDurability StorageService::Rebuild(const cybou::Hash256& operation_id
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save rebuilt placement state"};
     }
     m_placements->EraseRebuild(operation_id);
+    guard.Finish();
     return Place(lock, placement);
 }
 
@@ -365,7 +372,8 @@ std::optional<std::vector<unsigned char>> StorageService::FetchInternal(const Ch
         }
     }
     for (const auto& provider : candidates) {
-        auto bytes = m_transport.Get(provider, chunk_id);
+        auto bytes = m_runtime.StorageIo().Submit(provider.storage_id, StorageIoScheduler::Kind::READ,
+            [this, provider, chunk_id] { return m_transport.Get(provider, chunk_id); }).get();
         if (!bytes || ComputeChunkId(*bytes) != chunk_id) continue;
         // Кешируем уже проверенный ciphertext; fetch не создаёт новых provider-обязательств и не меняет финализацию.
         (void)m_runtime.GetChunkBlobStore().Put(chunk_id, *bytes);

@@ -6,42 +6,10 @@
 
 #include <cybou/storage_service_internal.h>
 #include <cybou/node_runtime.h>
+#include <cybou/storage_io_scheduler.h>
 #include <algorithm>
 
 namespace cybou {
-
-namespace {
-class ActivePlacementGuard {
-public:
-    ActivePlacementGuard(std::unique_lock<std::mutex>& lock,
-                         std::set<cybou::Hash256>& active,
-                         std::condition_variable& cv,
-                         const cybou::Hash256& id)
-        : m_lock{lock}, m_active{active}, m_cv{cv}, m_id{id}
-    {
-        m_active.insert(m_id);
-    }
-
-    ~ActivePlacementGuard()
-    {
-        if (!m_lock.owns_lock()) {
-            m_lock.lock();
-        }
-        m_active.erase(m_id);
-        m_cv.notify_all();
-    }
-
-    ActivePlacementGuard(const ActivePlacementGuard&) = delete;
-    ActivePlacementGuard& operator=(const ActivePlacementGuard&) = delete;
-
-private:
-    std::unique_lock<std::mutex>& m_lock;
-    std::set<cybou::Hash256>& m_active;
-    std::condition_variable& m_cv;
-    const cybou::Hash256 m_id;
-};
-
-} // namespace
 
 PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, Placement& placement)
 {
@@ -100,45 +68,76 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
             const auto known = identity_of.find(replica.storage_id);
             used_identities.insert(known == identity_of.end() ? replica.storage_id : known->second);
         }
-        for (const auto& provider : providers) {
-            if (replicas.size() >= m_target) break;
-            // Один provider key считается одной репликой независимо от числа endpoint.
-            if (HasProvider(replicas, provider) || used_identities.contains(ProviderSelector::EconomicIdentity(provider))) continue;
-
+        std::set<std::array<unsigned char, 32>> attempted;
+        while (replicas.size() < m_target) {
+            std::vector<StorageEndpoint> plan;
+            auto reserved = used_identities;
+            for (const auto& provider : providers) {
+                if (plan.size() >= std::min<size_t>(4, m_target - replicas.size())) break;
+                if (attempted.contains(provider.storage_id) || HasProvider(replicas, provider) ||
+                    reserved.contains(ProviderSelector::EconomicIdentity(provider))) continue;
+                plan.push_back(provider);
+                attempted.insert(provider.storage_id);
+                reserved.insert(ProviderSelector::EconomicIdentity(provider));
+            }
+            if (plan.empty()) break;
             const auto op_id = placement.operation_id;
             const auto chunk_id = placement.leaves[i];
-
+            std::vector<std::future<std::optional<ChunkAdmissionResult>>> pending;
+            pending.reserve(plan.size());
+            std::vector<std::optional<ChunkAdmissionResult>> results(plan.size());
+            // Copies share one bounded encrypted chunk; never queue a whole publication.
+            const auto payload = std::make_shared<const std::vector<unsigned char>>(*bytes);
             lock.unlock();
-            const auto admitted = m_transport.Put(provider, op_id, chunk_id, *bytes, proof);
+            try {
+                for (const auto& provider : plan) {
+                    pending.push_back(m_runtime.StorageIo().Submit(provider.storage_id, StorageIoScheduler::Kind::WRITE,
+                        [this, provider, op_id, chunk_id, payload, proof] {
+                            return m_transport.Put(provider, op_id, chunk_id, *payload, proof);
+                        }));
+                }
+            } catch (...) {
+                for (auto& job : pending) job.wait();
+                throw;
+            }
+            for (size_t j = 0; j < pending.size(); ++j) {
+                try { results[j] = pending[j].get(); }
+                catch (...) { /* unavailable transport */ }
+            }
             lock.lock();
-
-            // STORED и ALREADY_STORED одинаково означают, что provider удерживает этот чанк.
-            if (!admitted || !*admitted) {
-                admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
-                    (admitted ? " rejected chunk with status " + std::to_string(static_cast<unsigned>(admitted->status))
-                              : " did not acknowledge chunk admission");
-                continue;
-            }
-            // Реплика засчитывается только с receipt, подписанным именно этим StorageId (DEC-276).
-            const auto signer = VerifyStorageReceipt(admitted->receipt, m_runtime.GetNetworkBinding(), op_id,
-                chunk_id, static_cast<std::uint32_t>(bytes->size()));
-            if (!signer || *signer != provider.storage_id) {
-                admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
-                    " returned no valid storage receipt";
-                continue;
-            }
-            m_evidence->RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; });
-            // Receipt открывает интервал хранения; следующая успешная проверка его засчитывает.
-            m_evidence->CreditReplica(provider.storage_id, chunk_id, bytes->size(), StorageEvidenceNowMs());
-            if (!HasProvider(replicas, provider)) {
-                if (!m_evidence->SaveReceipt(op_id, chunk_id, provider, admitted->receipt)) {
-                    admission_error = "Cannot save storage receipt";
+            for (size_t j = 0; j < plan.size(); ++j) {
+                const auto& provider = plan[j];
+                const auto& admitted = results[j];
+                // STORED и ALREADY_STORED одинаково означают, что provider удерживает этот чанк.
+                if (!admitted || !*admitted) {
+                    admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
+                        (admitted ? " rejected chunk with status " + std::to_string(static_cast<unsigned>(admitted->status))
+                                  : " did not acknowledge chunk admission");
                     continue;
                 }
-                replicas.push_back(provider);
-                used_identities.insert(ProviderSelector::EconomicIdentity(provider));
-                changed = true;
-                (void)m_placements->Save(placement);
+                // Реплика засчитывается только с receipt, подписанным именно этим StorageId (DEC-276).
+                const auto signer = VerifyStorageReceipt(admitted->receipt, m_runtime.GetNetworkBinding(), op_id,
+                    chunk_id, static_cast<std::uint32_t>(bytes->size()));
+                if (!signer || *signer != provider.storage_id) {
+                    admission_error = "Provider " + provider.address + ':' + std::to_string(provider.port) +
+                        " returned no valid storage receipt";
+                    continue;
+                }
+                m_evidence->RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; });
+                // Receipt открывает интервал хранения; следующая успешная проверка его засчитывает.
+                m_evidence->CreditReplica(provider.storage_id, chunk_id, bytes->size(), StorageEvidenceNowMs());
+                if (!HasProvider(replicas, provider)) {
+                    if (!m_evidence->SaveReceipt(op_id, chunk_id, provider, admitted->receipt)) {
+                        admission_error = "Cannot save storage receipt";
+                        continue;
+                    }
+                    replicas.push_back(provider);
+                    used_identities.insert(ProviderSelector::EconomicIdentity(provider));
+                    changed = true;
+                }
+            }
+            if (changed && !m_placements->Save(placement)) {
+                return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
             }
         }
     }
@@ -156,6 +155,38 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
     return result;
 }
 
+std::vector<StorageEndpoint> StorageService::CheckReplicas(const cybou::Hash256& operation_id,
+    const ChunkId& chunk_id, const std::vector<StorageEndpoint>& replicas,
+    const std::optional<std::vector<unsigned char>>& local, const bool force_full)
+{
+    const auto bytes = std::make_shared<const std::optional<std::vector<unsigned char>>>(local);
+    std::vector<std::future<bool>> pending;
+    pending.reserve(replicas.size());
+    std::vector<StorageEndpoint> healthy;
+    healthy.reserve(replicas.size());
+    try {
+        for (const auto& provider : replicas) {
+            pending.push_back(m_runtime.StorageIo().Submit(provider.storage_id, StorageIoScheduler::Kind::READ,
+                [this, provider, chunk_id, bytes, force_full] {
+                    return m_verifier->CheckReplica(provider, chunk_id, *bytes, force_full);
+                }));
+        }
+    } catch (...) {
+        for (auto& job : pending) job.wait();
+        throw;
+    }
+    for (size_t i = 0; i < pending.size(); ++i) {
+        bool ok{false};
+        try { ok = pending[i].get(); } catch (...) {
+            m_evidence->ForgetReplica(replicas[i].storage_id, chunk_id);
+            m_evidence->RecordEvidence(replicas[i].storage_id, [](StorageProviderEvidence& e) { ++e.failures; });
+        }
+        if (ok) healthy.push_back(replicas[i]);
+        else m_evidence->EraseReceipt(operation_id, chunk_id, replicas[i]);
+    }
+    return healthy;
+}
+
 std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::AuditNextPlacement(const std::size_t max_chunks)
 {
     std::unique_lock lock{m_mutex};
@@ -163,6 +194,8 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
     if (index.empty()) return std::nullopt;
     const auto operation_id = index[m_audit_placement_cursor++ % index.size()];
     if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::storage_audit_started,{{"operation_id",operation_id.GetHex()}});
+    m_placement_cv.wait(lock, [&] { return !m_active_placements.contains(operation_id); });
+    ActivePlacementGuard guard{lock, m_active_placements, m_placement_cv, operation_id};
     auto placement = m_placements->Load(operation_id);
     if (!placement || placement->leaves.empty()) return std::nullopt;
     const std::size_t count = placement->leaves.size();
@@ -179,10 +212,7 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         // Локальная копия позволяет проверить дешёвый random-offset ответ без выгрузки чанка.
         auto local = m_runtime.GetChunkBlobStore().Get(chunk_id);
         if (local && ComputeChunkId(*local) != chunk_id) local.reset();
-        for (const auto& provider : replicas) {
-            if (m_verifier->CheckReplica(provider, chunk_id, local, false)) healthy.push_back(provider);
-            else m_evidence->EraseReceipt(operation_id, chunk_id, provider);
-        }
+        healthy = CheckReplicas(operation_id, chunk_id, replicas, local, false);
         lock.lock();
         if (healthy.size() != replicas.size()) {
             replicas = std::move(healthy);
@@ -199,6 +229,7 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     // Если ушли ниже target, сразу ремонтируем из любой валидной копии: локальной или удалённой.
     if (result.state != DurabilityState::PROTECTED && m_runtime.FindFinalizedRootPublication(operation_id)) {
+        guard.Finish();
         result = Place(lock, *placement);
     }
     if (degraded) if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::placement_repaired : NodeEvent::storage_audit_failed,
@@ -209,6 +240,8 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
 PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
 {
     std::unique_lock lock{m_mutex};
+    m_placement_cv.wait(lock, [&] { return !m_active_placements.contains(operation_id); });
+    ActivePlacementGuard guard{lock, m_active_placements, m_placement_cv, operation_id};
     auto placement = m_placements->Load(operation_id);
     if (!placement) return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Unknown publication placement"};
     bool changed{false};
@@ -219,10 +252,7 @@ PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
         healthy.reserve(replicas.size());
         lock.unlock();
         // Полный audit публикации всегда проверяет exact bytes полным GET.
-        for (const auto& provider : replicas) {
-            if (m_verifier->CheckReplica(provider, chunk_id, std::nullopt, true)) healthy.push_back(provider);
-            else m_evidence->EraseReceipt(operation_id, chunk_id, provider);
-        }
+        healthy = CheckReplicas(operation_id, chunk_id, replicas, std::nullopt, true);
         lock.lock();
         if (healthy.size() != replicas.size()) {
             replicas = std::move(healthy);
@@ -233,6 +263,7 @@ PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
         return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
     }
     if (!m_runtime.FindFinalizedRootPublication(operation_id)) return Summarize(*placement);
+    guard.Finish();
     return Place(lock, *placement);
 }
 

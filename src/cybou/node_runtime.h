@@ -27,6 +27,8 @@
 #include <cybou/identity_signer.h>
 
 #include <array>
+#include <atomic>
+#include <condition_variable>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -43,7 +45,8 @@
 #include <vector>
 
 namespace cybou {
-namespace p2p { class PeerAdmissionPolicy; class PeerManager; }
+namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; }
+class StorageIoScheduler;
 class CybouKeyStore;
 class IdentityOperationCoordinator;
 class PoaSigner;
@@ -568,6 +571,14 @@ public:
     /// \brief Константный доступ к underlying local state store.
     const CybouStateStore& GetStore() const { return m_chain.store; }
 
+    // Local production wakeup revision; never persisted or sent to peers.
+    uint64_t BlockProductionRevision() const;
+    void WaitForBlockProductionChange(uint64_t revision, const std::atomic_bool& stop,
+        std::chrono::steady_clock::time_point deadline);
+    void WakeBlockProduction();
+
+    StorageIoScheduler& StorageIo();
+
 private:
     enum class PeerFailureClass : uint8_t { TEMPORARY, PROTOCOL, WRONG_NETWORK };
     /// \var PeerFailureClass::TEMPORARY
@@ -591,6 +602,7 @@ private:
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
     void RevalidateCandidates();
+    void NotifyBlockProductionLocked();
     // Internal ownership domains; these are parts of one uniform Full Node.
     // Network I/O may call chain methods: never nest chain -> network locks.
     struct ChainCore {
@@ -611,6 +623,8 @@ private:
         std::map<cybou::Hash256, OperationStatus> recent_operation_status;
         std::deque<cybou::Hash256> recent_operation_status_order;
         mutable std::mutex mutex;
+        std::condition_variable production_cv;
+        uint64_t production_revision{0};
     };
     struct ProviderCore {
         ~ProviderCore();
@@ -626,6 +640,8 @@ private:
         explicit NetworkCore(const NodeRuntimeConfig& config);
         ~NetworkCore();
         std::unique_ptr<p2p::PeerManager> peer_manager;
+        std::unique_ptr<p2p::StorageSessionPool> storage_sessions;
+        std::unique_ptr<StorageIoScheduler> storage_io;
         mutable std::mutex mutex;
         std::map<Endpoint, PeerRetryState> peer_retry_after;
         std::chrono::steady_clock::time_point next_peer_ping{};

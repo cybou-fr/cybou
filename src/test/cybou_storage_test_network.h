@@ -9,6 +9,7 @@
 #include <cybou/storage_service.h>
 #include <test/cybou_service_test_fixture.h>
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -147,8 +148,8 @@ public:
     std::set<cybou::StorageEndpoint> lagging;
     /** Verified payout account per StorageId, as the runtime transport would report it. */
     std::map<std::array<unsigned char, 32>, std::array<unsigned char, 32>> payout;
-    int puts{0};
-    int audits{0};
+    std::atomic_int puts{0};
+    std::atomic_int audits{0};
     std::optional<std::size_t> proof_budget;
 
 private:

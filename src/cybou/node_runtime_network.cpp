@@ -6,6 +6,8 @@
 
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/p2p/storage_session_pool.h>
+#include <cybou/storage_io_scheduler.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/identity_crypto.h>
 #include <boost/asio/ip/address.hpp>
@@ -80,7 +82,15 @@ CybouNodeRuntime::NetworkCore::NetworkCore(const NodeRuntimeConfig& config)
 {
 }
 
-CybouNodeRuntime::NetworkCore::~NetworkCore() = default;
+CybouNodeRuntime::NetworkCore::~NetworkCore()
+{
+    // Drain jobs while routing, peer policy and runtime domains still exist.
+    storage_io.reset();
+    storage_sessions.reset();
+    peer_manager.reset();
+}
+
+StorageIoScheduler& CybouNodeRuntime::StorageIo() { return *m_network.storage_io; }
 
 bool CybouNodeRuntime::AdmitPeerAddress(const std::string& numeric_address) const
 {
@@ -125,36 +135,34 @@ std::optional<ChunkAdmissionResult> CybouNodeRuntime::PutChunkToStorageEndpoint(
     const uint16_t port, const std::array<unsigned char, 32>& storage_id, const cybou::Hash256& publication_operation_id,
     const ChunkId& chunk_id, const std::span<const unsigned char> stored_bytes, const ChunkAuthorizationProof& proof)
 {
-    std::lock_guard p2p_lock(m_network.mutex);
-    if (!m_network.peer_manager) return std::nullopt;
-    return m_network.peer_manager->PutAuthorizedChunk(address, port, storage_id, publication_operation_id, chunk_id,
-        stored_bytes, proof);
+    return m_network.storage_sessions->Run(address, port, storage_id, [&](p2p::PeerSession& session) {
+        return session.PutAuthorizedChunk(publication_operation_id, chunk_id, stored_bytes, proof);
+    });
 }
 
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetChunkFromStorageEndpoint(const std::string& address,
     const uint16_t port, const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id)
 {
-    std::lock_guard p2p_lock(m_network.mutex);
-    if (!m_network.peer_manager) return std::nullopt;
-    return m_network.peer_manager->GetChunkById(address, port, storage_id, chunk_id);
+    return m_network.storage_sessions->Run(address, port, storage_id, [&](p2p::PeerSession& session) {
+        return session.GetChunkById(chunk_id);
+    }, true);
 }
 
 std::optional<StorageAuditAnswer> CybouNodeRuntime::AuditChunkAtStorageEndpoint(const std::string& address,
     const uint16_t port, const std::array<unsigned char, 32>& storage_id, const StorageAuditChallenge& challenge)
 {
-    std::lock_guard p2p_lock(m_network.mutex);
-    if (!m_network.peer_manager) return std::nullopt;
-    return m_network.peer_manager->AuditChunk(address, port, storage_id, challenge);
+    return m_network.storage_sessions->Run(address, port, storage_id, [&](p2p::PeerSession& session) {
+        return session.AuditChunk(challenge);
+    });
 }
 
 std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationProofFromStorageEndpoint(
     const std::string& address, const uint16_t port, const std::array<unsigned char, 32>& storage_id,
     const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id)
 {
-    std::lock_guard p2p_lock(m_network.mutex);
-    if (!m_network.peer_manager) return std::nullopt;
-    return m_network.peer_manager->GetChunkAuthorizationProof(address, port, storage_id,
-        publication_operation_id, chunk_id);
+    return m_network.storage_sessions->Run(address, port, storage_id, [&](p2p::PeerSession& session) {
+        return session.GetChunkAuthorizationProof(publication_operation_id, chunk_id);
+    });
 }
 
 void CybouNodeRuntime::SchedulePeerRetry(

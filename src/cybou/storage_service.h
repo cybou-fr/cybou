@@ -62,6 +62,7 @@ struct StorageEndpoint {
 inline bool SameProvider(const StorageEndpoint& a, const StorageEndpoint& b) { return a.storage_id == b.storage_id; }
 
 /// \brief Транспорт exact encrypted chunks между full nodes.
+/// \details Calls to different StorageIds may overlap; implementations must be thread-safe.
 class StorageTransport {
 public:
     virtual ~StorageTransport() = default;
@@ -300,6 +301,9 @@ private:
     class ReplicaVerifier;
     class ProviderSelector;
     PublicationDurability Place(std::unique_lock<std::mutex>& lock, Placement& placement);
+    std::vector<StorageEndpoint> CheckReplicas(const cybou::Hash256& operation_id,
+        const ChunkId& chunk_id, const std::vector<StorageEndpoint>& replicas,
+        const std::optional<std::vector<unsigned char>>& local, bool force_full);
     PublicationDurability Summarize(const Placement& placement) const;
     std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,
         std::span<const StorageEndpoint> preferred);

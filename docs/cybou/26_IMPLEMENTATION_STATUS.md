@@ -123,6 +123,68 @@ while placement I/O runs and P2P PUT/GET/audit. The main service implementation 
 378 lines after extraction. This is component evidence, not deployment, soak or
 measured concurrency/throughput evidence.
 
+
+## Bounded concurrent storage I/O (2026-10-05)
+
+R4 adds one node-local `StorageIoScheduler`: four persistent workers, at most
+eight queued jobs, one active job per StorageId and two read/verification jobs.
+The read budget conservatively includes random-offset checks that can fall back
+to full GET. GET/proof recovery also passes through this scheduler. These are
+local resource limits, not protocol roles or consensus parameters.
+
+Placement plans up to four distinct economic identities for one chunk, sends
+PUTs concurrently, collects every result, verifies each StorageId-bound receipt,
+and checkpoints the placement once per completed batch. A batch shares one
+owned ciphertext; it never queues an entire file. Audits check the current
+chunk's replicas concurrently and retain exact-byte verification and evidence
+rules. Per-publication guards serialize audit, rebuild and placement mutations,
+while semantic inspection remains available during remote I/O. Exceptions are
+returned through futures; queued jobs drain before runtime domains are destroyed.
+
+Remote storage requests use a node-local pool of at most four cached ordinary
+P2P sessions, one in flight per proven StorageId and two full GETs. Each session
+is exclusively leased, separately proves the expected StorageId and uses the
+same TCP deadline, Geo admission, compiled TLS pin, HELLO network and known-chain
+checks as mesh sessions. Admission is rechecked on reuse. Storage I/O no longer
+holds the mesh manager mutex; discovery/relay/sync remain in PeerManager. The
+old PeerManager storage-transfer path is removed. No wire, genesis, canonical
+state, payout formula or database format changes.
+
+Concurrency is covered by gated tests for worker/read/provider budgets, exception
+release and shutdown draining; simultaneous PUT/GET and receipt accounting;
+invalid-receipt rejection and missing-replica resumption; and real TLS/HELLO/
+StorageId session overlap and reuse. No performance multiplier is claimed;
+battle/soak and measured throughput remain R8 work.
+
+Local R4 validation: Windows MinGW Release headless and Qt GUI builds passed;
+the complete core suite passed all 257 cases and 97,660 assertions. This is
+component and local integration evidence; no VPS deployment or soak was run.
+
+## Event-driven PoA production (2026-10-05)
+
+R5 replaces the 100 ms production polling tick with a runtime condition variable
+and a local change revision protected by the chain mutex. New locally executed
+candidates (local submission, mesh relay or signed settlement), signer changes
+and finalized-head/pool revalidation wake the worker. Duplicate or rejected
+admissions do not generate candidate wakeups. Reading the revision before
+readiness and checking it under the same mutex in the wait predicate prevents
+lost wakeups. Shutdown sets its stop flag and notifies this wait explicitly.
+
+Idle or signer-disabled production waits without a timer. Pending work waits
+until the successful-block interval or transient retry deadline, unless a state
+change or stop occurs first. Existing exponential retry (100 ms to 5 seconds),
+exact journaled candidate reuse and fail-closed safety halt remain intact.
+DEC-286 now describes event-driven scheduling; non-empty automatic blocks,
+manual finalization, height-counted windows, wire, state and durable signing
+rules are unchanged. No network migration or genesis change is required.
+
+Local R5 validation: Windows MinGW Release headless and Qt GUI builds passed;
+the complete core suite passed all 260 cases and 101,813 assertions. New tests
+cover pre-wait events, idle/stop/deadline predicates, relay admission versus
+duplicate suppression, block-interval enforcement, prompt shutdown and pending
+work after worker restart. Existing service coverage verifies exact-candidate
+retry after signer failure and resumed production after signer unlock.
+
 ## Storage economy status (2026-10-04)
 
 DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:

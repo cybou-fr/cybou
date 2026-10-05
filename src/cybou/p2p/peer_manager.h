@@ -43,6 +43,10 @@ enum class PeerConnectStatus : uint8_t {
     LOCAL_FAILURE,      ///< Локальный сбой RNG/сокета/подготовки транспорта.
 };
 
+// Common ordinary TCP/TLS/HELLO dial path, including Geo, SPKI and chain checks.
+std::unique_ptr<PeerSession> DialPeer(CybouNodeRuntime& runtime, boost::asio::io_context& io,
+    const std::string& address, uint16_t port, PeerConnectStatus& status);
+
 /// \brief Наблюдаемая информация о подключенном пире.
 struct PeerInfo {
     /// \brief Канонический числовой IP-адрес удаленного endpoint'а.
@@ -122,22 +126,6 @@ public:
     /// \brief Возвращает подключенные Full Node'ы с уже доказанной storage identity.
     /// \return Только те пиры, у которых `STORAGE_PROOF` уже успешно связал endpoint с `StorageId`.
     std::vector<PeerInfo> StorageEndpoints();
-    /// \brief Передает финализованно-авторизованный зашифрованный chunk конкретному storage-пиру.
-    std::optional<ChunkAdmissionResult> PutAuthorizedChunk(
-        const std::string& address, uint16_t port, const StorageId& storage_id,
-        const cybou::Hash256& publication_operation_id,
-        const ChunkId& chunk_id, std::span<const unsigned char> stored_bytes,
-        const ChunkAuthorizationProof& proof);
-    /// \brief Запрашивает chunk по ChunkId у конкретного storage-пира.
-    std::optional<std::vector<unsigned char>> GetChunkById(
-        const std::string& address, uint16_t port, const StorageId& storage_id, const ChunkId& chunk_id);
-    /// \brief Запрашивает proof авторизации chunk'а у конкретного storage-пира.
-    std::optional<ChunkAuthorizationProof> GetChunkAuthorizationProof(
-        const std::string& address, uint16_t port, const StorageId& storage_id,
-        const cybou::Hash256& publication_operation_id, const ChunkId& chunk_id);
-    /// \brief Отправляет storage audit challenge конкретному storage-пиру.
-    std::optional<StorageAuditAnswer> AuditChunk(const std::string& address, uint16_t port,
-        const StorageId& storage_id, const StorageAuditChallenge& challenge);
     /// \brief Разрывает все текущие соединения.
     /// \post Сессии и их gossip frontier удалены; новый HELLO восстановит frontier.
     void DisconnectAll();
@@ -150,13 +138,6 @@ public:
 
 private:
     using Endpoint = std::pair<std::string, uint16_t>;
-    /// \brief Находит live storage-сессию и при необходимости впервые доказывает ее `StorageId`.
-    /// \param address Числовой адрес endpoint'а.
-    /// \param port Порт endpoint'а.
-    /// \param storage_id Если задан, найденный пир обязан доказать именно этот `StorageId`.
-    /// \param endpoint Необязательный вывод канонического ключа карты `m_peers`.
-    PeerSession* FindStorageSession(const std::string& address, uint16_t port,
-        const std::optional<StorageId>& storage_id, Endpoint* endpoint = nullptr);
     CybouNodeRuntime& m_runtime;
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;

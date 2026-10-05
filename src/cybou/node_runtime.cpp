@@ -6,6 +6,8 @@
 
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/p2p/storage_session_pool.h>
+#include <cybou/storage_io_scheduler.h>
 #include <stdexcept>
 #include <algorithm>
 
@@ -47,6 +49,8 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     // Keep the local full node usable before it has learned or connected to a
     // peer. Configured endpoints and discovered hints can be added later.
     m_network.peer_manager = std::make_unique<p2p::PeerManager>(*this);
+    m_network.storage_sessions = std::make_unique<p2p::StorageSessionPool>(*this);
+    m_network.storage_io = std::make_unique<StorageIoScheduler>();
 }
 
 CybouNodeRuntime::~CybouNodeRuntime() = default;
@@ -122,6 +126,7 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(
         }
         // Every full node executes the candidate itself before anything else.
         const auto admission = m_chain.operation_pool.Admit(op, work_nonce, std::move(source_peer));
+        if (admission == PoolAdmission::ACCEPTED) NotifyBlockProductionLocked();
         if (admission == PoolAdmission::ALREADY_FINALIZED) {
             const auto height = m_chain.store.GetFinalizedOperationHeight(op_id).value_or(0);
             RememberOperationStatus(op_id, {.kind = OperationStatusKind::FINALIZED, .finalized_height = height});
