@@ -283,7 +283,9 @@ void CybouDesktopController::start()
             network_config,
             [this, geo_policy](const cybou::SyncPeerResult& sync_result, const cybou::NodeRuntimeStatus& runtime_status,
                 const size_t connected_peer_count) {
-                const bool bootstrap_reachable = sync_result.IsConnected();
+                // Online while any peer session is up: one failed pass (an unreachable discovered
+                // peer) must not flip the header to "Connecting" while blocks still flow.
+                const bool bootstrap_reachable = sync_result.IsConnected() || connected_peer_count > 0;
                 const bool local_state_unavailable =
                     runtime_status.runtime_state == cybou::NodeRuntimeState::NETWORK_MISMATCH ||
                     runtime_status.runtime_state == cybou::NodeRuntimeState::CORRUPT;

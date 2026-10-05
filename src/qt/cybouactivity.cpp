@@ -172,7 +172,7 @@ void CybouActivityButton::rebuildRows()
         row->setSpacing(8);
         Glyph glyph{Glyph::CloudUp};
         switch (operation.kind) {
-        case CybouActivityOperation::Kind::File: glyph = Glyph::CloudUp; break;
+        case CybouActivityOperation::Kind::File: glyph = Glyph::Upload; break;
         case CybouActivityOperation::Kind::Download: glyph = Glyph::Download; break;
         case CybouActivityOperation::Kind::Mail: glyph = Glyph::Envelope; break;
         case CybouActivityOperation::Kind::Payment: glyph = Glyph::WalletCard; break;
@@ -182,9 +182,12 @@ void CybouActivityButton::rebuildRows()
         row->addWidget(Chip(glyph, operation.attention ? Tint::Rose : Tint::Mint, parent, 32, 16), 0, Qt::AlignTop);
         auto* text = new QVBoxLayout;
         text->setSpacing(0);
-        auto* title = new QLabel{operation.title, parent};
+        // One line: a long file name without spaces would wrap mid-word and overlap the status.
+        auto* title = new QLabel{parent};
         title->setObjectName(QStringLiteral("rowTitle"));
-        title->setWordWrap(true);
+        title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        title->setText(title->fontMetrics().elidedText(operation.title, Qt::ElideMiddle, 300));
+        title->setToolTip(operation.title);
         auto* status = new QLabel{operation.status, parent};
         status->setObjectName(QStringLiteral("rowSub"));
         if (operation.attention) status->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()));

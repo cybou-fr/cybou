@@ -2,6 +2,61 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="fr_FR">
 <context>
+    <name>CybouActivity</name>
+    <message>
+        <source>Uploading %1</source>
+        <translation>Téléversement de %1</translation>
+    </message>
+    <message>
+        <source>Downloading %1</source>
+        <translation>Téléchargement de %1</translation>
+    </message>
+    <message>
+        <source>%1 was not uploaded</source>
+        <translation>%1 n’a pas été téléversé</translation>
+    </message>
+    <message>
+        <source>Needs attention</source>
+        <translation>À vérifier</translation>
+    </message>
+    <message>
+        <source>(no subject)</source>
+        <translation>(sans objet)</translation>
+    </message>
+    <message>
+        <source>“%1” was not sent</source>
+        <translation>« %1 » n’a pas été envoyé</translation>
+    </message>
+    <message>
+        <source>Sending “%1” to %2</source>
+        <translation>Envoi de « %1 » à %2</translation>
+    </message>
+    <message>
+        <source>Sending %1 to %2</source>
+        <translation>Envoi de %1 à %2</translation>
+    </message>
+    <message>
+        <source>Moving %1 to System Balance</source>
+        <translation>Transfert de %1 vers le solde système</translation>
+    </message>
+    <message>
+        <source>Claiming your .cybou name</source>
+        <translation>Réservation de votre nom .cybou</translation>
+    </message>
+    <message>
+        <source>Changing your recovery phrase</source>
+        <translation>Changement de votre phrase de récupération</translation>
+    </message>
+    <message>
+        <source>Waiting for confirmation</source>
+        <translation>En attente de confirmation</translation>
+    </message>
+    <message>
+        <source>Waiting for confirmation. Keep both the old and the new words until it is done.</source>
+        <translation>En attente de confirmation. Conservez l’ancienne et la nouvelle phrase jusqu’à la fin.</translation>
+    </message>
+</context>
+<context>
     <name>CybouActivityButton</name>
     <message>
         <location filename="../cybouactivity.cpp" line="+90"/>
