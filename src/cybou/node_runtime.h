@@ -410,6 +410,8 @@ public:
     /// \param height Целевая высота finalized chain.
     /// \return Блок или std::nullopt, если история не содержит его локально.
     std::optional<FinalizedBlock> GetBlockAtHeight(uint64_t height) const;
+    std::optional<FinalizedPublicationScan> ScanFinalizedPublications(uint64_t after, uint64_t through,
+        uint64_t max_blocks) const;
     /// \brief Находит координаты finalized операции в локальной проверенной истории.
     /// \param op_id Искомый OperationID.
     /// \return Координаты, отсутствие либо признак недоступной/несогласованной истории.

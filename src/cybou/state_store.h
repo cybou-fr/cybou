@@ -55,6 +55,20 @@ struct LocalRecordCodec<FinalizedHead> {
 };
 } // namespace detail
 
+struct FinalizedEventLocation {
+    uint64_t height{0};
+    uint32_t operation_index{0};
+    Hash256 block_id;
+};
+struct FinalizedEventLookup {
+    bool available{false};
+    std::optional<FinalizedEventLocation> location;
+};
+struct FinalizedPublicationScan {
+    std::vector<uint64_t> heights;
+    uint64_t scanned_height{0};
+};
+
 /// \brief Ошибки загрузки канонического состояния из локального KV store.
 enum class StateLoadError : uint8_t {
     NONE,             ///< Состояние загружено и прошло hash integrity check.
@@ -190,8 +204,19 @@ public:
     /// \brief Возвращает финализированную высоту операции, если локальный индекс и блок валидны.
     std::optional<uint64_t> GetFinalizedOperationHeight(const cybou::Hash256& op_id) const;
 
+    // Rebuildable local coordinates, never part of canonical state or wire.
+    FinalizedEventLookup FindIndexedOperation(const Hash256& operation_id) const;
+    FinalizedEventLookup FindIndexedKem(const AccountId& account, uint64_t epoch) const;
+    std::optional<FinalizedPublicationScan> ScanPublicationHeights(uint64_t after, uint64_t through,
+        uint64_t max_blocks) const;
+    bool RebuildFinalizedEventIndex() const;
+
 
 private:
+    void AppendFinalizedEvents(KVStore::Batch& batch, const FinalizedBlock& block,
+        const FinalizedHead& previous, const FinalizedBlock* replaced = nullptr) const;
+    bool EnsureFinalizedEventsLocked(bool force = false) const;
+    bool ValidateFinalizedEvent(const FinalizedEventLocation& location) const;
     StateLoadResult LoadStateLocked() const;
     StateSnapshotResult GetStateSnapshotLocked() const;
     mutable std::mutex m_snapshot_mutex;

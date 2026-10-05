@@ -618,4 +618,70 @@ BOOST_AUTO_TEST_CASE(sync_completion_is_advisory_for_ordinary_peers)
     BOOST_CHECK(storage_sync.caught_up_with_known_peers);
 }
 
+
+BOOST_AUTO_TEST_CASE(finalized_event_index_rebuilds_and_refuses_missing_source)
+{
+    CybouServiceTestFixture fixture;
+    const auto identity = fixture.CreateIdentity("event-index.cybou");
+    const auto account = *identity->GetAccountId();
+    const auto block = fixture.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(block);
+    const auto op = *cybou::ComputeOperationId(block->block.operations.front());
+    auto& store = fixture.runtime->GetStore();
+    auto& db = store.GetDatabase();
+    const auto root = store.GetStateRoot();
+    for (int i = 0; i < 12; ++i) BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    const auto scan = fixture.runtime->ScanFinalizedPublications(0, 13, 1);
+    BOOST_REQUIRE(scan);
+    BOOST_CHECK(scan->heights.empty());
+    BOOST_CHECK_EQUAL(scan->scanned_height, 13U);
+    db.Write(std::string{"cybou/events/op/"} + op.GetHex(), std::string{"truncated"});
+    BOOST_CHECK(fixture.runtime->FindFinalizedOperation(op).status == cybou::FinalizedOperationLookupStatus::FOUND);
+    const auto kem_key = std::string{"cybou/events/kem/"} + account.Value().GetHex() + "/0000000000000000";
+    db.Erase(kem_key);
+    BOOST_CHECK(fixture.runtime->FindIdentityKemPackage(account, 0).status == cybou::IdentityKemPackageLookupStatus::FOUND);
+    // The same committed history supports a freshly opened store without its index marker.
+    db.Erase(std::string{"cybou/events/head"});
+    cybou::CybouStateStore reopened{db, fixture.definition};
+    const auto found = reopened.FindIndexedOperation(op);
+    BOOST_REQUIRE(found.available && found.location);
+    BOOST_CHECK_EQUAL(found.location->height, 1U);
+    BOOST_CHECK(store.GetStateRoot() == root);
+    BOOST_CHECK(reopened.FindIndexedKem(account, 0).location.has_value());
+    // Cache coordinates cannot make a missing source block into finalized evidence.
+    db.Erase(std::string{"cybou/block/"} + cybou::ComputeBlockId(block->block).GetHex());
+    BOOST_CHECK(fixture.runtime->FindFinalizedOperation(op).status == cybou::FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE);
+    BOOST_CHECK(!reopened.RebuildFinalizedEventIndex());
+    BOOST_CHECK(!db.Exists(std::string{"cybou/events/head"}));
+    BOOST_CHECK(store.GetStateRoot() == root);
+}
+
+BOOST_AUTO_TEST_CASE(canonical_replacement_erases_losing_event_coordinates)
+{
+    CybouServiceTestFixture first;
+    CybouServiceTestFixture second{first.validator_seed[0]};
+    const auto alice = first.CreateIdentity("event-conflict-a.cybou");
+    const auto bob = second.CreateIdentity("event-conflict-b.cybou");
+    const auto a = first.runtime->GetBlockAtHeight(1);
+    const auto b = second.runtime->GetBlockAtHeight(1);
+    BOOST_REQUIRE(a && b);
+    const bool a_wins = cybou::ComputeBlockId(a->block) < cybou::ComputeBlockId(b->block);
+    const auto& winner = a_wins ? *a : *b;
+    const auto& loser = a_wins ? *b : *a;
+    const auto losing_account = a_wins ? *bob->GetAccountId() : *alice->GetAccountId();
+    const auto winning_op = *cybou::ComputeOperationId(winner.block.operations.front());
+    const auto losing_op = *cybou::ComputeOperationId(loser.block.operations.front());
+    CybouServiceTestFixture observer{first.validator_seed[0]};
+    BOOST_REQUIRE(observer.runtime->CommitBlock(loser));
+    BOOST_CHECK(observer.runtime->FindFinalizedOperation(losing_op).status == cybou::FinalizedOperationLookupStatus::FOUND);
+    BOOST_REQUIRE(observer.runtime->CommitBlock(winner));
+    auto& db = observer.runtime->GetStore().GetDatabase();
+    BOOST_CHECK(!db.Exists(std::string{"cybou/events/op/"} + losing_op.GetHex()));
+    BOOST_CHECK(!db.Exists(std::string{"cybou/events/kem/"} + losing_account.Value().GetHex() + "/0000000000000000"));
+    BOOST_CHECK(observer.runtime->FindFinalizedOperation(losing_op).status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
+    BOOST_CHECK(observer.runtime->FindFinalizedOperation(winning_op).status == cybou::FinalizedOperationLookupStatus::FOUND);
+    BOOST_CHECK(observer.runtime->GetStore().RebuildFinalizedEventIndex());
+    BOOST_CHECK(observer.runtime->FindFinalizedOperation(losing_op).status == cybou::FinalizedOperationLookupStatus::NOT_FOUND);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

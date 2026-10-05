@@ -185,6 +185,45 @@ duplicate suppression, block-interval enforcement, prompt shutdown and pending
 work after worker restart. Existing service coverage verifies exact-candidate
 retry after signer failure and resumed production after signer unlock.
 
+## Local finalized-event coordinates (2026-10-05)
+
+R6 adds `finalized_event_index.cpp` behind `CybouStateStore`. The current local
+`cybou/events/` namespace contains operation coordinates (including publication,
+rotation and revocation), publication-bearing heights, KEM coordinates by public
+AccountID/epoch and a complete-head marker. Each coordinate is exactly 44 bytes
+(height, operation index, BlockID); ordered height/epoch keys use fixed-width hex.
+There is no recipient index or cached plaintext. New entries and removal of a
+losing same-height canonical block are part of the canonical commit's atomic
+batch; the index is not committed by state root and changes no wire/genesis.
+
+Missing, stale or malformed complete-head metadata triggers a rebuild from
+retained blocks. Rebuild invalidates the marker first, clears derived namespaces
+in bounded batches and verifies parent continuity plus hybrid PoA certificates
+before publishing a complete marker. Interruption never leaves a complete partial
+index. Positive lookup coordinates are checked against the canonical source
+block, operation identity/type and parent link; malformed/stale operation or KEM
+rows cause one rebuild attempt. Missing referenced source history yields unavailable, and
+no index is treated as independent proof of finality. Normal lookup validates
+its source block, rather than re-verifying the entire preceding history each time.
+
+Runtime operation/KEM lookup uses these coordinates. ApplicationService queries
+bounded ordered publication-height ranges, skips unrelated heights and retains
+atomic per-relevant-block private records/checkpoints and bridge rescanning.
+Each range contains at most 256 relevant heights; semantic capsule filtering,
+unavailable-content retries, own-publication recovery and monetary rules remain
+in their existing services. `KVStore::ForEachStringRange` supplies an inclusive
+fixed-length-key range with early termination. Rebuild requires retained source
+blocks; deleting all canonical data still requires ordinary verified mesh sync.
+
+Local R6 validation: Windows MinGW Release headless and Qt GUI builds passed;
+the complete core suite passed all 263 cases and 98,100 assertions. New
+regressions cover malformed/missing operation/KEM rows, marker deletion and
+store reopen, rebuild failure with absent source blocks, unchanged canonical
+state root, removal of losing-branch coordinates and sparse Mail recovery after
+private Application DB deletion. Existing rotation, revocation, storage admission,
+bridge recovery and receipt/settlement tests also pass. This is local component
+and integration evidence; long-history recovery timing remains R8 profiling work.
+
 ## Storage economy status (2026-10-04)
 
 DEC-274–DEC-283 are frozen as target architecture (M1). M2 is implemented:

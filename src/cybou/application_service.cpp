@@ -412,14 +412,25 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     if (ImportBridgeSeeds(*me, my_key_epoch)) height = 0;
     height = std::max(height, first_height);
     for (int pass{0}; pass < 2; ++pass) {
-        for (std::uint64_t scanned{0}; scanned < max_blocks && height < progress.finalized_height; ++scanned) {
-            // A block's records, indexes and the checkpoint past it persist atomically.
+        const auto scan = m_runtime.ScanFinalizedPublications(height, progress.finalized_height, max_blocks);
+        if (!scan) break;
+        bool complete{true};
+        for (const auto publication_height : scan->heights) {
+            // Sparse public coordinates skip unrelated blocks. Private records
+            // and the checkpoint past each relevant block still commit atomically.
             PrivateApplicationStore::Batch batch{m_application_db};
-            if (!ProcessBlock(height + 1, my_key_epoch)) break;
+            if (!ProcessBlock(publication_height, my_key_epoch)) { complete = false; break; }
             Writer out;
-            out.U64(height + 1);
-            if (!m_application_db.Put(SCAN_KEY, out.Out()) || !batch.Commit()) break;
-            ++height;
+            out.U64(publication_height);
+            if (!m_application_db.Put(SCAN_KEY, out.Out()) || !batch.Commit()) { complete = false; break; }
+            height = publication_height;
+        }
+        if (!complete) break;
+        if (height < scan->scanned_height) {
+            Writer out;
+            out.U64(scan->scanned_height);
+            if (!m_application_db.Put(SCAN_KEY, out.Out())) break;
+            height = scan->scanned_height;
         }
         // A bridge found during this scan may open older publications: rescan once.
         if (height < progress.finalized_height || !ImportBridgeSeeds(*me, my_key_epoch)) break;

@@ -146,8 +146,8 @@ public:
     ApplicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
         PrivateApplicationStore& application_db, StorageService& storage);
 
-    /// Сканирует до `max_blocks` новых финализированных блоков и повторяет недоступные корни.
-    /// \param max_blocks Верхняя граница числа новых блоков за один проход.
+    /// Сканирует до `max_blocks` финализированных блоков с публикациями и повторяет недоступные корни.
+    /// \param max_blocks Верхняя граница числа релевантных блоков за один проход; прочие высоты пропускаются.
     /// \return Обновлённый прогресс локальной индексации.
     ApplicationScanProgress Scan(std::uint64_t max_blocks = 256);
     /// Возвращает текущий прогресс сканирования.

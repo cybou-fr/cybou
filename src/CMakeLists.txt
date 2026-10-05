@@ -101,6 +101,7 @@ add_library(cybou_node STATIC
   cybou/poa_conflict_detector.cpp
   cybou/poa_signing_journal.cpp
   cybou/state_store.cpp
+  cybou/finalized_event_index.cpp
   cybou/block_executor.cpp
   cybou/poa_finalizer.cpp
   cybou/operation_pool.cpp

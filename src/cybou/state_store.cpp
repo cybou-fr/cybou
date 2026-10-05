@@ -123,6 +123,7 @@ GenesisInitResult CybouStateStore::InitializeGenesis(
     batch.Write(HEAD_KEY, initial_head);
     batch.Write(NETWORK_ID_KEY, m_network_binding);
     batch.Write(StateHeightKey(0), *serialized_state);
+    batch.Write(std::string{"cybou/events/head"}, detail::SerializeLocalRecord(initial_head));
     auto snapshot = std::make_shared<const CybouState>(genesis_state);
     m_db.WriteBatch(batch, sync);
     m_state_snapshot.store(std::move(snapshot));
@@ -334,6 +335,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
                 batch.Write(OperationKey(*op_id), block_id);
             }
         }
+        AppendFinalizedEvents(batch, finalized_block, *head, &*old_block);
         auto snapshot = std::make_shared<const CybouState>(std::move(*execution.state));
         m_db.WriteBatch(batch, sync);
         m_state_snapshot.store(std::move(snapshot));
@@ -410,6 +412,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         // нужд; каноническая истина всё равно определяется последним финализированным состоянием.
         batch.Erase(StateHeightKey(block.height - 16));
     }
+    AppendFinalizedEvents(batch, finalized_block, *head);
     auto snapshot = is_empty_noop_block ? loaded.state :
         std::make_shared<const CybouState>(std::move(*next_state));
     m_db.WriteBatch(batch, sync);

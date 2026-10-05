@@ -260,6 +260,10 @@ public:
     void ForEachStringPrefixRaw(const std::string& prefix, size_t key_size,
         const std::function<void(const std::string&, const std::string&)>& visitor) const;
 
+    // Fixed-length string-key range, inclusive bounds; false stops visitation.
+    void ForEachStringRange(const std::string& first, const std::string& last,
+        const std::function<bool(const std::string&, const std::string&)>& visitor) const;
+
     template <typename K>
     void Erase(const K& key, bool sync = false)
     {

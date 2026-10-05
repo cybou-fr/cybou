@@ -189,4 +189,25 @@ void KVStore::ForEachStringPrefixRaw(const std::string& prefix, const size_t key
     CheckLevelDB(iterator->status());
 }
 
+void KVStore::ForEachStringRange(const std::string& first, const std::string& last,
+    const std::function<bool(const std::string&, const std::string&)>& visitor) const
+{
+    if (first.size() != last.size() || first > last || !visitor) throw std::invalid_argument("invalid CYBOU KV range");
+    const auto low = detail::SerializeLocalRecord(first);
+    const auto high = detail::SerializeLocalRecord(last);
+    const leveldb::Slice begin{reinterpret_cast<const char*>(low.data()), low.size()};
+    const leveldb::Slice end{reinterpret_cast<const char*>(high.data()), high.size()};
+    std::unique_ptr<leveldb::Iterator> iterator{m_impl->db->NewIterator(m_impl->read_options)};
+    for (iterator->Seek(begin); iterator->Valid() && iterator->key().compare(end) <= 0; iterator->Next()) {
+        const auto key = iterator->key();
+        const auto value = iterator->value();
+        std::string decoded_key, decoded_value;
+        if (!detail::DeserializeLocalRecord(std::span{reinterpret_cast<const unsigned char*>(key.data()), key.size()}, decoded_key) ||
+            !detail::DeserializeLocalRecord(std::span{reinterpret_cast<const unsigned char*>(value.data()), value.size()}, decoded_value))
+            throw std::ios_base::failure{"corrupt local CYBOU range record"};
+        if (!visitor(decoded_key, decoded_value)) break;
+    }
+    CheckLevelDB(iterator->status());
+}
+
 } // namespace cybou

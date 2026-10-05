@@ -810,4 +810,38 @@ BOOST_AUTO_TEST_CASE(recovery_bridge_after_application_db_loss)
     BOOST_CHECK(owner.publication->VerifyRecoveryBridge("bridge-after-loss", next, *owner.storage));
 }
 
+
+BOOST_AUTO_TEST_CASE(sparse_finalized_publications_skip_unrelated_history_and_rebuild)
+{
+    CybouServiceTestFixture fixture;
+    ProviderNetwork network{fixture};
+    Party alice{fixture, network, "sparse-alice"};
+    Party bob{fixture, network, "sparse-bob"};
+    for (int i = 0; i < 12; ++i) BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    network.Sync();
+    const auto mail = Message(bob.Account(), "Sparse history", "One relevant publication");
+    BOOST_REQUIRE(alice.publication->PublishMail("sparse-mail", mail).phase == cybou::PublicationJobPhase::WAITING_FINALITY);
+    Finalize(fixture, network);
+    const auto publication_height = *fixture.runtime->GetFinalizedHeight();
+    alice.publication->ProcessDurability(*alice.storage);
+    for (int i = 0; i < 8; ++i) BOOST_REQUIRE(fixture.runtime->ProduceBlock());
+    const auto tip = *fixture.runtime->GetFinalizedHeight();
+    const auto scan = fixture.runtime->ScanFinalizedPublications(0, tip, 1);
+    BOOST_REQUIRE(scan);
+    BOOST_REQUIRE_EQUAL(scan->heights.size(), 1U);
+    BOOST_CHECK_EQUAL(scan->heights.front(), publication_height);
+    auto progress = bob.application->Scan(1);
+    BOOST_CHECK_EQUAL(progress.scanned_height, publication_height);
+    BOOST_REQUIRE_EQUAL(bob.application->ListMail().size(), 1U);
+    progress = bob.application->Scan(1);
+    BOOST_CHECK_EQUAL(progress.scanned_height, tip);
+    BOOST_CHECK_EQUAL(bob.application->ListMail().size(), 1U);
+    bob.DestroyApplicationDb(fixture, network);
+    fixture.runtime->GetStore().GetDatabase().Erase(std::string{"cybou/events/head"});
+    bob.application->Scan(1);
+    BOOST_REQUIRE_EQUAL(bob.application->ListMail().size(), 1U);
+    BOOST_CHECK_EQUAL(bob.application->ListMail().front().message.subject, "Sparse history");
+    BOOST_CHECK_EQUAL(bob.application->Scan(1).scanned_height, tip);
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -25,6 +25,23 @@ common encrypted ChunkStore
 
 The number of architectural services is intentionally small.
 
+The Full Node maintains a rebuildable local finalized-event index. It records
+public operation coordinates, publication-bearing block heights and KEM package
+coordinates by public AccountID/key epoch. It does not index capsule recipients,
+decrypted content or private Mail/Files semantics. Coordinates never confer
+admission or consensus authority: their source must be a canonical finalized
+block. Index entries and the complete-head marker update in the same database
+batch as a block commit, including removal of a losing canonical block's entries.
+A missing/incomplete index is rebuilt from retained finalized history; absent or
+invalid referenced source blocks leave lookup/recovery unavailable rather than advancing
+application checkpoints. This changes no wire or canonical state encoding.
+
+Application recovery walks publication-bearing heights through this shared
+index, tries capsules locally and still checkpoints each relevant block together
+with its private records. The scan budget counts relevant blocks (up to 256 per
+indexed batch); it can advance across unrelated heights without decoding them.
+
+
 ### ApplicationService
 
 Owns inbound discovery and private application indexing:

@@ -537,48 +537,32 @@ std::optional<FinalizedBlock> CybouNodeRuntime::GetBlockAtHeight(const uint64_t 
     return m_chain.store.GetBlockAtHeight(height);
 }
 
+std::optional<FinalizedPublicationScan> CybouNodeRuntime::ScanFinalizedPublications(
+    const uint64_t after, const uint64_t through, const uint64_t max_blocks) const
+{
+    std::lock_guard lock{m_chain.mutex};
+    if (!m_chain.store.GetStateSnapshot()) return std::nullopt;
+    return m_chain.store.ScanPublicationHeights(after, through, max_blocks);
+}
+
 FinalizedOperationLookupResult CybouNodeRuntime::FindFinalizedOperation(const cybou::Hash256& op_id) const
 {
     FinalizedOperationLookupResult result;
-    const auto status = GetStatus();
-    if (!status.is_initialized || op_id.IsNull()) return result;
-    result.status = FinalizedOperationLookupStatus::NOT_FOUND;
-    cybou::Hash256 previous_id = m_config.network_genesis.GetGenesisAnchor();
-    for (uint64_t height = 1; height <= status.finalized_height; ++height) {
-        const auto finalized = GetBlockAtHeight(height);
-        if (!finalized) {
-            result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
-            return result;
-        }
-        const auto block_id = ComputeBlockId(finalized->block);
-        // Lookup is intentionally strict: any gap or certificate mismatch means
-        // the local history cannot be used as verified evidence for this answer.
-        if (finalized->block.parent_block_id != previous_id ||
-            finalized->certificate.network_binding != status.network_binding ||
-            finalized->certificate.height != height ||
-            finalized->certificate.block_id != block_id) {
-            result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
-            return result;
-        }
-        for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
-            const auto candidate = ComputeOperationId(finalized->block.operations[index]);
-            if (!candidate) {
-                result.status = FinalizedOperationLookupStatus::HISTORY_UNAVAILABLE;
-                return result;
-            }
-            if (*candidate == op_id) {
-                result.status = FinalizedOperationLookupStatus::FOUND;
-                result.scanned_height = height;
-                result.height = height;
-                result.operation_index = static_cast<uint32_t>(index);
-                result.block_id = block_id;
-                return result;
-            }
-        }
-        previous_id = block_id;
-        result.scanned_height = height;
-        if (height == status.finalized_height) break;
+    if (op_id.IsNull()) return result;
+    std::lock_guard lock{m_chain.mutex};
+    if (!m_chain.store.GetStateSnapshot()) return result;
+    const auto indexed = m_chain.store.FindIndexedOperation(op_id);
+    if (!indexed.available) return result;
+    if (!indexed.location) {
+        result.status = FinalizedOperationLookupStatus::NOT_FOUND;
+        result.scanned_height = m_chain.store.GetFinalizedHeight().value_or(0);
+        return result;
     }
+    result.status = FinalizedOperationLookupStatus::FOUND;
+    result.height = indexed.location->height;
+    result.scanned_height = result.height;
+    result.operation_index = indexed.location->operation_index;
+    result.block_id = indexed.location->block_id;
     return result;
 }
 
@@ -622,53 +606,32 @@ IdentityKemPackageLookupResult CybouNodeRuntime::FindIdentityKemPackage(
         return result;
     }
 
-    bool found{false};
-    const auto account_bytes = account_id.Value();
-    cybou::Hash256 previous_id = m_config.network_genesis.GetGenesisAnchor();
-    for (uint64_t height = 1; height <= *finalized_height; ++height) {
-        const auto finalized = m_chain.store.GetBlockAtHeight(height);
-        if (!finalized) return result;
-        const auto block_id = ComputeBlockId(finalized->block);
-        if (finalized->block.parent_block_id != previous_id ||
-            finalized->certificate.network_binding != m_network_binding ||
-            finalized->certificate.height != height ||
-            finalized->certificate.block_id != block_id) return result;
-        for (size_t index = 0; index < finalized->block.operations.size(); ++index) {
-            const auto& operation = finalized->block.operations[index];
-            if (!ComputeOperationId(operation)) return result;
-            const IdentityKemPackage* package{nullptr};
-            AccountId published_account;
-            uint64_t published_epoch{0};
-            if (const auto* create = std::get_if<AccountCreateOp>(&operation)) {
-                published_account = create->account_id;
-                package = &create->kem_package;
-            } else if (const auto* rotate = std::get_if<IdentityRotate>(&operation)) {
-                published_account = rotate->account_id;
-                published_epoch = rotate->key_epoch;
-                package = &rotate->new_kem_package;
-            }
-            if (!package || published_account != account_id || published_epoch != key_epoch) continue;
-            if (found) return result;
-            const auto commitment = ComputeIdentityKemPackageCommitment(
-                std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
-                std::span<const unsigned char, 32>{account_bytes.begin(), 32}, key_epoch, *package);
-            if (!commitment) return result;
-            if (key_epoch == identity->key_epoch && *commitment != identity->kem_package_id) {
-                result.status = IdentityKemPackageLookupStatus::HISTORY_UNAVAILABLE;
-                return result;
-            }
-            found = true;
-            result.package = *package;
-            result.package_id = *commitment;
-            result.key_epoch = key_epoch;
-            result.operation_height = height;
-            result.operation_index = static_cast<uint32_t>(index);
-            result.block_id = block_id;
-        }
-        previous_id = block_id;
-        if (height == *finalized_height) break;
+    const auto indexed = m_chain.store.FindIndexedKem(account_id, key_epoch);
+    if (!indexed.available) return result;
+    if (!indexed.location) {
+        result.status = IdentityKemPackageLookupStatus::NOT_FOUND;
+        return result;
     }
-    result.status = found ? IdentityKemPackageLookupStatus::FOUND : IdentityKemPackageLookupStatus::NOT_FOUND;
+    const auto& location = *indexed.location;
+    const auto finalized = m_chain.store.GetBlockAtHeight(location.height);
+    if (!finalized || location.operation_index >= finalized->block.operations.size()) return result;
+    const auto& operation = finalized->block.operations[location.operation_index];
+    const IdentityKemPackage* package{nullptr};
+    if (const auto* create = std::get_if<AccountCreateOp>(&operation)) package = &create->kem_package;
+    else if (const auto* rotate = std::get_if<IdentityRotate>(&operation)) package = &rotate->new_kem_package;
+    if (!package) return result;
+    const auto account_bytes = account_id.Value();
+    const auto commitment = ComputeIdentityKemPackageCommitment(
+        std::span<const unsigned char, 32>{m_network_binding.begin(), 32},
+        std::span<const unsigned char, 32>{account_bytes.begin(), 32}, key_epoch, *package);
+    if (!commitment || (key_epoch == identity->key_epoch && *commitment != identity->kem_package_id)) return result;
+    result.package = *package;
+    result.package_id = *commitment;
+    result.key_epoch = key_epoch;
+    result.operation_height = location.height;
+    result.operation_index = location.operation_index;
+    result.block_id = location.block_id;
+    result.status = IdentityKemPackageLookupStatus::FOUND;
     return result;
 }
 
