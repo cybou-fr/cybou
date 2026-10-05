@@ -16,6 +16,13 @@ The work serialization is 113 bytes and binds NetworkID, AccountID, authorizatio
 
 Full nodes check canonical encoding, network and account bindings, authorization commitment, work difficulty, valid epoch range, both proofs of possession, duplicate accounts and recovery keys, the per-block creation limit, and Central Treasury solvency. Consensus uses block height and immutable network parameters, never local wall-clock time.
 
+Since DEC-286 the PoA produces no empty blocks, so block height no longer tracks
+time. A work epoch (1,024 blocks) can last hours or days on a quiet network, and
+AccountCreate work computed early stays valid for that long: the anti-precomputation
+window is weaker in wall-clock terms. Consensus is unaffected; a stockpile of
+AccountCreate work is still bounded by the per-block creation limit and by
+Treasury onboarding. Revisit if precomputed account floods are observed.
+
 A successful operation atomically registers the Identity, transfers the network onboarding bonus from the Central Treasury, and creates the monetary account with zero spendable Balance and the bonus in System Balance. The state change becomes durable only after the currently authorized PoA finalizer signs the block and each full node verifies the deterministic transition.
 
 ## Onboarding and Authority interaction

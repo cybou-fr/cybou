@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
 | docs/cybou/24_DECISIONS.md | 226 | e8868d4698fe532a |
 | docs/cybou/25_OPEN_QUESTIONS.md | 95 | 2b7f6636be348a45 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 181 | d7c845ca4672b7cd |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 183 | e1dbbd301bd2a5ee |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 48 | 1e075f96cb806c7d |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -41,7 +41,7 @@ editing an included file.
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 61 | 13864b26648c59c5 |
 | docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 33 | 34bd913889679688 |
 | docs/cybou/68_OPERATOR_KEY_SEPARATION.md | 45 | 01cfb063d090d3fc |
-| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 37 | 7638143de46ca56d |
+| docs/cybou/70_ACCOUNT_CREATION_ANTI_SYBIL.md | 44 | 565693a0e8e06e49 |
 | docs/cybou/71_WINDOWS_MINGW_BUILD.md | 146 | c346d8a11674248e |
 | docs/cybou/72_DESKTOP_WALLET_UI.md | 81 | fdb80029a85ff71b |
 | docs/cybou/73_CORE_DESKTOP_CONTRACT.md | 93 | 82d3f1f94cf727c3 |
@@ -62,7 +62,7 @@ editing an included file.
 | docs/cybou/DATA_PROCESSING_INVENTORY.md | 76 | d37b639cba196d25 |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |
 | docs/cybou/DEVNET_LIVE_ACCEPTANCE.md | 98 | 408b3d2fce69dcd3 |
-| docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 172 | f87139fd03db0423 |
+| docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 172 | 33de2ee86a22b0e7 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |

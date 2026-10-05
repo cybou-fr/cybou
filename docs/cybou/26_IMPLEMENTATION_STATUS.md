@@ -106,7 +106,9 @@ deployment evidence. Subsequent governance commits changed documentation.
 - StorageService checks replicas with random-offset audits over CYBOU P2P and
   full GET plus BLAKE3 one time in eight (always without a local copy). Per
   provider evidence (receipts, successes, failures, full verifications, times)
-  is bounded and held in memory only. PoA settlement is not implemented.
+  is bounded; receipts and the evidence index persist in the encrypted Application DB.
+  PoA settlement exists only for leases whose placements the Central Authority
+  Identity itself holds (see the storage economy paragraph above).
 - Repair is attempted from valid surviving bytes to available providers. Finality
   and admission ACKs alone do not prove current availability or recoverability.
 - Local allocation and finalized quotas do not measure actual 1:3 reciprocal

@@ -149,9 +149,8 @@ signing journal. Exactly one signer runs.
    (default 30 periods) and reaches `Protected` with replicas on distinct payout
    accounts.
 3. Revoking it closes the lease after the current period.
-4. A PoA `StorageSettlement` for period 0 is accepted (today only through
-   `CybouNodeRuntime::SubmitStorageSettlement`; there is no operator command
-   yet) and `TotalCybou` stays 100,000,000,000.
+4. A PoA `StorageSettlement` for period 0 is accepted (Central Authority page,
+   "Settle storage period") and `TotalCybou` stays 100,000,000,000.
 5. `python test/cybou_operator_cli.py PATH_TO_HEADLESS_CYBOU` passes.
 
 Record results in `DEVNET_LIVE_ACCEPTANCE.md`.
@@ -165,8 +164,9 @@ step 4 the old network can be resumed only with a pre-M5 binary and the archived
 
 ## Known gaps after cutover
 
-- no aggregation of off-chain storage evidence into settlements at the PoA, and
-  no operator command to submit a settlement;
-- desktop does not wipe a retired network automatically;
+- no transport of other payers' off-chain storage evidence to the PoA: the
+  settlement command pays only leases the Central Authority Identity placed;
+- no proof that a paid provider was the network-assigned one (DEC-280 assignment
+  evidence);
 - lease renewal UX before expiry;
 - the AccountCreate PoW price against splitting into many Identities is unmeasured.
