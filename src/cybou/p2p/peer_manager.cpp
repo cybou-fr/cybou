@@ -227,6 +227,13 @@ SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uin
             [&](uint64_t expected_height, std::span<const unsigned char> bytes) {
                 const auto block = DeserializeFinalizedBlock(bytes);
                 const auto& announced = *it->second->Peer();
+                // The same block may already have arrived through another peer's announcement
+                // while this batch was in flight: an identical block is a benign race, not a
+                // protocol error (which would ban an honest peer for half an hour).
+                if (block && m_runtime.GetFinalizedHeight().value_or(0) >= expected_height) {
+                    const auto local = m_runtime.GetBlockAtHeight(expected_height);
+                    return local && local->certificate.block_id == block->certificate.block_id;
+                }
                 // Даже после валидного batch wire-ответа commit остается локальным и
                 // независимым: peer не может продвинуть канон одним только объявлением.
                 if (!block || block->block.height != expected_height ||
