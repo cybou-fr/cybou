@@ -145,7 +145,7 @@ ChunkAdmissionResult CybouNodeRuntime::PutFinalizedChunk(
 std::optional<std::vector<unsigned char>> CybouNodeRuntime::GetFinalizedChunk(const ChunkId& chunk_id) const
 {
     auto bytes = m_provider.finalized_chunk_store->GetChunk(chunk_id);
-    if (m_config.event_writer) m_config.event_writer->Write(bytes ? NodeEvent::chunk_get : NodeEvent::chunk_verify_failed,
+    if (m_config.event_writer) m_config.event_writer->Write(bytes ? NodeEvent::chunk_get : NodeEvent::chunk_missing,
         {{"chunk_id",ChunkIdHex(chunk_id)},{"bytes",std::uint64_t{bytes ? bytes->size() : 0}}});
     return bytes;
 }

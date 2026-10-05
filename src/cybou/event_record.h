@@ -50,6 +50,7 @@ enum class NodeEvent {
     storage_audit_failed,  ///< Storage audit выявил проблему.
     storage_audit_repaired, ///< Последствия storage audit устранены.
     block_production_retry, ///< Повторная попытка локального block production.
+    chunk_missing,         ///< Запрошенного chunk-а здесь нет (обычный промах GET, не ошибка проверки).
 };
 using EventValue = std::variant<std::string, std::uint64_t, bool>;
 using EventFields = std::map<std::string, EventValue>;

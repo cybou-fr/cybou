@@ -29,7 +29,7 @@ constexpr const char* NAMES[] = {
     "block_finalized","poa_safety_halt","storage_connected","storage_disconnected",
     "chunk_put","chunk_get","chunk_verify_failed","placement_created","placement_degraded",
     "placement_repaired","content_securing","content_protected","storage_audit_started",
-    "storage_audit_failed","storage_audit_repaired","block_production_retry",
+    "storage_audit_failed","storage_audit_repaired","block_production_retry","chunk_missing",
 };
 }
 EventWriter::EventWriter(const std::filesystem::path& path,EventLogMode mode) : m_file{OpenPrivateAppendFile(path)},m_mode{mode} {
