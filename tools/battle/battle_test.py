@@ -451,7 +451,8 @@ def main() -> None:
     run.add_argument("--vps-nodes", type=int, default=2)
     run.add_argument("--win-clients", type=int, default=2)
     run.add_argument("--wsl-clients", type=int, default=2)
-    run.add_argument("--identities", type=int, default=2)
+    run.add_argument("--identities", type=int, default=8,
+                     help="Identities per client; one account signs one operation per block, so spread the load")
     run.add_argument("--profile", default="mixed", choices=["mixed", "files", "mail", "payments", "system-locks"])
     run.add_argument("--rate", type=int, default=1, help="operations per second per client")
     run.add_argument("--duration", default="10m")
