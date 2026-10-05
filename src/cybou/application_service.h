@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 /// \file
 /// Восстановимый локальный индекс Mail/Files поверх финализированных RootPublication.
@@ -201,6 +200,9 @@ public:
     /// A retry/restart returns the same ID, never a second publication.
     std::optional<PrivateItemId> BindDraftToMessage(std::string_view draft_id,
         const PrivateItemId& proposed_id);
+    /// Save (before creating a job) or check (when resuming a job) its private
+    /// recipient/text/attachment fingerprint. Save timestamps are excluded.
+    bool CheckDraftSendPayload(const MailDraft& draft, bool replace);
 
     /// Возвращает собственные RecoveryBridge в каноническом порядке.
     /// \return Список мостов, пригодных для восстановления исторических KEM epoch.

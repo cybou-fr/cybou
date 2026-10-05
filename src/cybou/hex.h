@@ -1,4 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Русский публичный API строгого hex-кодирования для пользовательского ввода и вывода.
 #ifndef CYBOU_HEX_H

@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_HOMEPAGE_H
 #define CYBOU_QT_PAGES_HOMEPAGE_H
@@ -10,12 +9,14 @@
 #include <QCoreApplication>
 #include <QWidget>
 #include <QStringList>
+#include <QHash>
 
 #include <functional>
 
 class CybouDesktopModel;
 class OnboardingView;
 class QLabel;
+class QPushButton;
 class QStackedWidget;
 class QFrame;
 class QVBoxLayout;
@@ -69,6 +70,9 @@ private:
     QVBoxLayout* m_activity_rows{nullptr};
     QLabel* m_activity_empty{nullptr};
     QStringList m_activity_presentation;
+    QHash<QString, QWidget*> m_activity_widgets;
+    QPushButton* m_activity_refresh{nullptr};
+    QLabel* m_activity_refresh_hint{nullptr};
     QFrame* m_first_steps{nullptr};
     QVBoxLayout* m_first_steps_rows{nullptr};
     const std::function<void()> m_identity_requested;

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 #include <cybou/p2p/storage_session_pool.h>
 #include <cybou/node_runtime.h>
 #include <algorithm>

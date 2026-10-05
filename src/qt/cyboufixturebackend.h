@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUFIXTUREBACKEND_H
 #define CYBOU_QT_CYBOUFIXTUREBACKEND_H
@@ -40,6 +39,7 @@ public:
 
     void openIdentity() override;
     void closeIdentity() override;
+    void refreshProjection(CommandProgress progress) override;
 
     void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) override;
     void sendMail(const CybouMailItem& message, const QString& draft_id = {}, CommandProgress progress = {}) override;

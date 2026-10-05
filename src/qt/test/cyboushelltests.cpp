@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/test/cyboushelltests.h>
 
@@ -25,6 +24,8 @@
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/walletpage.h>
 #include <QTableWidget>
+#include <QProgressDialog>
+#include <QElapsedTimer>
 
 #include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
@@ -37,6 +38,7 @@
 #include <cybou/recovery_phrase.h>
 
 #include <QApplication>
+#include <QAccessible>
 #include <QAbstractButton>
 #include <QMenu>
 #include <QMimeData>
@@ -47,7 +49,10 @@
 #include <QListWidget>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QPointer>
 #include <QSignalSpy>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QTextEdit>
@@ -141,6 +146,8 @@ T* FindById(QWidget* parent, const QString& id)
 class RecordingBackend final : public CybouApplicationBackend
 {
 public:
+    CommandProgress refresh_result;
+    void refreshProjection(CommandProgress progress) override { commands << QStringLiteral("refresh"); refresh_result = std::move(progress); }
     using CybouApplicationBackend::CybouApplicationBackend;
     QStringList commands;
     bool available{true};
@@ -1657,6 +1664,96 @@ void CybouShellTests::backendCommandsDriveProjection()
     QVERIFY(model.mailItems().isEmpty());
 }
 
+void CybouShellTests::activityRefreshPreservesRows()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    window->showPage(CybouPage::Home);
+    window->show();
+    auto* home = static_cast<HomePage*>(window->page(CybouPage::Home));
+    const auto now = QDateTime::currentDateTime();
+    QVector<CybouActivityItem> items{{CybouActivityKind::FileUploaded, QStringLiteral("Original"), {}, now, QStringLiteral("event-a")},
+        {CybouActivityKind::MailReceived, QStringLiteral("Message"), {}, now.addSecs(-30), QStringLiteral("event-b")}};
+    model->setActivity(items);
+    QPointer<QFrame> row;
+    QTRY_VERIFY((row = FindById<QFrame>(home, QStringLiteral("event-a"))) != nullptr);
+    QSignalSpy activity_changed{model, &CybouDesktopModel::activityChanged};
+    model->setActivity(items);
+    QCOMPARE(activity_changed.count(), 0);
+    items[0].title = QStringLiteral("Updated");
+    items[0].subtitle = QStringLiteral("Details arrived");
+    items.prepend({CybouActivityKind::PaymentReceived, QStringLiteral("New payment"), {}, now.addSecs(1), QStringLiteral("event-c")});
+    model->setActivity(items);
+    QCOMPARE(FindById<QFrame>(home, QStringLiteral("event-a")), row.data());
+    QCOMPARE(row->findChild<QLabel*>(QStringLiteral("rowTitle"))->text(), QStringLiteral("Updated"));
+    QVERIFY(row->findChild<QLabel*>(QStringLiteral("rowSub"))->isVisible());
+    auto* refresh = FindById<QPushButton>(home, QStringLiteral("activityRefresh"));
+    QVERIFY(refresh && refresh->isEnabled());
+    refresh->click();
+    QVERIFY(model->applicationRefreshing());
+    QVERIFY(!refresh->isEnabled());
+    QTRY_VERIFY(model->lastApplicationRefresh().isValid());
+    QCOMPARE(FindById<QFrame>(home, QStringLiteral("event-a")), row.data());
+    for (int i = 0; i < 10; ++i) items.append({CybouActivityKind::FileUploaded,
+        QStringLiteral("Another file %1").arg(i), {}, now.addSecs(-60 - i), QStringLiteral("extra-%1").arg(i)});
+    model->setActivity(items);
+    window->resize(1040, 720);
+    auto* scroll = home->findChild<QScrollArea*>(QStringLiteral("homeScroll"));
+    QVERIFY(scroll);
+    QTRY_VERIFY(scroll->verticalScrollBar()->maximum() > 0);
+    QCOMPARE(scroll->horizontalScrollBar()->maximum(), 0);
+    model->requestLockVault();
+    QVERIFY(model->activity().isEmpty());
+    QVERIFY(!model->lastApplicationRefresh().isValid());
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QVERIFY(row.isNull());
+}
+
+void CybouShellTests::localRefreshRejectsStaleReplies()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    QVERIFY(model.requestApplicationRefresh());
+    const auto first = backend.refresh_result;
+    QVERIFY(!model.requestApplicationRefresh());
+    QCOMPARE(backend.commands.count(QStringLiteral("refresh")), 1);
+    first(CybouCommandState::Failed, QStringLiteral("snapshot failed"));
+    QTRY_VERIFY(!model.applicationRefreshing());
+    QVERIFY(!model.lastApplicationRefresh().isValid());
+    QCOMPARE(model.applicationRefreshError(), QStringLiteral("snapshot failed"));
+    QVERIFY(model.requestApplicationRefresh());
+    const auto second = backend.refresh_result;
+    first(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QVERIFY(model.applicationRefreshing());
+    QVERIFY(!model.lastApplicationRefresh().isValid());
+    second(CybouCommandState::Committed, {});
+    QTRY_VERIFY(model.lastApplicationRefresh().isValid());
+    bool interrupted = false;
+    QVERIFY(model.requestApplicationRefresh([&](bool ok, const QString&) { interrupted = !ok; }));
+    const auto abandoned = backend.refresh_result;
+    backend.available = false;
+    Q_EMIT backend.availabilityChanged();
+    QVERIFY(interrupted);
+    QVERIFY(!model.applicationRefreshing());
+    abandoned(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QVERIFY(!model.applicationRefreshError().isEmpty());
+    backend.available = true;
+    Q_EMIT backend.availabilityChanged();
+    QVERIFY(model.requestApplicationRefresh());
+    const auto late = backend.refresh_result;
+    model.requestLockVault();
+    late(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QVERIFY(!model.applicationRefreshing());
+    QVERIFY(!model.lastApplicationRefresh().isValid());
+}
+
 void CybouShellTests::localMailCommandsWaitForCommit()
 {
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
@@ -1777,6 +1874,429 @@ void CybouShellTests::composerKeepsTextOnSaveAndSendFailure()
     QTRY_COMPARE(accepted, 1);
     QVERIFY(rebuilt.findChild<QTextEdit*>(QStringLiteral("composeBody"))->toPlainText().isEmpty());
 
+}
+
+void CybouShellTests::folderImportIsCancellableAndPreservesStructure()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    model.setFileItems({});
+    StoragePage page{&model};
+    page.resize(1040, 720);
+    page.show();
+    QTemporaryDir source;
+    const QString root = source.filePath(QStringLiteral("Import"));
+    QVERIFY(QDir{}.mkpath(root + QStringLiteral("/Nested/Empty")));
+    for (const auto& name : {QStringLiteral("alpha.txt"), QStringLiteral(".hidden"), QStringLiteral("Nested/beta.txt")}) {
+        QFile file{root + QStringLiteral("/") + name};
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        QCOMPARE(file.write("hello"), qint64{5});
+    }
+    QSignalSpy notifications{&model, &CybouDesktopModel::notificationRequested};
+    const auto cancel = [&] {
+        auto* dialog = page.findChild<QProgressDialog*>();
+        QVERIFY(dialog);
+        auto* button = dialog->findChild<QPushButton*>();
+        QVERIFY(button);
+        button->click();
+    };
+    page.uploadFiles({root});
+    QVERIFY(model.fileItems().isEmpty()); // Discovery never stages synchronously.
+    auto* progress = page.findChild<QProgressDialog*>();
+    QVERIFY(progress && progress->isVisible());
+    const QString capture = qEnvironmentVariable("CYBOU_IMPORT_SCREENSHOT");
+    if (!capture.isEmpty()) QVERIFY(progress->grab().save(capture));
+    cancel();
+    QTest::qWait(150);
+    QVERIFY(model.fileItems().isEmpty());
+    QVERIFY(notifications.last().first().toString().contains(QStringLiteral("0 items")));
+
+    QStringList too_many;
+    for (int i{0}; i < 10001; ++i) too_many.append(root);
+    page.uploadFiles(too_many);
+    QVERIFY(model.fileItems().isEmpty());
+    QVERIFY(notifications.last().first().toString().contains(QStringLiteral("10,000")));
+
+    page.uploadFiles({root});
+    // A second import does not start another tree while the first owns the task.
+    page.uploadFiles({root});
+    QTRY_COMPARE(model.fileItems().size(), 6);
+    QTRY_VERIFY(page.findChild<QProgressDialog*>() == nullptr);
+    const auto named = [&](const QString& name) -> const CybouFileItem* {
+        for (const auto& file : model.fileItems()) if (file.name == name) return model.fileItem(file.id);
+        return nullptr;
+    };
+    QVERIFY(named(QStringLiteral("Import")));
+    QVERIFY(named(QStringLiteral("Nested")));
+    QVERIFY(named(QStringLiteral("Empty")));
+    QCOMPARE(named(QStringLiteral("Nested"))->parent_id, named(QStringLiteral("Import"))->id);
+    QCOMPARE(named(QStringLiteral("Empty"))->parent_id, named(QStringLiteral("Nested"))->id);
+    QCOMPARE(named(QStringLiteral("beta.txt"))->parent_id, named(QStringLiteral("Nested"))->id);
+    QVERIFY(named(QStringLiteral(".hidden"))); // Do not silently omit hidden content.
+    QCOMPARE(named(QStringLiteral("alpha.txt"))->logical_size, quint64{5});
+
+    const int baseline = model.fileItems().size();
+    // A discovery error rejects the whole plan before any folder is created.
+    page.uploadFiles({root, source.filePath(QStringLiteral("missing"))});
+    QTRY_VERIFY(page.findChild<QProgressDialog*>() == nullptr);
+    QCOMPARE(model.fileItems().size(), baseline);
+    QVERIFY(notifications.last().first().toString().contains(QStringLiteral("No items")));
+
+    bool cancelled{false};
+    auto stop = QObject::connect(&model, &CybouDesktopModel::filesChanged, &page, [&] {
+        if (!cancelled && model.fileItems().size() > baseline) { cancelled = true; cancel(); }
+    });
+    page.uploadFiles({root});
+    QTRY_VERIFY(cancelled);
+    QTest::qWait(150);
+    QCOMPARE(model.fileItems().size(), baseline + 1); // The accepted root stays; descendants are stopped.
+    QVERIFY(notifications.last().first().toString().contains(QStringLiteral("1 items")));
+    QObject::disconnect(stop);
+
+    bool locked{false};
+    auto lock = QObject::connect(&model, &CybouDesktopModel::filesChanged, &page, [&] {
+        if (!locked && model.fileItems().size() > baseline + 1) {
+            locked = true;
+            model.setIdentityState(CybouIdentityState::Locked, model.status().account_id, 1);
+        }
+    });
+    page.uploadFiles({root});
+    QTRY_VERIFY(locked);
+    QTRY_VERIFY(page.findChild<QProgressDialog*>() == nullptr);
+    QTest::qWait(150);
+    QVERIFY(model.fileItems().isEmpty());
+    QObject::disconnect(lock);
+
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    model.setFileItems({});
+    auto* temporary_page = new StoragePage{&model};
+    temporary_page->uploadFiles({root});
+    delete temporary_page; // No GUI-thread join and no late staging.
+    QTest::qWait(150);
+    QVERIFY(model.fileItems().isEmpty());
+}
+
+void CybouShellTests::largeFileCatalogUpdatesInPlace()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    const int requested = qEnvironmentVariableIntValue("CYBOU_TEST_CATALOG_SIZE");
+    const int count = requested > 0 ? std::clamp(requested, 2000, 10000) : 2000;
+    QVector<CybouFileItem> catalog;
+    for (int i{0}; i < count; ++i) {
+        CybouFileItem file;
+        file.id = QString::number(i);
+        file.name = QStringLiteral("Document %1.pdf").arg(i, 4, 10, QLatin1Char('0'));
+        file.state = CybouContentState::Securing;
+        file.operation_state = CybouOperationState::Finalized;
+        file.min_remote_replicas = 1;
+        file.remote_replica_target = 2;
+        catalog.append(file);
+    }
+    model.setFileItems(catalog);
+    QElapsedTimer load;
+    load.start();
+    StoragePage page{&model};
+    const qint64 load_ms = load.elapsed();
+    page.resize(1040, 720);
+    page.show();
+    auto* table = page.findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+    QVERIFY(table);
+    auto* row = table->topLevelItem(1000);
+    QVERIFY(!table->itemWidget(row, 3));
+    table->setCurrentItem(row);
+    QVector<qint64> times;
+    int steps{0};
+    bool finished{false};
+    QTimer ticks;
+    ticks.setInterval(0);
+    QObject::connect(&ticks, &QTimer::timeout, &page, [&] {
+        QElapsedTimer update;
+        update.start();
+        catalog[1000].min_remote_replicas = steps % 2;
+        model.setFileItems(catalog);
+        times.append(update.elapsed());
+        if (++steps == 10) { ticks.stop(); finished = true; }
+    });
+    ticks.start();
+    QTRY_VERIFY_WITH_TIMEOUT(finished, 10000);
+    QCOMPARE(table->topLevelItemCount(), count);
+    QCOMPARE(table->topLevelItem(1000), row);
+    QVERIFY(!table->itemWidget(row, 3));
+    QCOMPARE(table->currentItem(), row);
+    QVERIFY(row->isSelected());
+    QCOMPARE(page.findChildren<QLabel*>(QStringLiteral("stateChip")).size(), 0);
+    QVERIFY(!row->data(3, Qt::AccessibleTextRole).toString().isEmpty());
+    std::sort(times.begin(), times.end());
+    qInfo("Synthetic %d-file catalog: initial construction %lld ms; 10 one-file updates median %lld ms, max %lld ms (not a live storage benchmark)",
+        count, static_cast<long long>(load_ms), static_cast<long long>(times[times.size() / 2]), static_cast<long long>(times.last()));
+}
+
+void CybouShellTests::mailReaderKeepsContextAndClearsOnLock()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    CybouMailItem message;
+    message.id = QStringLiteral("reader-one");
+    message.subject = QStringLiteral("<b>literal subject</b>");
+    message.body = QStringLiteral("<b>literal body</b>\n") + QStringLiteral("A long readable line.\n").repeated(200);
+    message.from_name = QStringLiteral("alice.cybou");
+    message.to_name = QStringLiteral("stan.cybou");
+    message.state = CybouContentState::Received;
+    message.operation_state = CybouOperationState::Finalized;
+    CybouAttachmentItem attachment;
+    attachment.id = QStringLiteral("attachment-one");
+    attachment.name = QStringLiteral("report.pdf");
+    attachment.state = CybouContentState::Received;
+    message.attachments.append(attachment);
+    auto unrelated = message;
+    unrelated.id = QStringLiteral("reader-two");
+    unrelated.body = QStringLiteral("Short second message");
+    unrelated.attachments.clear();
+    model.setMailItems({message, unrelated});
+    MailReader reader{&model};
+    reader.resize(680, 720);
+    reader.showMessage(message.id);
+    reader.show();
+    auto* scroll = reader.findChild<QScrollArea*>(QStringLiteral("readerScroll"));
+    auto* body = reader.findChild<QLabel*>(QStringLiteral("readerBody"));
+    QVERIFY(scroll && body);
+    QTRY_VERIFY(scroll->verticalScrollBar()->maximum() > 100);
+    QPointer<QPushButton> download;
+    QTRY_VERIFY((download = FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment"))) != nullptr);
+    body->setSelection(0, 3);
+    QCOMPARE(body->selectedText(), QStringLiteral("<b>"));
+    scroll->verticalScrollBar()->setValue(100);
+    unrelated.subject = QStringLiteral("Unrelated update");
+    model.setMailItems({message, unrelated});
+    QCOMPARE(FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment")), download.data());
+    QCOMPARE(body->selectedText(), QStringLiteral("<b>"));
+    QCOMPARE(scroll->verticalScrollBar()->value(), 100);
+    message.starred = true;
+    model.setMailItems({message, unrelated});
+    QCOMPARE(FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment")), download.data());
+    QCOMPARE(body->selectedText(), QStringLiteral("<b>"));
+    message.attachments[0].retrieval = CybouRetrievalState::Downloading;
+    model.setMailItems({message, unrelated});
+    QTRY_VERIFY(download.isNull());
+    QTRY_VERIFY(FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment")) != nullptr);
+    QVERIFY(!FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment"))->isEnabled());
+    QCOMPARE(body->selectedText(), QStringLiteral("<b>"));
+    QCOMPARE(scroll->verticalScrollBar()->value(), 100);
+    reader.showMessage(unrelated.id);
+    QTRY_COMPARE(scroll->verticalScrollBar()->value(), 0);
+    QVERIFY(body->selectedText().isEmpty());
+    reader.showMessage(message.id);
+    bool details_survived{false};
+    QTimer::singleShot(0, &reader, [&] {
+        auto* dialog = reader.findChild<QDialog*>(QStringLiteral("mailSecurityDetails"));
+        unrelated.starred = true;
+        model.setMailItems({message, unrelated});
+        details_survived = dialog && dialog->isVisible();
+        model.setIdentityState(CybouIdentityState::Locked, model.status().account_id, 1);
+    });
+    reader.showSecurityDetails();
+    QVERIFY(details_survived);
+    QVERIFY(reader.messageId().isEmpty());
+    QVERIFY(body->text().isEmpty());
+    QTRY_VERIFY(FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment")) == nullptr);
+}
+
+void CybouShellTests::mailRowsRetainContextAndReplacement()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    QVector<CybouMailItem> mail;
+    for (int i{0}; i < 100; ++i) {
+        CybouMailItem message;
+        message.id = QStringLiteral("mail-%1").arg(i);
+        message.subject = QStringLiteral("Subject %1").arg(i);
+        message.from_name = QStringLiteral("alice.cybou");
+        message.state = CybouContentState::Received;
+        message.operation_state = CybouOperationState::Finalized;
+        message.folder = CybouMailFolder::Inbox;
+        message.time = QDateTime::currentDateTime().addSecs(-i * 60);
+        mail.append(message);
+    }
+    mail[51].unread = true;
+    model.setMailItems(mail);
+    EmailPage page{&model, {}};
+    page.resize(1040, 720);
+    page.show();
+    auto* list = page.findChild<QListWidget*>(QStringLiteral("messageList"));
+    QVERIFY(list);
+    auto* folders = page.findChild<QListWidget*>(QStringLiteral("folderList"));
+    QVERIFY(folders);
+    QPointer<QWidget> inbox_target{folders->itemWidget(folders->item(0))};
+    QVERIFY(inbox_target);
+    QTRY_VERIFY(list->verticalScrollBar()->maximum() > 0);
+    auto* selected = list->item(50);
+    auto* other = list->item(51);
+    QPointer<QWidget> other_widget{list->itemWidget(other)};
+    list->setCurrentItem(selected);
+    other->setSelected(true);
+    list->scrollToItem(selected, QAbstractItemView::PositionAtTop);
+    const int scroll = list->verticalScrollBar()->value();
+    page.openMessage(QStringLiteral("mail-50"));
+    QPointer<QWidget> previous_selected_widget{list->itemWidget(selected)};
+    mail[50].starred = true;
+    model.setMailItems(mail);
+    QVERIFY(!previous_selected_widget || !previous_selected_widget->isVisible());
+    QCOMPARE(list->item(50), selected);
+    QCOMPARE(list->itemWidget(other), other_widget.data());
+    QCOMPARE(folders->itemWidget(folders->item(0)), inbox_target.data());
+    QVERIFY(selected->isSelected() && other->isSelected());
+    QCOMPARE(list->currentItem(), selected);
+    QCOMPARE(list->verticalScrollBar()->value(), scroll);
+    QCOMPARE(page.reader()->messageId(), QStringLiteral("mail-50"));
+
+    Q_EMIT model.applicationBackend()->mailItemReplaced(QStringLiteral("mail-50"), QStringLiteral("permanent-mail"));
+    QCOMPARE(list->item(50), selected);
+    QCOMPARE(selected->data(Qt::UserRole).toString(), QStringLiteral("permanent-mail"));
+    QCOMPARE(page.reader()->messageId(), QStringLiteral("permanent-mail"));
+    QVERIFY(!model.mailItem(QStringLiteral("mail-50")));
+    QVERIFY(model.mailItem(QStringLiteral("permanent-mail")));
+    QVERIFY(selected->isSelected() && other->isSelected());
+    mail[50].id = QStringLiteral("permanent-mail");
+    CybouMailItem incoming = mail.first();
+    incoming.id = QStringLiteral("new-mail");
+    incoming.time = incoming.time.addSecs(60);
+    mail.append(incoming);
+    model.setMailItems(mail);
+    QCOMPARE(list->item(51), selected);
+    QCOMPARE(list->itemAt(QPoint{1, 0}), selected);
+    QCOMPARE(list->currentItem(), selected);
+    QCOMPARE(list->itemWidget(other), other_widget.data());
+    mail.removeAt(51);
+    model.setMailItems(mail);
+    QVERIFY(inbox_target->findChild<QLabel*>(QStringLiteral("folderCount"))->isHidden());
+    QCOMPARE(list->selectedItems().size(), 1);
+    QVERIFY(selected->isSelected());
+    page.setSearchText(QStringLiteral("Subject 50"));
+    QCOMPARE(list->count(), 1);
+    QCOMPARE(list->item(0), selected);
+    page.setSearchText(QStringLiteral("no-match"));
+    QCOMPARE(list->count(), 0);
+    page.setSearchText({});
+    QVERIFY(list->selectedItems().isEmpty());
+    model.setIdentityState(CybouIdentityState::Locked, model.status().account_id, 1);
+    QCOMPARE(list->count(), 0);
+}
+
+void CybouShellTests::fileRowsRetainInteractionAcrossUpdates()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    QVector<CybouFileItem> items;
+    for (int i{0}; i < 120; ++i) {
+        CybouFileItem file;
+        file.id = QStringLiteral("stable-%1").arg(i);
+        file.name = QStringLiteral("File %1.txt").arg(i, 3, 10, QLatin1Char('0'));
+        file.logical_size = 100;
+        file.state = CybouContentState::Securing;
+        file.operation_state = CybouOperationState::Finalized;
+        file.min_remote_replicas = 1;
+        file.remote_replica_target = 2;
+        items.append(file);
+    }
+    model.setFileItems(items);
+    StoragePage page{&model};
+    page.resize(1040, 720);
+    page.show();
+    auto* table = page.findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+    auto* grid = page.findChild<QListWidget*>(QStringLiteral("filesGrid"));
+    QVERIFY(table && grid);
+    QTRY_VERIFY(table->verticalScrollBar()->maximum() > 0);
+    auto* selected = table->topLevelItem(50);
+    auto* other = table->topLevelItem(51);
+    auto* tile = grid->item(50);
+    const QString selected_id = selected->data(0, Qt::UserRole + 1).toString();
+    table->setCurrentItem(selected);
+    other->setSelected(true);
+    table->scrollToItem(selected, QAbstractItemView::PositionAtTop);
+    const int scroll = table->verticalScrollBar()->value();
+    const QString other_status = other->data(3, Qt::AccessibleTextRole).toString();
+    QVERIFY(!table->itemWidget(selected, 3));
+    QVERIFY(!other_status.isEmpty());
+    // A changed progress caption updates the existing row/chip; other rows stay untouched.
+    items[50].progress_percent = 61;
+    items[50].min_remote_replicas = 0;
+    items[52].name = QStringLiteral("File 052.pdf");
+    model.setFileItems(items);
+    QCOMPARE(table->topLevelItem(50), selected);
+    QCOMPARE(grid->item(50), tile);
+    QVERIFY(!table->itemWidget(selected, 3));
+    QCOMPARE(other->data(3, Qt::AccessibleTextRole).toString(), other_status);
+    QCOMPARE(table->currentItem(), selected);
+    QVERIFY(selected->isSelected() && other->isSelected());
+    QCOMPARE(table->verticalScrollBar()->value(), scroll);
+    QVERIFY(selected->data(3, Qt::AccessibleTextRole).toString().contains(QStringLiteral("0 of 2")));
+    QCOMPARE(selected->toolTip(3), selected->text(3));
+    auto* accessible = QAccessible::queryAccessibleInterface(table);
+    QVERIFY(accessible && accessible->tableInterface());
+    auto* status_cell = accessible->tableInterface()->cellAt(50, 3);
+    QVERIFY(status_cell);
+    QCOMPARE(status_cell->text(QAccessible::Name), selected->data(3, Qt::AccessibleTextRole).toString());
+
+    page.setGridMode(true);
+    QVERIFY(tile->isSelected() && grid->item(51)->isSelected());
+    QCOMPARE(grid->currentItem(), tile);
+    page.setGridMode(false);
+    QCOMPARE(table->currentItem(), selected);
+    QVERIFY(selected->isSelected() && other->isSelected());
+
+    // Insert above the viewport: retained rows and the visible anchor stay in place.
+    CybouFileItem added = items.first();
+    added.id = QStringLiteral("inserted");
+    added.name = QStringLiteral("AAA.txt");
+    items.append(added);
+    model.setFileItems(items);
+    QCOMPARE(table->topLevelItem(51), selected);
+    QCOMPARE(grid->item(51), tile);
+    QCOMPARE(table->currentItem(), selected);
+    QCOMPARE(table->itemAt(QPoint{1, 0}), selected);
+    QVERIFY(selected->isSelected() && other->isSelected());
+
+    page.sortBy(0, true);
+    QVERIFY(selected->isSelected() && other->isSelected());
+    QCOMPARE(table->currentItem(), selected);
+    QCOMPARE(grid->item(grid->row(tile)), tile);
+    QCOMPARE(table->topLevelItem(0)->text(0), QStringLiteral("File 119.txt"));
+    // A real rename changes ordering but preserves object/current/selection.
+    items[50].name = QStringLiteral("ZZZ-renamed.txt");
+    model.setFileItems(items);
+    QCOMPARE(table->topLevelItem(0), selected);
+    QCOMPARE(grid->item(0), tile);
+    QCOMPARE(selected->text(0), QStringLiteral("ZZZ-renamed.txt"));
+    QCOMPARE(table->currentItem(), selected);
+    QVERIFY(selected->isSelected());
+    items[50].state = CybouContentState::Protected;
+    model.setFileItems(items);
+    QCOMPARE(table->topLevelItem(0), selected);
+    QVERIFY(!table->itemWidget(selected, 3));
+    QVERIFY(selected->data(3, Qt::AccessibleTextRole).toString().contains(QStringLiteral("Protected")));
+
+    items.removeAt(51); // Remove another selected file without affecting this one.
+    model.setFileItems(items);
+    QVERIFY(selected->isSelected());
+    QCOMPARE(table->selectedItems().size(), 1);
+    QCOMPARE(table->currentItem(), selected);
+    QVERIFY(!page.visibleIds().contains(QStringLiteral("stable-51")));
+    // Filtering removes hidden selections rather than keeping invisible action targets.
+    page.setSearchText(QStringLiteral("ZZZ"));
+    QCOMPARE(table->topLevelItemCount(), 1);
+    QCOMPARE(table->topLevelItem(0), selected);
+    page.setSearchText(QStringLiteral("no-match"));
+    QCOMPARE(table->topLevelItemCount(), 0);
+    QCOMPARE(grid->count(), 0);
+    page.setSearchText({});
+    QVERIFY(page.visibleIds().contains(selected_id));
+    QVERIFY(table->selectedItems().isEmpty());
+    model.setIdentityState(CybouIdentityState::Locked, model.status().account_id, 1);
+    QCOMPARE(table->topLevelItemCount(), 0);
+    QCOMPARE(grid->count(), 0);
+    QVERIFY(page.currentFolder().isEmpty());
+    QVERIFY(page.detailsId().isEmpty());
 }
 
 void CybouShellTests::fileAdvancedSurvivesRefresh()
@@ -2093,7 +2613,8 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     }
 
     // Mail attachment -> Files: a catalog entry referencing the same content.
-    QVERIFY(!bob_model->requestSaveAttachmentToFiles(contract_message, received_attachment.id).isEmpty());
+    const QString saved_client = bob_model->requestSaveAttachmentToFiles(contract_message, received_attachment.id);
+    QVERIFY(!saved_client.isEmpty());
     const auto bob_file = [&]() -> const CybouFileItem* {
         for (const auto& item : bob_model->fileItems()) {
             if (item.name == QStringLiteral("contract.pdf")) return bob_model->fileItem(item.id);
@@ -2104,6 +2625,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(produce_until([&] { return bob_file() && bob_file()->state == CybouContentState::Securing; }));
     QTRY_VERIFY(bob_contract() && !bob_contract()->attachments.first().saved_file_id.isEmpty());
     const QString saved_id = bob_file()->id;
+    QCOMPARE(saved_client, saved_id);
     const QString from_files = attach_dir.filePath(QStringLiteral("from-files.pdf"));
     bob_model->requestFileDownload(saved_id, from_files);
     QTRY_VERIFY(QFile::exists(from_files));
@@ -2224,6 +2746,7 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QVERIFY(!work_client.isEmpty());
     QTRY_VERIFY(file_named(QStringLiteral("Work")) != nullptr);
     const QString work_id = file_named(QStringLiteral("Work"))->id;
+    QCOMPARE(work_client, work_id);
     QTemporaryDir files_dir;
     QByteArray original(400 * 1024, '\0');
     for (int i = 0; i < original.size(); ++i) original[i] = static_cast<char>(i * 13 + 1);
@@ -2233,14 +2756,26 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
         QVERIFY(out.open(QIODevice::WriteOnly));
         out.write(original);
     }
-    QVERIFY(!alice_model->requestFileUpload(source, work_client).isEmpty()); // client folder ID resolves
+    const QString report_client = alice_model->requestFileUpload(source, work_client);
+    QVERIFY(!report_client.isEmpty());
     QTRY_VERIFY(file_named(QStringLiteral("report.bin")) != nullptr);
     QCOMPARE(file_named(QStringLiteral("report.bin"))->parent_id, work_id);
     QVERIFY(file_named(QStringLiteral("report.bin"))->available_offline);
+    StoragePage live_files{alice_model.get()};
+    live_files.show();
+    live_files.showDetails(report_client);
+    QToolButton* live_advanced{nullptr};
+    QTRY_VERIFY((live_advanced = FindById<QToolButton>(&live_files, QStringLiteral("fileAdvanced"))) != nullptr);
+    live_advanced->click();
+    QVERIFY(live_advanced->isChecked());
     QVERIFY(finalize_until(QStringLiteral("report.bin"), CybouContentState::Securing));
+    QCOMPARE(live_files.detailsId(), report_client);
+    QTRY_VERIFY(FindById<QToolButton>(&live_files, QStringLiteral("fileAdvanced")) != nullptr);
+    QVERIFY(FindById<QToolButton>(&live_files, QStringLiteral("fileAdvanced"))->isChecked());
     QTRY_VERIFY(file_named(QStringLiteral("report.bin")) && file_named(QStringLiteral("report.bin"))->finalized_height > 0);
     QCOMPARE(file_named(QStringLiteral("report.bin"))->logical_size, quint64(original.size()));
     const QString report_id = file_named(QStringLiteral("report.bin"))->id;
+    QCOMPARE(report_client, report_id);
 
     alice_model->requestRenameFile(report_id, QStringLiteral("report-final.bin"));
     QTRY_VERIFY(file_named(QStringLiteral("report-final.bin")) != nullptr);

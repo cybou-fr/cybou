@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
+
 // Test-only construction of exact encrypted publication chunks.
 #ifndef CYBOU_TEST_PUBLICATION_BUILDER_H
 #define CYBOU_TEST_PUBLICATION_BUILDER_H

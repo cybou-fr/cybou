@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 /// \file
 /// Реализация rebuildable-индекса Mail/Files и восстановления приватных публикаций.
@@ -8,6 +7,7 @@
 #include <cybou/application_service.h>
 
 #include <cybou/crypto/cleanse.h>
+#include <cybou/crypto/sha256.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <cybou/identity_kem.h>
 #include <cybou/keystore.h>
@@ -909,9 +909,38 @@ bool ApplicationService::DeleteDraft(std::string_view draft_id, bool keep_send_b
     auto names = ReadNames(m_application_db, DRAFT_INDEX_KEY);
     std::erase(names, std::string{draft_id});
     return m_application_db.Erase(DraftKey(draft_id)) &&
-        (keep_send_binding || m_application_db.Erase("mail/draft-send/" + std::string{draft_id})) &&
+        (keep_send_binding || (m_application_db.Erase("mail/draft-send/" + std::string{draft_id}) &&
+            m_application_db.Erase("mail/draft-send-content/" + std::string{draft_id}))) &&
         WriteNames(m_application_db, DRAFT_INDEX_KEY, names) &&
         batch.Commit();
+}
+
+bool ApplicationService::CheckDraftSendPayload(const MailDraft& draft, bool replace)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidDraftId(draft.draft_id) || !m_application_db.Has(DraftKey(draft.draft_id)) ||
+        !m_application_db.Has("mail/draft-send/" + draft.draft_id) ||
+        draft.to.size() > MAX_DRAFT_TEXT || draft.subject.size() > MAX_DRAFT_TEXT ||
+        draft.body.size() > MAX_DRAFT_TEXT || draft.attachments.size() > MAX_DRAFT_ATTACHMENTS) return false;
+    Writer out;
+    PutString(out, draft.to);
+    PutString(out, draft.subject);
+    PutString(out, draft.body);
+    out.U32(static_cast<std::uint32_t>(draft.attachments.size()));
+    for (const auto& attachment : draft.attachments) {
+        if (attachment.name.size() > 4096 || attachment.source_path.size() > 32768 ||
+            attachment.reference_id.size() > 256) return false;
+        PutString(out, attachment.name);
+        out.U64(attachment.logical_size);
+        PutString(out, attachment.source_path);
+        PutString(out, attachment.reference_id);
+    }
+    std::array<unsigned char, 32> digest;
+    if (!crypto::ComputeSha256({out.Out()}, digest.data())) return false;
+    const auto key = "mail/draft-send-content/" + draft.draft_id;
+    if (replace) return m_application_db.Put(key, digest);
+    const auto saved = m_application_db.Get(key);
+    return saved && saved->size() == digest.size() && std::equal(saved->begin(), saved->end(), digest.begin());
 }
 
 /* ---- queries and local state ---- */

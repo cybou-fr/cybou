@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 /// \file
 /// \brief Merkle-коммитменты и inclusion proof для авторизации чанков публикации.

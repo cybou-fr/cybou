@@ -8,11 +8,14 @@ Reference: Bitcoin Core v31.1 is distributed under the MIT license and its top-l
 
 Never globally replace upstream or third-party holders with CYBOU.
 
-## If CYBOU remains MIT
+## CYBOU license: Apache-2.0
 
-Recommended structure:
+All CYBOU source files are Apache-2.0 (`LICENSE`, SPDX header in every file).  Bitcoin-derived components were removed or rewritten; `COPYING` (MIT) is kept only as a record of the fork ancestry.
+Legal review of the change is still recommended before release.
 
-- keep inherited Bitcoin Core MIT notice(s);
+Structure:
+
+- keep the Bitcoin Core MIT text in COPYING as ancestry record;
 - preserve source-file headers;
 - preserve third-party license files;
 - add a CYBOU notice for CYBOU-authored work;
@@ -49,11 +52,11 @@ Do not rewrite upstream year ranges.
 
 ### New CYBOU file
 
-If MIT is retained:
+Under Apache-2.0:
 
 ```text
 Copyright (c) 2026-present Stanislav SAVELIEV
-Distributed under the MIT software license, see the accompanying file COPYING.
+SPDX-License-Identifier: Apache-2.0
 ```
 
 ## Do not mechanically bump years

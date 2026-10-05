@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 /// \file
 /// KEM-профиль Identity и канонические операции с X-Wing пакетами.

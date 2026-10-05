@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_MAILREADER_H
 #define CYBOU_QT_PAGES_MAILREADER_H
@@ -16,6 +15,7 @@ class CybouDesktopModel;
 class QLabel;
 class QPushButton;
 class QToolButton;
+class QScrollArea;
 class QVBoxLayout;
 
 /**
@@ -61,6 +61,9 @@ private:
     QLabel* m_delivery_text{nullptr};
     QPushButton* m_retry{nullptr};
     QLabel* m_body{nullptr};
+    QScrollArea* m_scroll{nullptr};
+    QVector<CybouAttachmentItem> m_rendered_attachments;
+    QStringList m_attachment_context;
     QWidget* m_attachments{nullptr};
     QVBoxLayout* m_attachment_rows{nullptr};
     QPushButton* m_reply{nullptr};

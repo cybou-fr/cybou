@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/pages/homepage.h>
 
@@ -17,6 +16,8 @@
 #include <QPointer>
 #include <QRandomGenerator>
 #include <QSettings>
+#include <QScrollArea>
+#include <QSet>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
@@ -134,6 +135,7 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
              &CybouDesktopModel::walletChanged, &CybouDesktopModel::namesChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
+    connect(m_model, &CybouDesktopModel::applicationRefreshChanged, this, [this] { refresh(); });
     // Relative activity times age while the window stays open.
     auto* ticker = new QTimer{this};
     connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
@@ -181,9 +183,19 @@ QWidget* HomePage::buildSummaryCard(const QString& title, Glyph glyph, Tint tint
 QWidget* HomePage::buildDashboard()
 {
     m_dashboard = new QWidget{m_stack};
-    auto* outer = new QHBoxLayout{m_dashboard};
+    auto* dashboard_layout = new QVBoxLayout{m_dashboard};
+    dashboard_layout->setContentsMargins(0, 0, 0, 0);
+    auto* scroll = new QScrollArea{m_dashboard};
+    scroll->setObjectName(QStringLiteral("homeScroll"));
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    auto* canvas = new QWidget{scroll};
+    scroll->setWidget(canvas);
+    dashboard_layout->addWidget(scroll);
+    auto* outer = new QHBoxLayout{canvas};
     outer->setContentsMargins(28, 24, 28, 28);
-    auto* column = new QWidget{m_dashboard};
+    auto* column = new QWidget{canvas};
     column->setMaximumWidth(1180);
     outer->addStretch(0);
     outer->addWidget(column, 1);
@@ -265,7 +277,23 @@ QWidget* HomePage::buildDashboard()
     auto* activity_layout = new QVBoxLayout{activity};
     activity_layout->setContentsMargins(22, 18, 22, 14);
     activity_layout->setSpacing(4);
-    activity_layout->addWidget(SectionTitle(tr("Recent activity"), activity));
+    auto* activity_header = new QHBoxLayout;
+    activity_header->addWidget(SectionTitle(tr("Recent activity"), activity), 1);
+    m_activity_refresh = new QPushButton{tr("Refresh"), activity};
+    m_activity_refresh->setObjectName(QStringLiteral("secondaryButton"));
+    m_activity_refresh->setProperty("cybouId", QStringLiteral("activityRefresh"));
+    m_activity_refresh->setAccessibleName(tr("Refresh local activity"));
+    m_activity_refresh->setToolTip(tr("Read current local Mail and Files indexes. This does not force network sync or storage audits."));
+    activity_header->addWidget(m_activity_refresh);
+    activity_layout->addLayout(activity_header);
+    m_activity_refresh_hint = MutedText(tr("Current local activity"), activity);
+    activity_layout->addWidget(m_activity_refresh_hint);
+    connect(m_activity_refresh, &QPushButton::clicked, this, [this] {
+        const QPointer<HomePage> guard{this};
+        if (!m_model->requestApplicationRefresh([guard](bool ok, const QString& error) {
+            if (guard && !ok) guard->m_model->notify(error);
+        })) m_model->notify(tr("Local refresh is unavailable right now."));
+    });
     auto* rows_host = new QWidget{activity};
     m_activity_rows = new QVBoxLayout{rows_host};
     m_activity_rows->setContentsMargins(0, 6, 0, 0);
@@ -288,8 +316,17 @@ void HomePage::refresh()
     if (!show_dashboard) {
         m_activity_presentation.clear();
         ClearLayout(m_activity_rows);
+        m_activity_widgets.clear();
+        m_activity_empty->setVisible(true);
         return;
     }
+
+    m_activity_refresh->setEnabled(!m_model->applicationRefreshing() && m_model->featureAvailability().mail);
+    m_activity_refresh_hint->setText(m_model->applicationRefreshing() ? tr("Refreshing local activity…")
+        : !m_model->applicationRefreshError().isEmpty() ? tr("Refresh failed. Try again.")
+        : m_model->lastApplicationRefresh().isValid() ? tr("Local view refreshed at %1")
+            .arg(QLocale{}.toString(m_model->lastApplicationRefresh(), QLocale::ShortFormat))
+        : tr("Current local activity"));
 
     m_identity_name->setText(status.primary_name.isEmpty()
         ? CybouProduct::shortId(status.account_id) : status.primary_name);
@@ -328,13 +365,16 @@ void HomePage::refresh()
     auto items = m_model->activity();
     std::stable_sort(items.begin(), items.end(), [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
     QStringList presentation;
+    presentation << QDate::currentDate().toString(Qt::ISODate);
     for (const auto& item : items.mid(0, 8)) {
-        presentation << QString::number(static_cast<int>(item.kind)) << item.title << item.subtitle
+        presentation << item.id << QString::number(static_cast<int>(item.kind)) << item.title << item.subtitle
                      << item.time.date().toString(Qt::ISODate) << shortTime(item.time);
     }
     if (presentation == m_activity_presentation) { rebuildFirstSteps(); return; }
     m_activity_presentation = presentation;
-    ClearLayout(m_activity_rows);
+    // Keep semantic rows alive while reordering the bounded top-eight view.
+    while (auto* item = m_activity_rows->takeAt(0)) delete item;
+    QSet<QString> retained;
     const QDate today = QDate::currentDate();
     QString group;
     int shown = 0;
@@ -344,13 +384,47 @@ void HomePage::refresh()
         const QString heading = day == today ? tr("Today") : day == today.addDays(-1) ? tr("Yesterday") : tr("Earlier");
         if (heading != group) {
             group = heading;
-            auto* label = Eyebrow(heading, m_activity_rows->parentWidget());
+            const auto key = QStringLiteral("group:") + heading;
+            retained.insert(key);
+            auto* label = qobject_cast<QLabel*>(m_activity_widgets.value(key));
+            if (!label) {
+                label = Eyebrow(heading, m_activity_rows->parentWidget());
+                m_activity_widgets.insert(key, label);
+            }
             label->setContentsMargins(0, shown == 0 ? 0 : 8, 0, 2);
             m_activity_rows->addWidget(label);
         }
-        m_activity_rows->addWidget(ActivityRow(ActivityGlyph(item.kind), ActivityTint(item.kind), item.title, item.subtitle,
-            shortTime(item.time), m_activity_rows->parentWidget()));
+        const auto key = QStringLiteral("item:") + item.id;
+        retained.insert(key);
+        auto* row = m_activity_widgets.value(key);
+        if (!row) {
+            row = ActivityRow(ActivityGlyph(item.kind), ActivityTint(item.kind), item.title, QStringLiteral(" "),
+                QStringLiteral(" "), m_activity_rows->parentWidget());
+            row->setProperty("cybouId", item.id);
+            m_activity_widgets.insert(key, row);
+        }
+        auto* title = row->findChild<QLabel*>(QStringLiteral("rowTitle"));
+        title->setTextFormat(Qt::PlainText);
+        title->setWordWrap(true);
+        title->setText(item.title);
+        auto* subtitle = row->findChild<QLabel*>(QStringLiteral("rowSub"));
+        subtitle->setTextFormat(Qt::PlainText);
+        subtitle->setWordWrap(true);
+        subtitle->setText(item.subtitle);
+        subtitle->setVisible(!item.subtitle.isEmpty());
+        row->findChild<QLabel*>(QStringLiteral("rowMeta"))->setText(shortTime(item.time));
+        auto* chip = row->findChild<QLabel*>(QStringLiteral("iconChip"));
+        chip->setProperty("tint", tintName(ActivityTint(item.kind)));
+        chip->setPixmap(glyphPixmap(ActivityGlyph(item.kind), {18, 18}, CybouTheme::color(tintInk(ActivityTint(item.kind)))));
+        m_activity_rows->addWidget(row);
         ++shown;
+    }
+    for (auto it = m_activity_widgets.begin(); it != m_activity_widgets.end();) {
+        if (!retained.contains(it.key())) {
+            it.value()->hide();
+            it.value()->deleteLater();
+            it = m_activity_widgets.erase(it);
+        } else ++it;
     }
     m_activity_empty->setVisible(shown == 0);
     rebuildFirstSteps();

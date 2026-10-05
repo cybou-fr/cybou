@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
+
 // Offline-only network creation and read-only verification. Never linked into cybou.
 #include <cybou/provision.h>
 #include <cybou/official_networks.h>

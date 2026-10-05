@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license.
+// SPDX-License-Identifier: Apache-2.0
 // Synthetic client: all operations go through production services and journals.
 #include <cybou/official_networks.h>
 #include <cybou/cli/command_line.h>

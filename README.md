@@ -1,146 +1,146 @@
 # CYBOU
 
-CYBOU développe une messagerie privée et un stockage de fichiers distribués,
-sans dépendre d'un service cloud centralisé.
-Ce dépôt contient le code du client, du nœud, du protocole et de leurs tests.
+CYBOU dÃ©veloppe une messagerie privÃ©e et un stockage de fichiers distribuÃ©s,
+sans dÃ©pendre d'un service cloud centralisÃ©.
+Ce dÃ©pÃ´t contient le code du client, du nÅ“ud, du protocole et de leurs tests.
 CYBOU n'est pas un service public de messagerie ou de stockage cloud.
 
-**Une identité. Des échanges privés. Vos données sous votre contrôle.**
+**Une identitÃ©. Des Ã©changes privÃ©s. Vos donnÃ©es sous votre contrÃ´le.**
 
 ## Produit
 
-Le client de bureau relie une identité CYBOU aux fonctions Wallet, Mail et
-Files. Le code applicatif prend en charge la rédaction et l'envoi de messages,
-les pièces jointes, ainsi que le dépôt, le téléchargement et l'organisation de
+Le client de bureau relie une identitÃ© CYBOU aux fonctions Wallet, Mail et
+Files. Le code applicatif prend en charge la rÃ©daction et l'envoi de messages,
+les piÃ¨ces jointes, ainsi que le dÃ©pÃ´t, le tÃ©lÃ©chargement et l'organisation de
 fichiers et de dossiers.
 
-Pour les entreprises, l'offre visée est la création d'un réseau CYBOU privé
-distinct, gouverné par l'organisation cliente : genèse et identifiant de réseau
-propres, clés d'autorité détenues par l'entreprise, nœuds bootstrap et règles
-d'accès par IP définis pour cette instance. Le client choisit l'infrastructure
-et la connectivité ; Internet ou intranet ne sont pas des produits différents.
+Pour les entreprises, l'offre visÃ©e est la crÃ©ation d'un rÃ©seau CYBOU privÃ©
+distinct, gouvernÃ© par l'organisation cliente : genÃ¨se et identifiant de rÃ©seau
+propres, clÃ©s d'autoritÃ© dÃ©tenues par l'entreprise, nÅ“uds bootstrap et rÃ¨gles
+d'accÃ¨s par IP dÃ©finis pour cette instance. Le client choisit l'infrastructure
+et la connectivitÃ© ; Internet ou intranet ne sont pas des produits diffÃ©rents.
 
-Cette offre décrit l'objectif du produit, pas une fonction déjà disponible de
-bout en bout. Le VPS DEV exécute désormais un Full Node ordinaire sur DEVNET
+Cette offre dÃ©crit l'objectif du produit, pas une fonction dÃ©jÃ  disponible de
+bout en bout. Le VPS DEV exÃ©cute dÃ©sormais un Full Node ordinaire sur DEVNET
 sur `51.255.46.58:29461` ; les anciens services finalizer et fournisseurs
-sont inactifs. Le client vérifie la genèse signée compilée et utilise le bootstrap compilé
-avec son pin TLS ; le VPS utilise le même protocole CYBOU P2P.
-L'exécutable unique `cybou` démarre uniquement le DEVNET compilé et propose, sans
-interface, `node run` avec la clé PoA optionnelle, mais le
-client ne possède pas encore de parcours général de création et de mise en
-service d'un réseau privé d'entreprise.
+sont inactifs. Le client vÃ©rifie la genÃ¨se signÃ©e compilÃ©e et utilise le bootstrap compilÃ©
+avec son pin TLS ; le VPS utilise le mÃªme protocole CYBOU P2P.
+L'exÃ©cutable unique `cybou` dÃ©marre uniquement le DEVNET compilÃ© et propose, sans
+interface, `node run` avec la clÃ© PoA optionnelle, mais le
+client ne possÃ¨de pas encore de parcours gÃ©nÃ©ral de crÃ©ation et de mise en
+service d'un rÃ©seau privÃ© d'entreprise.
 
 ## Fonctionnement technique
 
-- **Identité et clés.** Le coffre local protège le matériel de récupération
-  d'une identité au niveau du compte. Le code sépare les rôles de clés et
-  combine Ed25519 avec ML-DSA pour les signatures d'identité.
-- **Contenus privés.** Mail et Files sont convertis en contenu chiffré côté
-  client, découpé en blocs ROOT/INDEX/DATA. `RootPublication` est l'opération
-  protocolaire qui autorise une publication ; les schémas Mail et Files sont
-  des données applicatives privées.
-- **Stockage vérifiable.** La blockchain agit comme un registre notarié
-  déterministe : elle consigne les métadonnées de `RootPublication`, les racines Merkle
-  et les capsules de destinataires. Le stockage réseau se paie par un bail
-  (`StorageLease`) depuis le System Balance vers un séquestre, versé aux nœuds qui
-  prouvent un service de stockage via un règlement quotidien signé par le PoA
-  (aucune déclaration locale ni voucher hors-chaîne ne confère d'autorité). Chaque
-  nœud choisit une capacité locale d'au moins 15 Gio, dont au plus 2/3 pour autrui.
-  Les contrôles opérationnels relisent les fragments via GET et vérifient BLAKE3 ;
-  la réparation est tentée depuis une copie valide vers un fournisseur disponible. Le mécanisme
+- **IdentitÃ© et clÃ©s.** Le coffre local protÃ¨ge le matÃ©riel de rÃ©cupÃ©ration
+  d'une identitÃ© au niveau du compte. Le code sÃ©pare les rÃ´les de clÃ©s et
+  combine Ed25519 avec ML-DSA pour les signatures d'identitÃ©.
+- **Contenus privÃ©s.** Mail et Files sont convertis en contenu chiffrÃ© cÃ´tÃ©
+  client, dÃ©coupÃ© en blocs ROOT/INDEX/DATA. `RootPublication` est l'opÃ©ration
+  protocolaire qui autorise une publication ; les schÃ©mas Mail et Files sont
+  des donnÃ©es applicatives privÃ©es.
+- **Stockage vÃ©rifiable.** La blockchain agit comme un registre notariÃ©
+  dÃ©terministe : elle consigne les mÃ©tadonnÃ©es de `RootPublication`, les racines Merkle
+  et les capsules de destinataires. Le stockage rÃ©seau se paie par un bail
+  (`StorageLease`) depuis le System Balance vers un sÃ©questre, versÃ© aux nÅ“uds qui
+  prouvent un service de stockage via un rÃ¨glement quotidien signÃ© par le PoA
+  (aucune dÃ©claration locale ni voucher hors-chaÃ®ne ne confÃ¨re d'autoritÃ©). Chaque
+  nÅ“ud choisit une capacitÃ© locale d'au moins 15 Gio, dont au plus 2/3 pour autrui.
+  Les contrÃ´les opÃ©rationnels relisent les fragments via GET et vÃ©rifient BLAKE3 ;
+  la rÃ©paration est tentÃ©e depuis une copie valide vers un fournisseur disponible. Le mÃ©canisme
   cryptographique d'audit de stockage (`StorageAuditChallenge`, `CreateStorageAuditProof`,
-  `VerifyStorageAuditProof`) est implémenté ; le protocole réseau d'audit périodique
-  et sa notarisation ne sont pas implémentés. Lors de la révocation finalisée
-  d'un objet (`RevokePublication`), les nœuds conformes tentent de purger les fragments
+  `VerifyStorageAuditProof`) est implÃ©mentÃ© ; le protocole rÃ©seau d'audit pÃ©riodique
+  et sa notarisation ne sont pas implÃ©mentÃ©s. Lors de la rÃ©vocation finalisÃ©e
+  d'un objet (`RevokePublication`), les nÅ“uds conformes tentent de purger les fragments
   qu'aucune autre publication n'autorise. Cela ne prouve ni la disparition de copies
-  cachées ni la destruction des clés récupérables via les capsules historiques.
-  100% des commissions de protocole reviennent à
-  l'opérateur pour la maintenance et le développement du réseau.
-- **Transport P2P.** CYBOU P2P utilise TLS 1.3 avec l'échange hybride
-  `X25519MLKEM768`. Chaque nœud complet implémente le même protocole. L’identité de stockage
-  est prouvée à la demande ; les certificats de blocs prouvent seuls l’autorité PoA.
-- **Finalité.** Les commandes opérateur incluent un finalizer PoA. C'est une
-  finalité à opérateur unique, pas un consensus BFT ; chaque nœud vérifie les
-  blocs et les transitions d'état. L'autorité racine du réseau est la clé
-  publique de réseau (NetworkID = Network Public Key), dont la clé privée
-  reste strictement hors-ligne pour signer la genèse immuable une seule fois.
-  Les données publiques du réseau officiel (clé publique, genèse signée, état
-  initial et adresses bootstrap) doivent être compilées dans le client, sans
-  fichier réseau officiel chargé à l'exécution. La clé PoA autorisée par la
-  genèse est un rôle distinct de l'identité ordinaire `cybou.cybou` et signe les blocs.
-  Chaque nœud complet exécute lui-même chaque opération candidate. Il n'existe
-  ni AUTH ni Validation : le spam est payé en CYBOU (frais, loyer de stockage)
-  et par une preuve de travail de relais unique. Le PoA ré-exécute tout et reste
-  seul à finaliser.
-- **Admission réseau.** Les commandes réseau de `cybou` exigent une
+  cachÃ©es ni la destruction des clÃ©s rÃ©cupÃ©rables via les capsules historiques.
+  100% des commissions de protocole reviennent Ã 
+  l'opÃ©rateur pour la maintenance et le dÃ©veloppement du rÃ©seau.
+- **Transport P2P.** CYBOU P2P utilise TLS 1.3 avec l'Ã©change hybride
+  `X25519MLKEM768`. Chaque nÅ“ud complet implÃ©mente le mÃªme protocole. Lâ€™identitÃ© de stockage
+  est prouvÃ©e Ã  la demande ; les certificats de blocs prouvent seuls lâ€™autoritÃ© PoA.
+- **FinalitÃ©.** Les commandes opÃ©rateur incluent un finalizer PoA. C'est une
+  finalitÃ© Ã  opÃ©rateur unique, pas un consensus BFT ; chaque nÅ“ud vÃ©rifie les
+  blocs et les transitions d'Ã©tat. L'autoritÃ© racine du rÃ©seau est la clÃ©
+  publique de rÃ©seau (NetworkID = Network Public Key), dont la clÃ© privÃ©e
+  reste strictement hors-ligne pour signer la genÃ¨se immuable une seule fois.
+  Les donnÃ©es publiques du rÃ©seau officiel (clÃ© publique, genÃ¨se signÃ©e, Ã©tat
+  initial et adresses bootstrap) doivent Ãªtre compilÃ©es dans le client, sans
+  fichier rÃ©seau officiel chargÃ© Ã  l'exÃ©cution. La clÃ© PoA autorisÃ©e par la
+  genÃ¨se est un rÃ´le distinct de l'identitÃ© ordinaire `cybou.cybou` et signe les blocs.
+  Chaque nÅ“ud complet exÃ©cute lui-mÃªme chaque opÃ©ration candidate. Il n'existe
+  ni AUTH ni Validation : le spam est payÃ© en CYBOU (frais, loyer de stockage)
+  et par une preuve de travail de relais unique. Le PoA rÃ©-exÃ©cute tout et reste
+  seul Ã  finaliser.
+- **Admission rÃ©seau.** Les commandes rÃ©seau de `cybou` exigent une
   politique d'admission explicite. Le mode `france` utilise une base GeoIP
-  validée ; le développement utilise DEVNET avec les mêmes règles d’admission.
+  validÃ©e ; le dÃ©veloppement utilise DEVNET avec les mÃªmes rÃ¨gles dâ€™admission.
 
-Les vues Mail et Files sont conservées dans une base applicative chiffrée
-propre à chaque identité et peuvent être reconstruites à partir des publications
-finalisées et des fournisseurs. Une copie locale en cache n'est pas comptée
-comme réplique distante.
-Le code distingue les fournisseurs par leur StorageId prouvé : des clés distinctes
-ne prouvent pas des disques, machines ou opérateurs indépendants. La cible Beta
-de deux répliques distantes indépendantes reste à vérifier au-delà de ce comptage.
+Les vues Mail et Files sont conservÃ©es dans une base applicative chiffrÃ©e
+propre Ã  chaque identitÃ© et peuvent Ãªtre reconstruites Ã  partir des publications
+finalisÃ©es et des fournisseurs. Une copie locale en cache n'est pas comptÃ©e
+comme rÃ©plique distante.
+Le code distingue les fournisseurs par leur StorageId prouvÃ© : des clÃ©s distinctes
+ne prouvent pas des disques, machines ou opÃ©rateurs indÃ©pendants. La cible Beta
+de deux rÃ©pliques distantes indÃ©pendantes reste Ã  vÃ©rifier au-delÃ  de ce comptage.
 
-## État du code
+## Ã‰tat du code
 
-Le dépôt contient des implémentations natives pour le coffre et la récupération
-d'identité, les opérations d'identité, les noms `.cybou`, Wallet, Mail, Files,
-les publications chiffrées, le stockage et le transport P2P. Les tests natifs
+Le dÃ©pÃ´t contient des implÃ©mentations natives pour le coffre et la rÃ©cupÃ©ration
+d'identitÃ©, les opÃ©rations d'identitÃ©, les noms `.cybou`, Wallet, Mail, Files,
+les publications chiffrÃ©es, le stockage et le transport P2P. Les tests natifs
 couvrent notamment ces composants, l'admission des pairs et le cycle de vie du
-stockage ; le shell Qt dispose également de tests d'interface.
+stockage ; le shell Qt dispose Ã©galement de tests d'interface.
 
-Le client de bureau démarre actuellement avec les constantes publiques DEVNET compilées et
+Le client de bureau dÃ©marre actuellement avec les constantes publiques DEVNET compilÃ©es et
 n'active pas encore le finalizer dans le parcours utilisateur ; le finalizer
-PoA s'exécute séparément via la commande opérateur `node run --poa-key-file`. Le CLI fournit aussi des outils de
-diagnostic, de synchronisation et de vérification du stockage. Les
-fonctions de déploiement d'un réseau d'entreprise doivent encore être reliées
-à un parcours opérateur complet avant de pouvoir être présentées comme une
+PoA s'exÃ©cute sÃ©parÃ©ment via la commande opÃ©rateur `node run --poa-key-file`. Le CLI fournit aussi des outils de
+diagnostic, de synchronisation et de vÃ©rification du stockage. Les
+fonctions de dÃ©ploiement d'un rÃ©seau d'entreprise doivent encore Ãªtre reliÃ©es
+Ã  un parcours opÃ©rateur complet avant de pouvoir Ãªtre prÃ©sentÃ©es comme une
 fonction utilisable depuis le bureau.
 
-DEVNET est le profil officiel visé avec le bootstrap `51.255.46.58:29461`.
-MAINNET n'est pas encore provisionné et doit rester désactivé dans l'interface.
-Les fichiers réseau officiels externes ont été supprimés.
+DEVNET est le profil officiel visÃ© avec le bootstrap `51.255.46.58:29461`.
+MAINNET n'est pas encore provisionnÃ© et doit rester dÃ©sactivÃ© dans l'interface.
+Les fichiers rÃ©seau officiels externes ont Ã©tÃ© supprimÃ©s.
 
-Ce projet est en développement actif. Le code et ses tests ne constituent ni
-une certification, ni un audit de sécurité indépendant, ni une garantie
-d'aptitude à la production.
+Ce projet est en dÃ©veloppement actif. Le code et ses tests ne constituent ni
+une certification, ni un audit de sÃ©curitÃ© indÃ©pendant, ni une garantie
+d'aptitude Ã  la production.
 
 ## Compilation et tests
 
-Le projet utilise C++20, CMake et OpenSSL 3.5 ou ultérieur. Qt 6 est requis
-pour construire le client de bureau. Les dépendances natives et les étapes de
-compilation par plateforme sont détaillées dans [INSTALL.md](INSTALL.md).
+Le projet utilise C++20, CMake et OpenSSL 3.5 ou ultÃ©rieur. Qt 6 est requis
+pour construire le client de bureau. Les dÃ©pendances natives et les Ã©tapes de
+compilation par plateforme sont dÃ©taillÃ©es dans [INSTALL.md](INSTALL.md).
 
 La cible de tests protocole est `cybou-core-test`. Elle regroupe les suites
-natives sur l'identité, les clés, PoA, les publications, le stockage et le
-transport. Les tests Qt sont activés avec les options de compilation GUI et
-tests correspondantes. Les presets et cibles sont définis dans
+natives sur l'identitÃ©, les clÃ©s, PoA, les publications, le stockage et le
+transport. Les tests Qt sont activÃ©s avec les options de compilation GUI et
+tests correspondantes. Les presets et cibles sont dÃ©finis dans
 [`CMakePresets.json`](CMakePresets.json), [`CMakeLists.txt`](CMakeLists.txt) et
 [`src/test/CMakeLists.txt`](src/test/CMakeLists.txt).
 
 ## Parcours du code
 
-- [Client de bureau et démarrage réseau](src/qt/cyboudesktopcontroller.cpp)
+- [Client de bureau et dÃ©marrage rÃ©seau](src/qt/cyboudesktopcontroller.cpp)
 - [Adaptateur applicatif Mail et Files](src/qt/cyboucoreapplicationadapter.cpp)
-- [Runtime du nœud](src/cybou/node_runtime.cpp)
+- [Runtime du nÅ“ud](src/cybou/node_runtime.cpp)
 - [Commandes de `cybou`](src/cybou/cli/cybou_cli.cpp)
 - [Tests natifs](src/test/CMakeLists.txt)
 - [Tests du shell Qt](src/qt/test/cyboushelltests.cpp)
 
-## Contribution et sécurité
+## Contribution et sÃ©curitÃ©
 
 - [Contribuer au projet](CONTRIBUTING.md)
-- [Politique de sécurité](SECURITY.md)
-- [Licence](COPYING)
+- [Politique de sÃ©curitÃ©](SECURITY.md)
+- [Licence Apache-2.0](LICENSE) · [Notices](NOTICE.md) · [Bitcoin Core ancestry (MIT)](COPYING)
 
-Ne réutilisez pas les clés ou données de développement comme actifs de
-production. Signalez les problèmes de sécurité selon la procédure décrite dans
+Ne rÃ©utilisez pas les clÃ©s ou donnÃ©es de dÃ©veloppement comme actifs de
+production. Signalez les problÃ¨mes de sÃ©curitÃ© selon la procÃ©dure dÃ©crite dans
 `SECURITY.md`.
 
-© 2026 Stanislav Saveliev. Conçu en France.
+Â© 2026 Stanislav Saveliev. ConÃ§u en France.
 
 Offline network tooling is built explicitly with `-DBUILD_PROVISION_TOOL=ON`.
 `cybou-provision verify-devnet private/devnet` checks existing material without

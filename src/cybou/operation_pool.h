@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
-// Distributed under the MIT software license, see the accompanying file COPYING.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_OPERATION_POOL_H
 #define CYBOU_OPERATION_POOL_H

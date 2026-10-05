@@ -1,6 +1,5 @@
 # Copyright (c) 2026 CYBOU contributors
-# Distributed under the MIT software license, see the accompanying
-# file COPYING or https://opensource.org/license/mit/.
+# SPDX-License-Identifier: Apache-2.0
 
 # CYBOU native unit and integration test suites.
 add_executable(cybou-core-test

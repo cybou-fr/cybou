@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 #ifndef CYBOU_STORAGE_IO_SCHEDULER_H
 #define CYBOU_STORAGE_IO_SCHEDULER_H
 

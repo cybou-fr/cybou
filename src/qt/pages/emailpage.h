@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_EMAILPAGE_H
 #define CYBOU_QT_PAGES_EMAILPAGE_H
@@ -8,6 +7,7 @@
 #include <qt/cybouproduct.h>
 
 #include <QCoreApplication>
+#include <QHash>
 #include <QWidget>
 
 #include <functional>
@@ -18,6 +18,7 @@ class QLabel;
 class QLineEdit;
 class QMenu;
 class QListWidget;
+class QListWidgetItem;
 class QPushButton;
 class QStackedWidget;
 class QVBoxLayout;
@@ -91,6 +92,9 @@ private:
     QLabel* m_banner_text{nullptr};
     QPushButton* m_banner_action{nullptr};
     QListWidget* m_list{nullptr};
+    QHash<QString, QListWidgetItem*> m_rows;
+    QHash<QString, CybouMailItem> m_rendered_mail;
+    QHash<QString, QStringList> m_rendered_meta;
     QLabel* m_list_empty{nullptr};
     QStackedWidget* m_detail{nullptr};
     QWidget* m_detail_empty{nullptr};

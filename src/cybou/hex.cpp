@@ -1,4 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
+// SPDX-License-Identifier: Apache-2.0
 #include <cybou/hex.h>
 namespace cybou {
 std::optional<Hash256> ParseHash256UserHex(std::string_view input) { return Hash256::FromHex(input); }

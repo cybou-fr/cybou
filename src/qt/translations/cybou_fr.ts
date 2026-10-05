@@ -331,6 +331,14 @@
         <source>This message could not be moved. Try again.</source>
         <translation>Impossible de déplacer ce message. Réessayez.</translation>
     </message>
+    <message>
+        <source>These edits have not been sent. Start a new message: this draft is linked to an earlier saved publication.</source>
+        <translation>Ces modifications n’ont pas été envoyées. Rédigez un nouveau message : ce brouillon est lié à une publication déjà enregistrée.</translation>
+    </message>
+    <message>
+        <source>The local view could not be refreshed. Try again.</source>
+        <translation>La vue locale n’a pas pu être actualisée. Réessayez.</translation>
+    </message>
 </context>
 <context>
     <name>CybouDesktopController</name>
@@ -655,6 +663,10 @@
     <message>
         <source>Saving draft</source>
         <translation>Enregistrement du brouillon</translation>
+    </message>
+    <message>
+        <source>Local refresh was interrupted. Try again.</source>
+        <translation>L’actualisation locale a été interrompue. Réessayez.</translation>
     </message>
 </context>
 <context>
@@ -2144,6 +2156,38 @@ Objet : %3
     <message>
         <source>System Balance %1</source>
         <translation>Solde système %1</translation>
+    </message>
+    <message>
+        <source>Refresh</source>
+        <translation>Actualiser</translation>
+    </message>
+    <message>
+        <source>Refresh local activity</source>
+        <translation>Actualiser l’activité locale</translation>
+    </message>
+    <message>
+        <source>Read current local Mail and Files indexes. This does not force network sync or storage audits.</source>
+        <translation>Relire les index locaux du courrier et des fichiers. Cette action ne force ni la synchronisation réseau ni les audits de stockage.</translation>
+    </message>
+    <message>
+        <source>Current local activity</source>
+        <translation>Activité locale actuelle</translation>
+    </message>
+    <message>
+        <source>Local refresh is unavailable right now.</source>
+        <translation>L’actualisation locale est indisponible pour le moment.</translation>
+    </message>
+    <message>
+        <source>Refreshing local activity…</source>
+        <translation>Actualisation de l’activité locale…</translation>
+    </message>
+    <message>
+        <source>Refresh failed. Try again.</source>
+        <translation>L’actualisation a échoué. Réessayez.</translation>
+    </message>
+    <message>
+        <source>Local view refreshed at %1</source>
+        <translation>Vue locale actualisée le %1</translation>
     </message>
 </context>
 <context>
@@ -5032,6 +5076,46 @@ Enregistrer quand même ?</translation>
     <message>
         <source>Download is available when network protection is complete.</source>
         <translation>Le téléchargement sera disponible lorsque la protection réseau sera complète.</translation>
+    </message>
+    <message>
+        <source>Finding files and folders. Nothing uploaded yet.</source>
+        <translation>Recherche des fichiers et dossiers. Aucun élément téléversé.</translation>
+    </message>
+    <message>
+        <source>Finding files and folders: %1 found. Nothing uploaded yet.</source>
+        <translation>Recherche des fichiers et dossiers : %1 trouvés. Aucun élément téléversé.</translation>
+    </message>
+    <message>
+        <source>Preparing upload: %1 of %2 items queued. Network protection continues separately.</source>
+        <translation>Préparation : %1 éléments sur %2 mis en file. La protection réseau se poursuit séparément.</translation>
+    </message>
+    <message>
+        <source>%1 items queued for upload. %2 symbolic links skipped. Follow protection in Files.</source>
+        <translation>%1 éléments mis en file de téléversement. %2 liens symboliques ignorés. Suivez la protection dans Fichiers.</translation>
+    </message>
+    <message>
+        <source>Import stopped. %1 items already queued; remaining items were not uploaded.</source>
+        <translation>Import arrêté. %1 éléments déjà mis en file ; les autres n’ont pas été téléversés.</translation>
+    </message>
+    <message>
+        <source>Import cancelled. %1 items already queued; remaining items were not uploaded.</source>
+        <translation>Import annulé. %1 éléments déjà mis en file ; les autres n’ont pas été téléversés.</translation>
+    </message>
+    <message>
+        <source>A folder import is already in progress.</source>
+        <translation>Un import de dossier est déjà en cours.</translation>
+    </message>
+    <message>
+        <source>The folder could not be read. No items were uploaded.</source>
+        <translation>Le dossier n’a pas pu être lu. Aucun élément téléversé.</translation>
+    </message>
+    <message>
+        <source>The folder contains an unreadable or unsupported item. No items were uploaded.</source>
+        <translation>Le dossier contient un élément illisible ou non pris en charge. Aucun élément téléversé.</translation>
+    </message>
+    <message>
+        <source>This import exceeds 10,000 items or 64 folder levels. Select smaller folders. No items were uploaded.</source>
+        <translation>Cet import dépasse 10 000 éléments ou 64 niveaux de dossiers. Sélectionnez des dossiers plus petits. Aucun élément téléversé.</translation>
     </message>
 </context>
 <context>

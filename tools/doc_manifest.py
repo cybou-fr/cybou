@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
+
 """
 CYBOU documentation manifest generator and consistency checker.
 

@@ -1,6 +1,5 @@
 # Copyright (c) 2026 Stanislav Saveliev
-# Distributed under the MIT software license, see the accompanying
-# file COPYING or https://opensource.org/license/mit/.
+# SPDX-License-Identifier: Apache-2.0
 #
 # CYBOU desktop screenshot QA matrix (fixtures x widths x Windows scaling).
 # Usage: pwsh src/qt/test/run_screenshots.ps1 -Exe build\bin\cybou.exe -Out shots

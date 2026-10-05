@@ -1,6 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cybouapplication.h>
 

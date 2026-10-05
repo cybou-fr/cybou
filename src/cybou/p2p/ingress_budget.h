@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying file COPYING.
+// SPDX-License-Identifier: Apache-2.0
 #ifndef CYBOU_P2P_INGRESS_BUDGET_H
 #define CYBOU_P2P_INGRESS_BUDGET_H
 #include <chrono>

@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_TEST_CYBOUSHELLTESTS_H
 #define CYBOU_QT_TEST_CYBOUSHELLTESTS_H
@@ -70,6 +69,13 @@ private Q_SLOTS:
     void localMailCommandsWaitForCommit();
     void composerKeepsTextOnSaveAndSendFailure();
     void fileAdvancedSurvivesRefresh();
+    void fileRowsRetainInteractionAcrossUpdates();
+    void mailRowsRetainContextAndReplacement();
+    void mailReaderKeepsContextAndClearsOnLock();
+    void largeFileCatalogUpdatesInPlace();
+    void folderImportIsCancellableAndPreservesStructure();
+    void activityRefreshPreservesRows();
+    void localRefreshRejectsStaleReplies();
     void liveFeatureAvailabilityStayHonest();
     void fixtureLifecycleFollowsBackend();
     void filesShowLocalAvailability();

@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/pages/storagepage.h>
 
@@ -13,11 +12,18 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
+#include <QFile>
+#include <QScopedValueRollback>
 #include <QFileInfo>
 #include <QSettings>
+#include <QStyledItemDelegate>
+#include <QPainter>
+#include <QStyle>
+#include <QApplication>
 #include <QFrame>
 #include <QMouseEvent>
 #include <QInputDialog>
+#include <QItemSelectionModel>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QShortcut>
@@ -29,6 +35,9 @@
 #include <QLocale>
 #include <QMenu>
 #include <QProgressBar>
+#include <QProgressDialog>
+#include <QThread>
+#include <QElapsedTimer>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QStackedWidget>
@@ -45,6 +54,9 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <atomic>
+#include <filesystem>
+#include <vector>
 #include <utility>
 
 using namespace CybouUi;
@@ -52,8 +64,74 @@ using namespace CybouUi;
 namespace {
 
 constexpr int kIdRole = Qt::UserRole + 1;
+constexpr int kOrderRole = Qt::UserRole + 2;
+constexpr int kGlyphRole = Qt::UserRole + 3;
 
+class FileRow final : public QTreeWidgetItem {
+public:
+    using QTreeWidgetItem::QTreeWidgetItem;
+    bool operator<(const QTreeWidgetItem& other) const override
+    {
+        return data(0, kOrderRole).toInt() < other.data(0, kOrderRole).toInt();
+    }
+};
+
+class FileTile final : public QListWidgetItem {
+public:
+    using QListWidgetItem::QListWidgetItem;
+    bool operator<(const QListWidgetItem& other) const override
+    {
+        return data(kOrderRole).toInt() < other.data(kOrderRole).toInt();
+    }
+};
+
+constexpr int kStateRole = Qt::UserRole + 4;
+constexpr int kOperationRole = Qt::UserRole + 5;
 enum Column { NameColumn = 0, SizeColumn, ModifiedColumn, StatusColumn, ColumnCount };
+
+class FileStatusDelegate final : public QStyledItemDelegate {
+public:
+    explicit FileStatusDelegate(QObject* parent)
+        : QStyledItemDelegate{parent}, m_lock{glyphPixmap(Glyph::Lock, {12, 12},
+              CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))} {}
+
+    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const override
+    {
+        QStyleOptionViewItem background{option};
+        initStyleOption(&background, index);
+        const QString text = background.text;
+        background.text.clear();
+        const auto* style = background.widget ? background.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &background, painter, background.widget);
+        if (text.isEmpty()) return;
+        const auto state = static_cast<CybouContentState>(index.data(kStateRole).toInt());
+        const auto operation = static_cast<CybouOperationState>(index.data(kOperationRole).toInt());
+        const bool settled = !CybouProduct::itemPending(state, operation) &&
+            (state == CybouContentState::Protected || state == CybouContentState::Received);
+        painter->save();
+        painter->setClipRect(option.rect);
+        const int x = option.rect.left() + 3;
+        const int center = option.rect.center().y();
+        if (settled) painter->drawPixmap(x, center - 6, m_lock);
+        else {
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(CybouTheme::color(stateColor(state, operation)));
+            painter->drawEllipse(QPointF{x + 5.0, static_cast<double>(center)}, 3.0, 3.0);
+        }
+        QFont font{option.font};
+        font.setPixelSize(12);
+        painter->setFont(font);
+        painter->setPen(option.state & QStyle::State_Selected ? option.palette.highlightedText().color()
+            : CybouTheme::color(state == CybouContentState::NeedsAttention ? CybouTheme::ROSE : CybouTheme::TEXT_SECONDARY));
+        const QRect caption{x + 17, option.rect.top(), std::max(0, option.rect.width() - 23), option.rect.height()};
+        painter->drawText(caption, Qt::AlignLeft | Qt::AlignVCenter,
+            QFontMetrics{font}.elidedText(text, Qt::ElideRight, caption.width()));
+        painter->restore();
+    }
+private:
+    const QPixmap m_lock;
+};
 
 QString ViewName(StoragePage::View view)
 {
@@ -283,11 +361,13 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_table->setObjectName(QStringLiteral("filesTable"));
     m_table->setAccessibleName(tr("Files"));
     m_table->setColumnCount(ColumnCount);
+    m_table->setItemDelegateForColumn(StatusColumn, new FileStatusDelegate{m_table});
     m_table->setHeaderLabels({tr("Name"), tr("Size"), tr("Modified"), tr("Status")});
     m_table->setRootIsDecorated(false);
     // Rename is an explicit action (F2 / context menu), never an inline editor on click.
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setUniformRowHeights(true);
+    m_table->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_table->setFrameShape(QFrame::NoFrame);
     m_table->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_table->setSelectionMode(QAbstractItemView::ExtendedSelection);
@@ -320,6 +400,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_tiles->setResizeMode(QListView::Adjust);
     m_tiles->setMovement(QListView::Static);
     m_tiles->setWrapping(true);
+    m_tiles->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_tiles->setSpacing(10);
     m_tiles->setIconSize({48, 48});
     m_tiles->setGridSize({164, 128});
@@ -436,8 +517,8 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         rebuild();
         rebuildDetails();
     });
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshChrome(); });
-    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshChrome(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshChrome(); if (m_import) advanceImport(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshChrome(); if (m_import) advanceImport(); });
 
     m_nav->setCurrentRow(0);
     refreshChrome();
@@ -623,10 +704,25 @@ void StoragePage::openFolder(const QString& folder_id)
 
 void StoragePage::setGridMode(bool grid)
 {
+    const QStringList selection = selectedIds();
+    const QString current = m_grid
+        ? (m_tiles->currentItem() ? m_tiles->currentItem()->data(kIdRole).toString() : QString{})
+        : (m_table->currentItem() ? m_table->currentItem()->data(NameColumn, kIdRole).toString() : QString{});
+    const QSignalBlocker table_blocker{m_table}, grid_blocker{m_tiles};
     m_grid = grid;
+    if (grid) {
+        m_tiles->clearSelection();
+        if (m_grid_items.contains(current)) m_tiles->setCurrentItem(m_grid_items.value(current), QItemSelectionModel::NoUpdate);
+        for (const auto& id : selection) if (m_grid_items.contains(id)) m_grid_items.value(id)->setSelected(true);
+    } else {
+        m_table->clearSelection();
+        if (m_rows.contains(current)) m_table->setCurrentItem(m_rows.value(current), 0, QItemSelectionModel::NoUpdate);
+        for (const auto& id : selection) if (m_rows.contains(id)) m_rows.value(id)->setSelected(true);
+    }
     m_list_toggle->setChecked(!grid);
     m_grid_toggle->setChecked(grid);
     m_views->setCurrentWidget(grid ? static_cast<QWidget*>(m_tiles) : m_table);
+    refreshSelectionBar();
 }
 
 QStringList StoragePage::visibleIds() const
@@ -646,6 +742,7 @@ QVector<CybouFileItem> StoragePage::collect() const
 {
     const QString needle = m_search->text().trimmed();
     QVector<CybouFileItem> items;
+    if (m_model->status().identity_state != CybouIdentityState::Active) return items;
     for (const auto& item : m_model->fileItems()) {
         if (!needle.isEmpty()) {
             // Search covers the whole private catalog, not just this folder.
@@ -689,50 +786,105 @@ QVector<CybouFileItem> StoragePage::collect() const
 
 void StoragePage::rebuild()
 {
+    if (m_model->status().identity_state != CybouIdentityState::Active) {
+        m_folder.clear();
+        m_press_id.clear();
+        m_details_id.clear();
+        m_details_advanced = false;
+        m_details->hide();
+        const QSignalBlocker search_blocker{m_search};
+        m_search->clear();
+    }
     const auto items = collect();
     const bool online = m_model->status().online;
-    m_visible.clear();
-    m_table->clear();
-    m_tiles->clear();
-    for (const auto& file : items) {
-        m_visible << file.id;
-        // Every stored item is encrypted: a small lock marks it (folders included).
-        const QColor lock = CybouTheme::color(CybouTheme::BRAND_TEAL_DARK);
-        const QIcon icon{withLockBadge(glyphPixmap(FileGlyph(file), {20, 20},
-            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY)), lock)};
-        const QString status = CybouProduct::fileStatusText(file, online,
-            m_model->displayedOperationState(file.operation_id, file.operation_state));
-
-        auto* row = new QTreeWidgetItem{m_table};
-        row->setIcon(NameColumn, icon);
-        row->setText(NameColumn, file.starred ? file.name + QStringLiteral("  ★") : file.name);
-        row->setData(NameColumn, kIdRole, file.id);
-        row->setToolTip(NameColumn, file.name);
-        if (file.folder) {
-            int children = 0;
-            for (const auto& other : m_model->fileItems()) {
-                if (!other.trashed && other.parent_id == file.id) ++children;
-            }
-            row->setText(SizeColumn, children == 1 ? tr("1 item") : tr("%1 items").arg(children));
-        } else {
-            row->setText(SizeColumn, CybouProduct::sizeText(file.logical_size));
-        }
-        row->setText(ModifiedColumn, ModifiedText(file.modified));
-        // Every file shows where it stands (Protected included); folders have no state.
-        if (!status.isEmpty())
-            m_table->setItemWidget(row, StatusColumn, StateChip(file.state, status, m_table,
-                m_model->displayedOperationState(file.operation_id, file.operation_state)));
-        row->setData(StatusColumn, Qt::AccessibleTextRole, status);
-        row->setForeground(SizeColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
-        row->setForeground(ModifiedColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
-
-        auto* tile = new QListWidgetItem{QIcon{withLockBadge(glyphPixmap(FileGlyph(file), {48, 48},
-            CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY)), lock)},
-            status.isEmpty() ? file.name : QStringLiteral("%1\n%2").arg(file.name, status), m_tiles};
-        tile->setData(kIdRole, file.id);
-        tile->setToolTip(file.name);
-        tile->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    const QSignalBlocker table_blocker{m_table}, grid_blocker{m_tiles};
+    const int table_scroll = m_table->verticalScrollBar()->value();
+    const int grid_scroll = m_tiles->verticalScrollBar()->value();
+    auto* top = m_table->itemAt(QPoint{1, 0});
+    const QString anchor = top ? top->data(NameColumn, kIdRole).toString() : QString{};
+    const int anchor_offset = top ? m_table->visualItemRect(top).top() : 0;
+    QStringList next_visible;
+    QSet<QString> visible;
+    for (const auto& file : items) { next_visible.append(file.id); visible.insert(file.id); }
+    const bool reordered = next_visible != m_visible;
+    QHash<QString, int> children;
+    for (const auto& file : m_model->fileItems()) if (!file.trashed) ++children[file.parent_id];
+    for (auto it = m_rows.begin(); it != m_rows.end();) {
+        if (visible.contains(it.key())) { ++it; continue; }
+        delete it.value();
+        delete m_grid_items.take(it.key());
+        it = m_rows.erase(it);
     }
+    QHash<int, QPair<QIcon, QIcon>> icons;
+    int position{0};
+    for (const auto& file : items) {
+        auto* row = m_rows.value(file.id);
+        auto* tile = m_grid_items.value(file.id);
+        if (!row) {
+            row = new FileRow{m_table};
+            row->setData(NameColumn, kIdRole, file.id);
+            row->setForeground(SizeColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
+            row->setForeground(ModifiedColumn, CybouTheme::color(CybouTheme::TEXT_SECONDARY));
+            m_rows.insert(file.id, row);
+            tile = new FileTile{m_tiles};
+            tile->setData(kIdRole, file.id);
+            tile->setTextAlignment(Qt::AlignHCenter | Qt::AlignTop);
+            m_grid_items.insert(file.id, tile);
+        }
+        const int glyph = static_cast<int>(FileGlyph(file));
+        if (row->data(NameColumn, kGlyphRole) != QVariant{glyph}) {
+            if (!icons.contains(glyph)) {
+                const QColor color = CybouTheme::color(file.folder ? CybouTheme::BLUE : CybouTheme::TEXT_SECONDARY);
+                const QColor lock = CybouTheme::color(CybouTheme::BRAND_TEAL_DARK);
+                icons.insert(glyph, {QIcon{withLockBadge(glyphPixmap(FileGlyph(file), {20, 20}, color), lock)},
+                    QIcon{withLockBadge(glyphPixmap(FileGlyph(file), {48, 48}, color), lock)}});
+            }
+            row->setIcon(NameColumn, icons.value(glyph).first);
+            tile->setIcon(icons.value(glyph).second);
+            row->setData(NameColumn, kGlyphRole, glyph);
+        }
+        if (row->data(NameColumn, kOrderRole).toInt() != position || !row->data(NameColumn, kOrderRole).isValid())
+            row->setData(NameColumn, kOrderRole, position);
+        if (tile->data(kOrderRole).toInt() != position || !tile->data(kOrderRole).isValid())
+            tile->setData(kOrderRole, position);
+        ++position;
+        const auto operation = m_model->displayedOperationState(file.operation_id, file.operation_state);
+        const QString status = CybouProduct::fileStatusText(file, online, operation);
+        const QString name = file.starred ? file.name + QStringLiteral("  ★") : file.name;
+        const int count = children.value(file.id);
+        const QString size = file.folder ? (count == 1 ? tr("1 item") : tr("%1 items").arg(count))
+                                         : CybouProduct::sizeText(file.logical_size);
+        const QString modified = ModifiedText(file.modified);
+        if (row->text(NameColumn) != name) row->setText(NameColumn, name);
+        if (row->toolTip(NameColumn) != file.name) row->setToolTip(NameColumn, file.name);
+        if (row->text(SizeColumn) != size) row->setText(SizeColumn, size);
+        if (row->text(ModifiedColumn) != modified) row->setText(ModifiedColumn, modified);
+        if (row->text(StatusColumn) != status) row->setText(StatusColumn, status);
+        if (row->data(StatusColumn, kStateRole).toInt() != static_cast<int>(file.state) || !row->data(StatusColumn, kStateRole).isValid())
+            row->setData(StatusColumn, kStateRole, static_cast<int>(file.state));
+        if (row->data(StatusColumn, kOperationRole).toInt() != static_cast<int>(operation) || !row->data(StatusColumn, kOperationRole).isValid())
+            row->setData(StatusColumn, kOperationRole, static_cast<int>(operation));
+        if (row->toolTip(StatusColumn) != status) row->setToolTip(StatusColumn, status);
+        if (row->data(StatusColumn, Qt::AccessibleTextRole).toString() != status)
+            row->setData(StatusColumn, Qt::AccessibleTextRole, status);
+        const QString tile_text = status.isEmpty() ? file.name : QStringLiteral("%1\n%2").arg(file.name, status);
+        if (tile->text() != tile_text) tile->setText(tile_text);
+        if (tile->toolTip() != file.name) tile->setToolTip(file.name);
+    }
+    if (reordered) {
+        // Sorting retained rows preserves Qt's current/selected persistent indexes.
+        m_table->sortItems(NameColumn, Qt::AscendingOrder);
+        m_table->header()->setSortIndicator(m_sort_column, m_sort_descending ? Qt::DescendingOrder : Qt::AscendingOrder);
+        m_tiles->sortItems(Qt::AscendingOrder);
+        m_table->doItemsLayout();
+        m_tiles->doItemsLayout();
+    }
+    m_visible = std::move(next_visible);
+    if (reordered && !anchor.isEmpty() && m_rows.contains(anchor)) {
+        m_table->scrollToItem(m_rows.value(anchor), QAbstractItemView::PositionAtTop);
+        m_table->verticalScrollBar()->setValue(m_table->verticalScrollBar()->value() - anchor_offset);
+    } else m_table->verticalScrollBar()->setValue(table_scroll);
+    m_tiles->verticalScrollBar()->setValue(grid_scroll);
 
     const bool identity = m_model->status().identity_state == CybouIdentityState::Active;
     QString empty;
@@ -915,24 +1067,177 @@ void StoragePage::promptUploadFolder()
     uploadPaths({directory}, m_view == View::MyFiles ? m_folder : QString{});
 }
 
-void StoragePage::uploadPaths(const QStringList& paths, const QString& parent)
+struct StoragePage::FolderImport {
+    struct Entry { QString path; QString name; int parent{-1}; bool folder{false}; };
+    std::atomic<bool> cancelled{false};
+    std::atomic<bool> discovered{false};
+    std::atomic<int> count{0};
+    // Only the discovery worker writes these until discovered's release/acquire handoff.
+    std::vector<Entry> entries;
+    QString error;
+    QString account;
+    QString destination;
+    QVector<QString> ids;
+    int queued{0};
+    bool advancing{false};
+    int skipped_links{0};
+    QPointer<QProgressDialog> dialog;
+    QPointer<QTimer> timer;
+};
+
+StoragePage::~StoragePage()
 {
-    for (const auto& path : paths) {
-        const QFileInfo info{path};
-        if (info.isFile()) {
-            m_model->requestFileUpload(path, parent);
-        } else if (info.isDir() && !info.isSymLink()) {
-            // A folder keeps its structure: an encrypted folder per directory.
-            const QString folder_id = m_model->requestCreateFolder(info.fileName(), parent);
-            if (folder_id.isEmpty()) continue;
-            QStringList children;
-            const QDir dir{path};
-            for (const auto& entry : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
-                children << entry.absoluteFilePath();
-            }
-            uploadPaths(children, folder_id);
+    if (m_import) m_import->cancelled.store(true);
+}
+
+void StoragePage::finishImport(const QString& message)
+{
+    auto job = std::exchange(m_import, {});
+    if (!job) return;
+    job->cancelled.store(true);
+    if (job->timer) { job->timer->stop(); job->timer->deleteLater(); }
+    if (job->dialog) { job->dialog->hide(); job->dialog->deleteLater(); }
+    if (!message.isEmpty()) m_model->notify(message);
+}
+
+void StoragePage::advanceImport()
+{
+    const auto job = m_import;
+    if (!job) return;
+    if (m_model->status().identity_state != CybouIdentityState::Active ||
+        m_model->status().account_id != job->account || !m_model->featureAvailability().files) {
+        finishImport(tr("Import stopped. %1 items already queued; remaining items were not uploaded.").arg(job->queued));
+        return;
+    }
+    if (job->advancing) return;
+    QScopedValueRollback<bool> advancing{job->advancing, true};
+    if (!job->destination.isEmpty()) {
+        const auto* destination = m_model->fileItem(job->destination);
+        if (!destination || !destination->folder || destination->trashed) {
+            finishImport(tr("Import stopped. %1 items already queued; remaining items were not uploaded.").arg(job->queued));
+            return;
         }
     }
+    if (!job->discovered.load(std::memory_order_acquire)) {
+        job->dialog->setLabelText(tr("Finding files and folders: %1 found. Nothing uploaded yet.").arg(job->count.load()));
+        return;
+    }
+    if (!job->error.isEmpty()) { finishImport(job->error); return; }
+    const int total = static_cast<int>(job->entries.size());
+    job->dialog->setRange(0, std::max(1, total));
+    QElapsedTimer budget;
+    budget.start();
+    QPointer<StoragePage> guard{this};
+    for (int batch{0}; job->queued < total && batch < 8 && budget.elapsed() < 8; ++batch) {
+        const auto entry = job->entries[job->queued];
+        const QString parent = entry.parent < 0 ? job->destination : job->ids[entry.parent];
+        ++job->queued; // Count ownership handoff before reentrant model signals.
+        const QString id = entry.folder ? m_model->requestCreateFolder(entry.name, parent)
+                                       : m_model->requestFileUpload(entry.path, parent);
+        if (!guard || job->cancelled.load() || guard->m_import != job) return;
+        if (id.isEmpty()) {
+            --job->queued;
+            finishImport(tr("Import stopped. %1 items already queued; remaining items were not uploaded.").arg(job->queued));
+            return;
+        }
+        job->ids.append(id);
+    }
+    job->dialog->setValue(job->queued);
+    if (!guard || job->cancelled.load() || guard->m_import != job) return;
+    job->dialog->setLabelText(tr("Preparing upload: %1 of %2 items queued. Network protection continues separately.").arg(job->queued).arg(total));
+    if (job->queued == total) {
+        finishImport(tr("%1 items queued for upload. %2 symbolic links skipped. Follow protection in Files.").arg(total).arg(job->skipped_links));
+    } else job->timer->setInterval(0);
+}
+
+void StoragePage::uploadPaths(const QStringList& paths, const QString& parent)
+{
+    if (paths.isEmpty() || !m_model->featureAvailability().files ||
+        m_model->status().identity_state != CybouIdentityState::Active) return;
+    if (m_import) { m_model->notify(tr("A folder import is already in progress.")); return; }
+    // Small plain-file selections retain their immediate existing behavior.
+    if (paths.size() <= 64 && std::none_of(paths.begin(), paths.end(), [](const QString& path) { return QFileInfo{path}.isDir(); })) {
+        for (const auto& path : paths) if (!QFileInfo{path}.isSymLink()) m_model->requestFileUpload(path, parent);
+        return;
+    }
+    if (paths.size() > 10000) {
+        m_model->notify(tr("This import exceeds 10,000 items or 64 folder levels. Select smaller folders. No items were uploaded."));
+        return;
+    }
+    const auto job = std::make_shared<FolderImport>();
+    job->account = m_model->status().account_id;
+    job->destination = parent;
+    job->dialog = new QProgressDialog(tr("Finding files and folders. Nothing uploaded yet."), tr("Cancel"), 0, 0, this);
+    job->dialog->setProperty("cybouId", QStringLiteral("folderImportProgress"));
+    job->dialog->setWindowTitle(tr("Upload folder"));
+    job->dialog->setWindowModality(Qt::NonModal);
+    job->dialog->setAutoClose(false);
+    job->dialog->setAutoReset(false);
+    job->dialog->setMinimumDuration(0);
+    m_import = job;
+    connect(job->dialog, &QProgressDialog::canceled, this, [this, job] {
+        if (m_import == job) finishImport(tr("Import cancelled. %1 items already queued; remaining items were not uploaded.").arg(job->queued));
+    });
+    job->timer = new QTimer(this);
+    job->timer->setInterval(100);
+    connect(job->timer, &QTimer::timeout, this, [this] { advanceImport(); });
+    job->timer->start();
+    // Lifetime belongs to the worker, not the page. Destroying a page cancels
+    // without joining a potentially slow filesystem call on the GUI thread.
+    auto* worker = QThread::create([job, paths] {
+        try {
+            struct Pending { QString path; int parent; int depth; };
+            std::vector<Pending> pending;
+            for (auto it = paths.crbegin(); it != paths.crend(); ++it) pending.push_back({*it, -1, 0});
+            constexpr int limit{10000};
+            while (!pending.empty() && !job->cancelled.load()) {
+                const auto next = pending.back();
+                pending.pop_back();
+#ifdef Q_OS_WIN
+                const std::filesystem::path path{QDir::toNativeSeparators(next.path).toStdWString()};
+#else
+                const std::filesystem::path path{QFile::encodeName(next.path).constData()};
+#endif
+                std::error_code ec;
+                const auto status = std::filesystem::symlink_status(path, ec);
+                if (ec) { job->error = tr("The folder could not be read. No items were uploaded."); break; }
+                if (std::filesystem::is_symlink(status)) { ++job->skipped_links; continue; }
+                const bool folder = std::filesystem::is_directory(status);
+                if (!folder && !std::filesystem::is_regular_file(status)) {
+                    job->error = tr("The folder contains an unreadable or unsupported item. No items were uploaded."); break;
+                }
+                if (job->entries.size() >= limit || next.depth > 64) {
+                    job->error = tr("This import exceeds 10,000 items or 64 folder levels. Select smaller folders. No items were uploaded."); break;
+                }
+                const int index = static_cast<int>(job->entries.size());
+                job->entries.push_back({next.path, QFileInfo{next.path}.fileName(), next.parent, folder});
+                job->count.store(index + 1);
+                if (!folder) continue;
+                std::filesystem::directory_iterator cursor{path, ec}, end;
+                if (ec) { job->error = tr("The folder could not be read. No items were uploaded."); break; }
+                for (; cursor != end && !job->cancelled.load(); cursor.increment(ec)) {
+                    if (ec) break;
+#ifdef Q_OS_WIN
+                    const QString child = QString::fromStdWString(cursor->path().wstring());
+#else
+                    const QString child = QFile::decodeName(cursor->path().string().c_str());
+#endif
+                    pending.push_back({child, index, next.depth + 1});
+                    if (pending.size() + job->entries.size() > limit) {
+                        job->error = tr("This import exceeds 10,000 items or 64 folder levels. Select smaller folders. No items were uploaded."); break;
+                    }
+                }
+                if (ec) job->error = tr("The folder could not be read. No items were uploaded.");
+                if (!job->error.isEmpty()) break;
+            }
+        } catch (const std::exception&) {
+            job->error = tr("The folder could not be read. No items were uploaded.");
+        }
+        job->discovered.store(true, std::memory_order_release);
+    });
+    connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+    worker->start();
+    job->dialog->show();
 }
 
 void StoragePage::promptRename(const QString& id)

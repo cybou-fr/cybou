@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/pages/emailpage.h>
 
@@ -29,6 +28,8 @@
 #include <QResizeEvent>
 #include <QShortcut>
 #include <QShowEvent>
+#include <QScrollBar>
+#include <QSet>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -42,6 +43,12 @@ namespace {
 
 /** Window width at which Mail shows folders, list and reader together. */
 constexpr int kThreePaneWindowWidth = 1400;
+constexpr int kRankRole = Qt::UserRole + 1;
+class MessageItem final : public QListWidgetItem {
+public:
+    using QListWidgetItem::QListWidgetItem;
+    bool operator<(const QListWidgetItem& other) const override { return data(kRankRole).toInt() < other.data(kRankRole).toInt(); }
+};
 
 QRgb PeerColor(const QString& peer)
 {
@@ -83,7 +90,7 @@ Glyph ViewGlyph(EmailPage::View view)
 /** Peer shown in a list row: sender for received mail, recipient otherwise. */
 QString RowPeer(const CybouMailItem& item)
 {
-    return item.folder == CybouMailFolder::Sent || item.folder == CybouMailFolder::Drafts
+    return item.outgoing || item.folder == CybouMailFolder::Sent || item.folder == CybouMailFolder::Drafts
         ? EmailPage::tr("To: %1").arg(item.to_name) : item.from_name;
 }
 
@@ -142,8 +149,7 @@ QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool 
     marker->setStyleSheet(item.unread ? QStringLiteral("background: %1; border-radius: 4px;").arg(CybouTheme::color(CybouTheme::MINT).name())
                                       : QStringLiteral("background: transparent;"));
     layout->addWidget(marker, 0, Qt::AlignVCenter);
-    const QString peer = item.folder == CybouMailFolder::Inbox || item.folder == CybouMailFolder::Archive ||
-            item.folder == CybouMailFolder::Trash ? item.from_name : item.to_name;
+    const QString peer = item.outgoing || item.folder == CybouMailFolder::Sent || item.draft ? item.to_name : item.from_name;
     layout->addWidget(Avatar(peer.left(1), PeerColor(peer), row, 32), 0, Qt::AlignVCenter);
 
     auto* text = new QVBoxLayout;
@@ -292,6 +298,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
 
     m_list = new QListWidget{m_list_pane};
     m_list->setObjectName(QStringLiteral("messageList"));
+    m_list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_list->setAccessibleName(tr("Messages"));
     m_list->setFrameShape(QFrame::NoFrame);
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -378,9 +385,15 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::contactsChanged, this, [this] { rebuildContacts(); });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
-        if (m_current_id != old_id) return;
-        m_current_id = new_id;
-        rebuildList();
+        if (m_current_id == old_id) m_current_id = new_id;
+        if (m_press_id == old_id) m_press_id = new_id;
+        if (auto* row = m_rows.take(old_id)) {
+            if (auto* duplicate = m_rows.take(new_id)) delete duplicate;
+            row->setData(Qt::UserRole, new_id);
+            m_rows.insert(new_id, row);
+        }
+        m_rendered_mail.remove(old_id);
+        m_rendered_meta.remove(old_id);
     });
 
     // Familiar mail shortcuts; each has a visible button equivalent.
@@ -667,9 +680,7 @@ QStringList EmailPage::visibleMessageIds() const
 
 void EmailPage::rebuildFolders()
 {
-    const int current = m_folders->currentRow();
     const QSignalBlocker blocker{m_folders};
-    m_folders->clear();
     int drafts = 0;
     for (const auto& item : m_model->mailItems()) {
         if (item.folder == CybouMailFolder::Drafts) ++drafts;
@@ -679,7 +690,18 @@ void EmailPage::rebuildFolders()
         int count = 0;
         if (view == View::Inbox) count = m_model->unreadMailCount();
         if (view == View::Drafts) count = drafts;
-        auto* item = new QListWidgetItem{m_folders};
+        auto* item = m_folders->item(i);
+        if (item) {
+            item->setData(Qt::AccessibleTextRole, count > 0 ? tr("%1, %2").arg(ViewName(view)).arg(count) : ViewName(view));
+            auto* row = m_folders->itemWidget(item);
+            auto* badge = row->findChild<QLabel*>(QStringLiteral("folderCount"));
+            badge->setText(QString::number(count));
+            badge->setVisible(count > 0);
+            auto* name = row->findChild<QLabel*>(QStringLiteral("folderName"));
+            name->setStyleSheet(QStringLiteral("color: %1; background: transparent;%2").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name(), count > 0 ? QStringLiteral(" font-weight: 700;") : QString{}));
+            continue;
+        }
+        item = new QListWidgetItem{m_folders};
         item->setData(Qt::AccessibleTextRole, count > 0 ? tr("%1, %2").arg(ViewName(view)).arg(count) : ViewName(view));
         item->setSizeHint(QSize{0, 40});
         auto* row = new QWidget{m_folders};
@@ -691,17 +713,19 @@ void EmailPage::rebuildFolders()
         icon->setPixmap(glyphPixmap(ViewGlyph(view), {18, 18}, CybouTheme::color(CybouTheme::TEXT_SECONDARY)));
         layout->addWidget(icon);
         auto* name = new QLabel{ViewName(view), row};
+        name->setObjectName(QStringLiteral("folderName"));
         name->setStyleSheet(QStringLiteral("color: %1; background: transparent;%2").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name(), count > 0 ? QStringLiteral(" font-weight: 700;") : QString{}));
         layout->addWidget(name, 1);
-        if (count > 0) {
+        {
             auto* badge = new QLabel{QString::number(count), row};
             badge->setObjectName(QStringLiteral("folderCount"));
+            badge->setVisible(count > 0);
             badge->setStyleSheet(QStringLiteral("font-weight: 700; color: %1;").arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
             layout->addWidget(badge);
         }
         m_folders->setItemWidget(item, row);
     }
-    m_folders->setCurrentRow(current < 0 ? 0 : current);
+    m_folders->setCurrentRow(static_cast<int>(m_view));
 }
 
 void EmailPage::rebuildList()
@@ -711,19 +735,64 @@ void EmailPage::rebuildList()
     for (const auto& item : m_model->mailItems()) {
         if (inView(item) && matches(item, needle)) items.append(item);
     }
-    std::sort(items.begin(), items.end(), [](const CybouMailItem& a, const CybouMailItem& b) { return a.time > b.time; });
+    std::sort(items.begin(), items.end(), [](const CybouMailItem& a, const CybouMailItem& b) { return a.time != b.time ? a.time > b.time : a.id < b.id; });
     m_empty_trash->setVisible(m_view == View::Trash && !items.isEmpty() && needle.isEmpty());
 
-    m_list->clear();
-    for (const auto& mail : items) {
-        auto* item = new QListWidgetItem{m_list};
-        item->setData(Qt::UserRole, mail.id);
-        item->setData(Qt::AccessibleTextRole, tr("%1, %2").arg(RowPeer(mail), mail.subject));
-        item->setSizeHint(QSize{0, 62});
-        m_list->setItemWidget(item, MailRow(mail, m_model->displayedOperationState(mail.operation_id, mail.operation_state),
-            m_model->status().online, m_list));
-        if (mail.id == m_current_id) m_list->setCurrentItem(item);
+    if (m_model->status().identity_state != CybouIdentityState::Active) {
+        items.clear();
+        m_current_id.clear();
+        m_press_id.clear();
+        const QSignalBlocker search_blocker{m_search};
+        m_search->clear();
     }
+    const QSignalBlocker blocker{m_list};
+    const int scroll = m_list->verticalScrollBar()->value();
+    auto* top = m_list->itemAt(QPoint{1, 0});
+    const QString anchor = top ? top->data(Qt::UserRole).toString() : QString{};
+    const int offset = top ? m_list->visualItemRect(top).top() : 0;
+    QStringList order, previous;
+    for (int i{0}; i < m_list->count(); ++i) previous.append(m_list->item(i)->data(Qt::UserRole).toString());
+    QSet<QString> visible;
+    for (const auto& mail : items) { order.append(mail.id); visible.insert(mail.id); }
+    for (auto it = m_rows.begin(); it != m_rows.end();) {
+        if (visible.contains(it.key())) { ++it; continue; }
+        m_rendered_mail.remove(it.key());
+        m_rendered_meta.remove(it.key());
+        delete it.value();
+        it = m_rows.erase(it);
+    }
+    int rank{0};
+    for (const auto& mail : items) {
+        auto* item = m_rows.value(mail.id);
+        if (!item) {
+            item = new MessageItem{m_list};
+            item->setData(Qt::UserRole, mail.id);
+            item->setSizeHint(QSize{0, 62});
+            m_rows.insert(mail.id, item);
+        }
+        if (!item->data(kRankRole).isValid() || item->data(kRankRole).toInt() != rank) item->setData(kRankRole, rank);
+        ++rank;
+        const auto operation = m_model->displayedOperationState(mail.operation_id, mail.operation_state);
+        const QStringList meta{QString::number(static_cast<int>(operation)), QString::number(m_model->status().online), shortTime(mail.time)};
+        if (!m_rendered_mail.contains(mail.id) || m_rendered_mail.value(mail.id) != mail || m_rendered_meta.value(mail.id) != meta) {
+            item->setData(Qt::AccessibleTextRole, tr("%1, %2%3").arg(RowPeer(mail), mail.subject,
+                mail.unread ? tr(", unread") : QString{}));
+            // Qt deletes a replaced index widget later; hide it immediately so
+            // it cannot paint over the new row during the current event turn.
+            if (auto* previous = m_list->itemWidget(item)) previous->hide();
+            m_list->setItemWidget(item, MailRow(mail, operation, m_model->status().online, m_list));
+            m_rendered_mail.insert(mail.id, mail);
+            m_rendered_meta.insert(mail.id, meta);
+        }
+    }
+    if (order != previous) {
+        m_list->sortItems(Qt::AscendingOrder);
+        m_list->doItemsLayout();
+    }
+    if (order != previous && m_rows.contains(anchor)) {
+        m_list->scrollToItem(m_rows.value(anchor), QAbstractItemView::PositionAtTop);
+        m_list->verticalScrollBar()->setValue(m_list->verticalScrollBar()->value() - offset);
+    } else m_list->verticalScrollBar()->setValue(scroll);
     const bool identity = m_model->status().identity_state == CybouIdentityState::Active;
     m_list_empty->setText(!identity ? QString{}
         : !needle.isEmpty() ? tr("No messages match “%1”.").arg(needle)

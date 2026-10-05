@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
+
 """CYBOU DEVNET battle test: a real multi-site network under load, with a report.
 
 Topology (all ordinary Full Nodes on the current DEVNET):

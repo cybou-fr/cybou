@@ -673,3 +673,20 @@ A Beta candidate passes when a new user can, without technical guidance:
 
 The same flow must remain usable at 1040, 1280, 1600, and 1920 pixel desktop
 widths and at common Windows DPI scaling values.
+
+## Stable mailbox presentation
+
+Reconcile visible messages by semantic ID. Retain unaffected row widgets,
+selection, keyboard current item and scroll anchor; update only changed rows.
+Folder targets and count labels remain stable during refresh/drag. Temporary
+outgoing ID replacement transfers interaction context before removing the old
+projection. Filtering/removal drops invisible selections; lock clears private
+rows, search and interaction state. Outgoing mail shows its recipient even in
+Archive/Trash. A row refresh does not commit a move or imply Sent/protection.
+
+Reader refresh retains body text selection, scroll and unchanged attachment
+controls when unrelated messages/status change. Switching messages resets reader
+scroll/selection. Bodies and subjects render as plain text. Lock or removal
+clears private reader labels/attachments and closes scoped Security Details;
+unrelated updates keep that dialog open. Details remain an opening-time
+inspection rather than a claim of fresh network evidence.

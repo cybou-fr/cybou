@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUPRODUCT_H
 #define CYBOU_QT_CYBOUPRODUCT_H
@@ -225,6 +224,7 @@ struct CybouActivityItem {
     QString title;
     QString subtitle;
     QDateTime time;
+    QString id;
     bool operator==(const CybouActivityItem&) const = default;
 };
 

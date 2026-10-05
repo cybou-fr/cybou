@@ -1,6 +1,5 @@
-# Copyright (c) 2023-present The Bitcoin Core developers
-# Distributed under the MIT software license, see the accompanying
-# file COPYING or https://opensource.org/license/mit/.
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
 
 # This file is part of the transition from Autotools to CMake. Once CMake
 # support has been merged we should switch to using the upstream CMake

@@ -1,9 +1,9 @@
-#include <cybou/hex.h>
-// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboudesktopcontroller.h>
+
+#include <cybou/hex.h>
 
 #include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>

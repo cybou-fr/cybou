@@ -1,4 +1,7 @@
 #!/bin/sh
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
+
 set -e
 if [ $# -ne 3 ];
     then echo "usage: $0 <input> <stripped-binary> <debug-binary>"

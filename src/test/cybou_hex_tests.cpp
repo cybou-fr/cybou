@@ -1,4 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
+// SPDX-License-Identifier: Apache-2.0
 #include <cybou/hex.h>
 #include <boost/test/unit_test.hpp>
 BOOST_AUTO_TEST_SUITE(cybou_hex_tests)

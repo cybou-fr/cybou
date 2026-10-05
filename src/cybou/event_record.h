@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Публично-безопасная запись node events в локальный журнал.
 #ifndef CYBOU_EVENT_RECORD_H

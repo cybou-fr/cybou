@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H
 #define CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H
@@ -51,6 +50,7 @@ public:
 
     void openIdentity() override;
     void closeIdentity() override;
+    void refreshProjection(CommandProgress progress) override;
 
     void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) override;
     void sendMail(const CybouMailItem& message, const QString& draft_id = {}, CommandProgress progress = {}) override;
@@ -112,8 +112,6 @@ private:
     /** Sends not yet taken over by the worker (or refused before publication). */
     QHash<QString, CybouMailItem> m_pending_sends;
     QHash<QString, QString> m_send_drafts;
-    /** Model client IDs of created items -> private item IDs. */
-    QHash<QString, QString> m_client_ids;
     /** Starred is local-only Files state. */
     /** Star changes shown before the stored state reflects them. */
     QHash<QString, bool> m_pending_stars;
@@ -122,7 +120,6 @@ private:
     /** Items shown before the worker's snapshot includes them. */
     QHash<QString, CybouFileItem> m_pending_files;
     void showPendingFile(const CybouFileItem& item);
-    QString resolveFileId(const QString& id) const { return m_client_ids.value(id, id); }
     void emitFiles();
 
     /** GUI-thread handlers for worker results. */

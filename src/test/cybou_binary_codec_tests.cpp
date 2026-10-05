@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
+
 #include <cybou/binary_codec.h>
 #include <boost/test/unit_test.hpp>
 BOOST_AUTO_TEST_SUITE(cybou_binary_codec_tests)

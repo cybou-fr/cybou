@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
+
 #ifndef CYBOU_TEST_IDENTITY_HELPERS_H
 #define CYBOU_TEST_IDENTITY_HELPERS_H
 

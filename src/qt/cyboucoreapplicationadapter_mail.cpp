@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
@@ -146,6 +145,23 @@ std::optional<cybou::AccountId> CybouCoreApplicationAdapter::IdentitySession::Ma
     return std::nullopt;
 }
 
+void CybouCoreApplicationAdapter::refreshProjection(CommandProgress progress)
+{
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
+    m_session->Post([progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+        bool ok{false};
+        try {
+            s.Snapshot(s.catching_up ? CybouRestoreStepState::Running : CybouRestoreStepState::Done);
+            ok = true;
+        } catch (const std::exception&) { }
+        s.StateToGui([progress, ok] {
+            if (progress) progress(ok ? CybouCommandState::Committed : CybouCommandState::Failed,
+                ok ? QString{} : tr("The local view could not be refreshed. Try again."));
+        });
+    });
+}
+
 void CybouCoreApplicationAdapter::saveMailDraft(const CybouMailItem& draft, CommandProgress progress)
 {
     if (!m_session) {
@@ -221,6 +237,13 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
                 return;
             }
             const auto job_id = ToHex(*message_id);
+            const bool has_job = s.publication->GetJob(job_id).has_value();
+            if (!draft_id.isEmpty() && !s.application->CheckDraftSendPayload(StoredDraft(message, draft_id), !has_job)) {
+                fail(has_job
+                    ? tr("These edits have not been sent. Start a new message: this draft is linked to an earlier saved publication.")
+                    : tr("Could not save the outgoing message. Your draft is kept."));
+                return;
+            }
             const auto accept = [&](const cybou::PublicationJobResult& job, CybouMailItem outgoing) {
                 if (job.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) {
                     fail(tr("The message needs attention. Your draft is kept; retry continues the same publication."));
@@ -240,13 +263,13 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
                         owner->m_deleted_drafts.insert(draft_id);
                         Q_EMIT owner->mailItemRemoved(draft_id);
                     }
+                    Q_EMIT owner->mailItemReplaced(client_id, outgoing.id);
                     Q_EMIT owner->mailItemRemoved(client_id);
                     Q_EMIT owner->mailItemChanged(outgoing);
-                    Q_EMIT owner->mailItemReplaced(client_id, outgoing.id);
                     if (progress) progress(CybouCommandState::Committed, {});
                 });
             };
-            if (s.publication->GetJob(job_id)) {
+            if (has_job) {
                 const auto job = s.publication->Resume(job_id);
                 s.storage_projection.jobs[job_id] = job;
                 accept(job, message);
@@ -442,10 +465,8 @@ void CybouCoreApplicationAdapter::saveAttachmentToFiles(const QString& message_i
     const QString& file_id)
 {
     const auto message = FromHex(message_id);
-    const auto item_id = cybou::NewPrivateItemId();
+    const auto item_id = FromHex(file_id);
     if (!m_session || !message || !item_id) return;
-    const QString hex = QString::fromStdString(ToHex(*item_id));
-    m_client_ids.insert(file_id, hex);
     m_session->Post([message = *message, attachment_id, item_id = *item_id](IdentitySession& s) {
         const auto record = s.application->GetMail(message);
         if (!record) return;

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 #include <cybou/hash256.h>
 namespace cybou {
 std::string Hash256::GetHex() const {

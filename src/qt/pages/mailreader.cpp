@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/pages/mailreader.h>
 
@@ -18,6 +17,7 @@
 #include <QPushButton>
 #include <QPointer>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -211,7 +211,7 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     root->addWidget(separator);
 
     // Body + attachments scroll together.
-    auto* scroll = new QScrollArea{this};
+    auto* scroll = m_scroll = new QScrollArea{this};
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -223,6 +223,7 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     content_layout->setSpacing(16);
     m_body = new QLabel{content};
     m_body->setObjectName(QStringLiteral("readerBody"));
+    m_body->setTextFormat(Qt::PlainText);
     m_body->setWordWrap(true);
     m_body->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     m_body->setAlignment(Qt::AlignLeft | Qt::AlignTop);
@@ -254,6 +255,8 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     connect(m_forward, &QPushButton::clicked, this, [this] { if (onForward) onForward(m_id); });
 
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
         const auto& tasks = m_model->mailTasks();
         if (!std::any_of(tasks.begin(), tasks.end(), [this](const auto& task) {
@@ -276,6 +279,11 @@ void MailReader::setBackVisible(bool visible)
 
 void MailReader::showMessage(const QString& id)
 {
+    if (m_id != id) {
+        m_body->setSelection(0, 0);
+        m_scroll->verticalScrollBar()->setValue(0);
+        m_attachment_context.clear();
+    }
     m_id = id;
     refresh();
 }
@@ -306,8 +314,24 @@ void MailReader::moveTo(CybouMailFolder folder)
 void MailReader::refresh()
 {
     const auto* item = m_model->mailItem(m_id);
-    if (!item) return;
-    const bool outgoing = item->folder == CybouMailFolder::Sent || item->folder == CybouMailFolder::Drafts;
+    if (!item || m_model->status().identity_state != CybouIdentityState::Active) {
+        m_id.clear();
+        m_moving_id.clear();
+        m_rendered_attachments.clear();
+        m_attachment_context.clear();
+        for (auto* label : {m_subject, m_sender_name, m_sender, m_recipient, m_time, m_security, m_delivery_text, m_body}) label->clear();
+        m_avatar->clear();
+        ClearLayout(m_attachment_rows);
+        m_attachments->hide();
+        m_delivery->hide();
+        for (auto* action : {m_archive, m_trash, m_star}) action->setEnabled(false);
+        m_reply->setEnabled(false);
+        m_forward->setEnabled(false);
+        return;
+    }
+    const bool outgoing = item->outgoing || item->folder == CybouMailFolder::Sent || item->folder == CybouMailFolder::Drafts;
+    m_star->setEnabled(true);
+    m_subject->setTextFormat(Qt::PlainText);
     m_subject->setText(item->subject.isEmpty() ? tr("(no subject)") : item->subject);
     m_avatar->setPixmap(avatarPixmap(item->from_name.left(1), PeerColor(item->from_name), 40));
     m_sender_name->setText(DisplayName(*m_model, item->from_name));
@@ -370,10 +394,17 @@ void MailReader::refresh()
                 CybouTheme::color(attention ? CybouTheme::ROSE : CybouTheme::TEXT_PRIMARY).name()));
         m_retry->setVisible(attention);
     }
-    m_body->setText(item->body);
+    if (m_body->text() != item->body) m_body->setText(item->body);
     m_reply->setEnabled(!item->draft);
     m_forward->setEnabled(!item->draft);
 
+    const QStringList context{QString::number(online), QString::number(outgoing),
+        QString::number(m_model->featureAvailability().files),
+        QString::number(static_cast<int>(m_model->displayedOperationState(item->operation_id, item->operation_state)))};
+    if (m_attachment_context == context && m_rendered_attachments == item->attachments) return;
+    m_attachment_context = context;
+    m_rendered_attachments = item->attachments;
+    const int scroll = m_scroll->verticalScrollBar()->value();
     ClearLayout(m_attachment_rows);
     m_attachments->setVisible(!item->attachments.isEmpty());
     if (!item->attachments.isEmpty()) {
@@ -442,6 +473,7 @@ void MailReader::refresh()
         });
         m_attachment_rows->addWidget(chip);
     }
+    m_scroll->verticalScrollBar()->setValue(scroll);
 }
 
 void MailReader::showSecurityDetails()
@@ -450,6 +482,15 @@ void MailReader::showSecurityDetails()
     if (!item) return;
     QDialog dialog{this};
     dialog.setObjectName(QStringLiteral("mailSecurityDetails"));
+    const QString inspected_id = m_id;
+    const QString account = m_model->status().account_id;
+    const auto dismiss_if_inaccessible = [this, &dialog, inspected_id, account] {
+        const auto current = m_model->resolvedMailId(inspected_id);
+        if (m_model->status().identity_state != CybouIdentityState::Active ||
+            m_model->status().account_id != account || m_id != current || !m_model->mailItem(current)) dialog.reject();
+    };
+    connect(m_model, &CybouDesktopModel::statusChanged, &dialog, dismiss_if_inaccessible);
+    connect(m_model, &CybouDesktopModel::mailChanged, &dialog, dismiss_if_inaccessible);
     dialog.setWindowTitle(tr("Security details"));
     dialog.setMinimumWidth(520);
     auto* layout = new QVBoxLayout{&dialog};

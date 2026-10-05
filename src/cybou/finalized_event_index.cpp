@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 // Rebuildable public coordinates. No recipient or decrypted content index.
 #include <cybou/state_store.h>
 #include <cybou/poa_finality.h>

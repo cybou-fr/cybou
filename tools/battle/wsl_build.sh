@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
+
 # Builds the headless CYBOU tools (cybou, cybou-loadgen) inside WSL for the battle test.
 set -euo pipefail
 SRC=/mnt/c/Users/cybou/Desktop/cybou

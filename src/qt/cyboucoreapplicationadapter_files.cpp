@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
@@ -181,15 +180,14 @@ std::optional<cybou::PrivateItemId> ParentId(const QString& hex)
 
 void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id)
 {
-    const auto item_id = cybou::NewPrivateItemId();
+    const auto item_id = FromHex(file_id);
     if (!m_session || !item_id) return;
     const QString hex = QString::fromStdString(ToHex(*item_id));
-    m_client_ids.insert(file_id, hex);
     const QFileInfo info{source_path};
     CybouFileItem shown;
     shown.id = hex;
     shown.name = info.fileName();
-    shown.parent_id = resolveFileId(parent_id);
+    shown.parent_id = parent_id;
     shown.logical_size = static_cast<quint64>(std::max<qint64>(0, info.size()));
     shown.modified = QDateTime::currentDateTime();
     shown.state = CybouContentState::Local;
@@ -236,7 +234,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
 
 void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QString& destination)
 {
-    const QString hex = resolveFileId(file_id);
+    const QString hex = file_id;
     if (!m_session) return;
     m_session->Post([hex = hex.toStdString(), destination](IdentitySession& s) {
         const auto item = s.files.CurrentFile(hex);
@@ -261,14 +259,13 @@ void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QSt
 
 void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const QString& name, const QString& parent_id)
 {
-    const auto item_id = cybou::NewPrivateItemId();
+    const auto item_id = FromHex(folder_id);
     if (!m_session || !item_id) return;
     const QString hex = QString::fromStdString(ToHex(*item_id));
-    m_client_ids.insert(folder_id, hex);
     CybouFileItem shown;
     shown.id = hex;
     shown.name = name;
-    shown.parent_id = resolveFileId(parent_id);
+    shown.parent_id = parent_id;
     shown.folder = true;
     shown.modified = QDateTime::currentDateTime();
     shown.state = CybouContentState::Local;
@@ -287,7 +284,7 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
 void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& name)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString(), name = name.toStdString()](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString(), name = name.toStdString()](IdentitySession& s) {
         auto item = s.files.CurrentFile(hex);
         if (!item) return;
         item->name = name;
@@ -302,7 +299,7 @@ void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& n
 void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& parent_id)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString(), parent = ParentId(resolveFileId(parent_id))](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString(), parent = ParentId(parent_id)](IdentitySession& s) {
         auto item = s.files.CurrentFile(hex);
         if (!item) return;
         // Never move a folder into itself or its own subtree.
@@ -322,11 +319,10 @@ void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& par
 
 void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& copy_id, const QString& parent_id)
 {
-    const auto new_id = cybou::NewPrivateItemId();
+    const auto new_id = FromHex(copy_id);
     if (!m_session || !new_id) return;
-    m_client_ids.insert(copy_id, QString::fromStdString(ToHex(*new_id)));
-    m_session->Post([hex = resolveFileId(id).toStdString(), new_id = *new_id,
-                        parent = ParentId(resolveFileId(parent_id))](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString(), new_id = *new_id,
+                        parent = ParentId(parent_id)](IdentitySession& s) {
         auto item = s.files.CurrentFile(hex);
         if (!item || item->kind != cybou::FileItemKind::FILE) return;
         // A copy is a new catalog entry referencing the same protected content.
@@ -344,7 +340,7 @@ void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& cop
 
 void CybouCoreApplicationAdapter::setFileStarred(const QString& id, bool starred)
 {
-    const QString hex = resolveFileId(id);
+    const QString hex = id;
     if (!m_session) return;
     // Shown at once; persisted as encrypted Identity state once the item is indexed.
     m_pending_stars.insert(hex, starred);
@@ -362,7 +358,7 @@ void CybouCoreApplicationAdapter::postFileStar(const QString& hex, bool starred)
 void CybouCoreApplicationAdapter::trashFile(const QString& id)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString()](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
         auto item = s.files.CurrentFile(hex);
         if (!item || item->parent_id == cybou::FilesTrashParent()) return;
         // Contents follow their folder into Trash without separate changes.
@@ -378,7 +374,7 @@ void CybouCoreApplicationAdapter::trashFile(const QString& id)
 void CybouCoreApplicationAdapter::restoreFile(const QString& id)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString()](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
         auto item = s.files.CurrentFile(hex);
         if (!item) return;
         // Trash does not remember the old location; restored items return to My files.
@@ -395,7 +391,7 @@ void CybouCoreApplicationAdapter::deleteFiles(const QStringList& ids)
 {
     if (!m_session || ids.isEmpty()) return;
     std::vector<std::string> roots;
-    for (const auto& id : ids) roots.push_back(resolveFileId(id).toStdString());
+    for (const auto& id : ids) roots.push_back(id.toStdString());
     // One publication for the whole set: Empty Trash costs one network fee.
     m_session->Post([roots = std::move(roots)](IdentitySession& s) {
         const auto catalog = s.files.Catalog();
@@ -424,7 +420,7 @@ void CybouCoreApplicationAdapter::deleteFiles(const QStringList& ids)
 void CybouCoreApplicationAdapter::retryFile(const QString& id)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString()](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
         const auto job = s.files.item_jobs.find(hex);
         if (job == s.files.item_jobs.end()) {
             s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("This change cannot be retried; upload the file again.")); });
@@ -441,7 +437,7 @@ void CybouCoreApplicationAdapter::retryFile(const QString& id)
 void CybouCoreApplicationAdapter::discardFile(const QString& id)
 {
     if (!m_session) return;
-    const QString hex = resolveFileId(id);
+    const QString hex = id;
     // A file that never reached a publication (e.g. unreadable) exists only here.
     if (m_pending_files.remove(hex) > 0) {
         Q_EMIT fileItemsRemoved({hex});
@@ -468,7 +464,7 @@ void CybouCoreApplicationAdapter::discardFile(const QString& id)
 void CybouCoreApplicationAdapter::deleteFile(const QString& id)
 {
     if (!m_session) return;
-    m_session->Post([hex = resolveFileId(id).toStdString()](IdentitySession& s) {
+    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
         const auto root = FromHex(QString::fromStdString(hex));
         if (!root || !s.files.CurrentFile(hex)) return;
         const auto catalog = s.files.Catalog();

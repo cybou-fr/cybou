@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying file COPYING.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Русский публичный API безопасного чтения и записи приватных файлов.
 #ifndef CYBOU_SECRET_FILE_H

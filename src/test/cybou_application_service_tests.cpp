@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <cybou/application_service.h>
 
@@ -619,6 +618,12 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     BOOST_REQUIRE(outgoing && other);
     BOOST_CHECK(!owner.application->BindDraftToMessage("missing", *outgoing));
     BOOST_REQUIRE(owner.application->BindDraftToMessage(draft.draft_id, *outgoing) == outgoing);
+    BOOST_REQUIRE(owner.application->CheckDraftSendPayload(draft, true));
+    auto same_content = draft;
+    ++same_content.updated_ms;
+    BOOST_CHECK(owner.application->CheckDraftSendPayload(same_content, false));
+    same_content.attachments.front().source_path = "C:/tmp/other.txt";
+    BOOST_CHECK(!owner.application->CheckDraftSendPayload(same_content, false));
 
     // Survives reopening the Application DB (a restart).
     owner.Open(fixture, network);
@@ -627,7 +632,10 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     BOOST_CHECK(drafts[0] == newer); // newest first
     BOOST_CHECK(drafts[1] == draft);
     BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
+    BOOST_CHECK(owner.application->CheckDraftSendPayload(draft, false));
     draft.body = "Edited";
+    BOOST_CHECK(!owner.application->CheckDraftSendPayload(draft, false));
+    BOOST_REQUIRE(owner.application->CheckDraftSendPayload(draft, true));
     BOOST_REQUIRE(owner.application->SaveDraft(draft));
     BOOST_CHECK_EQUAL(owner.application->ListDrafts().size(), 2U);
     BOOST_REQUIRE(owner.application->DeleteDraft("draft-2"));
@@ -639,9 +647,11 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
     owner.Open(fixture, network);
     BOOST_REQUIRE(owner.application->SaveDraft(draft));
     BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
+    BOOST_CHECK(owner.application->CheckDraftSendPayload(draft, false));
     BOOST_REQUIRE(owner.application->DeleteDraft(draft.draft_id));
     BOOST_REQUIRE(owner.application->SaveDraft(draft));
     BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == other);
+    BOOST_CHECK(!owner.application->CheckDraftSendPayload(draft, false));
     // Never published: no operation was submitted and no chunk left the device.
     BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
     BOOST_CHECK(!fixture.runtime->ProduceBlock() || fixture.runtime->GetBlockAtHeight(*height + 1)->block.operations.empty());

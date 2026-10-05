@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <cybou/identity_authorization.h>
 #include <test/cybou_test_helpers.h>

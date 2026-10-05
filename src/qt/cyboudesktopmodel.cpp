@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboudesktopmodel.h>
 
@@ -13,6 +12,7 @@
 #include <cybou/name_service.h>
 #include <cybou/node_runtime.h>
 #include <cybou/hex.h>
+#include <cybou/publication_service.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/storage_economy.h>
 #include <cybou/support_mail.h>
@@ -35,6 +35,22 @@
 #include <utility>
 
 namespace {
+void NormalizeActivityIds(QVector<CybouActivityItem>& items)
+{
+    QHash<QString, int> occurrences;
+    for (auto& item : items) {
+        if (item.id.isEmpty()) {
+            const auto digest = [](const QString& text) {
+                return QString::fromLatin1(QCryptographicHash::hash(text.toUtf8(), QCryptographicHash::Sha256).toHex());
+            };
+            item.id = QStringLiteral("event:%1:%2:%3:%4").arg(static_cast<int>(item.kind))
+                .arg(item.time.toMSecsSinceEpoch()).arg(digest(item.title), digest(item.subtitle));
+        }
+        const auto occurrence = occurrences[item.id]++;
+        if (occurrence) item.id += QStringLiteral(":%1").arg(occurrence);
+    }
+}
+
 QStringList ToQStringList(const cybou::RecoveryWords& words)
 {
     QStringList list;
@@ -94,30 +110,33 @@ void CybouDesktopModel::rebuildActivity()
     for (const auto& mail : m_mail) {
         if (mail.draft || !timed(mail.time)) continue;
         const QString subject = mail.subject.isEmpty() ? tr("(no subject)") : mail.subject;
-        if (mail.folder == CybouMailFolder::Sent) {
-            items.append({CybouActivityKind::MailSent, tr("Mail to %1").arg(mail.to_name), subject, mail.time});
+        if (mail.folder == CybouMailFolder::Trash) continue;
+        if (mail.outgoing || mail.folder == CybouMailFolder::Sent) {
+            items.append({CybouActivityKind::MailSent, tr("Mail to %1").arg(mail.to_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
         } else if (mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive) {
-            items.append({CybouActivityKind::MailReceived, tr("Mail from %1").arg(mail.from_name), subject, mail.time});
+            items.append({CybouActivityKind::MailReceived, tr("Mail from %1").arg(mail.from_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
         }
     }
     for (const auto& file : m_files) {
         if (file.folder || file.trashed || !timed(file.modified)) continue;
         items.append({CybouActivityKind::FileUploaded, tr("%1 added to Files").arg(file.name),
-            CybouProduct::sizeText(file.logical_size), file.modified});
+            CybouProduct::sizeText(file.logical_size), file.modified, QStringLiteral("file:") + file.id});
     }
     for (const auto& entry : m_wallet_entries) {
         if (!timed(entry.time)) continue;
         const QString amount = cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
         if (entry.kind == CybouWalletEntryKind::Sent) {
-            items.append({CybouActivityKind::PaymentSent, tr("%1 sent").arg(amount), entry.counterparty_name, entry.time});
+            items.append({CybouActivityKind::PaymentSent, tr("%1 sent").arg(amount), entry.counterparty_name, entry.time, QStringLiteral("wallet:") + entry.id});
         } else if (entry.kind == CybouWalletEntryKind::Received) {
             items.append({CybouActivityKind::PaymentReceived, tr("%1 received").arg(amount), entry.counterparty_name,
-                entry.time});
+                entry.time, QStringLiteral("wallet:") + entry.id});
         }
     }
     std::stable_sort(items.begin(), items.end(),
         [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
     if (items.size() > 20) items.resize(20);
+    NormalizeActivityIds(items);
+    if (items == m_activity) return;
     m_activity = std::move(items);
     Q_EMIT activityChanged();
 }
@@ -259,15 +278,24 @@ void CybouDesktopModel::syncIdentitySession()
     ++m_mail_generation;
     m_mail_tasks.clear();
     m_mail_ids.clear();
+    m_application_refreshing = false;
+    m_last_application_refresh = {};
+    m_application_refresh_error.clear();
+    m_application_refresh_done = {};
+    Q_EMIT applicationRefreshChanged();
     Q_EMIT mailTasksChanged();
     if (!open) {
         // Private semantic data never outlives the unlocked Identity.
         const bool had_mail = !m_mail.isEmpty();
         const bool had_files = !m_files.isEmpty();
+        const bool had_activity = !m_activity.isEmpty();
         m_mail.clear();
         m_files.clear();
+        m_activity.clear();
+        m_extra_activity.clear();
         if (had_mail) Q_EMIT mailChanged();
         if (had_files) Q_EMIT filesChanged();
+        if (had_activity) Q_EMIT activityChanged();
     }
     if (!m_backend) return;
     if (open) m_backend->openIdentity();
@@ -292,7 +320,20 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
     m_backend = backend;
     if (m_backend) {
         using B = CybouApplicationBackend;
-        connect(m_backend, &B::availabilityChanged, this, [this] { setFeatureAvailability(m_requested_availability); });
+        connect(m_backend, &B::availabilityChanged, this, [this] {
+            setFeatureAvailability(m_requested_availability);
+            if (m_application_refreshing && !m_backend->mailAvailable()) {
+                const QPointer<CybouDesktopModel> guard{this};
+                const auto generation = m_mail_generation;
+                m_application_refreshing = false;
+                ++m_application_refresh_id;
+                m_application_refresh_error = tr("Local refresh was interrupted. Try again.");
+                auto done = std::move(m_application_refresh_done);
+                Q_EMIT applicationRefreshChanged();
+                if (guard && m_mail_generation == generation && m_session_open && done)
+                    done(false, m_application_refresh_error);
+            }
+        });
         connect(m_backend, &B::mailSnapshot, this, [this](const QVector<CybouMailItem>& items) {
             if (m_session_open) setMailItems(items);
         });
@@ -301,10 +342,19 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
         });
         connect(m_backend, &B::mailItemRemoved, this, &CybouDesktopModel::removeMailItem);
         connect(m_backend, &B::mailItemReplaced, this, [this](const QString& old_id, const QString& new_id) {
-            if (!m_session_open) return;
+            if (!m_session_open || old_id == new_id) return;
             m_mail_ids.insert(old_id, new_id);
             for (auto& task : m_mail_tasks) if (task.related_id == old_id) task.related_id = new_id;
+            bool changed{false};
+            for (auto it = m_mail.begin(); it != m_mail.end(); ++it) {
+                if (it->id != old_id) continue;
+                if (mailItem(new_id)) m_mail.erase(it);
+                else it->id = new_id;
+                changed = true;
+                break;
+            }
             Q_EMIT mailIdReplaced(old_id, new_id);
+            if (changed) Q_EMIT mailChanged();
         });
         connect(m_backend, &B::mailStateChanged, this, &CybouDesktopModel::setMailState);
         connect(m_backend, &B::attachmentStateChanged, this, &CybouDesktopModel::setAttachmentState);
@@ -425,6 +475,40 @@ void CybouDesktopModel::requestMailStarred(const QString& id, bool starred)
     if (mailReady() && item && item->starred != starred) m_backend->setMailStarred(id, starred);
 }
 
+bool CybouDesktopModel::requestApplicationRefresh(CommandDone done)
+{
+    if (m_application_refreshing || !mailReady()) return false;
+    const auto generation = m_mail_generation;
+    const auto request_id = ++m_application_refresh_id;
+    const QPointer<CybouDesktopModel> guard{this};
+    m_application_refreshing = true;
+    m_application_refresh_error.clear();
+    m_application_refresh_done = std::move(done);
+    Q_EMIT applicationRefreshChanged();
+    if (!guard || m_mail_generation != generation || !m_session_open) return false;
+    m_backend->refreshProjection([guard, generation, request_id](CybouCommandState state, const QString& error) {
+        if (!guard) return;
+        QTimer::singleShot(0, guard, [guard, generation, request_id, state, error] {
+            if (!guard || guard->m_mail_generation != generation || !guard->m_session_open ||
+                guard->m_application_refresh_id != request_id || !guard->m_application_refreshing) return;
+            if (state != CybouCommandState::Committed && state != CybouCommandState::Failed) return;
+            const bool ok = state == CybouCommandState::Committed;
+            guard->m_application_refreshing = false;
+            guard->m_application_refresh_error = error;
+            auto done = std::move(guard->m_application_refresh_done);
+            if (ok) {
+                guard->m_last_application_refresh = QDateTime::currentDateTime();
+                guard->rebuildActivity();
+            }
+            if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
+            Q_EMIT guard->applicationRefreshChanged();
+            if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
+            if (done) done(ok, error);
+        });
+    });
+    return true;
+}
+
 void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folder, CommandDone done)
 {
     const auto* item = mailItem(id);
@@ -453,6 +537,12 @@ namespace {
 QString NewLocalId(const char* prefix)
 {
     return QStringLiteral("%1-%2").arg(QLatin1String{prefix}, QUuid::createUuid().toString(QUuid::WithoutBraces));
+}
+
+QString NewFileId()
+{
+    const auto id = cybou::NewPrivateItemId();
+    return id ? QString::fromStdString(cybou::HexEncode(*id)) : QString{};
 }
 
 QString PreviewOf(const QString& body)
@@ -666,18 +756,22 @@ void CybouDesktopModel::removeFileItems(const QStringList& ids)
 
 void CybouDesktopModel::setActivity(QVector<CybouActivityItem> items)
 {
+    NormalizeActivityIds(items);
+    if (items == m_activity) return;
     m_activity = std::move(items);
     Q_EMIT activityChanged();
 }
 
 void CybouDesktopModel::addActivity(const CybouActivityItem& item)
 {
+    auto event = item;
+    if (event.id.isEmpty()) event.id = NewLocalId("event");
     if (fixtureMode()) {
-        m_activity.prepend(item);
+        m_activity.prepend(event);
         Q_EMIT activityChanged();
         return;
     }
-    m_extra_activity.prepend(item);
+    m_extra_activity.prepend(event);
     if (m_extra_activity.size() > 20) m_extra_activity.resize(20);
     rebuildActivity();
 }
@@ -1519,7 +1613,8 @@ bool CybouDesktopModel::requestRestoreIdentity(const QString& recovery_phrase, c
 QString CybouDesktopModel::requestFileUpload(const QString& source_path, const QString& parent_id)
 {
     if (!filesReady() || !QFileInfo{source_path}.isFile()) return {};
-    const QString id = NewLocalId("file");
+    const QString id = NewFileId();
+    if (id.isEmpty()) return {};
     m_backend->uploadFile(id, source_path, parent_id);
     return id;
 }
@@ -1542,7 +1637,8 @@ const CybouFileItem* CybouDesktopModel::fileItem(const QString& id) const
 QString CybouDesktopModel::requestCreateFolder(const QString& name, const QString& parent_id)
 {
     if (!filesReady() || name.trimmed().isEmpty()) return {};
-    const QString id = NewLocalId("folder");
+    const QString id = NewFileId();
+    if (id.isEmpty()) return {};
     m_backend->createFolder(id, name.trimmed(), parent_id);
     return id;
 }
@@ -1565,7 +1661,8 @@ QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& par
 {
     const auto* item = fileItem(id);
     if (!filesReady() || !item || item->folder) return {};
-    const QString copy_id = NewLocalId("copy");
+    const QString copy_id = NewFileId();
+    if (copy_id.isEmpty()) return {};
     m_backend->copyFile(id, copy_id, parent_id);
     return copy_id;
 }
@@ -1638,7 +1735,8 @@ QString CybouDesktopModel::requestSaveAttachmentToFiles(const QString& message_i
         if (attachment.id != attachment_id) continue;
         if (!CybouProduct::contentOnNetwork(attachment.state)) return {};
         if (!attachment.saved_file_id.isEmpty() && fileItem(attachment.saved_file_id)) return attachment.saved_file_id;
-        const QString id = NewLocalId("saved");
+        const QString id = NewFileId();
+        if (id.isEmpty()) return {};
         const QString name = attachment.name;
         m_backend->saveAttachmentToFiles(message_id, attachment_id, id);
         if (fileItem(id)) {

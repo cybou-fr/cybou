@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) 2026 Stanislav SAVELIEV
+# SPDX-License-Identifier: Apache-2.0
+
 # Installs permanent DEVNET storage peers next to the bootstrap on the DEV VPS:
 # ordinary Full Nodes cybou-storage@2 and @3 on ports 29462 and 29463.
 # Beta durability needs two remote replicas at distinct StorageIds; with only the

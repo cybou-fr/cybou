@@ -231,16 +231,23 @@ rebuild follow-up are implemented in the working tree. Archive batch feedback
 waits for commit and Undo operates on successful items. Reader toolbar actions
 and Delete use the same acknowledgement rule. The worker no longer
 drops the rest of a dequeued command batch after one exception.
+The send binding's private content fingerprint rejects altered payload as a
+resume of an already saved job; the edited draft is kept for a new message.
 
 W2/W3 partial delivery: identical semantic snapshots suppress signals, Home
-skips unchanged activity presentation rebuilds, Files Advanced/scroll survive
-details refresh, active-job copy counts are filled, unknown counts are explicit,
+uses stable activity IDs and cached rows with in-place updates; Files Advanced
+and scroll survive details refresh, active-job copy counts are filled, unknown counts are explicit,
 folder destinations use IDs/breadcrumbs, Files-to-Mail gates explain protection
 and downloads commit atomically without deleting a previous destination first.
 Mail row children now pass mouse input to the drag/select viewport. These changes
-do not complete native drag acceptance, all incremental row work, ID replacement,
-evidence freshness, folder enumeration or W5–W8 extensions. Validation results
-are recorded in `26_IMPLEMENTATION_STATUS.md` after the test run.
+include a coalesced manual local-view refresh, scoped refresh timestamp,
+failure/interruption handling and lock cleanup. Home scrolls vertically at
+small sizes and renders wrapping activity labels as plain text. Full Qt and
+focused Windows checks are recorded against `da6d6b9` plus the UI worktree.
+Remaining gates include physical mouse drag acceptance, incremental Mail/Files
+Mail row work and ID handoff,
+evidence freshness and W5–W8 extensions. Validation results
+are recorded in `26_IMPLEMENTATION_STATUS.md`.
 
 Deliver small reviewable changes in the order above. W1 precedes final DnD/
 batch success/Undo work; W2 precedes new frequently refreshed pages; W3 baseline
@@ -255,3 +262,135 @@ two-desktop/storage acceptance for distributed behavior. Record timing and
 responsiveness with realistic datasets; set budgets from W0 measurements.
 Earlier 50-case Qt results at the committed baseline are historical regression
 evidence, not validation of current dirty sources or this documentation edit.
+
+Files identity delivery (2026-10-05): upload, create-folder, copy and save-from-Mail
+now receive a single private item ID from the desktop model. The core adapter
+uses it unchanged through pending projection and encrypted catalog indexing;
+the temporary-ID alias map is removed. The live-core regression checks folder
+and upload return IDs and preserves the open Advanced drawer across finality.
+The bounded asynchronous folder-enumeration slice is recorded below.
+
+Validation of the permanent Files ID slice: isolated GUI/test build passed;
+55 Qt results passed, and 5 focused Windows results passed (including setup
+and cleanup). Logs: `artifacts/uiux-implementation-20261005/qt-files-id-full.txt`
+and `qt-files-id-windows.txt`. Source baseline: HEAD `1ee870f` plus worktree.
+
+Folder-import W3 delivery (2026-10-05): bounded discovery runs on a read-only
+worker before staging. A nonmodal progress dialog counts discovered/queued items
+and offers Cancel. The GUI submits small batches into the existing publication
+path; error/limit rejection creates nothing, partial cancellation reports only
+accepted items. Lock, account change, Files unavailability and page destruction
+stop future staging. Hidden files and empty folders retain their tree positions;
+symbolic links are skipped. No folder-import persistence or protocol entity is
+introduced. Remaining W2/W3 work includes incremental Mail rows, evidence freshness,
+large-catalog measurements and physical mouse/DPI acceptance.
+
+Validation of folder import: isolated review build passed; full Qt suite
+56 passed/0 failed (`qt-folder-import-full.txt`), focused Windows suite
+5 passed/0 failed including setup/cleanup (`qt-folder-import-windows.txt`).
+The native progress screenshot was inspected. Regression coverage includes
+structure/hidden files, early and partial cancellation, discovery failure,
+over-limit selection, duplicate start, Identity lock and page destruction.
+A blocking filesystem call cannot be forcibly interrupted; no slow-volume or
+10,000-item latency acceptance claim is made. Baseline `1ee870f` plus worktree.
+
+Files row W2 delivery (2026-10-05): table and grid reconcile by private item ID,
+retain unchanged objects/chips and update metadata/progress in place. Sorting
+uses retained ranked items; removed/filtered objects lose selection. View-mode
+switches transfer visible selection/current item. Table insertion preserves its
+visible anchor; updates preserve scroll. Lock clears rows and private navigation.
+Folder child counts use one catalog pass, and identical glyph icons are reused.
+
+Native Windows synthetic 2,000-file measurement: construction 796 ms; ten
+one-file updates median 11 ms, max 12 ms (`qt-file-rows-final-windows.txt`).
+These measure synchronous fixture model/page work, excluding network, storage
+I/O and frame-completion latency. Construction remains a material UX gap: next
+reduce per-item widget cost using viewport delegates/lazy presentation, retaining
+accessibility and selection/DnD behavior. Measure first visible frame, scroll and
+10,000-item catalogs before setting release budgets. Mail incremental rows,
+evidence freshness and physical mouse/multi-DPI acceptance remain open.
+
+Validation of Files rows: final isolated build passed
+(`build-file-rows-icons.txt`); full Qt suite 58 passed/0 failed
+(`qt-file-rows-final-full.txt`), focused native Windows suite
+7 passed/0 failed including setup/cleanup (`qt-file-rows-final-windows.txt`).
+Coverage includes retained row/grid/chip objects, metadata/progress, multiple
+selection/current item, mode transfer, sorting/rename, insertion anchor,
+removal/filter/lock cleanup, plus existing folder-import/Advanced/drop routing.
+Baseline `1ee870f` plus worktree. Physical mouse and multi-DPI acceptance remain
+separate; no live storage or smooth-frame guarantee follows from fixture timings.
+
+Files viewport-status delivery (2026-10-05): status cells now use one Qt delegate
+instead of one QLabel/widget layout per row. Display/accessibility roles and
+full-text tooltips remain semantic; native selection/focus backgrounds, lock and
+pending/error markers are preserved. Qt accessibility-table API regression reads
+the complete status after an update. This is API evidence, not a physical screen
+reader acceptance pass.
+
+Native Windows synthetic timing: 2,000-item construction 90 ms; ten single-file
+updates median 8 ms/max 9 ms (`qt-file-delegate-windows.txt`). The additional
+10,000-item run measured construction 527 ms and update median 43 ms/max 49 ms
+(`qt-file-delegate-10000.txt`). These exclude network/storage I/O and completed
+frame latency; the latter run overlapped the offscreen regression process.
+Full Qt suite 58 passed/0 failed (`qt-file-delegate-full.txt`); focused Windows
+7 passed/0 failed, plus large-catalog run 3 passed/0 failed including setup and
+cleanup. Isolated GUI/test build passed; native list/upload screenshots reviewed.
+Baseline `1ee870f` plus worktree.
+
+The previous per-row-widget bottleneck is removed. Remaining performance work is
+10,000-item snapshot/coalescing cost, completed-frame and scroll measurement.
+Next product slice: incremental Mail rows and stable draft/message ID handoff;
+retain acknowledgement/draft recovery/drag behavior while changing presentation.
+
+
+Mail reconciliation slice (2026-10-05): visible list items are retained by ID,
+unaffected row widgets are reused, and only changed rows are repainted/replaced.
+Selection, current item and scroll anchor survive metadata updates/insertion;
+filtered/removed selections are dropped and lock clears private row caches/search.
+Folder targets/count labels are retained. Outgoing Archive/Trash rows show the
+recipient. The model adopts a replacement outgoing ID before removing the old
+projection; list and reader transfer their current ID/selection to it. Move
+acknowledgement and durable draft/send ownership rules remain in force.
+
+Isolated review build passed; full Qt suite 59 passed/0 failed
+(`qt-mail-rows-full.txt`), focused Windows suite 6 passed/0 failed including
+setup/cleanup (`qt-mail-rows-windows.txt`). Regression covers a 100-message list,
+retained unrelated widgets and folder target, badge count changes, multiple
+selection/current/anchor, ID replacement with an open reader, insertion,
+removal/filter/lock and existing failure/commit/context-menu paths. Native Inbox
+fixture screenshot was inspected. Baseline `1ee870f` plus worktree; no deployment.
+Large mailbox construction still creates row widgets and needs profiling/delegate
+work; physical mouse/multi-DPI and broader assurance acceptance remain open.
+
+
+Mail reader context and privacy slice (2026-10-05): unrelated Mail/status updates
+preserve body selection, scroll and unchanged attachment widgets. Attachment
+retrieval changes update controls; switching messages resets selection/scroll.
+Subjects and bodies render as plain text. Lock or a missing message clears
+private labels and attachment caches; scoped Security Details closes on loss of
+access, while unrelated changes keep it open. Details are an opening-time
+inspection, not live evidence. Outgoing direction survives Archive/Trash.
+Replaced Mail row widgets are hidden immediately before Qt deferred deletion,
+preventing transient overlapping text noticed in native fixture capture.
+
+Remaining acceptance: large mailbox construction/delegate profiling, completed
+frame/scroll timings, physical mouse and multiple DPI settings. Runtime rotation
+must retain an honest record of timing failures; a passing rerun does not erase
+the initial failed run. No user desktop restart or network deployment occurred.
+
+Validation: initial isolated reader build passed (`build-mail-reader.txt`).
+Native Windows focused suite: 5 passed/0 failed including setup/cleanup
+(`qt-mail-reader-windows.txt`). Full Qt run: 59 passed/1 failed
+(`qt-mail-reader-full.txt`); the failure was the rotation completion deadline
+in `rotationKeepsLiveSessionWorking`, outside reader presentation. Its isolated
+rerun passed, 3/0 including setup/cleanup (`qt-mail-reader-rotation-recheck.txt`).
+The initial failure remains recorded; suite-wide clean acceptance is not claimed.
+Native reader fixture was inspected and revealed deferred row-widget overlap,
+subsequently corrected with an immediate hide and regression assertion.
+
+Final overlap fix validation: isolated GUI/test build passed
+(`build-mail-reader-final.txt`); Windows reader/list/command focused suite
+5 passed/0 failed, including setup/cleanup (`qt-mail-reader-final-windows.txt`).
+The list regression asserts that a replaced row is already hidden before Qt
+processes deferred deletion. Source hashes are recorded in source-manifest.json;
+concurrent repository commits are represented by its current HEAD plus worktree.

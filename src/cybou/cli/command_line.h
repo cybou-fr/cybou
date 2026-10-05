@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Русские вспомогательные утилиты для строгого разбора CLI-аргументов.
 #ifndef CYBOU_CLI_COMMAND_LINE_H

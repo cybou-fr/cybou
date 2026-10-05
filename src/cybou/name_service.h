@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
-// Distributed under the MIT software license, see the accompanying file COPYING.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Синхронный workflow claim'а имени .cybou поверх node runtime и keystore.
 

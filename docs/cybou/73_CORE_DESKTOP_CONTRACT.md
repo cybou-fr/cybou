@@ -120,12 +120,26 @@ durable job. Successful handoff removes draft content while retaining its
 binding to prevent stale compose replay from creating a second publication;
 explicit draft discard removes the binding. This is local application state,
 not a protocol object or canonical pending state.
+A private content fingerprint excludes save timestamps. Before staging,
+the fingerprint can be replaced; once a durable publication job exists,
+changed recipient/text/attachments must be refused as a resume of that job.
+Keep the edited draft and explain that a new message is required for the edits.
 
 Progress and evidence DTOs distinguish unknown, checking, measured, stale and
 failed observations, including observation time and scope. Replica count is
 the minimum over required chunks; absence of a measurement is not zero. Proven
 StorageId/payout identity diversity is not proof of independent failure domains.
 Expose safe blocker reasons rather than interpreting elapsed time as failure.
+
+Recent activity has stable Identity-local event IDs, derived from semantic
+Mail/Files/Wallet references. Refresh preserves unchanged row widgets and
+updates changed labels in place. A manual local-view refresh queues a read of
+current application indexes on the Identity worker; it neither forces network
+sync, audits providers nor creates operations. Its timestamp describes that
+local refresh only. Coalesce repeated refresh requests, explain errors and
+clear activity/pending refresh presentation on Identity lock.
+The Home content scrolls vertically at small supported window sizes; long
+activity labels wrap as plain text without expanding the window horizontally.
 
 Unchanged projections must not emit wholesale replacement notifications.
 Pages preserve selection, expanded Advanced, focus, scroll and input across

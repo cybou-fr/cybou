@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUAPPLICATIONBACKEND_H
 #define CYBOU_QT_CYBOUAPPLICATIONBACKEND_H
@@ -53,6 +52,8 @@ public:
     virtual void openIdentity() = 0;
     /** The Identity locked or went away: drop plaintext state and indexes. */
     virtual void closeIdentity() = 0;
+    /** Read current local semantic indexes; no forced sync/audit or publication. */
+    virtual void refreshProjection(CommandProgress progress) = 0;
 
     /* ---- Mail commands. ---- */
     virtual void saveMailDraft(const CybouMailItem& draft, CommandProgress progress = {}) = 0;
@@ -92,6 +93,8 @@ public:
     virtual void identityKeysChanged() {}
 
     /* ---- Files commands. ---- */
+    /** Creation IDs are permanent random 32-byte private item IDs in raw-order hex.
+     * Backends retain them unchanged in pending and indexed projections. */
     virtual void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) = 0;
     virtual void downloadFile(const QString& file_id, const QString& destination) = 0;
     virtual void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) = 0;

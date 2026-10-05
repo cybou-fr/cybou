@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Русский заголовок для компактного бинарного кодека CYBOU.
 #ifndef CYBOU_BINARY_CODEC_H

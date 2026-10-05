@@ -1,5 +1,5 @@
 // Copyright (c) 2026 CYBOU contributors
-// Distributed under the MIT software license, see COPYING.
+// SPDX-License-Identifier: Apache-2.0
 /// \file
 /// \brief Русский публичный API канонического 32-байтового идентификатора.
 #ifndef CYBOU_HASH256_H

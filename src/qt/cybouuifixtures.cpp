@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cybouuifixtures.h>
 
@@ -46,6 +45,7 @@ CybouMailItem Mail(const QString& id, CybouMailFolder folder, const QString& fro
     item.time = time;
     item.unread = unread;
     item.draft = folder == CybouMailFolder::Drafts;
+    item.outgoing = folder == CybouMailFolder::Sent;
     // Own sent mail is Protected (remote durability); incoming mail is Received.
     item.state = folder == CybouMailFolder::Drafts ? CybouContentState::Local
         : folder == CybouMailFolder::Sent ? CybouContentState::Protected : CybouContentState::Received;

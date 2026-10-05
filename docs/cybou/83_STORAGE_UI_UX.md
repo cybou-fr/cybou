@@ -26,8 +26,30 @@ Pages never enumerate foreign hosted chunks or the provider DB.
 Keep the selected semantic file, details scroll and Advanced expansion stable
 across snapshot refresh and pending-to-indexed item replacement. Lock clears
 private state. An actual removed/inaccessible item closes details with a reason.
+New uploads, folders, copies and Mail attachment saves allocate one random private
+item ID before entering the adapter. Pending projection and indexed catalog use
+that same ID; no temporary Files ID or replacement alias is retained.
+List rows and grid items are reconciled by this ID. Status/metadata changes
+update existing items and preserve selection, keyboard current item and scroll.
+Sorting or insertion moves retained items rather than recreating the catalog;
+removed/filtered items lose their selection. View-mode switches carry the visible
+selection. Lock clears private rows, navigation and interaction state. Folder
+child counts are aggregated in one catalog pass. Status cells use a viewport
+delegate rather than one QWidget per file. Plain semantic status text remains
+in display/accessibility roles and tooltips; selection/focus uses the standard
+item-view style. Protected uses the lock marker; pending/error states retain
+their distinct markers. No status is conveyed by colour alone.
 Folder pickers use unique IDs with breadcrumb labels; duplicate names must not
 choose the wrong destination. Recursive folder enumeration runs off the UI thread.
+Folder import first discovers a bounded tree without creating publications (up to
+10,000 entries and 64 directory levels), skipping symbolic links. A read failure
+or exceeded limit rejects that discovery before staging. Progress and Cancel
+remain available. Successful discovery feeds the existing upload/create commands
+in small GUI batches. Cancellation during staging stops remaining commands;
+already queued publications keep their normal lifecycle and are not rolled back.
+Identity lock/change, Files unavailability or page destruction stops the import.
+Discovery progress is an entry count, not an invented completion percentage;
+queued counts never imply finality or remote protection.
 
 Show separate fields for confirmation, local availability, remote replicas and
 retrieval/integrity. Examples: Waiting for confirmation; Protecting — 1 of 2

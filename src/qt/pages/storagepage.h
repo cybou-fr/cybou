@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_STORAGEPAGE_H
 #define CYBOU_QT_PAGES_STORAGEPAGE_H
@@ -8,9 +7,11 @@
 #include <qt/cybouproduct.h>
 
 #include <QCoreApplication>
+#include <QHash>
 #include <QWidget>
 
 #include <functional>
+#include <memory>
 
 class CybouDesktopModel;
 class QFrame;
@@ -22,6 +23,8 @@ class QPushButton;
 class QStackedWidget;
 class QToolButton;
 class QTreeWidget;
+class QTreeWidgetItem;
+class QListWidgetItem;
 class QDragEnterEvent;
 class QDropEvent;
 
@@ -43,6 +46,8 @@ public:
     };
 
     StoragePage(CybouDesktopModel* model, std::function<void()> home_requested = {}, QWidget* parent = nullptr);
+
+    ~StoragePage() override;
 
     View view() const { return m_view; }
     void setView(View view);
@@ -78,6 +83,8 @@ private:
     QString m_folder;
     bool m_grid{false};
     QStringList m_visible;
+    QHash<QString, QTreeWidgetItem*> m_rows;
+    QHash<QString, QListWidgetItem*> m_grid_items;
 
     QPushButton* m_new{nullptr};
     /** Visible in Trash only: permanently deletes everything there as one change. */
@@ -117,13 +124,18 @@ private:
     QString m_details_id;
     bool m_details_advanced{false};
 
+    struct FolderImport;
+    std::shared_ptr<FolderImport> m_import;
+    void advanceImport();
+    void finishImport(const QString& message);
+
     QStringList selectedIds() const;
     void showContextMenu(const QPoint& global_pos);
     void promptNewFolder();
     void promptUploadFolder();
     /** Where the user saved this file with Download, if that copy is still complete; else empty. */
     QString downloadedPath(const QString& id) const;
-    /** Uploads files and whole folders (recursively, as encrypted folders) under `parent`. */
+    /** Uploads files and discovers bounded folder trees in the background under `parent`. */
     void uploadPaths(const QStringList& paths, const QString& parent);
     void promptRename(const QString& id);
     void promptMove(const QString& id);

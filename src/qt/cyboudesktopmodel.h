@@ -1,6 +1,5 @@
 ﻿// Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUDESKTOPMODEL_H
 #define CYBOU_QT_CYBOUDESKTOPMODEL_H
@@ -211,6 +210,10 @@ public:
     void requestMailRead(const QString& id, bool read);
     void requestMailStarred(const QString& id, bool starred);
     using CommandDone = std::function<void(bool, const QString&)>;
+    bool requestApplicationRefresh(CommandDone done = {});
+    bool applicationRefreshing() const { return m_application_refreshing; }
+    QDateTime lastApplicationRefresh() const { return m_last_application_refresh; }
+    QString applicationRefreshError() const { return m_application_refresh_error; }
     void requestMoveMail(const QString& id, CybouMailFolder folder, CommandDone done = {});
     const QVector<CybouMailTask>& mailTasks() const { return m_mail_tasks; }
     QString resolvedMailId(const QString& id) const { return m_mail_ids.value(id, id); }
@@ -407,6 +410,7 @@ Q_SIGNALS:
     void filesChanged();
     void activityChanged();
     void mailTasksChanged();
+    void applicationRefreshChanged();
     void walletChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
@@ -472,6 +476,11 @@ private:
     void syncIdentitySession();
     bool m_session_open{false};
     quint64 m_mail_generation{0};
+    bool m_application_refreshing{false};
+    quint64 m_application_refresh_id{0};
+    QDateTime m_last_application_refresh;
+    QString m_application_refresh_error;
+    CommandDone m_application_refresh_done;
     QVector<CybouMailTask> m_mail_tasks;
     QHash<QString, QString> m_mail_ids;
     std::function<void(CybouCommandState, const QString&)> mailCommand(

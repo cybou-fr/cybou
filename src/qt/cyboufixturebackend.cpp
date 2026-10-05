@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboufixturebackend.h>
 
@@ -61,6 +60,14 @@ void CybouFixtureApplicationBackend::closeIdentity()
 {
     // The fixture store survives so unlocking shows the same data again.
     m_open = false;
+}
+
+void CybouFixtureApplicationBackend::refreshProjection(CommandProgress progress)
+{
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
+    Q_EMIT mailSnapshot(m_mail);
+    Q_EMIT filesSnapshot(m_files);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
 CybouMailItem* CybouFixtureApplicationBackend::mail(const QString& id)

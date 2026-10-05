@@ -1,6 +1,5 @@
 // Copyright (c) 2026 Stanislav Saveliev
-// Distributed under the MIT software license, see the accompanying
-// file COPYING or https://opensource.org/license/mit/.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
@@ -76,7 +75,6 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_deleted_mail.clear();
     m_pending_sends.clear();
     m_send_drafts.clear();
-    m_client_ids.clear();
     m_last_files.clear();
     m_pending_files.clear();
     m_pending_stars.clear();

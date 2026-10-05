@@ -18,6 +18,9 @@ retention, and send acknowledgement after durable publication-job ownership.
 An encrypted draft-to-message binding survives restart/stale compose replay;
 successful handoff retains this local binding, explicit discard removes it.
 One failed worker command no longer drops the remaining dequeued batch.
+The binding retains a private recipient/text/attachment fingerprint: altered
+draft content cannot silently resume an earlier saved publication. Preparation
+can replace this fingerprint only before a durable publication job exists.
 
 Files Advanced and detail scroll survive snapshot updates; active-job copy
 counts are filled and unknown counts are explicit. Disabled Files-to-Mail and
@@ -27,9 +30,19 @@ destination on retrieval/write/commit failure. Unchanged semantic Mail/Files
 snapshots suppress signals and Home avoids unchanged activity reconstruction.
 Mail row children pass mouse input to the existing drag/select viewport.
 
-Remaining delivery work includes native drag acceptance, incremental row/ID
-replacement behavior, manual refresh and evidence timestamps, asynchronous
-folder enumeration and measured worker/shutdown latency. Files-to-Mail remains
+The next slice adds stable Identity-local activity IDs, cached Home rows with
+in-place label updates, coalesced manual local-view refresh and a timestamp
+scoped to that refresh. The worker reads semantic indexes without forcing
+network sync, scanning history, auditing providers or creating operations.
+Failed/interrupted refresh allows retry; old request/session replies are
+ignored. Lock clears activity, row caches and refresh presentation. Home
+scrolls vertically at small window sizes and wraps activity as plain text.
+
+Remaining delivery work includes physical mouse drag acceptance, incremental
+Mail rows and ID handoff, initial large-Files presentation cost, evidence
+timestamps and measured
+worker/shutdown latency. Folder-import discovery is now bounded and asynchronous
+with cancellation; large-catalog responsiveness still needs measurement. Files-to-Mail remains
 restricted to Protected references; pending-content compose needs the durable
 reference design in the delivery plan. Map/explorer/console and the broader
 assurance packages remain target work.
@@ -42,9 +55,12 @@ and do not prove Beta failure-domain independence.
 
 See [`DESKTOP_UX_DELIVERY_PLAN.md`](DESKTOP_UX_DELIVERY_PLAN.md) for delivery
 dependencies and [`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md) for
-new product boundaries. Validation for this slice: all 53 Qt shell tests passed
-(including three new failure/acknowledgement/Advanced regression cases), and
-all 12 ApplicationService tests passed. Logs are under
+new product boundaries. Validation for these slices on HEAD `da6d6b9` plus the
+current UI worktree: all 55 Qt shell results passed (five new regression cases),
+and all 12 ApplicationService cases passed. Focused native Windows checks cover
+activity, refresh/session failures, Advanced, mailbox acknowledgements, drop
+event routing and supported window-width constraints at the current display
+scaling. Logs and the source manifest are under
 `artifacts/uiux-implementation-20261005/`. A separately linked/deployed GUI
 review build avoids replacing the executable/DLLs held by the running desktop.
 These are local component/Qt checks, not distributed durability, native drag
@@ -453,3 +469,99 @@ both linked Network Root guards reject private derivation/signing. The VPS
 service is active and desktop/VPS doctors report READY on the unchanged genesis.
 Its binary update preserved state. Finality/storage fault scenarios are not run
 against the locked official signer during this removal.
+
+Files private IDs are allocated once in the model and reused by the core adapter
+for uploads, folders, copies and attachment saves. Pending-to-indexed Files
+identity therefore requires no replacement mapping. See the live-core Qt
+regression and delivery plan for current validation.
+Validation for this slice: full Qt suite 55 passed/0 failed and native Windows
+focused suite 5 passed/0 failed (including setup/cleanup); isolated review build
+passed, based on `1ee870f` plus the UI worktree.
+
+Folder-import slice (2026-10-05): background bounded discovery (10,000 entries,
+64 levels) precedes publication staging. Nonmodal progress/Cancel, bounded GUI
+batches, safe partial cancellation, hidden/empty folder preservation and lock/
+page-lifetime handling are implemented. Isolated build passed; full Qt suite
+56 passed/0 failed and focused native Windows suite 5 passed/0 failed (including
+setup/cleanup), against `1ee870f` plus worktree. Blocking-volume cancellation and
+large-catalog latency remain evidence gaps; cancellation does not undo accepted
+publication jobs. Logs are in `artifacts/uiux-implementation-20261005/`.
+
+Files row slice (2026-10-05): retained ID-keyed table/grid items, metadata/status
+updates in place, selection/current-item continuity across refresh/sort/rename,
+visible-anchor preservation on table insertion, view-mode selection transfer,
+removal/filter cleanup and lock clearing are implemented. Child-count aggregation
+is linear in the catalog and glyph icons are shared. Native synthetic 2,000-item
+construction took 796 ms; ten one-file updates had median 11 ms/max 12 ms. This
+is local fixture/model/page timing, not live storage or completed-frame evidence.
+Per-item widgets still make initial presentation expensive; delegate/lazy-view
+work and larger-catalog/frame benchmarks remain required.
+Final isolated review build passed; full Qt suite 58 passed/0 failed and native
+Windows focused suite 7 passed/0 failed including setup/cleanup, against
+`1ee870f` plus worktree. Logs: `qt-file-rows-final-full.txt` and
+`qt-file-rows-final-windows.txt` in the UI artifact directory.
+
+Files delegate slice (2026-10-05): one viewport status delegate replaces per-row
+QLabel widgets; plain display/accessibility text and full tooltips are retained.
+The Qt table accessibility API returns the updated status. Synthetic native
+construction/update times are 90 ms / median 8 ms, max 9 ms for 2,000 items;
+527 ms / median 43 ms, max 49 ms for 10,000. These are fixture model/page timings
+without completed-frame, live runtime or physical screen-reader evidence.
+Full Qt suite 58 passed/0 failed; Windows focused 7 passed/0 failed and 10,000-item
+run 3 passed/0 failed including setup/cleanup. Isolated review build passed and
+list/upload screenshots were inspected. Sources: `1ee870f` plus worktree; logs
+`qt-file-delegate-*.txt` in the UI artifact directory. Remaining performance
+acceptance concerns large snapshot updates, scrolling and frame completion.
+
+
+Mail reconciliation slice (2026-10-05): visible list items are retained by ID,
+unaffected row widgets are reused, and only changed rows are repainted/replaced.
+Selection, current item and scroll anchor survive metadata updates/insertion;
+filtered/removed selections are dropped and lock clears private row caches/search.
+Folder targets/count labels are retained. Outgoing Archive/Trash rows show the
+recipient. The model adopts a replacement outgoing ID before removing the old
+projection; list and reader transfer their current ID/selection to it. Move
+acknowledgement and durable draft/send ownership rules remain in force.
+
+Isolated review build passed; full Qt suite 59 passed/0 failed
+(`qt-mail-rows-full.txt`), focused Windows suite 6 passed/0 failed including
+setup/cleanup (`qt-mail-rows-windows.txt`). Regression covers a 100-message list,
+retained unrelated widgets and folder target, badge count changes, multiple
+selection/current/anchor, ID replacement with an open reader, insertion,
+removal/filter/lock and existing failure/commit/context-menu paths. Native Inbox
+fixture screenshot was inspected. Baseline `1ee870f` plus worktree; no deployment.
+Large mailbox construction still creates row widgets and needs profiling/delegate
+work; physical mouse/multi-DPI and broader assurance acceptance remain open.
+
+
+Mail reader context and privacy slice (2026-10-05): unrelated Mail/status updates
+preserve body selection, scroll and unchanged attachment widgets. Attachment
+retrieval changes update controls; switching messages resets selection/scroll.
+Subjects and bodies render as plain text. Lock or a missing message clears
+private labels and attachment caches; scoped Security Details closes on loss of
+access, while unrelated changes keep it open. Details are an opening-time
+inspection, not live evidence. Outgoing direction survives Archive/Trash.
+Replaced Mail row widgets are hidden immediately before Qt deferred deletion,
+preventing transient overlapping text noticed in native fixture capture.
+
+Remaining acceptance: large mailbox construction/delegate profiling, completed
+frame/scroll timings, physical mouse and multiple DPI settings. Runtime rotation
+must retain an honest record of timing failures; a passing rerun does not erase
+the initial failed run. No user desktop restart or network deployment occurred.
+
+Validation: initial isolated reader build passed (`build-mail-reader.txt`).
+Native Windows focused suite: 5 passed/0 failed including setup/cleanup
+(`qt-mail-reader-windows.txt`). Full Qt run: 59 passed/1 failed
+(`qt-mail-reader-full.txt`); the failure was the rotation completion deadline
+in `rotationKeepsLiveSessionWorking`, outside reader presentation. Its isolated
+rerun passed, 3/0 including setup/cleanup (`qt-mail-reader-rotation-recheck.txt`).
+The initial failure remains recorded; suite-wide clean acceptance is not claimed.
+Native reader fixture was inspected and revealed deferred row-widget overlap,
+subsequently corrected with an immediate hide and regression assertion.
+
+Final overlap fix validation: isolated GUI/test build passed
+(`build-mail-reader-final.txt`); Windows reader/list/command focused suite
+5 passed/0 failed, including setup/cleanup (`qt-mail-reader-final-windows.txt`).
+The list regression asserts that a replaced row is already hidden before Qt
+processes deferred deletion. Source hashes are recorded in source-manifest.json;
+concurrent repository commits are represented by its current HEAD plus worktree.
