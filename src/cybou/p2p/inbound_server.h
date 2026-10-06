@@ -27,7 +27,8 @@ inline constexpr size_t MAX_INBOUND_PEERS{128};
 /// \brief Максимум одновременных inbound-сессий с одного публичного IP.
 /// \details Один адрес (один NAT, один злоумышленник) не может занять все слоты.
 ///          Локальные адреса (loopback, LAN, DEC-285) — собственные машины оператора — не ограничены.
-inline constexpr size_t MAX_INBOUND_PEERS_PER_ADDRESS{8};
+///          32: офис, общий Wi-Fi или CGNAT мобильного оператора выводят многих пользователей через один IP.
+inline constexpr size_t MAX_INBOUND_PEERS_PER_ADDRESS{32};
 
 /// \brief Ограниченный inbound-listener DEV-узла.
 /// \details У каждого пира свой worker; один зависший пир не блокирует accept следующего.
