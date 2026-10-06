@@ -62,6 +62,8 @@ struct Metrics {
     Samples wallet_finality, publication_finality, publication_protected, publication_queue_wait, publication_signed_to_final;
     std::map<std::string,uint64_t> submitted, failed, busy;
     uint64_t bytes_published{0};
+    /** Recovery profile: content each restored Identity had to read back, and what it did. */
+    uint64_t expected_files{0}, recovered_files{0}, expected_mail{0}, recovered_mail{0};
 };
 Metrics metrics;
 struct Client {
@@ -83,11 +85,15 @@ struct Client {
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
     std::chrono::steady_clock::time_point next_audit{std::chrono::steady_clock::now()+30s};
+    std::filesystem::path dir;
+    /** Recovery targets of this Identity, from its expected.txt (else the command line). */
+    uint64_t expect_files{0}, expect_mail{0};
     /** Submission time of each job not yet finalized / protected (for --metrics). */
     std::map<std::string,Clock::time_point> awaiting_finality, awaiting_protection, awaiting_sign, signed_at;
     Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target, bool recovery) {
         std::filesystem::create_directories(dir);
+        this->dir=dir;
         events=std::make_shared<cybou::EventWriter>(dir/"client.events.jsonl");
         auto config=cybou::MakeNodeRuntimeConfig(net,dir/"node");
         if (std::none_of(config.configured_peers.begin(),config.configured_peers.end(),
@@ -277,8 +283,7 @@ int main(int argc,char* argv[]) {
         if (!std::set<std::string>{"files","mail","root-publications","payments","system-locks","mixed","recovery","funder"}.contains(profile)) throw std::runtime_error("unknown profile");
         const auto expected_mail=cybou::cli::Number(opts.Get("expected-incoming-mail","0"),0,100000);
         const auto expected_files=cybou::cli::Number(opts.Get("expected-files","0"),0,100000);
-        if (profile=="recovery" && !expected_mail && !expected_files)
-            throw std::runtime_error("recovery requires an expected content count per Identity");
+        // Recovery reads each Identity's expected.txt (written after a load run) or the counts given here.
         std::ifstream file{opts.Require("password-file"),std::ios::binary};
         std::string password{std::istreambuf_iterator<char>{file},std::istreambuf_iterator<char>{}};
         if (!file || password.empty() || password.size()>1024) throw std::runtime_error("invalid password file");
@@ -336,6 +341,23 @@ int main(int argc,char* argv[]) {
         for (uint64_t i=0;i<count && !stop;++i) clients.push_back(std::make_unique<Client>(*net,std::filesystem::path{opts.Require("data-dir")}/("identity-"+std::to_string(i)),peer,password,target,profile=="recovery"));
         cybou::crypto::CleanseMemory(password.data(),password.size());
         if (clients.size()!=count) return 1;
+        if (profile=="recovery") {
+            for (auto& client : clients) {
+                client->expect_files=expected_files;
+                client->expect_mail=expected_mail;
+                std::ifstream expected{client->dir/"expected.txt"};
+                for (std::string key; expected >> key;) {
+                    uint64_t value{0};
+                    expected >> value;
+                    if (key=="files") client->expect_files=value;
+                    else if (key=="mail") client->expect_mail=value;
+                }
+                metrics.expected_files+=client->expect_files;
+                metrics.expected_mail+=client->expect_mail;
+            }
+            if (!metrics.expected_files && !metrics.expected_mail)
+                throw std::runtime_error("recovery requires expected.txt or an expected content count");
+        }
         {
             std::ofstream accounts{std::filesystem::path{opts.Require("data-dir")}/"accounts.txt"};
             for (const auto& client : clients) accounts << client->identity->GetAccountId()->Value().GetHex() << '\n';
@@ -484,8 +506,8 @@ int main(int argc,char* argv[]) {
                             throw std::runtime_error("recovered recipient mail differs");
                         ++incoming;
                     }
-                    if (incoming<expected_mail || client->verified_files.size()<expected_files) done=false;
-                    if (expected_files) for (const auto& recovered : client->application->ListFiles()) {
+                    if (incoming<client->expect_mail || client->verified_files.size()<client->expect_files) done=false;
+                    if (client->expect_files) for (const auto& recovered : client->application->ListFiles()) {
                         if (recovered.item.kind!=cybou::FileItemKind::FILE) continue;
                         const auto durability=client->storage->GetDurability(recovered.operation_id);
                         if (!durability || durability->state!=cybou::DurabilityState::PROTECTED ||
@@ -501,7 +523,25 @@ int main(int argc,char* argv[]) {
             }
             if (!done) std::this_thread::sleep_for(1s);
         }
-        for (auto& client : clients) client->events->Write(cybou::NodeEvent::node_stopping);
+        for (auto& client : clients) {
+            uint64_t files{0}, mail{0};
+            for (const auto& file : client->application->ListFiles()) {
+                if (file.item.kind!=cybou::FileItemKind::FILE) continue;
+                const auto durability=client->storage->GetDurability(file.operation_id);
+                // Only content the network confirmed as protected must survive a clean restore.
+                if (durability && durability->state==cybou::DurabilityState::PROTECTED &&
+                    durability->min_replicas>=client->storage->RemoteReplicaTarget()) ++files;
+            }
+            for (const auto& item : client->application->ListMail()) if (!item.outgoing) ++mail;
+            if (profile=="recovery") {
+                metrics.recovered_files+=std::min<uint64_t>(client->verified_files.size(),client->expect_files);
+                metrics.recovered_mail+=std::min(mail,client->expect_mail);
+            } else {
+                std::ofstream expected{client->dir/"expected.txt",std::ios::trunc};
+                expected << "files " << files << "\nmail " << mail << '\n';
+            }
+            client->events->Write(cybou::NodeEvent::node_stopping);
+        }
         const auto elapsed_s=std::chrono::duration<double>(Clock::now()-start).count();
         // Attempts refused because the account was busy are not operations.
         for (const auto& [_,n] : metrics.busy) submitted-=std::min<uint64_t>(submitted,n);
@@ -523,7 +563,9 @@ int main(int argc,char* argv[]) {
                 << ",\"publication_submit_to_final\":" << metrics.publication_finality.Json()
                 << ",\"publication_submit_to_protected\":" << metrics.publication_protected.Json()
                 << ",\"publication_queue_wait\":" << metrics.publication_queue_wait.Json()
-                << ",\"publication_signed_to_final\":" << metrics.publication_signed_to_final.Json() << "}\n";
+                << ",\"publication_signed_to_final\":" << metrics.publication_signed_to_final.Json()
+                << ",\"recovery\":{\"expected_files\":" << metrics.expected_files << ",\"recovered_files\":" << metrics.recovered_files
+                << ",\"expected_mail\":" << metrics.expected_mail << ",\"recovered_mail\":" << metrics.recovered_mail << "}}\n";
             if (!out) throw std::runtime_error("cannot write metrics");
         }
         return done ? 0 : 1;

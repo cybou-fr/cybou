@@ -287,6 +287,45 @@ class Battle:
             time.sleep(10)
         self.sample()
 
+    def restore(self) -> None:
+        """Clean-machine restore: each client's Identities start again from their vault alone.
+
+        A fresh data directory holds only identity.vault and expected.txt (what the load run
+        left protected); the restore rebuilds Mail and Files from the chain and fetches every
+        file back from the network, checking each byte."""
+        log("restore: rebuilding every client Identity from its vault on a clean data directory")
+        processes = []
+        for path, peer in self.win_clients():
+            target = path.with_name(path.name + "-restore")
+            for i in range(self.args.identities):
+                source, dest = path / f"identity-{i}", target / f"identity-{i}"
+                dest.mkdir(parents=True)
+                for name in ("identity.vault", "expected.txt"):
+                    if (source / name).exists():
+                        shutil.copy2(source / name, dest / name)
+                seed_geo(dest / "node")
+            args = self.client_args("recovery", "0s", str(target / "metrics.json"))
+            args[args.index("--drain-timeout") + 1] = self.args.restore_timeout
+            processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(target),
+                                         "--peer", f"{peer[0]}:{peer[1]}", "--password-file", str(PASSWORD_FILE)] + args,
+                                        target / "restore.log"))
+        for path, peer in self.wsl_clients():
+            target = path + "-restore"
+            copies = " ".join(f"mkdir -p {target}/identity-{i}/node && cp {path}/identity-{i}/identity.vault {target}/identity-{i}/ && "
+                              f"cp {path}/identity-{i}/expected.txt {target}/identity-{i}/ 2>/dev/null; "
+                              f"cp -r {self.wsl_dir}/geo-seed {target}/identity-{i}/node/geo 2>/dev/null;"
+                              for i in range(self.args.identities))
+            wsl(f"{copies} true")
+            args = self.client_args("recovery", "0s", target + "/metrics.json")
+            args[args.index("--drain-timeout") + 1] = self.args.restore_timeout
+            wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {target} --peer {peer[0]}:{peer[1]} "
+                      f"--password-file {self.wsl_dir}/password.txt {' '.join(args)}", f"{target}/restore.log", f"{target}/restore.pid")
+        while any(p.poll() is None for p in processes) or any(
+                wsl(f"kill -0 $(cat {path}-restore/restore.pid) 2>/dev/null && echo running || true").strip() == "running"
+                for path, _ in self.wsl_clients()):
+            self.sample()
+            time.sleep(10)
+
     def wsl_load_running(self) -> bool:
         return any(wsl(f"kill -0 $(cat {path}/load.pid) 2>/dev/null && echo running || true").strip() == "running"
                    for path, _ in self.wsl_clients())
@@ -352,6 +391,15 @@ class Battle:
             text = wsl(f"cat {path}/metrics.json 2>/dev/null || true").strip()
             if text:
                 metrics.append(("wsl:" + path.rsplit("/", 1)[1], json.loads(text)))
+        restores = []
+        for path, _ in self.win_clients():
+            file = path.with_name(path.name + "-restore") / "metrics.json"
+            if file.exists():
+                restores.append(("windows:" + path.name, json.loads(file.read_text())))
+        for path, _ in self.wsl_clients():
+            text = wsl(f"cat {path}-restore/metrics.json 2>/dev/null || true").strip()
+            if text:
+                restores.append(("wsl:" + path.rsplit("/", 1)[1], json.loads(text)))
         (self.dir / "samples.json").write_text(json.dumps(self.samples), encoding="utf-8")
         total_ops = sum(m["operations"] for _, m in metrics)
         elapsed = max((m["elapsed_s"] for _, m in metrics), default=0)
@@ -376,6 +424,33 @@ class Battle:
             lines.append(f"| {name} | {m['result']} | {m['operations']} | {m['operations_per_s']:.2f} | "
                          f"{w['p50_ms']:.0f} / {w['p95_ms']:.0f} | {f['p50_ms']:.0f} / {f['p95_ms']:.0f} | "
                          f"{p['p50_ms']:.0f} / {p['p95_ms']:.0f} | {m['failed']} |")
+        # Verdict: correctness gates only; latencies are reported, not judged.
+        checks: list[tuple[str, bool, str]] = []
+        load_clients = [n for n, _ in metrics]
+        expected_clients = len(self.win_clients()) + len(self.wsl_clients()) + (1 if self.args.desktop_mails else 0)
+        checks.append(("every client reported metrics", len(load_clients) == expected_clients,
+                       f"{len(load_clients)} of {expected_clients}"))
+        for name, m in metrics:
+            checks.append((f"{name}: load drained", m["result"] == "PASS", m["result"]))
+            checks.append((f"{name}: no failed operations", not m["failed"], str(m["failed"] or "none")))
+        restore_names = {n for n, _ in restores}
+        for path, _ in self.win_clients():
+            if "windows:" + path.name not in restore_names:
+                checks.append((f"windows:{path.name}: restore reported", False, "no metrics"))
+        for path, _ in self.wsl_clients():
+            if "wsl:" + path.rsplit("/", 1)[1] not in restore_names:
+                checks.append((f"wsl:{path.rsplit('/', 1)[1]}: restore reported", False, "no metrics"))
+        for name, m in restores:
+            rec = m.get("recovery", {})
+            ok = (m["result"] == "PASS" and rec.get("recovered_files") == rec.get("expected_files")
+                  and rec.get("recovered_mail") == rec.get("expected_mail"))
+            checks.append((f"{name}: clean restore", ok,
+                           f"files {rec.get('recovered_files')}/{rec.get('expected_files')}, "
+                           f"mail {rec.get('recovered_mail')}/{rec.get('expected_mail')}, {m['result']}, {m['elapsed_s']:.0f} s"))
+        self.passed = all(ok for _, ok, _ in checks)
+        verdict = ["", f"## Verdict: {'PASS' if self.passed else 'FAIL'}", "", "| Check | Result | Detail |", "|---|---|---|"]
+        verdict += [f"| {name} | {'PASS' if ok else 'FAIL'} | {detail} |" for name, ok, detail in checks]
+        lines[6:6] = verdict
         desktop_owner = self.args.desktop_name
         mine = [h for h in getattr(self, "holdings", []) if h[1] == desktop_owner]
         lines += ["", f"## Chunks stored for {desktop_owner}", ""]
@@ -424,12 +499,15 @@ def cmd_run(args: argparse.Namespace) -> None:
         time.sleep(args.warmup)
         battle.fund(battle.prepare_clients())
         battle.load()
+        battle.restore()
         battle.stop_nodes()
         battle.collect_holdings()
         battle.report()
     finally:
         log("stopping battle processes")
         battle.stop()
+    if not getattr(battle, "passed", False):
+        sys.exit(1)
 
 
 def cmd_cleanup(_: argparse.Namespace) -> None:
@@ -467,6 +545,7 @@ def main() -> None:
     run.add_argument("--capacity", default="15GiB")
     run.add_argument("--fund-each", type=int, default=100000)
     run.add_argument("--drain-timeout", default="10m")
+    run.add_argument("--restore-timeout", default="30m", help="time for a clean restore to read everything back")
     run.add_argument("--warmup", type=int, default=30, help="seconds for nodes to sync before clients start")
     run.add_argument("--desktop-name", default="cybou.cybou", help="desktop Identity that receives letters")
     run.add_argument("--desktop-mails", type=int, default=20, help="letters with attachments sent to the desktop")
