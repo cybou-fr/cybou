@@ -141,7 +141,9 @@ struct Client {
             if (!identity->GetAccountId() || !node->Runtime().GetAccountState(*identity->GetAccountId()))
                 throw std::runtime_error("recovery requires a finalized synthetic Identity");
         } else {
-            const auto created = identity->CreateIdentitySync(password,nullptr,120s);
+            // AccountCreate carries heavy proof-of-work and the battle clients mine on one host,
+            // so new accounts finalize about one per block: allow a long queue.
+            const auto created = identity->CreateIdentitySync(password,nullptr,900s);
             if (!created.success) throw std::runtime_error("synthetic Identity creation failed: "+created.error_message);
         }
         auto& runtime=node->Runtime(); auto& keys=identity->GetKeyStore();
