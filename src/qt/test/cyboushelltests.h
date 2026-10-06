@@ -28,7 +28,6 @@ private Q_SLOTS:
     void mainWindowStarts();
     void homePageIsDefault();
     void navigationSwitchesPages();
-    void diagnosticsStaySecondaryWindow();
     void identityCreateFollowsFeatureAvailability();
     void restoreFlowValidatesPhrase();
     void identityPageHidesSecrets();
@@ -95,6 +94,7 @@ private Q_SLOTS:
     void networkRefreshCoalescesStatusBurst();
     void authorityExplorerAndEvidenceWorkspace();
     void ownContentInspectorAndBoundedConsole();
+    void consoleTranslationsPermissionsAndBounds();
     void assuranceLifecycleAndRecoveryGates();
 
 private:

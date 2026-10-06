@@ -7,7 +7,6 @@
 #include <QCoreApplication>
 #include <QWidget>
 
-#include <functional>
 
 class CybouDesktopModel;
 class QLabel;
@@ -20,8 +19,7 @@ class DiagnosticsPage : public QWidget
     Q_DECLARE_TR_FUNCTIONS(DiagnosticsPage)
 
 public:
-    DiagnosticsPage(CybouDesktopModel* model, std::function<void()> diagnostics_window_requested,
-        QWidget* parent = nullptr);
+    explicit DiagnosticsPage(CybouDesktopModel* model, QWidget* parent = nullptr);
 
 protected:
     void showEvent(QShowEvent* event) override;

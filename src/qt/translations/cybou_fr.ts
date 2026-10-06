@@ -127,241 +127,382 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>  [File task] %1: %2 | Retrieval: %3</source><translation>  [Tâche fichier] %1 : %2 | Récupération : %3</translation></message>
+    <message><source>Application preparation: %1 / %2 publications scanned</source><translation>Préparation de l’application : %1 / %2 publications parcourues</translation></message>
     <message>
-        <location filename="../cybouconsoledialog.cpp" line="+36"/>
+        <source>Show available commands</source>
+        <translation>Afficher les commandes disponibles</translation>
+    </message>
+    <message>
+        <source>Local node and Identity status</source>
+        <translation>État du nœud local et de l’Identité</translation>
+    </message>
+    <message>
+        <source>Network binding, chain tip and state root</source>
+        <translation>Empreinte du réseau, sommet de chaîne et racine d’état</translation>
+    </message>
+    <message>
+        <source>Physical storage usage and capacity policy</source>
+        <translation>Stockage physique utilisé et capacité locale</translation>
+    </message>
+    <message>
+        <source>Observed sessions and unverified peer heights</source>
+        <translation>Sessions observées et hauteurs déclarées non vérifiées</translation>
+    </message>
+    <message>
+        <source>Locally tracked operations</source>
+        <translation>Opérations suivies localement</translation>
+    </message>
+    <message>
+        <source>Own AccountID, name and key epoch</source>
+        <translation>Votre AccountID, nom et époque de clés</translation>
+    </message>
+    <message>
+        <source>Own Balance and System Balance</source>
+        <translation>Votre Balance et System Balance</translation>
+    </message>
+    <message>
+        <source>Own files and replica status</source>
+        <translation>Vos fichiers et l’état des répliques</translation>
+    </message>
+    <message>
+        <source>Own file metadata and retrieval state</source>
+        <translation>Métadonnées et récupération de votre fichier</translation>
+    </message>
+    <message>
+        <source>Chunk evidence availability for an own file</source>
+        <translation>Disponibilité des preuves de chunks pour votre fichier</translation>
+    </message>
+    <message>
+        <source>Own active application tasks</source>
+        <translation>Vos tâches applicatives actives</translation>
+    </message>
+    <message>
+        <source>Local finalizer and finalized state totals</source>
+        <translation>Finaliseur local et totaux de l’état finalisé</translation>
+    </message>
+    <message>
+        <source>Clear output and command history</source>
+        <translation>Effacer la sortie et l’historique des commandes</translation>
+    </message>
+    <message>
         <source>CYBOU Read-Only Console</source>
         <translation>Console CYBOU en lecture seule</translation>
     </message>
     <message>
-        <location line="+14"/>
         <source>Bounded Read-Only Console</source>
         <translation>Console bornée en lecture seule</translation>
     </message>
     <message>
-        <location line="+2"/>
-        <source>Restricted diagnostic inspection for own files, chunk trees, and network state. Shell, mutation, and scripting commands are disabled.</source>
-        <translation>Inspection diagnostique restreinte des fichiers propres, arbres de blocs et état du réseau. Commandes shell, mutation et scripts désactivés.</translation>
+        <source>Inspect local network state, own file metadata and available operator diagnostics. Shell, mutation, and scripting commands are disabled.</source>
+        <translation>Inspection de l’état du réseau local, des métadonnées de vos fichiers et des diagnostics opérateur disponibles. Commandes shell, mutation et scripts désactivés.</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Type a command (e.g. &apos;help&apos;, &apos;status&apos;, &apos;files&apos;, &apos;storage&apos;)…</source>
-        <translation>Tapez une commande (ex. &apos;help&apos;, &apos;status&apos;, &apos;files&apos;, &apos;storage&apos;)…</translation>
+        <source>Type a command (e.g. 'help', 'status', 'files', 'storage')…</source>
+        <translation>Tapez une commande (ex. 'help', 'status', 'files', 'storage')…</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Run</source>
         <translation>Exécuter</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>Clear</source>
         <translation>Effacer</translation>
     </message>
     <message>
-        <location line="+8"/>
-        <source>CYBOU Bounded Console initialized. Type &apos;help&apos; to view permitted read-only commands.</source>
-        <translation>Console bornée CYBOU initialisée. Tapez &apos;help&apos; pour afficher les commandes autorisées en lecture seule.</translation>
+        <source>CYBOU Bounded Console initialized. Type 'help' to view permitted read-only commands.</source>
+        <translation>Console bornée CYBOU initialisée. Tapez 'help' pour afficher les commandes autorisées en lecture seule.</translation>
     </message>
     <message>
-        <location line="+72"/>
         <source>Vault locked. Private session history and output cleared.</source>
         <translation>Coffre verrouillé. Historique et sorties de session privée effacés.</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>Available read-only commands:
-  help               Show this command reference
-  status             Show local node status and verified height
-  storage            Show own storage usage, local capacity, and provider obligations
-  files [filter]     List own unlocked files (ID, Name, Size, State, Replicas)
-  file &lt;id|name&gt;     Show details for a specific own file
-  chunks &lt;id|name&gt;   Inspect chunk tree, byte ranges, and BLAKE3 verification
-  peers              List observed peer connections
-  jobs               List active background jobs in progress
-  clear              Clear console output
-
-Security note: This console does not execute shell scripts, SQL queries, or mutation operations. All queries are strictly bounded to the currently unlocked Identity.</source>
-        <translation type="unfinished">
-      </translation>
+        <source>Command too long (maximum 1024 characters).</source>
+        <translation>Commande trop longue (maximum 1024 caractères).</translation>
     </message>
     <message>
-        <location line="+25"/>
-        <source>Network: %1 (%2)
-Node: %3 | Online: %4 | Connection: %5
-Finalized Height: %6
-Identity: %7 (%8)</source>
-        <translation type="unfinished">
-      </translation>
+        <source>Error: Command '%1' is not recognized or not permitted. Type help for available commands.</source>
+        <translation>Erreur : commande '%1' inconnue ou non autorisée. Tapez help pour les commandes disponibles.</translation>
     </message>
     <message>
-        <location line="+6"/>
-        <source>Running</source>
-        <translation>En cours d&apos;exécution</translation>
+        <source>Unlock your Identity to use this command.</source>
+        <translation>Déverrouillez votre Identité pour utiliser cette commande.</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>Stopped</source>
-        <translation>Arrêté</translation>
+        <source>Usage: %1</source>
+        <translation>Utilisation : %1</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Yes</source>
-        <translation>Oui</translation>
+        <source>Available read-only commands:</source>
+        <translation>Commandes disponibles en lecture seule :</translation>
     </message>
     <message>
-        <location line="+0"/>
-        <source>No</source>
-        <translation>Non</translation>
+        <source>Unlock your Identity for private catalog commands.</source>
+        <translation>Déverrouillez votre Identité pour les commandes du catalogue privé.</translation>
     </message>
     <message>
-        <location line="-9"/>
-        <location line="+13"/>
+        <source>Active</source>
+        <translation>Actif</translation>
+    </message>
+    <message>
+        <source>Creating</source>
+        <translation>Création</translation>
+    </message>
+    <message>
+        <source>Restoring</source>
+        <translation>Restauration</translation>
+    </message>
+    <message>
+        <source>Syncing</source>
+        <translation>Synchronisation…</translation>
+    </message>
+    <message>
+        <source>Locked</source>
+        <translation>Verrouillé</translation>
+    </message>
+    <message>
+        <source>Needs Attention</source>
+        <translation>À vérifier</translation>
+    </message>
+    <message>
         <source>None</source>
         <translation>Aucun</translation>
     </message>
     <message>
-        <location line="-19"/>
-        <source>Active</source>
-        <translation type="unfinished">Actif</translation>
+        <source>Network: %1 (%2)
+Node: %3 | Online: %4 | Connection: %5
+Finalized Height: %6
+Identity: %7 (%8)</source>
+        <translation>Réseau : %1 (%2)
+Nœud : %3 | En ligne : %4 | Connexion : %5
+Hauteur finalisée : %6
+Identité : %7 (%8)</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Creating</source>
-        <translation type="unfinished"></translation>
+        <source>Running</source>
+        <translation>En cours d'exécution</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Restoring</source>
-        <translation type="unfinished"></translation>
+        <source>Stopped</source>
+        <translation>Arrêté</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Syncing</source>
-        <translation type="unfinished">Synchronisation…</translation>
+        <source>Yes</source>
+        <translation>Oui</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Locked</source>
-        <translation type="unfinished">Verrouillé</translation>
+        <source>No</source>
+        <translation>Non</translation>
     </message>
     <message>
-        <location line="+1"/>
-        <source>Needs Attention</source>
-        <translation type="unfinished"></translation>
+        <source>Unknown</source>
+        <translation>Inconnu</translation>
     </message>
     <message>
-        <location line="+28"/>
-        <source>Own Storage Summary:
-  Own files: %1 items
-  Own stored data: %2 (%3 bytes)
-  Local capacity policy (V): %4
-  Provider obligations: &lt;= %5 (floor(2V/3))
-  Storage model: Uniform Full Node, intrinsic encrypted storage.</source>
-        <translation type="unfinished">
-      </translation>
+        <source>Network: %1
+Network binding: %2
+Locally verified height: %3
+Tip: %4
+State root: %5
+Safety halt: %6</source>
+        <translation>Réseau : %1
+Empreinte du réseau : %2
+Hauteur vérifiée localement : %3
+Sommet : %4
+Racine d’état : %5
+Arrêt de sécurité : %6</translation>
     </message>
     <message>
-        <location line="+14"/>
+        <source>Physical storage (encrypted bytes): %1 / %2
+Provider obligations: %3 / %4 bytes
+Capacity and obligations are local policy, not consensus rights.</source>
+        <translation>Stockage physique (octets chiffrés) : %1 / %2
+Obligations de stockage : %3 / %4 octets
+Capacité et obligations relèvent de la politique locale, sans droit de consensus.</translation>
+    </message>
+    <message>
+        <source>Own Storage Summary: %1 items, %2 logical bytes (not physical storage usage).</source>
+        <translation>Vos fichiers : %1 éléments, %2 octets logiques (distincts du stockage physique).</translation>
+    </message>
+    <message>
+        <source>AccountID: %1
+Name: %2
+Key epoch: %3
+Creation height: %4</source>
+        <translation>AccountID : %1
+Nom : %2
+Époque de clés : %3
+Hauteur de création : %4</translation>
+    </message>
+    <message>
+        <source>Balance: %1 CYBOU
+System Balance: %2 CYBOU (non-transferable service budget)</source>
+        <translation>Balance : %1 CYBOU
+System Balance : %2 CYBOU (budget de service non transférable)</translation>
+    </message>
+    <message>
+        <source>Locally tracked operations: %1 (maximum 100 rows)</source>
+        <translation>Opérations suivies localement : %1 (maximum 100 lignes)</translation>
+    </message>
+    <message>
+        <source>Local pending</source>
+        <translation>En attente locale</translation>
+    </message>
+    <message>
+        <source>Accepted remotely</source>
+        <translation>Acceptée à distance</translation>
+    </message>
+    <message>
+        <source>Finalized</source>
+        <translation>Finalisée</translation>
+    </message>
+    <message>
+        <source>Rejected</source>
+        <translation>Rejetée</translation>
+    </message>
+    <message>
+        <source>History unavailable</source>
+        <translation>Historique indisponible</translation>
+    </message>
+    <message>
+        <source>Output limited to 100 rows.</source>
+        <translation>Sortie limitée à 100 lignes.</translation>
+    </message>
+    <message>
+        <source>Signer unavailable</source>
+        <translation>Signataire indisponible</translation>
+    </message>
+    <message>
+        <source>Finalizing</source>
+        <translation>Finalisation</translation>
+    </message>
+    <message>
+        <source>Paused</source>
+        <translation>En pause</translation>
+    </message>
+    <message>
+        <source>Safety halt</source>
+        <translation>Arrêt de sécurité</translation>
+    </message>
+    <message>
+        <source>Local finalizer: %1
+Signer enabled: %2
+Candidates: %3
+Locally verified height: %4</source>
+        <translation>Finaliseur local : %1
+Signataire activé : %2
+Candidats : %3
+Hauteur vérifiée localement : %4</translation>
+    </message>
+    <message>
+        <source>Locally executed candidates: %1 (volatile pool)</source>
+        <translation>Candidats exécutés localement : %1 (file volatile)</translation>
+    </message>
+    <message>
+        <source>Finalized state at height %1
+Identities: %2
+Names: %3
+Pending name commits: %4
+Balance total: %5 CYBOU
+System Balance total: %6 CYBOU
+Storage escrow: %7 CYBOU</source>
+        <translation>État finalisé à la hauteur %1
+Identités : %2
+Noms : %3
+Engagements de nom en attente : %4
+Total Balance : %5 CYBOU
+Total System Balance : %6 CYBOU
+Séquestre de stockage : %7 CYBOU</translation>
+    </message>
+    <message>
+        <source>Usage: authority [status|candidates|totals]</source>
+        <translation>Utilisation : authority [status|candidates|totals]</translation>
+    </message>
+    <message>
         <source>Listing own unlocked files:</source>
         <translation>Liste des fichiers déverrouillés :</translation>
     </message>
     <message>
-        <location line="+6"/>
         <source>[Folder]</source>
         <translation>[Dossier]</translation>
     </message>
     <message>
-        <location line="+2"/>
         <source>(replicas: %1/%2)</source>
         <translation>(répliques : %1/%2)</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>  No matching files found.</source>
         <translation>  Aucun fichier correspondant trouvé.</translation>
     </message>
     <message>
-        <location line="+3"/>
         <source>Usage: file &lt;id|name&gt;</source>
         <translation>Utilisation : file &lt;id|nom&gt;</translation>
     </message>
     <message>
-        <location line="+11"/>
-        <location line="+36"/>
         <source>File not found in own catalog: %1</source>
         <translation>Fichier introuvable dans le catalogue propre : %1</translation>
     </message>
     <message>
-        <location line="-32"/>
         <source>File Details:
   ID: %1
   Name: %2
   Root Content ID: %3
   Logical Size: %4 (%5 bytes)
-  Chunks: %6 (512 KiB billing unit)
+  Billing units: %6 (512 KiB, not a measured chunk count)
   State: %7
   Remote Replicas: %8 of %9
   Local Availability: %10
   Retrieval: %11</source>
-        <translation type="unfinished">
-      </translation>
+        <translation>Détails du fichier :
+  ID : %1
+  Nom : %2
+  Racine du contenu : %3
+  Taille logique : %4 (%5 octets)
+  Unités de facturation : %6 (512 Kio, pas un nombre de chunks mesuré)
+  État : %7
+  Répliques distantes : %8 sur %9
+  Disponibilité locale : %10
+  Récupération : %11</translation>
     </message>
     <message>
-        <location line="+12"/>
-        <location line="+29"/>
         <source>Not reported</source>
         <translation>Non rapporté</translation>
     </message>
     <message>
-        <location line="-20"/>
         <source>Usage: chunks &lt;id|name&gt;</source>
         <translation>Utilisation : chunks &lt;id|nom&gt;</translation>
     </message>
     <message>
-        <location line="+15"/>
-        <source>Chunk Tree: %1
-  Root Content ID: %2
-  Size: %3 | Chunks: %4 | Chunk size: 512 KiB
-  Integrity: Content-addressed BLAKE3 Merkle tree</source>
-        <translation type="unfinished">
-      </translation>
+        <source>Chunk evidence: %1
+Content root: %2
+Actual chunk list and verification results are not exposed by the application model. No integrity check was performed.</source>
+        <translation>Preuves de chunks : %1
+Racine du contenu : %2
+Le modèle applicatif ne fournit pas la liste réelle des chunks ni les résultats de vérification. Aucun contrôle d’intégrité effectué.</translation>
     </message>
     <message>
-        <location line="+22"/>
-        <source>  ... and %1 more chunks (bounded output)</source>
-        <translation>  ... et %1 autres blocs (sortie bornée)</translation>
-    </message>
-    <message>
-        <location line="+2"/>
-        <source>  Evidence: Authorized by owner self-capsule and finalized RootPublication.</source>
-        <translation>  Preuve : Autorisé par la capsule propriétaire et RootPublication finalisée.</translation>
-    </message>
-    <message>
-        <location line="+3"/>
         <source>Observed Peer Connections (%1 peers):</source>
         <translation>Connexions de pairs observées (%1 pairs) :</translation>
     </message>
     <message>
-        <location line="+9"/>
         <source>  No peers currently connected.</source>
         <translation>  Aucun pair connecté actuellement.</translation>
     </message>
     <message>
-        <location line="+4"/>
         <source>Active Background Jobs:</source>
         <translation>Tâches de fond actives :</translation>
     </message>
     <message>
-        <location line="+12"/>
         <source>  No background jobs currently in progress.</source>
         <translation>  Aucune tâche de fond en cours.</translation>
     </message>
     <message>
-        <location line="+4"/>
-        <source>Error: Command &apos;%1&apos; is not recognized or not permitted. This console is strictly read-only and accepts only: help, status, storage, files, file, chunks, peers, jobs, clear.</source>
-        <translation>Erreur : La commande &apos;%1&apos; n&apos;est pas reconnue ou non autorisée. Cette console est strictement en lecture seule et accepte uniquement : help, status, storage, files, file, chunks, peers, jobs, clear.</translation>
+        <source>Error: Command '%1' is not recognized or not permitted. This console is strictly read-only and accepts only: help, status, storage, files, file, chunks, peers, jobs, clear.</source>
+        <translation>Erreur : La commande '%1' n'est pas reconnue ou non autorisée. Cette console est strictement en lecture seule et accepte uniquement : help, status, storage, files, file, chunks, peers, jobs, clear.</translation>
     </message>
 </context>
+
 <context>
     <name>CybouCoreApplicationAdapter</name>
     <message>
@@ -983,6 +1124,7 @@ Identity: %7 (%8)</source>
 </context>
 <context>
     <name>CybouMainWindow</name>
+    <message><source>Read-only console</source><translation>Console en lecture seule</translation></message>
     <message>
         <location filename="../cyboumainwindow.cpp" line="+92"/>
         <source>Home</source>
@@ -1043,26 +1185,8 @@ Identity: %7 (%8)</source>
         <source>CYBOU</source>
         <translation>CYBOU</translation>
     </message>
-    <message>
-        <location line="-882"/>
-        <source>CYBOU diagnostics</source>
-        <translation>Diagnostics de CYBOU</translation>
-    </message>
-    <message>
-        <location line="+9"/>
-        <source>Network: %1
-Network ID: %2
-Node running: %3
-Peers: %4
-Finalized height: %5
-Data directory: %6</source>
-        <translation>Réseau : %1
-ID réseau : %2
-Nœud actif : %3
-Pairs : %4
-Hauteur finalisée : %5
-Dossier de données : %6</translation>
-    </message>
+
+
     <message>
         <location line="+3"/>
         <source>yes</source>
@@ -1120,11 +1244,7 @@ Dossier de données : %6</translation>
         <source>Lock local vault</source>
         <translation>Verrouiller le coffre local</translation>
     </message>
-    <message>
-        <location line="+7"/>
-        <source>Diagnostics window</source>
-        <translation>Fenêtre de diagnostic</translation>
-    </message>
+
     <message>
         <location line="+1"/>
         <location line="+1"/>
@@ -1687,11 +1807,7 @@ Racine d’état %7</translation>
         <source>Open Read-Only Console</source>
         <translation>Ouvrir la console en lecture seule</translation>
     </message>
-    <message>
-        <location line="+10"/>
-        <source>Open diagnostics window</source>
-        <translation>Ouvrir la fenêtre de diagnostic</translation>
-    </message>
+
     <message>
         <location line="+18"/>
         <source>Running</source>

@@ -83,8 +83,7 @@ void Row(QVBoxLayout* layout, const QString& key, const QString& value, QWidget*
 
 } // namespace
 
-DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()> diagnostics_window_requested,
-    QWidget* parent)
+DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, QWidget* parent)
     : QWidget{parent}, m_model{model}
 {
     setMinimumWidth(0);
@@ -198,10 +197,6 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
     });
     root->addWidget(console_btn, 0, Qt::AlignLeft);
 
-    auto* open = new QPushButton{tr("Open diagnostics window"), this};
-    open->setObjectName(QStringLiteral("secondaryButton"));
-    connect(open, &QPushButton::clicked, this, [fn = std::move(diagnostics_window_requested)] { if (fn) fn(); });
-    root->addWidget(open, 0, Qt::AlignLeft);
     root->addStretch();
 
     m_refresh_timer = new QTimer{this};

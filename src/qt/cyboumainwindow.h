@@ -55,7 +55,6 @@ public:
     ~CybouMainWindow() override;
 
     void startRuntime();
-    void showDebugWindow();
     void showPage(CybouPage page);
     void showNetworkDiagnostics();
     /** Rebuilds the shell so every page picks up a new appearance. */
@@ -101,7 +100,6 @@ private:
     QMenu* m_identity_menu{nullptr};
     QSystemTrayIcon* m_tray_icon{nullptr};
     QMenu* m_tray_menu{nullptr};
-    QDialog* m_diagnostics{nullptr};
     QDialog* m_application_loading{nullptr};
     bool m_application_loading_dismissed{false};
     void refreshApplicationLoading();

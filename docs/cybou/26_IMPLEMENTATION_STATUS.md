@@ -3,6 +3,31 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Bounded console and redundant diagnostics removal (2026-10-06)
+
+The duplicate diagnostics text window and its entry points are removed. Its six
+values remain in Network Advanced. The menu now opens the read-only console.
+Blank French multiline translations caused `help`, `status` and `storage` to
+produce empty responses; the console translations are complete and help derives
+from the actual command registry. Public local diagnostics, unlocked own-account
+queries and genesis-key-proven Authority queries have separate dispatch/help
+availability. Authority proof loss and locking clear private output and history.
+
+Storage uses the runtime's measured physical counters rather than guessed default
+capacity. Unknown replicas and finality remain unknown. The former `chunks`
+implementation synthesized SHA-256 digests from root text/index and called them
+verified BLAKE3 leaves; this false evidence is removed. Real chunk leaf inspection
+is unavailable through the current semantic model and the command says so.
+Lists, input, output and history are bounded. The UX contract records the next
+API-backed inspector/explorer work without advertising unimplemented commands.
+
+Validation: the native Windows Qt suite passed 73 results, including French
+command responses, ordinary-versus-Authority dispatch, proof-loss/lock cleanup,
+input/history/output bounds and truthful chunk evidence. The main desktop binary
+was rebuilt and deployed locally. Native French console screenshots and the full
+log are in `artifacts/console-20261006/`. This does not claim live-network audits
+or delivery of the future chunk/history APIs.
+
 ## Network and unlock presentation (2026-10-06)
 
 The local UI worktree combines Network and Diagnostics: the sidebar caption

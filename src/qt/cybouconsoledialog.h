@@ -17,12 +17,12 @@ class QPushButton;
  * Bounded read-only operator console.
  *
  * Implements a restricted command grammar for inspecting own unlocked
- * Identity files, storage capacity, chunk trees, observed peers, and jobs.
+ * Identity metadata, storage counters, observed peers, jobs and local PoA status.
  *
  * Strict invariants (R8 / W7):
  * - Strictly read-only: no shell, arbitrary SQL/script, mutation or signing commands.
  * - Zero disclosure of private key material, mnemonics, or foreign ChunkStore objects.
- * - Memory-bounded: capped output (500 lines).
+ * - Memory-bounded: 500 output blocks, 100 rows/history entries, 1024-character input.
  * - Safe cancellation: lock cleanup immediately flushes output and history.
  */
 class CybouConsoleDialog : public QDialog
@@ -49,6 +49,9 @@ private:
     QPushButton* m_clear_btn{nullptr};
     QStringList m_history;
     int m_history_index{-1};
+    bool m_private_session{false};
+    bool m_authority_session{false};
+    QString m_account;
     static constexpr int kMaxLines = 500;
 
     void handleRun();

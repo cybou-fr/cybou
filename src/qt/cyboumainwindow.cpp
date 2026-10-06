@@ -13,6 +13,7 @@
 #include <qt/pages/networkpage.h>
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/cybouactivity.h>
+#include <qt/cybouconsoledialog.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/homepage.h>
@@ -48,7 +49,6 @@
 #include <QProgressBar>
 #include <QResizeEvent>
 #include <QScrollArea>
-#include <QScrollBar>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QLocale>
@@ -58,7 +58,6 @@
 #include <QStackedWidget>
 #include <QStyle>
 #include <QSystemTrayIcon>
-#include <QTextEdit>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -184,51 +183,6 @@ void CybouMainWindow::startRuntime()
 {
     if (m_desktop_model->fixtureMode()) return;
     m_controller->start();
-}
-
-void CybouMainWindow::showDebugWindow()
-{
-    if (!m_diagnostics) {
-        m_diagnostics = new QDialog{this, Qt::Window};
-        m_diagnostics->setObjectName(QStringLiteral("CYBOUDiagnostics"));
-        m_diagnostics->setWindowTitle(tr("CYBOU diagnostics"));
-        m_diagnostics->resize(640, 360);
-        auto* layout = new QVBoxLayout{m_diagnostics};
-        auto* details = new QTextEdit{m_diagnostics};
-        details->setObjectName(QStringLiteral("diagnosticsDetails"));
-        details->setReadOnly(true);
-        details->setLineWrapMode(QTextEdit::NoWrap);
-        layout->addWidget(details);
-        const auto update_details = [this, details] {
-            const auto& status = m_desktop_model->status();
-            const auto text = tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
-                                     "Finalized height: %5\nData directory: %6")
-                .arg(status.network_name, status.network_binding,
-                    status.node_running ? tr("yes") : tr("no"))
-                .arg(status.peer_count)
-                .arg(status.finality_known ? QString::number(status.finalized_height) : tr("unknown"))
-                .arg(status.data_directory);
-            if (details->toPlainText() == text) return;
-            const auto cursor = details->textCursor();
-            const int anchor = cursor.anchor();
-            const int position = cursor.position();
-            const int horizontal = details->horizontalScrollBar()->value();
-            const int vertical = details->verticalScrollBar()->value();
-            details->setPlainText(text);
-            auto restored = details->textCursor();
-            const int last = details->document()->characterCount() - 1;
-            restored.setPosition(std::min(anchor, last));
-            restored.setPosition(std::min(position, last), QTextCursor::KeepAnchor);
-            details->setTextCursor(restored);
-            details->horizontalScrollBar()->setValue(horizontal);
-            details->verticalScrollBar()->setValue(vertical);
-        };
-        connect(m_desktop_model, &CybouDesktopModel::statusChanged, m_diagnostics, update_details);
-        update_details();
-    }
-    m_diagnostics->show();
-    m_diagnostics->raise();
-    m_diagnostics->activateWindow();
 }
 
 void CybouMainWindow::refreshApplicationLoading()
@@ -514,7 +468,11 @@ QFrame* CybouMainWindow::buildHeader(QWidget* parent)
         lock->setEnabled(active);
         m_identity_menu->addAction(tr("Settings"), this, [this] { showPage(CybouPage::Settings); });
         m_identity_menu->addSeparator();
-        m_identity_menu->addAction(tr("Diagnostics window"), this, &CybouMainWindow::showDebugWindow);
+        m_identity_menu->addAction(tr("Read-only console"), this, [this] {
+            auto* console = new CybouConsoleDialog{m_desktop_model, this};
+            console->setAttribute(Qt::WA_DeleteOnClose);
+            console->show();
+        });
         m_identity_menu->addAction(tr("About CYBOU"), this, [this] {
             QMessageBox::about(this, tr("About CYBOU"),
                 tr("CYBOU gives you one private Identity for Mail, Files, Names and Wallet."));
@@ -555,7 +513,7 @@ void CybouMainWindow::buildShell()
     auto* wallet = new WalletPage{m_desktop_model, nullptr};
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* network = new NetworkPage{m_desktop_model, nullptr};
-    auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
+    auto* diagnostics = new DiagnosticsPage{m_desktop_model, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showNetworkDiagnostics(); }, nullptr};
     settings->onAppearanceChanged = [this] { reloadAppearance(); };
     settings->onLanguageChanged = [this](const QString& language) { setLanguage(language); };
@@ -1053,6 +1011,15 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         }
         showNetworkDiagnostics();
         save(QStringLiteral("diagnostics"));
+        {
+            CybouConsoleDialog console{model, this};
+            console.show();
+            console.executeCommand(QStringLiteral("help"));
+            console.executeCommand(QStringLiteral("status"));
+            console.executeCommand(QStringLiteral("storage"));
+            qApp->processEvents();
+            console.grab().save(QDir{directory}.filePath(prefix + QStringLiteral("console-user.png")));
+        }
         showPage(CybouPage::Settings);
         save(QStringLiteral("settings"));
 
@@ -1070,6 +1037,14 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         authority.total_system_balance = 3'902'144;
         authority.storage_escrow = 1'204'500;
         model->setNetworkAuthority(authority);
+        {
+            CybouConsoleDialog console{model, this};
+            console.show();
+            console.executeCommand(QStringLiteral("help"));
+            console.executeCommand(QStringLiteral("authority status"));
+            qApp->processEvents();
+            console.grab().save(QDir{directory}.filePath(prefix + QStringLiteral("console-authority.png")));
+        }
         showPage(CybouPage::NetworkAuthority);
         save(QStringLiteral("network-authority"));
         authority.finalizer = CybouFinalizerState::Paused;

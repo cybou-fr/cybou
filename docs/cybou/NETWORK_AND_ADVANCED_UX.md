@@ -110,24 +110,54 @@ redact them; viewing a panel does not authorize publishing it.
 
 ## Own-content inspector and console
 
-Start with read-only diagnostics and a bounded command grammar, not a system
-shell or arbitrary SQL/script execution. Example product commands: status,
-storage summary, files list, file info <semantic-id>, file chunks <semantic-id>,
-network peers, jobs list. Exact grammar is an implementation choice; only
-implemented commands are advertised.
+The redundant standalone diagnostics text window is removed. Network Advanced
+remains the technical summary; the Identity menu and Advanced open the same
+read-only console implementation. Command names are stable ASCII tokens;
+descriptions and results follow the application language. Help is generated from
+the same command registry used for dispatch and authorization.
 
-Resolve content through the unlocked Identity's semantic Application DB and
-authorized owned content references. Show chunk verification and retrieval
-evidence for that content; never enumerate the common ChunkStore/provider DB
-or expose foreign hosted objects. Provider statistics are aggregates only.
-Bound rows, traversal depth, output size and execution time; support cancellation
-for safe read-only jobs. Clear private output/history on lock. Redact key
-material, phrase, plaintext file paths and sensitive endpoint details from logs
-and exports; console history storage needs an explicit privacy policy.
+| Access | Implemented commands | Source and scope |
+| --- | --- | --- |
+| Any local session | `help`, `status`, `network`, `storage`, `peers`, `operations`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements |
+| Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values and active application tasks |
+| Unlocked genesis-key-proven Authority | `authority [status|candidates|totals]` | Local signer loop, volatile locally executed candidates and locally verified finalized totals |
 
-Automatic output refresh preserves selection and text. No send, delete, signing,
-journal reset, genesis/provisioning or shell command exists in the first console.
-Any later mutation command needs the normal reviewed workflow and durable result.
+Authority commands are hidden from ordinary help and denied by dispatch. A name,
+peer endpoint or displayed role does not authorize them. Every invocation checks
+current model proof; loss of proof, account change or locking clears console
+output, input and history. Commands do not activate signing, networking proofs,
+repair or retrieval. Shell execution, SQL, scripts and mutations remain absent.
+
+Output retains at most 500 text blocks, lists at most 100 rows, command history
+at most 100 entries and input at most 1024 characters. Nothing is persisted.
+Unknown capacity/replica/finality observations stay unknown; logical file bytes
+are not physical storage use. File size divided by 512 KiB is a billing-unit
+estimate, never a measured chunk count. `chunks` reports the owned content root
+and explicitly states that actual leaf lists and verification results are not
+available through the current model. No fabricated digest, verified leaf or
+self-capsule/finality claim is displayed.
+
+### Further UI-to-console work
+
+The implemented commands cover technical values already available in Network,
+Files Advanced, Wallet and Authority. Keep normal Mail/Files/Wallet workflows in
+their pages. Candidates for a subsequent advanced console slice are:
+
+- Real own-content leaf manifests and integrity/retrieval evidence, after a
+  bounded cancellable ApplicationService API is available. Never enumerate the
+  common ChunkStore or foreign provider objects.
+- Paginated verified block/operation lookup, with history access on a worker and
+  explicit unavailable results. Current `operations` is a local tracked sample,
+  not a full blockchain explorer.
+- Authority queue ages, signer safety evidence summaries and settlement previews
+  when real APIs expose them. Off-chain storage observations cannot be presented
+  as canonical audit reliability or provider failure-domain independence.
+
+Pause/resume/finalize and settlement mutations currently stay in the Authority
+page with its established permission and review flow. Adding console mutations
+requires a separate product contract and the same authority checks and durable
+results; a typed command must not bypass that flow. These future features are
+not advertised by help until implemented.
 
 ## Tests and benchmarks
 

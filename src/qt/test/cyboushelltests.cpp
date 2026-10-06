@@ -60,6 +60,8 @@
 #include <QSettings>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QTranslator>
+#include <QPlainTextEdit>
 #include <QPlainTextEdit>
 #include <QTest>
 #include <QToolButton>
@@ -261,41 +263,6 @@ void CybouShellTests::navigationSwitchesPages()
         button->click();
         QCOMPARE(window->currentPageIndex(), index);
     }
-}
-
-void CybouShellTests::diagnosticsStaySecondaryWindow()
-{
-    auto window = makeWindow();
-    window->show();
-    QVERIFY(window->isVisible());
-
-    window->showDebugWindow();
-    auto* diagnostics = window->findChild<QDialog*>(QStringLiteral("CYBOUDiagnostics"));
-    QVERIFY(diagnostics);
-    QVERIFY(diagnostics->isVisible());
-    QVERIFY(window->isVisible());
-
-    window->showDebugWindow();
-    QVERIFY(diagnostics->isVisible());
-    auto* details = diagnostics->findChild<QTextEdit*>(QStringLiteral("diagnosticsDetails"));
-    QVERIFY(details);
-    QCOMPARE(details->lineWrapMode(), QTextEdit::NoWrap);
-    window->desktopModel()->setNetworkInfo(QStringLiteral("CYBOU DEVNET"), QString(4000, QLatin1Char('a')));
-    diagnostics->resize(400, 160);
-    QTRY_VERIFY(details->horizontalScrollBar()->maximum() > 100);
-    QTRY_VERIFY(details->verticalScrollBar()->maximum() > 0);
-    auto cursor = details->textCursor();
-    cursor.setPosition(0);
-    cursor.setPosition(7, QTextCursor::KeepAnchor);
-    details->setTextCursor(cursor);
-    details->horizontalScrollBar()->setValue(100);
-    details->verticalScrollBar()->setValue(details->verticalScrollBar()->maximum());
-    const int vertical = details->verticalScrollBar()->value();
-    window->desktopModel()->setFinalizedHeight(123);
-    QCOMPARE(details->horizontalScrollBar()->value(), 100);
-    QCOMPARE(details->verticalScrollBar()->value(), vertical);
-    QCOMPARE(details->textCursor().selectedText(), QStringLiteral("Network"));
-    diagnostics->close();
 }
 
 void CybouShellTests::identityCreateFollowsFeatureAvailability()
@@ -937,7 +904,7 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     snapshot.peers.push_back({"127.0.0.1:30471",9,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
-    DiagnosticsPage page{&model,[]{}};
+    DiagnosticsPage page{&model};
     QPushButton* monitor=nullptr;
     for (auto* button : page.findChildren<QPushButton*>()) if (button->text().contains(QStringLiteral("Network Monitor"))) monitor=button;
     QVERIFY(monitor);
@@ -3673,15 +3640,15 @@ void CybouShellTests::ownContentInspectorAndBoundedConsole()
     // single file info command
     console.executeCommand(QStringLiteral("file f_own_1"));
     QVERIFY(console.outputText().contains(file1.content_root_id));
-    QVERIFY(console.outputText().contains(QStringLiteral("Chunks: 3")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Billing units: 3")));
 
-    // chunks command (chunk tree inspection)
+    // Only real semantic evidence may be reported, never invented chunk digests.
+    console.clearOutput();
     console.executeCommand(QStringLiteral("chunks f_own_1"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Chunk Tree: contract.pdf")));
-    QVERIFY(console.outputText().contains(QStringLiteral("#0: 0..524287 bytes (512 KiB)")));
-    QVERIFY(console.outputText().contains(QStringLiteral("#1: 524288..1048575 bytes (512 KiB)")));
-    QVERIFY(console.outputText().contains(QStringLiteral("#2: 1048576..1499999 bytes")));
-    QVERIFY(console.outputText().contains(QStringLiteral("Verified")));
+    QVERIFY(console.outputText().contains(file1.content_root_id));
+    QVERIFY(console.outputText().contains(QStringLiteral("No integrity check was performed")));
+    QVERIFY(!console.outputText().contains(QStringLiteral("Verified")));
+    QVERIFY(!console.outputText().contains(QStringLiteral("Leaf:")));
 
     // peers and jobs commands
     console.executeCommand(QStringLiteral("peers"));
@@ -3694,12 +3661,112 @@ void CybouShellTests::ownContentInspectorAndBoundedConsole()
     console.executeCommand(QStringLiteral("exec drop table;"));
     QVERIFY(console.outputText().contains(QStringLiteral("Error: Command 'exec' is not recognized or not permitted")));
 
-    QVERIFY(console.historyCount() >= 5);
+    QVERIFY(console.historyCount() >= 4);
 
     // 6. Private session history and output cleanup on lock
     model->setIdentityState(CybouIdentityState::None);
     QCOMPARE(console.historyCount(), 0);
     QVERIFY(console.outputText().contains(QStringLiteral("Vault locked. Private session history and output cleared.")));
+}
+
+void CybouShellTests::consoleTranslationsPermissionsAndBounds()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(!window->findChild<QDialog*>(QStringLiteral("CYBOUDiagnostics")));
+    window->showNetworkDiagnostics();
+    QVERIFY(!window->page(CybouPage::Network)->findChild<QPushButton*>(QStringLiteral("diagnosticsWindowButton")));
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("own-account"), 1);
+    model->setPrimaryName(QStringLiteral("cybou.cybou")); // A name never grants signing authority.
+    cybou::NodeDiagnosticsSnapshot snapshot;
+    snapshot.initialized = true;
+    snapshot.height = 42;
+    snapshot.network_binding = "network-binding";
+    snapshot.tip = "verified-tip";
+    snapshot.state_root = "verified-state-root";
+    snapshot.local_storage_used = 1234;
+    snapshot.local_storage_capacity = 16106127360ULL;
+    snapshot.storage_used = 456;
+    snapshot.storage_capacity = 10737418240ULL;
+    snapshot.operations.push_back({"operation-1", 1, 42});
+    model->setNetworkDiagnostics(snapshot);
+    CybouFileItem file;
+    file.id = QStringLiteral("own-file"); file.name = QStringLiteral("own-file.txt");
+    file.logical_size = 123; file.min_remote_replicas = -1; file.remote_replica_target = -1;
+    model->setFileItems({file});
+    CybouConsoleDialog console{model};
+    console.executeCommand(QStringLiteral("help"));
+    QVERIFY(!console.outputText().contains(QStringLiteral("authority [")));
+    console.executeCommand(QStringLiteral("authority totals"));
+    QVERIFY(console.outputText().contains(QStringLiteral("not recognized or not permitted")));
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("file own-file"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Remote Replicas: — of —")));
+    console.executeCommand(QStringLiteral("status extra"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Usage: status")));
+    console.executeCommand(QStringLiteral("network"));
+    QVERIFY(console.outputText().contains(QStringLiteral("verified-state-root")));
+    console.executeCommand(QStringLiteral("operations"));
+    QVERIFY(console.outputText().contains(QStringLiteral("operation-1")));
+
+    CybouNetworkAuthorityStatus authority;
+    authority.proven = true; authority.finalizer = CybouFinalizerState::Paused;
+    authority.candidates = 1; authority.candidate_ids = {QStringLiteral("candidate-1")};
+    authority.total_balance = 12345; authority.finalized_height = 42;
+    model->setNetworkAuthority(authority);
+    console.clearOutput(); console.executeCommand(QStringLiteral("help"));
+    QVERIFY(console.outputText().contains(QStringLiteral("authority [status|candidates|totals]")));
+    console.executeCommand(QStringLiteral("authority status"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Local finalizer: Paused")));
+    console.executeCommand(QStringLiteral("authority candidates"));
+    QVERIFY(console.outputText().contains(QStringLiteral("candidate-1")));
+    console.executeCommand(QStringLiteral("authority totals"));
+    QVERIFY(console.outputText().contains(QStringLiteral("12345 CYBOU")));
+    model->setNetworkAuthority({});
+    QVERIFY(!console.outputText().contains(QStringLiteral("candidate-1")));
+    QCOMPARE(console.historyCount(), 0);
+
+    // Reproduce the user's French locale: formerly blank multiline translations.
+    QTranslator translator;
+    QVERIFY(translator.load(QStringLiteral(":/i18n/cybou_fr.qm")));
+    qApp->installTranslator(&translator);
+    for (const auto& cmd : {QStringLiteral("help"), QStringLiteral("status"), QStringLiteral("storage")}) {
+        console.clearOutput(); console.executeCommand(cmd);
+        const QString result = console.outputText().section(QLatin1Char('\n'), 1).trimmed();
+        QVERIFY2(!result.isEmpty(), qPrintable(cmd));
+    }
+    console.clearOutput(); console.executeCommand(QStringLiteral("help"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Commandes disponibles")));
+    console.executeCommand(QStringLiteral("storage"));
+    QVERIFY(console.outputText().contains(QStringLiteral("1234 / 16106127360")));
+    qApp->removeTranslator(&translator);
+
+    QVector<CybouFileItem> many;
+    for (int i = 0; i < 250; ++i) { auto row = file; row.id = QString::number(i); row.name = QStringLiteral("row-%1").arg(i); many.push_back(row); }
+    model->setFileItems(many);
+    console.clearOutput(); console.executeCommand(QStringLiteral("files"));
+    QVERIFY(console.outputText().contains(QStringLiteral("row-99")));
+    QVERIFY(!console.outputText().contains(QStringLiteral("row-100")));
+    QVERIFY(console.outputText().contains(QStringLiteral("limited to 100 rows")));
+    for (int i = 0; i < 120; ++i) console.executeCommand(QStringLiteral("files %1").arg(i));
+    QCOMPARE(console.historyCount(), 100);
+    QVERIFY(console.findChild<QPlainTextEdit*>(QStringLiteral("consoleOutput"))->blockCount() <= 500);
+    auto* input = console.findChild<QLineEdit*>(QStringLiteral("consoleInput"));
+    input->setText(QStringLiteral("private search"));
+    model->setIdentityState(CybouIdentityState::Locked);
+    QVERIFY(input->text().isEmpty());
+    QCOMPARE(console.historyCount(), 0);
+    console.executeCommand(QStringLiteral("files"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Unlock your Identity")));
+    QVERIFY(!console.outputText().contains(QStringLiteral("row-99")));
+    console.clearOutput(); console.executeCommand(QStringLiteral("help"));
+    QVERIFY(!console.outputText().contains(QStringLiteral("files [filter]")));
+    console.executeCommand(QStringLiteral("status"));
+    model->setPeerCount(7); // Routine ticks must not clear output while locked.
+    QVERIFY(console.outputText().contains(QStringLiteral("> status")));
+    console.executeCommand(QStringLiteral("clear"));
+    QVERIFY(console.outputText().isEmpty());
+    QCOMPARE(console.historyCount(), 0);
 }
 
 void CybouShellTests::assuranceLifecycleAndRecoveryGates()
