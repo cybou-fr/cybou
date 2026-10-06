@@ -485,6 +485,7 @@ class Battle:
 def cleanup_remote() -> None:
     wsl("pkill -f 'cybou-battle' || true", check=False)
     vps(f"for u in $(systemctl list-units --plain --no-legend 'cybou-battle-*' | awk '{{print $1}}'); do sudo systemctl stop $u; done; "
+        f"sudo systemctl reset-failed 'cybou-battle-*' 2>/dev/null; "
         f"for h in $(sudo nft -a list chain inet cybou_guard input | awk '/{NFT_COMMENT}/ {{print $NF}}'); do "
         f"sudo nft delete rule inet cybou_guard input handle $h; done", check=False)
 
@@ -494,6 +495,8 @@ def cmd_run(args: argparse.Namespace) -> None:
     battle = Battle(args)
     battle.dir.mkdir(parents=True)
     log(f"run {battle.run_id}: data in {battle.dir}")
+    # A run interrupted earlier may have left VPS units or WSL processes behind.
+    cleanup_remote()
     try:
         battle.start_nodes()
         time.sleep(args.warmup)
