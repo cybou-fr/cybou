@@ -260,7 +260,7 @@ int main(int argc,char* argv[]) {
             return 0;
         }
         cybou::cli::Options opts{argc,argv,1};
-        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name","pay-accounts","attachment-size"});
+        opts.Allow({"network","data-dir","peer","password-file","identities","profile","operations-per-second","file-size","duration","replicas","drain-timeout","max-operations","expected-incoming-mail","expected-files","recipient","subject","body","metrics","funder","fund-each","funder-name","pay-accounts","attachment-size","linger"});
         const auto* net=&cybou::RequireOfficialNetwork(opts.Require("network"));
         const auto endpoint=opts.Require("peer"); const auto colon=endpoint.rfind(':');
         if (colon==std::string::npos) throw std::runtime_error("invalid peer");
@@ -570,6 +570,9 @@ int main(int argc,char* argv[]) {
                 << ",\"expected_mail\":" << metrics.expected_mail << ",\"recovered_mail\":" << metrics.recovered_mail << "}}\n";
             if (!out) throw std::runtime_error("cannot write metrics");
         }
+        // --linger 1: clients are ordinary Full Nodes holding other owners' replicas; they
+        // keep serving after the metrics while a test restores someone else, as real peers do.
+        if (opts.Get("linger","0")=="1") while (!stop) std::this_thread::sleep_for(1s);
         return done ? 0 : 1;
     } catch (const std::exception& e) { std::cerr << "cybou-loadgen: " << e.what() << '\n'; return 1; }
 }

@@ -266,7 +266,7 @@ class Battle:
             # Through the bootstrap, whose permanent storage peers outlive the run: letters to a real
             # Identity must stay retrievable after the temporary battle nodes are deleted.
             peer = BOOTSTRAP
-            args = self.client_args("mail", self.args.duration, str(path / "metrics.json"))
+            args = self.client_args("mail", self.args.duration, str(path / "metrics.json")) + ["--linger", "1"]
             args[args.index("--identities") + 1] = "1"
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
                                          "--password-file", str(PASSWORD_FILE), "--recipient", self.args.desktop_name,
@@ -276,13 +276,17 @@ class Battle:
         for path, peer in self.win_clients():
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
                                          "--password-file", str(PASSWORD_FILE)] +
-                                        self.client_args(self.args.profile, self.args.duration, str(path / "metrics.json")),
-                                        path / "load.log"))
+                                        self.client_args(self.args.profile, self.args.duration, str(path / "metrics.json")) +
+                                        ["--linger", "1"], path / "load.log"))
         for path, peer in self.wsl_clients():
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {self.wsl_dir}/password.txt "
-                      f"{' '.join(self.client_args(self.args.profile, self.args.duration, path + '/metrics.json'))}",
+                      f"{' '.join(self.client_args(self.args.profile, self.args.duration, path + '/metrics.json'))} --linger 1",
                       f"{path}/load.log", f"{path}/load.pid")
-        while any(p.poll() is None for p in processes) or self.wsl_load_running():
+        # Clients linger as ordinary Full Nodes after writing their metrics: the load phase
+        # ends when every client has reported (or exited), not when its process stops.
+        local = [(p, path) for p, path in zip(processes, ([self.dir / "to-desktop"] if self.args.desktop_mails else []) +
+                                                [path for path, _ in self.win_clients()])]
+        while any(p.poll() is None and not (path / "metrics.json").exists() for p, path in local) or self.wsl_load_running():
             self.sample()
             time.sleep(10)
         self.sample()
@@ -327,8 +331,9 @@ class Battle:
             time.sleep(10)
 
     def wsl_load_running(self) -> bool:
-        return any(wsl(f"kill -0 $(cat {path}/load.pid) 2>/dev/null && echo running || true").strip() == "running"
-                   for path, _ in self.wsl_clients())
+        """A WSL client still loading: alive and without metrics yet."""
+        return any(wsl(f"test -f {path}/metrics.json || (kill -0 $(cat {path}/load.pid) 2>/dev/null && echo running) || true").strip()
+                   == "running" for path, _ in self.wsl_clients())
 
     # -- measurements --------------------------------------------------------
     def sample(self) -> None:
