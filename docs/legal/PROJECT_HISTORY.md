@@ -8,7 +8,8 @@ history.
 
 On 2026-10-06 the tracked tree was compared with Bitcoin Core v31.1 (tag
 commit `9be056a`). Apart from the vendored LevelDB and crc32c libraries, which
-keep their own licenses, only `COPYING` is identical: it keeps the original MIT
+keep their own licenses, only the former `COPYING` is identical; it is kept as
+`docs/legal/BITCOIN_CORE_MIT.txt`, preserving the original MIT
 text and its copyright notices as the record of that origin. No other file is
 more than 64% similar; the closest, `.editorconfig` and `vcpkg.json`, share
 only their standard file formats.

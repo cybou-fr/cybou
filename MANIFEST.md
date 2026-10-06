@@ -36,7 +36,7 @@ editing an included file.
 | docs/cybou/41_PUBLIC_SUPPORT_AND_FUNDING.md | 113 | cbd6d5215e01bb38 |
 | docs/cybou/42_COMPETITIVE_POSITIONING.md | 33 | 408818177dc10a14 |
 | docs/cybou/43_STRATEGIC_SOURCE_REGISTER.md | 116 | b2c9dc42f9ddbae2 |
-| docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 49 | fe752ebef565950c |
+| docs/cybou/46_COPYRIGHT_ATTRIBUTION_POLICY.md | 49 | 8b253e43bca85958 |
 | docs/cybou/50_EMAIL_SECURITY_MODEL.md | 92 | d00a892605db794f |
 | docs/cybou/52_BALANCE_AND_SYSTEM_BALANCE.md | 61 | 13864b26648c59c5 |
 | docs/cybou/56_OWNER_OPERATOR_AND_RESILIENCE.md | 33 | 34bd913889679688 |

@@ -5,7 +5,7 @@ Engineering policy only; obtain legal review before changing project licensing.
 ## CYBOU license: Apache-2.0
 
 All CYBOU source files are Apache-2.0 (`LICENSE`, SPDX header in every file).
-Project history and the MIT text kept in `COPYING` are described in
+Project history and the MIT text kept in `docs/legal/BITCOIN_CORE_MIT.txt` are described in
 `docs/legal/PROJECT_HISTORY.md`. Legal review is still recommended before release.
 
 Holder label:
