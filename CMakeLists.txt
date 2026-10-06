@@ -111,7 +111,7 @@ if(NOT MSVC)
       -Wduplicated-branches -Wduplicated-cond -Wlogical-op -Woverloaded-virtual
       -Wsuggest-override -Wimplicit-fallthrough -Wunreachable-code -Wundef
       -Wthread-safety -Wloop-analysis -Wself-assign -Wconditional-uninitialized
-      -Wno-unused-parameter
+      -Wno-unused-parameter -Wno-missing-field-initializers
       -fno-extended-identifiers -fstack-reuse=none
       -Wstack-protector -fstack-protector-all -fcf-protection=full)
     cybou_add_compile_flag(core_interface ${flag})

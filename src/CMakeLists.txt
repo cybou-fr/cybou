@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
+# Every CYBOU library and executable gets the platform definitions, hardening
+# and warning flags of core_interface.
+link_libraries(core_interface)
 
 # Set top-level target output locations.
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
