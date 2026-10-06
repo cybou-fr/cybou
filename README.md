@@ -134,7 +134,7 @@ tests correspondantes. Les presets et cibles sont dÃ©finis dans
 
 - [Contribuer au projet](CONTRIBUTING.md)
 - [Politique de sÃ©curitÃ©](SECURITY.md)
-- [Licence Apache-2.0](LICENSE) · [Notices](NOTICE.md) · [Bitcoin Core ancestry (MIT)](COPYING)
+- [Licence Apache-2.0](LICENSE) · [Notices](NOTICE.md) · [Historique du projet](docs/legal/PROJECT_HISTORY.md)
 
 Ne rÃ©utilisez pas les clÃ©s ou donnÃ©es de dÃ©veloppement comme actifs de
 production. Signalez les problÃ¨mes de sÃ©curitÃ© selon la procÃ©dure dÃ©crite dans

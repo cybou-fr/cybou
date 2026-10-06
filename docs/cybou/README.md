@@ -81,4 +81,3 @@ from or conflicting with higher levels:
 | [`POA_FINALITY_VECTORS.md`](POA_FINALITY_VECTORS.md) | PoA block and certificate test vectors | Level 2 | Active |
 | [`ROOT_PUBLICATION.md`](ROOT_PUBLICATION.md) | Canonical RootPublication wire format and validation | Level 2 | Active |
 | [`STORAGE_ADMISSION.md`](STORAGE_ADMISSION.md) | Merkle inclusion proofs, chunk admission, provider policy | Level 2 | Active |
-| [`UPSTREAM_BASELINE.md`](UPSTREAM_BASELINE.md) | Upstream Bitcoin Core baseline delta and removal plan | — | Historical |

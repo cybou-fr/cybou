@@ -1,8 +1,7 @@
 # 72 — Desktop Wallet UI
 
 The desktop client surfaces the two protocol balances from doc 52 natively.
-No inherited wallet UI is used: the inherited Bitcoin wallet is disabled in
-CYBOU builds and the desktop never touches coinbase/subsidy semantics.
+CYBOU has no block subsidy; the wallet shows only these finalized balances.
 
 ## Where balances live
 

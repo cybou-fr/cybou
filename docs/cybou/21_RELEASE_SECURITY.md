@@ -16,17 +16,6 @@ Before public production:
 - rollback policy;
 - update authenticity validation.
 
-## Upstream Bitcoin ancestry
-
-Maintain a record of:
-
-- original upstream tag/commit;
-- imported upstream fixes;
-- rejected upstream changes;
-- consensus-divergent files.
-
-After CYBOU consensus diverges, Bitcoin security patches cannot be merged blindly.
-
 ## Qt/dependencies
 
 Track licenses and exact linked modules.
