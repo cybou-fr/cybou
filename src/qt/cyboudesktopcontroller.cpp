@@ -3,6 +3,7 @@
 
 #include <qt/cyboudesktopcontroller.h>
 
+#include <cybou/event_record.h>
 #include <cybou/hex.h>
 
 #include <qt/cyboucoreapplicationadapter.h>
@@ -30,6 +31,7 @@
 #include <chrono>
 #include <array>
 #include <filesystem>
+#include <system_error>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -41,6 +43,25 @@
 #include <QDebug>
 
 namespace {
+/** Local diagnostic event log, like a headless node's --event-log: blocks, peers,
+    storage and production retries, so a stall can be examined afterwards. One
+    previous segment is kept; a log over 64 MiB is rotated at startup. */
+std::shared_ptr<cybou::EventWriter> OpenDesktopEventLog(const std::filesystem::path& data_directory)
+{
+    const auto path = data_directory / "events.jsonl";
+    std::error_code ec;
+    if (std::filesystem::file_size(path, ec) > 64ull * 1024 * 1024 && !ec) {
+        std::filesystem::rename(path, data_directory / "events.1.jsonl", ec);
+    }
+    try {
+        auto writer = std::make_shared<cybou::EventWriter>(path);
+        writer->Write(cybou::NodeEvent::node_started, {{"node_type", std::string{"desktop"}}});
+        return writer;
+    } catch (const std::exception& e) {
+        qWarning() << "CYBOU event log unavailable:" << e.what();
+        return nullptr;
+    }
+}
 
 /// Network-bound entries the desktop itself creates in its data directory. The
 /// directory may hold unrelated files (it can be user-chosen), so nothing else moves.
@@ -258,6 +279,7 @@ void CybouDesktopController::start()
         // A wildcard bind is not an address others can dial; only an explicit listener is advertised.
         if (listen_port_ok) config.advertised_endpoint = network_config.listen_endpoint;
         config.peer_admission_policy = std::move(peer_admission.policy);
+        config.event_writer = OpenDesktopEventLog(m_data_directory);
         m_node_service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
             .runtime = std::move(config),
             .genesis = genesis,
