@@ -52,7 +52,7 @@ if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou-core-test PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
 
-add_windows_application_manifest(cybou-core-test)
+cybou_windows_manifest(cybou-core-test)
 
 target_link_libraries(cybou-core-test
   cybou_core
@@ -109,4 +109,4 @@ function(add_all_test_targets test_target)
 endfunction()
 
 add_all_test_targets(cybou-core-test)
-install_binary_component(cybou-core-test INTERNAL)
+cybou_install(cybou-core-test INTERNAL)

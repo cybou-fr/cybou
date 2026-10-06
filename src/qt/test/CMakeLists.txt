@@ -3,14 +3,13 @@
 
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-p${CMAKE_CURRENT_SOURCE_DIR}")
 
-# Exercise the CYBOU-native window/model/controller without Bitcoin's Qt or
-# node test harness.
+# Exercise the CYBOU desktop window, model and controller.
 add_executable(test_cybou-native-qt
   cybou_native_qt_tests.cpp
   cyboushelltests.cpp
 )
 
-add_windows_application_manifest(test_cybou-native-qt)
+cybou_windows_manifest(test_cybou-native-qt)
 
 target_link_libraries(test_cybou-native-qt
   cybou_qt
@@ -38,7 +37,7 @@ if(WIN32 AND VCPKG_TARGET_TRIPLET)
   unset(plugin_path)
 endif()
 
-install_binary_component(test_cybou-native-qt INTERNAL)
+cybou_install(test_cybou-native-qt INTERNAL)
 
 if(WIN32 AND CYBOU_WINDEPLOYQT_EXECUTABLE)
   # Same Qt runtime as the linked Qt (including Qt6Test); see src/qt/CMakeLists.txt.

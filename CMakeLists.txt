@@ -1,506 +1,141 @@
 # Copyright (c) 2026 Stanislav SAVELIEV
 # SPDX-License-Identifier: Apache-2.0
 
-# Ubuntu 22.04 LTS Jammy Jellyfish, https://wiki.ubuntu.com/Releases, EOSS in June 2027:
-#  - CMake 3.22.1, https://packages.ubuntu.com/jammy/cmake
-#
-# Centos Stream 9, https://www.centos.org/cl-vs-cs/#end-of-life, EOL in May 2027:
-#  - CMake 3.26.5, https://mirror.stream.centos.org/9-stream/AppStream/x86_64/os/Packages/
 cmake_minimum_required(VERSION 3.22)
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
-  message(FATAL_ERROR "In-source builds are not allowed.")
+  message(FATAL_ERROR "Build CYBOU in a separate directory: cmake -S . -B build")
 endif()
-
-if(POLICY CMP0171)
-  # `codegen` is a reserved target name.
-  # See: https://cmake.org/cmake/help/latest/policy/CMP0171.html
-  cmake_policy(SET CMP0171 NEW)
-endif()
-
-# When adjusting CMake flag variables, we must not override those explicitly
-# set by the user. These are a subset of the CACHE_VARIABLES property.
-get_directory_property(precious_variables CACHE_VARIABLES)
-
-#=============================
-# Project / Package metadata
-#=============================
-set(CLIENT_NAME "CYBOU")
-set(COPYRIGHT_YEAR "2026")
-
-# During the enabling of the CXX and CXXOBJ languages, we modify
-# CMake's compiler/linker invocation strings by appending the content
-# of the user-defined `APPEND_*` variables, which allows overriding
-# any flag. We also ensure that the APPEND_* flags are considered
-# during CMake's tests, which use the `try_compile()` command.
-#
-# CMake's docs state that the `CMAKE_TRY_COMPILE_PLATFORM_VARIABLES`
-# variable "is meant to be set by CMake's platform information modules
-# for the current toolchain, or by a toolchain file." We do our best
-# to set it before the `project()` command.
-set(CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
-  CMAKE_CXX_COMPILE_OBJECT
-  CMAKE_OBJCXX_COMPILE_OBJECT
-  CMAKE_CXX_LINK_EXECUTABLE
-)
 
 project(CYBOU
   DESCRIPTION "CYBOU peer-to-peer network software"
   HOMEPAGE_URL "https://cybou.fr/"
-  LANGUAGES NONE
+  LANGUAGES CXX
 )
 
-
-set(COPYRIGHT_HOLDERS "The %s developers")
-set(COPYRIGHT_HOLDERS_FINAL "The ${CLIENT_NAME} developers")
-# No public CYBOU issue tracker has been designated yet.
-set(CLIENT_BUGREPORT "")
-
-#=============================
-# Language setup
-#=============================
-if(CMAKE_VERSION VERSION_LESS 4.2 AND CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT CMAKE_HOST_APPLE)
-  # We do not use the install_name_tool when cross-compiling for macOS.
-  # However, CMake < 4.2 still searches for Apple's version of the tool,
-  # which causes an error during configuration.
-  # See:
-  # - https://gitlab.kitware.com/cmake/cmake/-/issues/27069
-  # - https://gitlab.kitware.com/cmake/cmake/-/merge_requests/10955
-  # So disable this tool check in further enable_language() commands.
-  set(CMAKE_INSTALL_NAME_TOOL "${CMAKE_COMMAND} -E true")
-endif()
-enable_language(CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto SSL)
-find_package(ZLIB REQUIRED)
-find_package(blake3 1.8.1 EXACT CONFIG REQUIRED)
-
-list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake/module)
-include(ProcessConfigurations)
-
-# Flatten static lib dependencies.
-# Without this, if libfoo.a depends on libbar.a, libfoo's objects can't begin
-# to be compiled until libbar.a has been created.
-if (NOT DEFINED CMAKE_OPTIMIZE_DEPENDENCIES)
-  set(CMAKE_OPTIMIZE_DEPENDENCIES TRUE)
-endif()
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 #=============================
-# Configurable options
+# Options
 #=============================
-include(CMakeDependentOption)
-# When adding a new option, end the <help_text> with a full stop for consistency.
-option(BUILD_GUI "Build CYBOU desktop executable." OFF)
-
-option(BUILD_TESTS "Build test and other unit test executables." ON)
+option(BUILD_GUI "Build the CYBOU desktop executable." OFF)
+option(BUILD_TESTS "Build the CYBOU tests and developer tools." ON)
 option(CYBOU_ENABLE_TEST_HOOKS "Enable deterministic crash hooks in CYBOU test builds." OFF)
+option(WITH_CCACHE "Use ccache when it is installed." ON)
+set(SANITIZERS "" CACHE STRING "Comma-separated -fsanitize values, e.g. address,undefined.")
 if(CYBOU_ENABLE_TEST_HOOKS AND NOT BUILD_TESTS)
   message(FATAL_ERROR "CYBOU_ENABLE_TEST_HOOKS requires BUILD_TESTS=ON.")
 endif()
+include(CMakeDependentOption)
+cmake_dependent_option(BUILD_GUI_TESTS "Build the CYBOU desktop tests." ON "BUILD_GUI;BUILD_TESTS" OFF)
 
-option(REDUCE_EXPORTS "Attempt to reduce exported symbols in the resulting executables." OFF)
-option(CMAKE_COMPILE_WARNING_AS_ERROR "Treat compiler warnings as errors." OFF)
-option(WITH_CCACHE "Attempt to use ccache for compiling." ON)
+include(CybouBuildType)
+include(CybouFlags)
 
-cmake_dependent_option(BUILD_GUI_TESTS "Build CYBOU native Qt smoke test." ON "BUILD_GUI;BUILD_TESTS" OFF)
+#=============================
+# Dependencies
+#=============================
+find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto SSL)
+find_package(ZLIB REQUIRED)
+find_package(blake3 1.8.1 EXACT CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+# Header-only use: Asio and Beast for networking, Boost.Test for the tests.
+find_package(Boost 1.74.0 REQUIRED CONFIG)
+set_target_properties(Boost::headers PROPERTIES IMPORTED_GLOBAL TRUE)
+if(DEFINED VCPKG_TARGET_TRIPLET)
+  # vcpkg's boost/config/user.hpp selects DLL linkage; CYBOU uses Boost header-only.
+  target_compile_definitions(Boost::headers INTERFACE BOOST_NO_USER_CONFIG)
+  if(BUILD_TESTS)
+    # vcpkg ships the header-only Boost.Test runner as a separate package.
+    find_package(boost_included_unit_test_framework ${Boost_VERSION} EXACT REQUIRED CONFIG)
+  endif()
+endif()
 if(BUILD_GUI)
-  set(qt_components Core Gui Widgets Svg)
-  list(APPEND qt_components LinguistTools)
+  set(qt_components Core Gui Widgets Svg LinguistTools)
   if(BUILD_GUI_TESTS)
     list(APPEND qt_components Test)
   endif()
-  find_package(Qt 6.2 MODULE REQUIRED
-    COMPONENTS ${qt_components}
-  )
+  find_package(Qt6 6.2 REQUIRED COMPONENTS ${qt_components})
   unset(qt_components)
 endif()
 
+if(WITH_CCACHE AND NOT MSVC)
+  find_program(CCACHE_EXECUTABLE ccache)
+  mark_as_advanced(CCACHE_EXECUTABLE)
+  if(CCACHE_EXECUTABLE)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_EXECUTABLE})
+  endif()
+endif()
 
-set(APPEND_CPPFLAGS "" CACHE STRING "Preprocessor flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
-set(APPEND_CFLAGS "" CACHE STRING "C compiler flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
-set(APPEND_CXXFLAGS "" CACHE STRING "(Objective) C++ compiler flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
-set(APPEND_LDFLAGS "" CACHE STRING "Linker flags that are appended to the command line after all other flags added by the build system. This variable is intended for debugging and special builds.")
-string(APPEND CMAKE_CXX_COMPILE_OBJECT " ${APPEND_CPPFLAGS} ${APPEND_CXXFLAGS}")
-string(APPEND CMAKE_CXX_CREATE_SHARED_LIBRARY " ${APPEND_LDFLAGS}")
-string(APPEND CMAKE_CXX_LINK_EXECUTABLE " ${APPEND_LDFLAGS}")
-
-set(configure_warnings)
-
-include(CheckLinkerSupportsPIE)
-check_linker_supports_pie(configure_warnings)
-
+#=============================
+# Common compile and link settings
+#=============================
+# Every CYBOU target links core_interface for platform definitions,
+# hardening and warnings.
 add_library(core_interface INTERFACE)
-add_library(core_interface_relwithdebinfo INTERFACE)
-add_library(core_interface_debug INTERFACE)
-target_link_libraries(core_interface INTERFACE
-  $<$<CONFIG:RelWithDebInfo>:core_interface_relwithdebinfo>
-  $<$<CONFIG:Debug>:core_interface_debug>
-)
-
-include(TryAppendCXXFlags)
-include(TryAppendLinkerFlag)
-
-# Redefine/adjust per-configuration flags.
-target_compile_definitions(core_interface_debug INTERFACE
-  DEBUG
-  DEBUG_LOCKORDER
-  DEBUG_LOCKCONTENTION
-  ABORT_ON_FAILED_ASSUME
-)
+target_link_libraries(core_interface INTERFACE Threads::Threads)
+target_compile_definitions(core_interface INTERFACE $<$<CONFIG:Debug>:DEBUG>)
 
 if(WIN32)
-  #[=[
-  This build system supports two ways to build binaries for Windows.
-
-  1. Building on Windows using MSVC.
-  Implementation notes:
-  - /DWIN32 and /D_WINDOWS definitions are included into the CMAKE_CXX_FLAGS_INIT
-    and CMAKE_CXX_FLAGS_INIT variables by default.
-  - A run-time library is selected using the CMAKE_MSVC_RUNTIME_LIBRARY variable.
-  - MSVC-specific options, for example, /Zc:__cplusplus, are additionally required.
-
-  2. Cross-compiling using MinGW.
-  Implementation notes:
-  - WIN32 and _WINDOWS definitions must be provided explicitly.
-  - A run-time library must be specified explicitly using _MT definition.
-  ]=]
-
   target_compile_definitions(core_interface INTERFACE
     _WIN32_WINNT=0x0A00
     _WIN32_IE=0x0A00
     WIN32_LEAN_AND_MEAN
     NOMINMAX
   )
-
   if(MSVC)
-    if(VCPKG_TARGET_TRIPLET MATCHES "-static")
-      set(msvc_library_linkage "")
-    else()
-      set(msvc_library_linkage "DLL")
-    endif()
-    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>${msvc_library_linkage}")
-    unset(msvc_library_linkage)
-
-    target_compile_definitions(core_interface INTERFACE
-      _UNICODE;UNICODE
-    )
-    target_compile_options(core_interface INTERFACE
-      /utf-8
-      /Zc:preprocessor
-      /Zc:__cplusplus
-      /sdl
-    )
-    target_link_options(core_interface INTERFACE
-      # We embed our own manifests.
-      /MANIFEST:NO
-    )
-    # Improve parallelism in MSBuild.
-    # See: https://devblogs.microsoft.com/cppblog/improved-parallelism-in-msbuild/.
-    list(APPEND CMAKE_VS_GLOBALS "UseMultiToolTask=true")
-  endif()
-
-  if(MINGW)
-    target_compile_definitions(core_interface INTERFACE
-      WIN32
-      _WINDOWS
-      _MT
-    )
-    # Avoid the use of aligned vector instructions when building for Windows.
-    # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=54412.
-    try_append_cxx_flags("-Wa,-muse-unaligned-vector-move" TARGET core_interface SKIP_LINK)
-    try_append_linker_flag("-static" TARGET core_interface)
-    # We support Windows 10+, however it's not possible to set these values accordingly,
-    # due to a bug in mingw-w64. See https://sourceforge.net/p/mingw-w64/bugs/968/.
-    # As a best effort, target Windows 8.
-    try_append_linker_flag("-Wl,--major-subsystem-version,6" TARGET core_interface)
-    try_append_linker_flag("-Wl,--minor-subsystem-version,2" TARGET core_interface)
-  endif()
-
-  # Workaround producing large object files, which cannot be handled by the assembler.
-  # More likely to happen with no, or lower levels of optimisation.
-  # See discussion in https://github.com/bitcoin/bitcoin/issues/28109.
-  if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    try_append_cxx_flags("/bigobj" TARGET core_interface_debug SKIP_LINK)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+    target_compile_definitions(core_interface INTERFACE _UNICODE UNICODE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(core_interface INTERFACE /utf-8 /Zc:preprocessor /Zc:__cplusplus /sdl /W3 $<$<CONFIG:Debug>:/bigobj>)
+    target_link_options(core_interface INTERFACE /MANIFEST:NO /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT)
   else()
-    try_append_cxx_flags("-Wa,-mbig-obj" TARGET core_interface_debug SKIP_LINK)
+    target_compile_definitions(core_interface INTERFACE WIN32 _WINDOWS _MT)
+    # MinGW: unaligned vector moves (GCC bug 54412), large debug objects, static runtime.
+    cybou_add_compile_flag(core_interface -Wa,-muse-unaligned-vector-move)
+    cybou_add_compile_flag(core_interface $<$<CONFIG:Debug>:-Wa,-mbig-obj> CHECK -Wa,-mbig-obj)
+    cybou_add_link_flag(core_interface -static)
   endif()
 endif()
 
-# Use 64-bit off_t on 32-bit Linux.
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SIZEOF_VOID_P EQUAL 4)
-  # Ensure 64-bit offsets are used for filesystem accesses for 32-bit compilation.
-  target_compile_definitions(core_interface INTERFACE
-    _FILE_OFFSET_BITS=64
-  )
-endif()
-
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  target_compile_definitions(core_interface INTERFACE OBJC_OLD_DISPATCH_PROTOTYPES=0)
-  # These flags are specific to ld64, and may cause issues with other linkers.
-  # For example: GNU ld will interpret -dead_strip as -de and then try and use
-  # "ad_strip" as the symbol for the entry point.
-  try_append_linker_flag("-Wl,-dead_strip" TARGET core_interface)
-  try_append_linker_flag("-Wl,-dead_strip_dylibs" TARGET core_interface)
-  if(CMAKE_HOST_APPLE)
-    try_append_linker_flag("-Wl,-headerpad_max_install_names" TARGET core_interface)
-  endif()
-endif()
-
-set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
-target_link_libraries(core_interface INTERFACE
-  Threads::Threads
-)
-
-# Define sanitize_interface with -fsanitize flags intended to apply to all
-# libraries and executables.
-add_library(sanitize_interface INTERFACE)
-target_link_libraries(core_interface INTERFACE sanitize_interface)
 if(SANITIZERS)
-  # First check if the compiler accepts flags. If an incompatible pair like
-  # -fsanitize=address,thread is used here, this check will fail. This will also
-  # fail if a bad argument is passed, e.g. -fsanitize=undfeined
-  try_append_cxx_flags("-fsanitize=${SANITIZERS}" TARGET sanitize_interface
-    RESULT_VAR cxx_supports_sanitizers
-    SKIP_LINK
-  )
-  if(NOT cxx_supports_sanitizers)
-    message(FATAL_ERROR "Compiler did not accept requested flags.")
-  endif()
-
-  # Some compilers (e.g. GCC) require additional libraries like libasan,
-  # libtsan, libubsan, etc. Make sure linking still works with the sanitize
-  # flag. This is a separate check so we can give a better error message when
-  # the sanitize flags are supported by the compiler but the actual sanitizer
-  # libs are missing.
-  try_append_linker_flag("-fsanitize=${SANITIZERS}" VAR SANITIZER_LDFLAGS
-    RESULT_VAR linker_supports_sanitizers
-    NO_CACHE_IF_FAILED
-  )
-  if(NOT linker_supports_sanitizers)
-    message(FATAL_ERROR "Linker did not accept requested flags, you are missing required libraries.")
-  endif()
-endif()
-target_link_options(sanitize_interface INTERFACE ${SANITIZER_LDFLAGS})
-
-include(AddBoostIfNeeded)
-add_boost_if_needed()
-
-include(cmake/introspection.cmake)
-
-include(cmake/ccache.cmake)
-
-add_library(warn_interface INTERFACE)
-target_link_libraries(core_interface INTERFACE warn_interface)
-if(MSVC)
-  try_append_cxx_flags("/W3" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4018" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4146" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4244" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4267" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4715" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("/wd4805" TARGET warn_interface SKIP_LINK)
-  target_compile_definitions(warn_interface INTERFACE
-    _CRT_SECURE_NO_WARNINGS
-    _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
-  )
-else()
-  try_append_cxx_flags("-Wall" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wextra" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wgnu" TARGET warn_interface SKIP_LINK)
-  # Some compilers will ignore -Wformat-security without -Wformat, so just combine the two here.
-  try_append_cxx_flags("-Wformat -Wformat-security" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wvla" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wshadow-field" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wthread-safety" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wthread-safety-pointer" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wloop-analysis" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wredundant-decls" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wunused-member-function" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wdate-time" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wconditional-uninitialized" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wduplicated-branches" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wduplicated-cond" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wlogical-op" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Woverloaded-virtual" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wsuggest-override" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wimplicit-fallthrough" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wunreachable-code" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wdocumentation" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wself-assign" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wbidi-chars=any" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wundef" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wleading-whitespace=spaces" TARGET warn_interface SKIP_LINK)
-  try_append_cxx_flags("-Wtrailing-whitespace=any" TARGET warn_interface SKIP_LINK)
-
-  # Some compilers (gcc) ignore unknown -Wno-* options, but warn about all
-  # unknown options if any other warning is produced. Test the -Wfoo case, and
-  # set the -Wno-foo case if it works.
-  try_append_cxx_flags("-Wunused-parameter" TARGET warn_interface SKIP_LINK
-    IF_CHECK_PASSED "-Wno-unused-parameter"
-  )
+  target_compile_options(core_interface INTERFACE -fsanitize=${SANITIZERS})
+  target_link_options(core_interface INTERFACE -fsanitize=${SANITIZERS})
 endif()
 
-
-# Don't allow extended (non-ASCII) symbols in identifiers. This is easier for code review.
-try_append_cxx_flags("-fno-extended-identifiers" TARGET core_interface SKIP_LINK)
-
-# Set `-fmacro-prefix-map`, so that source file names are expanded without the
-# src prefix.
-try_append_cxx_flags("-fmacro-prefix-map=A=B" TARGET core_interface SKIP_LINK
-  IF_CHECK_PASSED "-fmacro-prefix-map=${PROJECT_SOURCE_DIR}/src=."
-)
-
-# GCC versions 13.2 (and earlier) are subject to a class of bugs, see
-# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90348 and the meta bug
-# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111843. To work around that, set
-# -fstack-reuse=none for all gcc builds. (Only gcc understands this flag).
-try_append_cxx_flags("-fstack-reuse=none" TARGET core_interface)
-
-if(MSVC)
-  try_append_linker_flag("/DYNAMICBASE" TARGET core_interface)
-  try_append_linker_flag("/HIGHENTROPYVA" TARGET core_interface)
-  try_append_linker_flag("/NXCOMPAT" TARGET core_interface)
-else()
-
-  # _FORTIFY_SOURCE requires that there is some level of optimization,
-  # otherwise it does nothing and just creates a compiler warning.
-  try_append_cxx_flags("-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3"
-    RESULT_VAR cxx_supports_fortify_source
-    SOURCE "int main() {
-            # if !defined __OPTIMIZE__ || __OPTIMIZE__ <= 0
-              #error
-            #endif
-            }"
-  )
-  if(cxx_supports_fortify_source)
-    target_compile_options(core_interface INTERFACE
-      -U_FORTIFY_SOURCE
-      -D_FORTIFY_SOURCE=3
-    )
+if(NOT MSVC)
+  foreach(flag IN ITEMS
+      -Wall -Wextra -Wformat -Wformat-security -Wvla -Wredundant-decls -Wdate-time
+      -Wduplicated-branches -Wduplicated-cond -Wlogical-op -Woverloaded-virtual
+      -Wsuggest-override -Wimplicit-fallthrough -Wunreachable-code -Wundef
+      -Wthread-safety -Wloop-analysis -Wself-assign -Wconditional-uninitialized
+      -Wno-unused-parameter
+      -fno-extended-identifiers -fstack-reuse=none
+      -Wstack-protector -fstack-protector-all -fcf-protection=full)
+    cybou_add_compile_flag(core_interface ${flag})
+  endforeach()
+  cybou_add_compile_flag(core_interface -fmacro-prefix-map=${PROJECT_SOURCE_DIR}/src=.)
+  if(NOT MINGW)
+    cybou_add_compile_flag(core_interface -fstack-clash-protection)
   endif()
-  unset(cxx_supports_fortify_source)
-
-  try_append_cxx_flags("-Wstack-protector" TARGET core_interface SKIP_LINK)
-  try_append_cxx_flags("-fstack-protector-all" TARGET core_interface)
-  try_append_cxx_flags("-fcf-protection=full" TARGET core_interface)
-
-  if(MINGW)
-    # stack-clash-protection is a no-op for Windows.
-    # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90458 for more details.
-  else()
-    try_append_cxx_flags("-fstack-clash-protection" TARGET core_interface)
-  endif()
-
-  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "aarch64" OR CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-      try_append_cxx_flags("-mbranch-protection=bti" TARGET core_interface SKIP_LINK)
-    else()
-      try_append_cxx_flags("-mbranch-protection=standard" TARGET core_interface SKIP_LINK)
-    endif()
-  endif()
-
-  try_append_linker_flag("-Wl,--enable-reloc-section" TARGET core_interface)
-  try_append_linker_flag("-Wl,--dynamicbase" TARGET core_interface)
-  try_append_linker_flag("-Wl,--nxcompat" TARGET core_interface)
-  try_append_linker_flag("-Wl,--high-entropy-va" TARGET core_interface)
-  try_append_linker_flag("-Wl,-z,relro" TARGET core_interface)
-  try_append_linker_flag("-Wl,-z,now" TARGET core_interface)
-  # TODO: This can be dropped once Bitcoin Core no longer supports
-  #       NetBSD 10.0 or if upstream fix is backported.
-  # NetBSD's dynamic linker ld.elf_so < 11.0 supports exactly 2
-  # `PT_LOAD` segments and binaries linked with `-z separate-code`
-  # have 4 `PT_LOAD` segments.
-  # Relevant discussions:
-  # - https://github.com/bitcoin/bitcoin/pull/28724#issuecomment-2589347934
-  # - https://mail-index.netbsd.org/tech-userlevel/2023/01/05/msg013666.html
-  if(CMAKE_SYSTEM_NAME STREQUAL "NetBSD" AND CMAKE_SYSTEM_VERSION VERSION_LESS 11.0)
-    try_append_linker_flag("-Wl,-z,noseparate-code" TARGET core_interface)
-  else()
-    try_append_linker_flag("-Wl,-z,separate-code" TARGET core_interface)
-  endif()
-  if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    try_append_linker_flag("-Wl,-fixup_chains" TARGET core_interface)
-  endif()
-endif()
-
-if(REDUCE_EXPORTS)
-  set(CMAKE_CXX_VISIBILITY_PRESET hidden)
-  try_append_linker_flag("-Wl,--exclude-libs,ALL" TARGET core_interface)
-  try_append_linker_flag("-Wl,-no_exported_symbols" VAR CMAKE_EXE_LINKER_FLAGS)
-endif()
-
-# Prefer Unix-style package components over frameworks on macOS.
-# This improves compatibility with Python version managers.
-set(Python3_FIND_FRAMEWORK LAST CACHE STRING "")
-# Search for generic names before more specialized ones. This
-# improves compatibility with Python version managers that use shims.
-set(Python3_FIND_UNVERSIONED_NAMES FIRST CACHE STRING "")
-mark_as_advanced(Python3_FIND_FRAMEWORK Python3_FIND_UNVERSIONED_NAMES)
-find_package(Python3 3.10 COMPONENTS Interpreter)
-if(NOT TARGET Python3::Interpreter)
-  list(APPEND configure_warnings
-    "Minimum required Python not found."
-  )
-endif()
-
-# Avoid duplicate flags when users provide them through both the environment and
-# CMake cache variables.
-if(DEFINED ENV{CXXFLAGS})
-  deduplicate_flags(CMAKE_CXX_FLAGS)
-endif()
-if(DEFINED ENV{LDFLAGS})
-  deduplicate_flags(CMAKE_EXE_LINKER_FLAGS)
+  # _FORTIFY_SOURCE needs optimisation; Debug builds compile with -O0.
+  target_compile_options(core_interface INTERFACE $<$<NOT:$<CONFIG:Debug>>:-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3>)
+  foreach(flag IN ITEMS
+      -Wl,--dynamicbase -Wl,--nxcompat -Wl,--high-entropy-va
+      -Wl,-z,relro -Wl,-z,now -Wl,-z,separate-code)
+    cybou_add_link_flag(core_interface ${flag})
+  endforeach()
 endif()
 
 if(BUILD_TESTS)
   enable_testing()
 endif()
 
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.29)
-  # have "make test" depend on "make all"
-  set(CMAKE_SKIP_TEST_ALL_DEPENDENCY FALSE)
-endif()
-
+include(CybouTargets)
+include(ThirdParty)
 add_subdirectory(src)
 
-include(Maintenance)
-setup_split_debug_script()
-
-message("\n")
-message("Configure summary")
-message("=================")
-message("Executables:")
-message("  cybou (GUI) ......................... ${BUILD_GUI}")
-message("  cybou (headless CLI) ................ ON")
-message("  cybou-loadgen (dev/test) ............ ${BUILD_TESTS}")
-message("Tests:")
-message("  test (cybou-core-test) .............. ${BUILD_TESTS}")
-message("  test_cybou-native-qt ................ ${BUILD_GUI_TESTS}")
-message("")
-if(CMAKE_CROSSCOMPILING)
-  set(cross_status "TRUE, for ${CMAKE_SYSTEM_NAME}, ${CMAKE_SYSTEM_PROCESSOR}")
-else()
-  set(cross_status "FALSE")
-endif()
-message("Cross compiling ....................... ${cross_status}")
-message("C++ compiler .......................... ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}, ${CMAKE_CXX_COMPILER}")
-include(FlagsSummary)
-flags_summary()
-message("Treat compiler warnings as errors ..... ${CMAKE_COMPILE_WARNING_AS_ERROR}")
-message("Use ccache for compiling .............. ${WITH_CCACHE}")
-message("\n")
-if(configure_warnings)
-    message("  ******\n")
-    foreach(warning IN LISTS configure_warnings)
-      message(WARNING "${warning}")
-    endforeach()
-    message("  ******\n")
-    message(AUTHOR_WARNING "Warnings have been encountered!")
-endif()
-
-# We want all build properties to be encapsulated properly.
-include(WarnAboutGlobalProperties)
+message(STATUS "CYBOU: build type ${CMAKE_BUILD_TYPE}, GUI ${BUILD_GUI}, tests ${BUILD_TESTS}, "
+  "compiler ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")

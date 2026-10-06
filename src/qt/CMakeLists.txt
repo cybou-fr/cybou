@@ -1,15 +1,6 @@
 # Copyright (c) 2026 Stanislav SAVELIEV
 # SPDX-License-Identifier: Apache-2.0
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  enable_language(OBJCXX)
-  set(CMAKE_OBJCXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
-  set(CMAKE_OBJCXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
-  set(CMAKE_OBJCXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
-  set(CMAKE_OBJCXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL}")
-  string(APPEND CMAKE_OBJCXX_COMPILE_OBJECT " ${APPEND_CPPFLAGS} ${APPEND_CXXFLAGS}")
-endif()
-
 get_target_property(qt_lib_type Qt6::Core TYPE)
 
 function(import_plugins target)
@@ -45,7 +36,7 @@ endfunction()
 
 # For Qt-specific commands and variables, please consult:
 #  - https://cmake.org/cmake/help/latest/manual/cmake-qt.7.html
-#  - https://doc.qt.io/qt-5/cmake-manual.html
+#  - https://doc.qt.io/qt-6/cmake-manual.html
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOMOC_MOC_OPTIONS "-p${CMAKE_CURRENT_SOURCE_DIR}")
@@ -120,8 +111,7 @@ add_executable(cybou
   cybouapplication.h
 )
 
-add_windows_resources(cybou res/cybou-res.rc)
-add_windows_application_manifest(cybou)
+cybou_windows_manifest(cybou res/cybou-res.rc)
 
 target_link_libraries(cybou
   cybou_qt
@@ -129,7 +119,7 @@ target_link_libraries(cybou
 )
 
 import_plugins(cybou)
-install_binary_component(cybou)
+cybou_install(cybou)
 if(WIN32)
   set_target_properties(cybou PROPERTIES WIN32_EXECUTABLE TRUE)
 

@@ -1,15 +1,7 @@
 # Copyright (c) 2026 CYBOU contributors
 # SPDX-License-Identifier: Apache-2.0
 
-include(AddWindowsResources)
-
 include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR})
-
-#=============================
-# Subprojects
-#=============================
-include(../cmake/crc32c.cmake)
-include(../cmake/leveldb.cmake)
 
 # Set top-level target output locations.
 if(NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
@@ -78,7 +70,7 @@ if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
 
-include(InstallBinaryComponent)
+
 
 # CYBOU node runtime and P2P library.
 add_library(cybou_node STATIC
@@ -154,14 +146,14 @@ endif()
 if(NOT BUILD_GUI)
   add_executable(cybou cybou_main.cpp)
   target_link_libraries(cybou PRIVATE cybou_cli)
-  install_binary_component(cybou)
-  add_windows_application_manifest(cybou)
+  cybou_install(cybou)
+  cybou_windows_manifest(cybou)
 endif()
 # Developer/test load generator; never part of a production build.
 if(BUILD_TESTS)
   add_executable(cybou-loadgen cybou_loadgen.cpp)
   target_link_libraries(cybou-loadgen PRIVATE cybou_node)
-  add_windows_application_manifest(cybou-loadgen)
+  cybou_windows_manifest(cybou-loadgen)
 endif()
 
 if(BUILD_GUI)
