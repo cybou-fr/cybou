@@ -14,7 +14,7 @@
 
 namespace cybou {
 namespace {
-// Source: bitcoin/bips bip-0039/english.txt, SHA-256
+// Source: BIP-0039 english.txt, SHA-256
 // 2f5eed53a4727b4bf8880d8f3f199efc90e58503646d9ff8eff3a2ed3b24dbda.
 // The BIP is licensed MIT. Word order is part of the recovery format.
 constexpr std::array<std::string_view, 2048> WORDS{

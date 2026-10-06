@@ -138,7 +138,7 @@ std::optional<AccountId> ReadAccount(Reader& in)
     return AccountId::FromBytes(bytes);
 }
 
-bool ReadUint256(Reader& in, cybou::Hash256& out) { return in.Bytes(std::span{out.begin(), 32}); }
+bool ReadHash256(Reader& in, cybou::Hash256& out) { return in.Bytes(std::span{out.begin(), 32}); }
 
 /** Индексы — только фиксированные 32-байтовые ID; сама Application DB не считается перечислимым каталогом. */
 template <typename Id>
@@ -255,7 +255,7 @@ std::optional<MailRecord> ApplicationService::LoadMail(const PrivateItemId& id) 
     if (!encoded) return std::nullopt;
     Reader in{*encoded};
     MailRecord record;
-    if (!Magic(in, MAIL_MAGIC) || !ReadUint256(in, record.operation_id)) return std::nullopt;
+    if (!Magic(in, MAIL_MAGIC) || !ReadHash256(in, record.operation_id)) return std::nullopt;
     const auto height = in.U64();
     const auto index = in.U32();
     const auto sender = ReadAccount(in);
@@ -307,7 +307,7 @@ std::optional<FileRecord> ApplicationService::LoadFile(const PrivateItemId& id) 
     Reader in{*encoded};
     FileRecord record;
     PrivateItemId stored_id{};
-    if (!Magic(in, FILE_MAGIC) || !ReadUint256(in, record.operation_id) || !in.Bytes(stored_id) ||
+    if (!Magic(in, FILE_MAGIC) || !ReadHash256(in, record.operation_id) || !in.Bytes(stored_id) ||
         stored_id != id) return std::nullopt;
     const auto height = in.U64();
     const auto index = in.U32();

@@ -1,4 +1,4 @@
-// BIP-39 English word list, bitcoin/bips bip-0039/english.txt (MIT).
+// BIP-39 English word list (BIP-0039 english.txt, MIT).
     "abandon",
     "ability",
     "able",
