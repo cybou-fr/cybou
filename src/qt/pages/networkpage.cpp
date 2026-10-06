@@ -656,12 +656,16 @@ void NetworkPage::refresh()
                 qBound(0.08, kSchematicRegions[reg_idx].normalized_pt.y() + dy, 0.90)
             };
         }
+        item.last_seen = QDateTime::currentDateTimeUtc();
         m_peers.append(item);
     }
 
-    // Bounded, session-local observations; no persistent endpoint history.
+    // Bounded, session-local observations; no persistent endpoint history. A peer
+    // gone for 10 minutes is dropped: old test nodes must not linger as "known".
+    const auto forget_before = QDateTime::currentDateTimeUtc().addSecs(-600);
     for (auto old : previous_peers) {
         if (m_peers.size() >= 100) break;
+        if (old.last_seen < forget_before) continue;
         if (std::none_of(m_peers.begin(), m_peers.end(), [&](const auto& p) { return p.endpoint == old.endpoint; })) {
             old.connected = false;
             old.storage_id.clear();

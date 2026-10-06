@@ -31,6 +31,7 @@ struct CybouPeerItem {
     bool connected{true};
     QString classification;
     QString region_label;
+    QDateTime last_seen; // when this session last had it connected
     QPointF map_coord; // Normalized [0, 1] coordinate on the France map
 };
 

@@ -179,7 +179,13 @@ void CybouNodeRuntime::SchedulePeerRetry(
         return std::chrono::seconds{delay};
     };
 
-    switch (failure) {
+    // A pinned rendezvous peer (the compiled bootstrap) is the way back into the
+    // mesh. A closed TLS handshake there is usually its per-IP session limit or a
+    // changed client address, not an incompatible peer: retry within minutes.
+    const bool rendezvous = std::any_of(m_network.configured_peers.begin(), m_network.configured_peers.end(),
+        [&](const ConfiguredPeer& peer) { return peer.endpoint == endpoint && peer.tls_spki_sha256; });
+    const auto effective = rendezvous && failure == PeerFailureClass::PROTOCOL ? PeerFailureClass::TEMPORARY : failure;
+    switch (effective) {
     case PeerFailureClass::TEMPORARY:
         retry.temporary_failures = std::min<uint32_t>(retry.temporary_failures + 1, 16);
         retry.retry_after = now + backoff(retry.temporary_failures, 5, 300);
