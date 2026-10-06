@@ -29,6 +29,8 @@
 #include <QAbstractItemView>
 #include <QCompleter>
 #include <QDir>
+#include <QEventLoop>
+#include <qt/cybouapplicationbackend.h>
 #include <QLineEdit>
 #include <QShortcut>
 #include <QStandardItemModel>
@@ -43,8 +45,10 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QLocale>
@@ -61,6 +65,15 @@
 #include <QWidgetAction>
 
 namespace {
+
+class ApplicationLoadingDialog final : public QDialog
+{
+public:
+    using QDialog::QDialog;
+    void reject() override {} // Use the explicit lock action while preparing private data.
+protected:
+    void closeEvent(QCloseEvent* event) override { event->ignore(); }
+};
 
 /** Below this window width the sidebar collapses to icons. */
 constexpr int kCompactSidebarWidth = 1180;
@@ -95,7 +108,6 @@ QString PageTitle(CybouPage page)
     case CybouPage::Wallet: return CybouMainWindow::tr("Wallet");
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
     case CybouPage::Network: return CybouMainWindow::tr("Network");
-    case CybouPage::Diagnostics: return CybouMainWindow::tr("Diagnostics");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
     case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Central Authority");
     }
@@ -156,6 +168,9 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
         const int delay_ms = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_DELAY_MS");
         QTimer::singleShot(delay_ms > 0 ? delay_ms : 1500, this, [this, shot_dir] { runScreenshotHarness(shot_dir); });
     }
+    connect(m_desktop_model, &CybouDesktopModel::applicationLoadChanged, this, &CybouMainWindow::refreshApplicationLoading);
+    connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, &CybouMainWindow::refreshApplicationLoading);
+    refreshApplicationLoading();
     m_constructed = true;
 }
 
@@ -182,16 +197,31 @@ void CybouMainWindow::showDebugWindow()
         auto* details = new QTextEdit{m_diagnostics};
         details->setObjectName(QStringLiteral("diagnosticsDetails"));
         details->setReadOnly(true);
+        details->setLineWrapMode(QTextEdit::NoWrap);
         layout->addWidget(details);
         const auto update_details = [this, details] {
             const auto& status = m_desktop_model->status();
-            details->setPlainText(tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
+            const auto text = tr("Network: %1\nNetwork ID: %2\nNode running: %3\nPeers: %4\n"
                                      "Finalized height: %5\nData directory: %6")
                 .arg(status.network_name, status.network_binding,
                     status.node_running ? tr("yes") : tr("no"))
                 .arg(status.peer_count)
                 .arg(status.finality_known ? QString::number(status.finalized_height) : tr("unknown"))
-                .arg(status.data_directory));
+                .arg(status.data_directory);
+            if (details->toPlainText() == text) return;
+            const auto cursor = details->textCursor();
+            const int anchor = cursor.anchor();
+            const int position = cursor.position();
+            const int horizontal = details->horizontalScrollBar()->value();
+            const int vertical = details->verticalScrollBar()->value();
+            details->setPlainText(text);
+            auto restored = details->textCursor();
+            const int last = details->document()->characterCount() - 1;
+            restored.setPosition(std::min(anchor, last));
+            restored.setPosition(std::min(position, last), QTextCursor::KeepAnchor);
+            details->setTextCursor(restored);
+            details->horizontalScrollBar()->setValue(horizontal);
+            details->verticalScrollBar()->setValue(vertical);
         };
         connect(m_desktop_model, &CybouDesktopModel::statusChanged, m_diagnostics, update_details);
         update_details();
@@ -199,6 +229,91 @@ void CybouMainWindow::showDebugWindow()
     m_diagnostics->show();
     m_diagnostics->raise();
     m_diagnostics->activateWindow();
+}
+
+void CybouMainWindow::refreshApplicationLoading()
+{
+    const auto state = m_desktop_model->applicationLoadState();
+    const bool preparing = state == CybouApplicationLoadState::Opening || state == CybouApplicationLoadState::Loading ||
+        state == CybouApplicationLoadState::Failed;
+    if (state == CybouApplicationLoadState::Closed) m_application_loading_dismissed = false;
+    if (!preparing || m_application_loading_dismissed) {
+        if (m_application_loading) m_application_loading->hide();
+        return;
+    }
+    if (!m_application_loading) {
+        m_application_loading = new ApplicationLoadingDialog{this};
+        m_application_loading->setObjectName(QStringLiteral("applicationLoadingDialog"));
+        m_application_loading->setWindowTitle(tr("Opening your Identity"));
+        m_application_loading->setWindowModality(Qt::WindowModal);
+        m_application_loading->setWindowFlags(Qt::Dialog | Qt::WindowTitleHint | Qt::CustomizeWindowHint);
+        m_application_loading->setFixedWidth(460);
+        auto* layout = new QVBoxLayout{m_application_loading};
+        layout->setContentsMargins(32, 28, 32, 28);
+        layout->setSpacing(16);
+        auto* logo = new QLabel{m_application_loading};
+        logo->setPixmap(CybouTheme::logoTile({72, 72}, 18, {52, 52}));
+        logo->setAlignment(Qt::AlignCenter);
+        layout->addWidget(logo);
+        auto* title = new QLabel{tr("Preparing your Mail and Files"), m_application_loading};
+        title->setObjectName(QStringLiteral("sectionTitle"));
+        title->setWordWrap(true);
+        title->setAlignment(Qt::AlignCenter);
+        layout->addWidget(title);
+        auto* stage = new QLabel{m_application_loading};
+        stage->setObjectName(QStringLiteral("applicationLoadingStage"));
+        stage->setWordWrap(true);
+        stage->setAlignment(Qt::AlignCenter);
+        stage->setTextFormat(Qt::PlainText);
+        layout->addWidget(stage);
+        auto* progress = new QProgressBar{m_application_loading};
+        progress->setObjectName(QStringLiteral("applicationLoadingProgress"));
+        layout->addWidget(progress);
+        auto* network = new QLabel{m_application_loading};
+        network->setObjectName(QStringLiteral("applicationLoadingNetwork"));
+        network->setWordWrap(true);
+        network->setAlignment(Qt::AlignCenter);
+        layout->addWidget(network);
+        auto* local = new QPushButton{tr("Open the local view while loading continues"), m_application_loading};
+        local->setObjectName(QStringLiteral("applicationLoadingLocalButton"));
+        connect(local, &QPushButton::clicked, this, [this] {
+            m_application_loading_dismissed = true;
+            m_application_loading->hide();
+        });
+        layout->addWidget(local);
+        auto* lock = new QPushButton{tr("Return to unlock"), m_application_loading};
+        lock->setObjectName(QStringLiteral("secondaryButton"));
+        connect(lock, &QPushButton::clicked, this, [this] { m_desktop_model->requestLockVault(); });
+        layout->addWidget(lock);
+    }
+    auto* stage = m_application_loading->findChild<QLabel*>(QStringLiteral("applicationLoadingStage"));
+    stage->setText(state == CybouApplicationLoadState::Failed ? m_desktop_model->applicationLoadError()
+        : state == CybouApplicationLoadState::Opening ? tr("Opening your encrypted local data…")
+        : !m_desktop_model->applicationLoadError().isEmpty() ? m_desktop_model->applicationLoadError()
+        : tr("Discovering and decrypting your content…"));
+    auto* progress = m_application_loading->findChild<QProgressBar*>(QStringLiteral("applicationLoadingProgress"));
+    const auto total = m_desktop_model->applicationLoadTotal();
+    if (state == CybouApplicationLoadState::Loading && total > 0) {
+        progress->setRange(0, 100);
+        progress->setValue(static_cast<int>(std::min(99.0, 100.0 * m_desktop_model->applicationLoadScanned() / total)));
+        progress->setFormat(tr("Verified history: %p%"));
+    } else {
+        progress->setRange(0, state == CybouApplicationLoadState::Failed ? 100 : 0);
+        progress->setValue(0);
+        progress->setTextVisible(false);
+    }
+    if (state == CybouApplicationLoadState::Loading && total > 0) progress->setTextVisible(true);
+    m_application_loading->findChild<QLabel*>(QStringLiteral("applicationLoadingNetwork"))->setText(
+        m_desktop_model->status().online ? tr("Connected to the network. Preparing your private view.")
+        : tr("Connecting to the network… Local data remains available offline."));
+    m_application_loading->findChild<QPushButton*>(QStringLiteral("applicationLoadingLocalButton"))->setVisible(state == CybouApplicationLoadState::Loading);
+    if (!m_application_loading->isVisible()) m_application_loading->show();
+}
+
+void CybouMainWindow::showNetworkDiagnostics()
+{
+    showPage(CybouPage::Network);
+    if (auto* network = dynamic_cast<NetworkPage*>(page(CybouPage::Network))) network->showAdvanced();
 }
 
 void CybouMainWindow::showPage(CybouPage page)
@@ -295,7 +410,7 @@ QFrame* CybouMainWindow::buildSidebar(QWidget* parent)
 
     add_button(CybouPage::Identity, CybouTheme::NavIcon::Identity);
     add_button(CybouPage::Network, CybouTheme::NavIcon::Network);
-    add_button(CybouPage::Diagnostics, CybouTheme::NavIcon::Diagnostics);
+
     add_button(CybouPage::Settings, CybouTheme::NavIcon::Settings);
     add_button(CybouPage::NetworkAuthority, CybouTheme::NavIcon::Diagnostics);
     // Hidden unless the unlocked Identity is proven to be the genesis authority.
@@ -429,7 +544,7 @@ void CybouMainWindow::buildShell()
     main_layout->addWidget(buildHeader(main_column));
 
     auto* home = new HomePage{m_desktop_model,
-        [this] { showPage(CybouPage::Diagnostics); },
+        [this] { showNetworkDiagnostics(); },
         [this] { showPage(CybouPage::Identity); },
         [this] { showPage(CybouPage::Wallet); },
         [this] { showPage(CybouPage::Mail); },
@@ -441,7 +556,7 @@ void CybouMainWindow::buildShell()
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* network = new NetworkPage{m_desktop_model, nullptr};
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
-    auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
+    auto* settings = new SettingsPage{m_desktop_model, [this] { showNetworkDiagnostics(); }, nullptr};
     settings->onAppearanceChanged = [this] { reloadAppearance(); };
     settings->onLanguageChanged = [this](const QString& language) { setLanguage(language); };
     identity->onSetupRequested = [this, home](bool restore) {
@@ -478,8 +593,8 @@ void CybouMainWindow::buildShell()
     addPage(files, false);
     addPage(wallet, true);
     addPage(identity, true);
-    addPage(network, true);
-    addPage(diagnostics, true);
+    addPage(network, false);
+    network->setDiagnosticsWidget(diagnostics);
     addPage(settings, true);
     m_activity->onOpenFile = [this, files](const QString& id) {
         showPage(CybouPage::Files);
@@ -545,7 +660,7 @@ void CybouMainWindow::refreshHeader()
     m_identity_button->setText(label);
     m_identity_button->setIcon(QIcon{CybouUi::avatarPixmap(label.left(1), CybouTheme::BRAND_TEAL, 24)});
     m_identity_button->setAccessibleName(tr("Identity menu for %1").arg(label));
-    m_brand_name->setText(status.primary_name.isEmpty() ? status.network_name : status.primary_name);
+    m_brand_name->setText(status.network_name);
 }
 
 void CybouMainWindow::setSidebarCompact(bool compact)
@@ -731,7 +846,7 @@ void CybouMainWindow::rebuildTrayMenu()
         activateWindow();
     });
     m_tray_menu->addAction(tr("Diagnostics"), this, [this] {
-        showPage(CybouPage::Diagnostics);
+        showNetworkDiagnostics();
         showNormal();
     });
     m_tray_menu->addSeparator();
@@ -846,6 +961,9 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
     const QString prefix = qEnvironmentVariable("CYBOU_SCREENSHOT_PREFIX");
     const QString fixture = CybouUiFixtures::requestedFixture();
     const auto save = [this, directory, prefix](const QString& screen) {
+        QEventLoop settle;
+        QTimer::singleShot(250, &settle, &QEventLoop::quit);
+        settle.exec();
         for (int i = 0; i < 3; ++i) qApp->processEvents();
         grab().save(QDir{directory}.filePath(QStringLiteral("%1%2.png").arg(prefix, screen)));
     };
@@ -916,8 +1034,24 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         save(QStringLiteral("wallet"));
         save(QStringLiteral("wallet-pending")); // fixture activity: Waiting / Finalized
         showPage(CybouPage::Network);
+        // Synthetic local diagnostics only in the explicit screenshot fixture.
+        cybou::NodeDiagnosticsSnapshot map_snapshot;
+        map_snapshot.peers = {{"51.255.46.58:29461", 48213, ""}, {"51.255.46.58:29462", 48212, ""}, {"127.0.0.1:29461", 48213, ""}};
+        model->setNetworkDiagnostics(map_snapshot);
         save(QStringLiteral("network"));
-        showPage(CybouPage::Diagnostics);
+        auto* network = static_cast<NetworkPage*>(page(CybouPage::Network));
+        network->selectPeer(0);
+        save(QStringLiteral("network-peer"));
+        map_snapshot.peers.erase(map_snapshot.peers.begin());
+        model->setNetworkDiagnostics(map_snapshot);
+        save(QStringLiteral("network-known-peer"));
+        if (auto* backend = model->applicationBackend()) {
+            Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Loading, 35, 100, {});
+            qApp->processEvents();
+            if (m_application_loading) m_application_loading->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("identity-loading.png")));
+            Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
+        }
+        showNetworkDiagnostics();
         save(QStringLiteral("diagnostics"));
         showPage(CybouPage::Settings);
         save(QStringLiteral("settings"));

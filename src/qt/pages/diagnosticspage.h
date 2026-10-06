@@ -12,12 +12,9 @@
 class CybouDesktopModel;
 class QLabel;
 class QVBoxLayout;
+class QTimer;
 
-/**
- * Diagnostics: the only normal page with node and network facts (node
- * state, peers, finalized height, PoA finality, network ID, data
- * directory). Home and product pages never show these.
- */
+/** Technical panel embedded in Network Advanced. */
 class DiagnosticsPage : public QWidget
 {
     Q_DECLARE_TR_FUNCTIONS(DiagnosticsPage)
@@ -25,6 +22,9 @@ class DiagnosticsPage : public QWidget
 public:
     DiagnosticsPage(CybouDesktopModel* model, std::function<void()> diagnostics_window_requested,
         QWidget* parent = nullptr);
+
+protected:
+    void showEvent(QShowEvent* event) override;
 
 private:
     CybouDesktopModel* const m_model;
@@ -37,6 +37,8 @@ private:
     QVBoxLayout* m_rows{nullptr};
     QVBoxLayout* m_services{nullptr};
 
+    QTimer* m_refresh_timer{nullptr};
+    void scheduleRefresh();
     void refresh();
 };
 

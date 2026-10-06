@@ -586,6 +586,11 @@ Identity: %7 (%8)</source>
         <source>The local view could not be refreshed. Try again.</source>
         <translation>La vue locale n’a pas pu être actualisée. Réessayez.</translation>
     </message>
+
+    <message><source>Your encrypted data could not be opened. Lock your Identity and try again.</source><translation>Vos données chiffrées n’ont pas pu être ouvertes. Verrouillez votre identité puis réessayez.</translation></message>
+    <message><source>Your data could not be prepared yet. CYBOU will retry automatically.</source><translation>Vos données n’ont pas encore pu être préparées. CYBOU réessaiera automatiquement.</translation></message>
+    <message><source>Waiting for encrypted content from peers… You can open the local view while CYBOU retries.</source><translation>En attente du contenu chiffré des pairs… Vous pouvez ouvrir l’espace local pendant que CYBOU réessaie.</translation></message>
+    <message><source>Your Identity is not available. Return to unlock and try again.</source><translation>Votre identité n’est pas disponible. Revenez au déverrouillage puis réessayez.</translation></message>
 </context>
 <context>
     <name>CybouCoreApplicationAdapter::IdentitySession</name>
@@ -1263,6 +1268,16 @@ Stan</translation>
         <source>This file is not ready to attach. Open its details to check protection.</source>
         <translation>Ce fichier n’est pas prêt à être joint. Consultez ses détails pour vérifier sa protection.</translation>
     </message>
+
+    <message><source>Opening your Identity</source><translation>Ouverture de votre identité</translation></message>
+    <message><source>Preparing your Mail and Files</source><translation>Préparation de vos e-mails et fichiers</translation></message>
+    <message><source>Return to unlock</source><translation>Revenir au déverrouillage</translation></message>
+    <message><source>Opening your encrypted local data…</source><translation>Ouverture de vos données locales chiffrées…</translation></message>
+    <message><source>Discovering and decrypting your content…</source><translation>Recherche et déchiffrement de votre contenu…</translation></message>
+    <message><source>Verified history: %p%</source><translation>Historique vérifié : %p%</translation></message>
+    <message><source>Connected to the network. Preparing your private view.</source><translation>Connecté au réseau. Préparation de votre espace privé.</translation></message>
+    <message><source>Connecting to the network… Local data remains available offline.</source><translation>Connexion au réseau… Vos données locales restent accessibles hors ligne.</translation></message>
+    <message><source>Open the local view while loading continues</source><translation>Ouvrir l’espace local pendant le chargement</translation></message>
 </context>
 <context>
     <name>CybouProduct</name>
@@ -4395,6 +4410,17 @@ Carte schématique illustrative des connexions observées. Les emplacements sont
         <source>Direct active P2P mesh session · TLS transport pinned</source>
         <translation>Session maillée P2P active directe · Transport TLS épinglé</translation>
     </message>
+
+    <message><source>Advanced · Diagnostics</source><translation>Avancé · Diagnostics</translation></message>
+    <message><source>Close</source><translation>Fermer</translation></message>
+    <message><source>Connection</source><translation>Connexion</translation></message>
+    <message><source>Connected</source><translation>Connecté</translation></message>
+    <message><source>Known · disconnected</source><translation>Connu · déconnecté</translation></message>
+    <message><source>Unknown</source><translation>Inconnu</translation></message>
+    <message><source>Previously observed in this app session. Current height and reachability unknown.</source><translation>Observé précédemment pendant cette session. Hauteur et disponibilité actuelles inconnues.</translation></message>
+    <message><source>%1/%2 protected</source><translation>%1/%2 protégés</translation></message>
+    <message><source>%1 securing</source><translation>%1 en sécurisation</translation></message>
+    <message><source>Direct active P2P mesh session · TLS</source><translation>Session P2P directe active · TLS</translation></message>
 </context>
 <context>
     <name>OnboardingView</name>
@@ -5180,6 +5206,8 @@ Enregistrer quand même ?</translation>
         <source>No peer connections observed</source>
         <translation>Aucune connexion de pair observée</translation>
     </message>
+    <message><source>%1 connected · %2 known, disconnected (pale)</source><translation>%1 connectés · %2 connus, déconnectés (pâles)</translation></message>
+    <message><source>Observed mesh peers</source><translation>Pairs du maillage observés</translation></message>
 </context>
 <context>
     <name>SettingsPage</name>

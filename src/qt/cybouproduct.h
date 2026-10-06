@@ -32,6 +32,8 @@ struct CybouMailTask {
 };
 
 /** Identity lifecycle as surfaced to the UI (one Identity per user). */
+enum class CybouApplicationLoadState { Closed, Opening, Loading, Ready, Failed };
+
 enum class CybouIdentityState {
     None,
     Creating,

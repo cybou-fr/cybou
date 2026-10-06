@@ -41,7 +41,6 @@ enum class CybouPage {
     Wallet,
     Identity,
     Network,
-    Diagnostics,
     Settings,
     /** Only for the Identity proven from genesis to hold the PoA finalizer key. */
     NetworkAuthority,
@@ -58,6 +57,7 @@ public:
     void startRuntime();
     void showDebugWindow();
     void showPage(CybouPage page);
+    void showNetworkDiagnostics();
     /** Rebuilds the shell so every page picks up a new appearance. */
     void reloadAppearance();
     void setLanguage(const QString& language);
@@ -102,6 +102,9 @@ private:
     QSystemTrayIcon* m_tray_icon{nullptr};
     QMenu* m_tray_menu{nullptr};
     QDialog* m_diagnostics{nullptr};
+    QDialog* m_application_loading{nullptr};
+    bool m_application_loading_dismissed{false};
+    void refreshApplicationLoading();
     bool m_sidebar_compact{false};
     CybouUi::Notifier* m_notifier{nullptr};
     /** Notified items ("mail:<id>", "pay:<id>"); primed with what exists at unlock. */

@@ -54,6 +54,7 @@ void CybouFixtureApplicationBackend::openIdentity()
     m_open = true;
     Q_EMIT mailSnapshot(m_mail);
     Q_EMIT filesSnapshot(m_files);
+    Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
 }
 
 void CybouFixtureApplicationBackend::closeIdentity()

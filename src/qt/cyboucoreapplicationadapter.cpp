@@ -28,8 +28,14 @@ void CybouCoreApplicationAdapter::setRefreshInterval(int ms)
 void CybouCoreApplicationAdapter::openIdentity()
 {
     if (m_session) return;
+    m_initial_projection_ready = false;
+    Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Opening, 0, 0, {});
     const auto account = m_identity.GetAccountId();
-    if (!account) return;
+    if (!account) {
+        Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Failed, 0, 0,
+            tr("Your Identity is not available. Return to unlock and try again."));
+        return;
+    }
     // One encrypted, rebuildable Application DB per Identity.
     const auto root = cybou::IdentityDataDirectory(m_data_directory, *account);
     ++m_session_generation;
@@ -89,7 +95,7 @@ void CybouCoreApplicationAdapter::setReady(bool ready)
 }
 
 void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QVector<CybouFileItem> files,
-    bool ready, CybouRestoreStepState restore)
+    bool ready, CybouRestoreStepState restore, bool initial_complete)
 {
     if (!m_session) return;
     // Drafts: the latest local edit wins until the worker has stored it; a
@@ -147,6 +153,10 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     m_last_files = std::move(files);
     emitFiles();
     Q_EMIT restoreProgressChanged(restore, restore);
+    if (!m_initial_projection_ready && (initial_complete || !items.isEmpty() || !m_last_files.isEmpty())) {
+        m_initial_projection_ready = true;
+        Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
+    }
 }
 
 void CybouCoreApplicationAdapter::showPendingFile(const CybouFileItem& item)

@@ -115,6 +115,8 @@ public:
 
 Q_SIGNALS:
     void availabilityChanged();
+    /** Initial private projection preparation; counts refer to locally verified history. */
+    void applicationLoadChanged(CybouApplicationLoadState state, quint64 scanned, quint64 total, const QString& error);
 
     /* Mail projection. */
     void mailSnapshot(const QVector<CybouMailItem>& items);

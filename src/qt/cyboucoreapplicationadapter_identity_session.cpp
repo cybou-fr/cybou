@@ -49,7 +49,11 @@ bool CybouCoreApplicationAdapter::IdentitySession::Open()
 void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
 {
     const bool ready = Open();
-    StateToGui([owner = owner, ready] { owner->setReady(ready); });
+    StateToGui([owner = owner, ready] {
+        owner->setReady(ready);
+        Q_EMIT owner->applicationLoadChanged(ready ? CybouApplicationLoadState::Loading : CybouApplicationLoadState::Failed,
+            0, 0, ready ? QString{} : tr("Your encrypted data could not be opened. Lock your Identity and try again."));
+    });
     if (!ready) return;
     while (!stop.stop_requested()) {
         // Recovery scans back to back; caught-up sessions wait for commands or the tick.
@@ -64,7 +68,13 @@ void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
         } catch (const std::exception& e) {
             // A failed refresh leaves the last snapshot in place; the next tick retries.
             // Never silently: a refresh that always fails freezes Mail and Files.
+            catching_up = false; // Retry at the normal interval, never spin after a failed scan.
             qWarning() << "CYBOU application refresh failed:" << e.what();
+            StateToGui([owner = owner] {
+                if (!owner->m_initial_projection_ready)
+                    Q_EMIT owner->applicationLoadChanged(CybouApplicationLoadState::Failed, 0, 0,
+                        tr("Your data could not be prepared yet. CYBOU will retry automatically."));
+            });
         }
     }
     // Commands issued just before locking (a saved draft, a send) still run.
@@ -83,6 +93,11 @@ void CybouCoreApplicationAdapter::IdentitySession::Refresh()
         return;
     }
     const auto progress = application->Scan();
+    StateToGui([owner = owner, scanned = progress.scanned_height, total = progress.finalized_height, unavailable = progress.unavailable_roots] {
+        if (!owner->m_initial_projection_ready)
+            Q_EMIT owner->applicationLoadChanged(CybouApplicationLoadState::Loading, scanned, total, unavailable ?
+                    tr("Waiting for encrypted content from peers… You can open the local view while CYBOU retries.") : QString{});
+    });
     // Restore progress (and the no-pause scan loop) follows the history scan only. Content that
     // cannot be fetched is retried in the background with backoff and never keeps the restore
     // banner up or the scan loop spinning; publication cleanup still waits for a complete index.
@@ -90,7 +105,7 @@ void CybouCoreApplicationAdapter::IdentitySession::Refresh()
     catching_up = !history_scanned;
     storage_projection.Refresh(progress.Complete());
     AdvanceRotation();
-    Snapshot(history_scanned ? CybouRestoreStepState::Done : CybouRestoreStepState::Running);
+    Snapshot(history_scanned ? CybouRestoreStepState::Done : CybouRestoreStepState::Running, progress.Complete() && progress.unavailable_roots == 0);
 }
 
 void CybouCoreApplicationAdapter::IdentitySession::AdvanceRotation()
@@ -113,11 +128,11 @@ void CybouCoreApplicationAdapter::IdentitySession::AdvanceRotation()
     }
 }
 
-void CybouCoreApplicationAdapter::IdentitySession::Snapshot(CybouRestoreStepState restore)
+void CybouCoreApplicationAdapter::IdentitySession::Snapshot(CybouRestoreStepState restore, bool initial_complete)
 {
     auto items = mail.Snapshot();
     auto file_items = files.FilesSnapshot();
-    StateToGui([owner = owner, items = std::move(items), file_items = std::move(file_items), restore]() mutable {
-        owner->applySnapshot(std::move(items), std::move(file_items), true, restore);
+    StateToGui([owner = owner, items = std::move(items), file_items = std::move(file_items), restore, initial_complete]() mutable {
+        owner->applySnapshot(std::move(items), std::move(file_items), true, restore, initial_complete);
     });
 }

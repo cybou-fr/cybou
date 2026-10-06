@@ -250,7 +250,7 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     void Run(std::stop_token stop);
     void Refresh();
     void AdvanceRotation();
-    void Snapshot(CybouRestoreStepState restore);
+    void Snapshot(CybouRestoreStepState restore, bool initial_complete = false);
 };
 
 #endif

@@ -91,6 +91,8 @@ private Q_SLOTS:
     void walletForecastAndTransferReview();
     void assuranceAndRestoreResponsiveness();
     void networkPageAndSchematicFranceMap();
+    void applicationLoadingWaitsForProjection();
+    void networkRefreshCoalescesStatusBurst();
     void authorityExplorerAndEvidenceWorkspace();
     void ownContentInspectorAndBoundedConsole();
     void assuranceLifecycleAndRecoveryGates();

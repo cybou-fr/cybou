@@ -298,6 +298,10 @@ public:
     /** Fee a message to support pays (about 5x a short message); empty when unknown. */
     std::optional<quint64> supportMailFee() const;
 
+    CybouApplicationLoadState applicationLoadState() const { return m_application_load_state; }
+    quint64 applicationLoadScanned() const { return m_application_load_scanned; }
+    quint64 applicationLoadTotal() const { return m_application_load_total; }
+    const QString& applicationLoadError() const { return m_application_load_error; }
     const CybouRestoreProgress& restoreProgress() const { return m_restore_progress; }
     void setRestoreProgress(const CybouRestoreProgress& progress);
 
@@ -411,6 +415,7 @@ Q_SIGNALS:
     void activityChanged();
     void mailTasksChanged();
     void applicationRefreshChanged();
+    void applicationLoadChanged();
     void walletChanged();
     void createIdentityRequested();
     void identityCreationFailed(const QString& reason);
@@ -475,6 +480,10 @@ private:
     /** Opens or closes the backend's Identity session to match identity_state. */
     void syncIdentitySession();
     bool m_session_open{false};
+    CybouApplicationLoadState m_application_load_state{CybouApplicationLoadState::Closed};
+    quint64 m_application_load_scanned{0}, m_application_load_total{0};
+    QString m_application_load_error;
+    void setApplicationLoad(CybouApplicationLoadState state, quint64 scanned = 0, quint64 total = 0, const QString& error = {});
     quint64 m_mail_generation{0};
     bool m_application_refreshing{false};
     quint64 m_application_refresh_id{0};

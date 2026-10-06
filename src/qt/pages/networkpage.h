@@ -18,6 +18,9 @@ class QGridLayout;
 class QHBoxLayout;
 class QLabel;
 class QTableWidget;
+class QTimer;
+class QScrollArea;
+class QPushButton;
 class QVBoxLayout;
 
 struct CybouPeerItem {
@@ -25,6 +28,7 @@ struct CybouPeerItem {
     quint64 advertised_height{0};
     QString storage_id;
     bool is_lan{false};
+    bool connected{true};
     QString classification;
     QString region_label;
     QPointF map_coord; // Normalized [0, 1] coordinate on the France map
@@ -50,6 +54,7 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     QVector<CybouPeerItem> m_peers;
@@ -68,6 +73,8 @@ public:
     int peerCount() const { return m_peers.size(); }
     int selectedPeerIndex() const { return m_selected_peer_index; }
     void selectPeer(int index);
+    void setDiagnosticsWidget(QWidget* widget);
+    void showAdvanced();
 
     SchematicFranceMap* mapWidget() const { return m_map; }
     QTableWidget* tableWidget() const { return m_table; }
@@ -75,6 +82,7 @@ public:
 
 protected:
     void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     void onTableSelectionChanged();
@@ -88,11 +96,14 @@ private:
     QVector<CybouPeerItem> m_peers;
     int m_selected_peer_index{-1};
     QDateTime m_last_update;
+    QString m_network_binding;
+    QWidget* m_advanced{nullptr};
+    QScrollArea* m_advanced_scroll{nullptr};
+    QPushButton* m_advanced_button{nullptr};
+    QVBoxLayout* m_advanced_layout{nullptr};
 
     // Header & summary
     QLabel* m_scope_note{nullptr};
-    QLabel* m_metric_connectivity{nullptr};
-    QLabel* m_metric_connectivity_sub{nullptr};
     QLabel* m_metric_height{nullptr};
     QLabel* m_metric_height_sub{nullptr};
     QLabel* m_metric_peers{nullptr};
@@ -110,6 +121,8 @@ private:
     QWidget* m_details_card{nullptr};
     QVBoxLayout* m_details_layout{nullptr};
 
+    QTimer* m_refresh_timer{nullptr};
+    void scheduleRefresh();
     void refresh();
     void updateDetails();
 };

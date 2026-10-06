@@ -3,6 +3,36 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Network and unlock presentation (2026-10-06)
+
+The local UI worktree combines Network and Diagnostics: the sidebar caption
+shows the current network. The map fills the entire Network page below the
+header; peer details and a scrollable Advanced drawer overlay it without resizing
+it. Public markers are pulled inside the silhouette; LAN observations use a
+separate bounded inset. Arrow keys select peers. Formerly connected endpoints
+remain as bounded (100), volatile session observations, shown pale with explicit
+disconnected text and unknown current height; switching network clears them.
+These observations are not a discovery census or current reachability evidence.
+Protection uses protected/total. Network refreshes coalesce; hidden diagnostics
+pause presentation, and diagnostic rows update values without widget teardown.
+
+After Identity unlock, a modal branded preparation view follows private DB
+opening, history discovery and semantic content preparation. Known scan counts
+provide progress; opening is indeterminate. The modal closes after applying a
+usable Mail/Files projection, or confirming a genuinely empty complete scan.
+Missing roots/failures remain explicit, with a local-view escape and a lock action.
+Network connectivity is informational, never a prerequisite for local readiness
+or Identity creation. Old session replies cannot revive the modal after locking;
+failed catch-up scans retry at the normal worker interval instead of spinning.
+
+Validation: the final native Windows Qt suite passed all 73 results, including
+coalesced status bursts with the drawer hidden/visible, full-page geometry,
+loading/failure/lock behavior and genuine empty projections through the core
+adapter. Native screenshots cover 1040x720 and 1280x860 with synthetic fixtures.
+Final logs and screenshots are under `artifacts/network-loading-20261006/`.
+The main `build_cybou_qt_mingw/bin/cybou.exe` was rebuilt successfully. This does
+not establish live-network performance acceptance or update the VPS deployment.
+
 ## Desktop UX source review (2026-10-05)
 
 Source inspection at HEAD `cc6c18e` plus the current worktree confirms live

@@ -39,7 +39,24 @@ updates, pauses expensive presentation while hidden and preserves interaction.
 Manual Refresh displays progress and Last updated; it does not launch a full
 audit, repair, history rescan or benchmark without an explicit separate action.
 
+## Unlock preparation
+
+After unlocking, the shell shows a modal CYBOU preparation view while the private
+Application DB opens and the initial semantic Mail/Files projection is prepared.
+Availability of signing/decryption keys alone is not UI readiness. Known local
+history scan counts drive the progress bar; DB opening uses indeterminate progress.
+A usable content projection or a completed genuinely empty scan dismisses the view,
+including offline. Missing roots and preparation failures remain explicit; users
+can choose the local view while retrieval retries, or return to unlock. Late
+session replies cannot reopen the view after locking. Public peer synchronization
+is not a freshness proof or a condition for Identity creation.
+
 ## France map
+
+The map occupies the complete Network page below the global header. Peer details
+and the scrollable Advanced drawer overlay it; opening Advanced does not shrink
+the map or grow the page. Network presentation coalesces status signals and pauses
+while hidden. Diagnostic rows are retained and only their values are updated.
 
 The initial map is a schematic France silhouette with visually balanced,
 stable placement of locally observed peers. Label it clearly: positions are

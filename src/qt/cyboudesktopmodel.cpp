@@ -268,6 +268,17 @@ void CybouDesktopModel::setIdentityState(CybouIdentityState state, const QString
     if (state == CybouIdentityState::Active) refreshFinalizedName();
 }
 
+void CybouDesktopModel::setApplicationLoad(CybouApplicationLoadState state, quint64 scanned, quint64 total, const QString& error)
+{
+    if (state == m_application_load_state && scanned == m_application_load_scanned &&
+        total == m_application_load_total && error == m_application_load_error) return;
+    m_application_load_state = state;
+    m_application_load_scanned = scanned;
+    m_application_load_total = total;
+    m_application_load_error = error;
+    Q_EMIT applicationLoadChanged();
+}
+
 void CybouDesktopModel::syncIdentitySession()
 {
     const auto state = m_status.identity_state;
@@ -275,6 +286,7 @@ void CybouDesktopModel::syncIdentitySession()
         state == CybouIdentityState::NeedsAttention;
     if (open == m_session_open) return;
     m_session_open = open;
+    setApplicationLoad(open && m_backend ? CybouApplicationLoadState::Opening : CybouApplicationLoadState::Closed);
     ++m_mail_generation;
     m_mail_tasks.clear();
     m_mail_ids.clear();
@@ -318,8 +330,13 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
         disconnect(m_backend, nullptr, this, nullptr);
     }
     m_backend = backend;
+    if (!m_backend) setApplicationLoad(CybouApplicationLoadState::Closed);
     if (m_backend) {
         using B = CybouApplicationBackend;
+        connect(m_backend, &B::applicationLoadChanged, this,
+            [this](CybouApplicationLoadState state, quint64 scanned, quint64 total, const QString& error) {
+                if (m_session_open) setApplicationLoad(state, scanned, total, error);
+            });
         connect(m_backend, &B::availabilityChanged, this, [this] {
             setFeatureAvailability(m_requested_availability);
             if (m_application_refreshing && !m_backend->mailAvailable()) {
@@ -376,7 +393,10 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
                 setRestoreProgress(progress);
             });
         connect(m_backend, &B::commandFailed, this, [this](const QString& text) { notify(text); });
-        if (m_session_open) m_backend->openIdentity();
+        if (m_session_open) {
+            setApplicationLoad(CybouApplicationLoadState::Opening);
+            m_backend->openIdentity();
+        }
     }
     setFeatureAvailability(m_requested_availability);
 }

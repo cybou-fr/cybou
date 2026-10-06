@@ -28,6 +28,7 @@
 #include <qt/cybouconsoledialog.h>
 #include <QTableWidget>
 #include <QProgressDialog>
+#include <QProgressBar>
 #include <QElapsedTimer>
 
 #include <cybou/network_genesis.h>
@@ -155,6 +156,7 @@ public:
     QStringList commands;
     bool available{true};
     bool open{false};
+    bool delay_load{false};
     QHash<QString, CommandProgress> draft_results;
     QVector<CommandProgress> move_results;
     CommandProgress send_result;
@@ -162,7 +164,7 @@ public:
 
     bool mailAvailable() const override { return available; }
     bool filesAvailable() const override { return available; }
-    void openIdentity() override { open = true; commands << QStringLiteral("open"); }
+    void openIdentity() override { open = true; commands << QStringLiteral("open"); if (!delay_load) Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {}); }
     void closeIdentity() override { open = false; commands << QStringLiteral("close"); }
     void saveMailDraft(const CybouMailItem& d, CommandProgress progress = {}) override { commands << QStringLiteral("draft:") + d.id; draft_results.insert(d.id, progress); }
     void sendMail(const CybouMailItem& m, const QString& draft_id = {}, CommandProgress progress = {}) override { commands << QStringLiteral("send:") + m.id; send_result = progress; send_draft_id = draft_id; }
@@ -227,7 +229,7 @@ void CybouShellTests::mainWindowStarts()
     QVERIFY(window);
     QVERIFY(window->centralWidget());
     QVERIFY(window->windowTitle().contains(QStringLiteral("CYBOU")));
-    QCOMPARE(window->pageCount(), 9);
+    QCOMPARE(window->pageCount(), 8);
     // The Network Authority entry exists only for the genesis-proven authority.
     auto* authority_nav = window->findChild<QAbstractButton*>(
         QStringLiteral("navButton%1").arg(static_cast<int>(CybouPage::NetworkAuthority)));
@@ -275,6 +277,24 @@ void CybouShellTests::diagnosticsStaySecondaryWindow()
 
     window->showDebugWindow();
     QVERIFY(diagnostics->isVisible());
+    auto* details = diagnostics->findChild<QTextEdit*>(QStringLiteral("diagnosticsDetails"));
+    QVERIFY(details);
+    QCOMPARE(details->lineWrapMode(), QTextEdit::NoWrap);
+    window->desktopModel()->setNetworkInfo(QStringLiteral("CYBOU DEVNET"), QString(4000, QLatin1Char('a')));
+    diagnostics->resize(400, 160);
+    QTRY_VERIFY(details->horizontalScrollBar()->maximum() > 100);
+    QTRY_VERIFY(details->verticalScrollBar()->maximum() > 0);
+    auto cursor = details->textCursor();
+    cursor.setPosition(0);
+    cursor.setPosition(7, QTextCursor::KeepAnchor);
+    details->setTextCursor(cursor);
+    details->horizontalScrollBar()->setValue(100);
+    details->verticalScrollBar()->setValue(details->verticalScrollBar()->maximum());
+    const int vertical = details->verticalScrollBar()->value();
+    window->desktopModel()->setFinalizedHeight(123);
+    QCOMPARE(details->horizontalScrollBar()->value(), 100);
+    QCOMPARE(details->verticalScrollBar()->value(), vertical);
+    QCOMPARE(details->textCursor().selectedText(), QStringLiteral("Network"));
     diagnostics->close();
 }
 
@@ -996,7 +1016,8 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
 void CybouShellTests::networkPageReflectsModel()
 {
     auto window = makeWindow();
-    auto* network = window->page(CybouPage::Diagnostics);
+    window->showNetworkDiagnostics();
+    auto* network = window->page(CybouPage::Network);
     QVERIFY(network);
 
     const QString network_name = window->desktopModel()->status().network_name;
@@ -1017,7 +1038,7 @@ void CybouShellTests::networkPageReflectsModel()
     };
     QVERIFY(has_text(QStringLiteral("Waiting for a valid Geo database")));
     model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::Ready);
-    QVERIFY(has_text(QStringLiteral("Ready")));
+    QTRY_VERIFY(has_text(QStringLiteral("Ready")));
 }
 
 void CybouShellTests::adapterSettersDrivePages()
@@ -1026,6 +1047,7 @@ void CybouShellTests::adapterSettersDrivePages()
     auto* model = window->desktopModel();
     QVERIFY(model);
 
+    window->showNetworkDiagnostics();
     // Doc 73 adapter surface: setters mutate status and pages follow.
     QSignalSpy status_spy{model, &CybouDesktopModel::statusChanged};
     model->setFinalizedHeight(42);
@@ -1033,8 +1055,9 @@ void CybouShellTests::adapterSettersDrivePages()
     QVERIFY(model->status().finality_known);
     QVERIFY(status_spy.count() >= 1);
 
-    auto* network = window->page(CybouPage::Diagnostics);
+    auto* network = window->page(CybouPage::Network);
     QVERIFY(network);
+    QTest::qWait(250);
     const auto labels = network->findChildren<QLabel*>();
     bool found_height = false;
     bool found_poa = false;
@@ -1049,6 +1072,7 @@ void CybouShellTests::adapterSettersDrivePages()
     const QString sync_error = QStringLiteral("Configured peer belongs to another CYBOU network.");
     model->setSyncError(sync_error);
     QCOMPARE(model->status().sync_error, sync_error);
+    QTest::qWait(250);
     bool found_sync_error = false;
     for (const auto* label : network->findChildren<QLabel*>()) {
         if (label->text() == sync_error) found_sync_error = true;
@@ -1333,7 +1357,7 @@ void CybouShellTests::darkAppearanceResolvesTokens()
     window->showPage(CybouPage::Files);
     window->reloadAppearance();
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
-    QCOMPARE(window->pageCount(), 9);
+    QCOMPARE(window->pageCount(), 8);
     window.reset();
     qunsetenv("CYBOU_APPEARANCE");
     CybouTheme::setAppearance(CybouTheme::Appearance::Light);
@@ -2534,6 +2558,9 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
         return std::make_pair(std::move(model), std::move(adapter));
     };
     auto [alice_model, alice_adapter] = open(*alice, "desktop-alice");
+    QTRY_COMPARE(alice_model->applicationLoadState(), CybouApplicationLoadState::Ready);
+    QVERIFY(alice_model->mailItems().isEmpty());
+    QVERIFY(alice_model->fileItems().isEmpty());
     // Mail turns on only once the adapter session has opened the core services.
     QTRY_VERIFY(alice_model->featureAvailability().mail);
     QVERIFY(alice_model->featureAvailability().files);
@@ -3376,7 +3403,7 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
     model->setFinalizedHeight(1500);
 
     // Verify peer count & table rows
-    QCOMPARE(net_page->peerCount(), 3);
+    QTRY_COMPARE(net_page->peerCount(), 3);
     auto* table = net_page->tableWidget();
     QCOMPARE(table->rowCount(), 3);
 
@@ -3430,20 +3457,24 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
     net_page->selectPeer(1);
     QCOMPARE(net_page->detailsWidget()->findChildren<QLabel*>().size(), detail_labels);
 
-    // 5. Test honest offline / empty state
+    // A lost session remains a bounded known observation, never a current height.
     snap.peers.clear();
     model->setNetworkDiagnostics(snap);
     model->setNodeStatus(false, 0, false);
-    QCOMPARE(net_page->peerCount(), 0);
-    QCOMPARE(table->rowCount(), 0);
+    QCOMPARE(net_page->peerCount(), 3);
+    QCOMPARE(table->rowCount(), 3);
+    QTRY_VERIFY(table->item(0, 1)->text().contains(QStringLiteral("disconnected")));
+    QCOMPARE(table->item(0, 2)->text(), QStringLiteral("Unknown"));
+    QCOMPARE(table->item(0, 3)->text(), QStringLiteral("Unknown"));
+    auto* advanced = net_page->findChild<QWidget*>(QStringLiteral("networkAdvanced"));
+    QVERIFY(advanced->isHidden());
+    net_page->showAdvanced();
+    QVERIFY(!advanced->isHidden());
+    snap.network_binding = "different-network";
+    model->setNetworkDiagnostics(snap);
+    QTRY_COMPARE(net_page->peerCount(), 0);
+    QVERIFY(net_page->detailsWidget()->isHidden());
 
-    bool found_empty_prompt = false;
-    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
-        if (label->text().contains(QStringLiteral("Select a peer"), Qt::CaseInsensitive)) {
-            found_empty_prompt = true;
-        }
-    }
-    QVERIFY(found_empty_prompt);
 }
 
 void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
@@ -3612,8 +3643,8 @@ void CybouShellTests::ownContentInspectorAndBoundedConsole()
     QVERIFY(inspect_btn);
 
     // 3. Diagnostics page button verification
-    window->showPage(CybouPage::Diagnostics);
-    auto* diag_page = dynamic_cast<DiagnosticsPage*>(window->page(CybouPage::Diagnostics));
+    window->showNetworkDiagnostics();
+    auto* diag_page = window->page(CybouPage::Network);
     QVERIFY(diag_page);
     auto* console_open_btn = diag_page->findChild<QPushButton*>(QStringLiteral("readOnlyConsoleButton"));
     QVERIFY(console_open_btn);
@@ -3822,3 +3853,70 @@ void CybouShellTests::assuranceLifecycleAndRecoveryGates()
 
 
 
+
+void CybouShellTests::applicationLoadingWaitsForProjection()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    RecordingBackend backend;
+    backend.delay_load = true;
+    model->setApplicationBackend(&backend);
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("loading-account"));
+    auto* dialog = window->findChild<QDialog*>(QStringLiteral("applicationLoadingDialog"));
+    QVERIFY(dialog);
+    QVERIFY(dialog->isVisible());
+    QVERIFY(dialog->isModal());
+    auto* progress = dialog->findChild<QProgressBar*>(QStringLiteral("applicationLoadingProgress"));
+    QVERIFY(progress);
+    QCOMPARE(progress->maximum(), 0);
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 25, 100, {});
+    QCOMPARE(progress->value(), 25);
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 100, 100, {});
+    QCOMPARE(progress->value(), 99); // Scan progress is not proof the semantic view was applied.
+    QVERIFY(dialog->isVisible());
+    dialog->reject();
+    QVERIFY(dialog->isVisible());
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Failed, 0, 0, QStringLiteral("Load failed"));
+    QCOMPARE(dialog->findChild<QLabel*>(QStringLiteral("applicationLoadingStage"))->text(), QStringLiteral("Load failed"));
+    Q_EMIT backend.mailSnapshot({});
+    Q_EMIT backend.filesSnapshot({});
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
+    QVERIFY(dialog->isHidden()); // An empty Identity is a valid prepared view, including offline.
+    model->setIdentityState(CybouIdentityState::Locked, QStringLiteral("loading-account"));
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 0, 100, {});
+    QCOMPARE(model->applicationLoadState(), CybouApplicationLoadState::Closed);
+    QVERIFY(dialog->isHidden());
+    model->setApplicationBackend(nullptr);
+}
+
+void CybouShellTests::networkRefreshCoalescesStatusBurst()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    NetworkPage page{&model};
+    page.resize(1040, 720);
+    page.show();
+    QTest::qWait(250);
+    QLabel* height = nullptr;
+    for (auto* caption : page.findChildren<QLabel*>()) {
+        if (caption->text() == QStringLiteral("Verified height"))
+            height = caption->parentWidget()->findChild<QLabel*>(QStringLiteral("metric"));
+    }
+    QVERIFY(height);
+    const auto old_height = height->text();
+    const auto label_count = page.findChildren<QLabel*>().size();
+    for (int i = 1; i <= 1000; ++i) model.setFinalizedHeight(i);
+    QCOMPARE(height->text(), old_height); // No synchronous rebuild during a burst.
+    QTRY_COMPARE(height->text(), QLocale{}.toString(quint64{1000}));
+    QCOMPARE(page.findChildren<QLabel*>().size(), label_count);
+    const auto* drawer = page.findChild<QScrollArea*>(QStringLiteral("networkAdvancedDrawer"));
+    QVERIFY(drawer && drawer->isHidden());
+    QVERIFY(page.mapWidget()->height() >= page.height() - 4);
+    page.showAdvanced();
+    QTest::qWait(350);
+    QVERIFY(!drawer->isHidden());
+    QVERIFY(page.mapWidget()->height() >= page.height() - 4);
+    const auto visible_labels = page.findChildren<QLabel*>().size();
+    for (int i = 1001; i <= 2000; ++i) model.setFinalizedHeight(i);
+    QTRY_COMPARE(height->text(), QLocale{}.toString(quint64{2000}));
+    QCOMPARE(page.findChildren<QLabel*>().size(), visible_labels);
+}

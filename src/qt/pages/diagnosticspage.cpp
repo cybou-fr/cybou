@@ -22,6 +22,7 @@
 #include <QLocale>
 #include <QPushButton>
 #include <QTimer>
+#include <QShowEvent>
 #include <QVBoxLayout>
 
 #include <utility>
@@ -41,39 +42,43 @@ QLabel* Tile(QGridLayout* grid, int row, int column, const QString& caption, QWi
     auto* value = new QLabel{card};
     value->setObjectName(QStringLiteral("metric"));
     value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    value->setWordWrap(true);
+    value->setMinimumWidth(0);
+    value->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     layout->addWidget(label);
     layout->addWidget(value);
     grid->addWidget(card, row, column);
     return value;
 }
 
-void ClearLayout(QLayout* layout)
-{
-    while (QLayoutItem* item = layout->takeAt(0)) {
-        if (item->layout()) ClearLayout(item->layout());
-        if (QWidget* widget = item->widget()) {
-            widget->hide();
-            widget->deleteLater();
-        }
-        delete item;
-    }
-}
-
 void Row(QVBoxLayout* layout, const QString& key, const QString& value, QWidget* parent)
 {
-    auto* row = new QHBoxLayout;
+    // Keep the rows alive: status ticks must not tear down a scrolled drawer.
+    for (auto* existing : parent->findChildren<QWidget*>(Qt::FindDirectChildrenOnly)) {
+        if (existing->property("diagnosticKey").toString() != key) continue;
+        auto* label = existing->findChild<QLabel*>(QStringLiteral("diagnosticValue"));
+        if (label->text() != value) label->setText(value);
+        return;
+    }
+    auto* container = new QWidget{parent};
+    container->setProperty("diagnosticKey", key);
+    auto* row = new QHBoxLayout{container};
+    row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(12);
-    auto* k = new QLabel{key, parent};
-    k->setObjectName(QStringLiteral("rowSub"));
-    k->setFixedWidth(170);
-    auto* v = new QLabel{value, parent};
-    v->setObjectName(QStringLiteral("rowTitle"));
-    v->setWordWrap(true);
-    v->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    v->setMinimumWidth(0);
-    row->addWidget(k, 0, Qt::AlignTop);
-    row->addWidget(v, 1);
-    layout->addLayout(row);
+    auto* caption = new QLabel{key, container};
+    caption->setObjectName(QStringLiteral("rowSub"));
+    caption->setFixedWidth(140);
+    caption->setWordWrap(true);
+    auto* label = new QLabel{value, container};
+    label->setObjectName(QStringLiteral("diagnosticValue"));
+    label->setWordWrap(true);
+    label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    label->setMinimumWidth(0);
+    label->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    label->setTextFormat(Qt::PlainText);
+    row->addWidget(caption, 0, Qt::AlignTop);
+    row->addWidget(label, 1);
+    layout->addWidget(container);
 }
 
 } // namespace
@@ -199,12 +204,27 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
     root->addWidget(open, 0, Qt::AlignLeft);
     root->addStretch();
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
+    m_refresh_timer = new QTimer{this};
+    m_refresh_timer->setSingleShot(true);
+    m_refresh_timer->setInterval(200);
+    connect(m_refresh_timer, &QTimer::timeout, this, &DiagnosticsPage::refresh);
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { scheduleRefresh(); });
+    connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { scheduleRefresh(); });
     auto* ticker = new QTimer{this};
-    connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
+    connect(ticker, &QTimer::timeout, this, [this] { scheduleRefresh(); });
     ticker->start(30000);
     refresh();
+}
+
+void DiagnosticsPage::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    scheduleRefresh();
+}
+
+void DiagnosticsPage::scheduleRefresh()
+{
+    if (isVisibleTo(window()) && !m_refresh_timer->isActive()) m_refresh_timer->start();
 }
 
 void DiagnosticsPage::refresh()
@@ -217,7 +237,6 @@ void DiagnosticsPage::refresh()
     m_height->setText(status.finality_known ? QLocale{}.toString(status.finalized_height) : QStringLiteral("—"));
     m_finality->setText(status.finality_known ? tr("PoA verified") : tr("Waiting"));
 
-    ClearLayout(m_rows);
     QWidget* parent = m_rows->parentWidget();
     const auto& diagnostics = m_model->networkDiagnostics();
     Row(m_rows, tr("Node type"), tr("Full Node"), parent);
@@ -232,12 +251,11 @@ void DiagnosticsPage::refresh()
         : tr("Waiting for a valid Geo database");
     Row(m_rows, tr("Peer admission Geo database"), geo_status, parent);
     Row(m_rows, tr("Last sync"), m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("Not yet"), parent);
-    if (!status.sync_error.isEmpty()) Row(m_rows, tr("Last error"), status.sync_error, parent);
+    Row(m_rows, tr("Last error"), status.sync_error.isEmpty() ? QStringLiteral("—") : status.sync_error, parent);
     Row(m_rows, tr("Network ID"), status.network_binding.isEmpty() ? tr("Available after node startup") : status.network_binding, parent);
     Row(m_rows, tr("Data directory"), status.data_directory.isEmpty() ? tr("Available after node startup") : status.data_directory, parent);
     Row(m_rows, tr("Finality model"), tr("Single-operator proof of authority (not Byzantine fault tolerant)"), parent);
 
-    ClearLayout(m_services);
     const auto& caps = m_model->featureAvailability();
     const QPair<QString, bool> services[] = {
         {tr("Identity"), caps.account_creation},

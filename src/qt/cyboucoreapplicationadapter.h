@@ -124,8 +124,9 @@ private:
 
     /** GUI-thread handlers for worker results. */
     void applySnapshot(QVector<CybouMailItem> items, QVector<CybouFileItem> files, bool ready,
-        CybouRestoreStepState restore);
+        CybouRestoreStepState restore, bool initial_complete = false);
     void setReady(bool ready);
+    bool m_initial_projection_ready{false};
     void notAvailable();
     /** Pending "secure data before rotation" request, answered exactly once. */
     std::function<void(bool, const QString&)> m_rotation_done;
