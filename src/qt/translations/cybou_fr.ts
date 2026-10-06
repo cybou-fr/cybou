@@ -775,6 +775,17 @@ Le modèle applicatif ne fournit pas la liste réelle des chunks ni les résulta
 <context>
     <name>CybouDesktopModel</name>
     <message>
+        <source>Syncing %1% (%2 blocks left)</source>
+        <translation>Synchronisation %1 % (%2 blocs restants)</translation>
+    </message>
+    <message numerus="yes">
+        <source>Network not confirming for %n min</source>
+        <translation>
+            <numerusform>Le réseau ne confirme plus depuis %n min</numerusform>
+            <numerusform>Le réseau ne confirme plus depuis %n min</numerusform>
+        </translation>
+    </message>
+    <message>
         <location filename="../cyboudesktopmodel.cpp" line="+76"/>
         <source>Needs attention</source>
         <translation>À vérifier</translation>

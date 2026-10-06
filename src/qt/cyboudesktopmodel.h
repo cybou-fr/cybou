@@ -58,6 +58,10 @@ struct CybouDesktopStatus {
     int peer_count{0};
     quint64 finalized_height{0};
     bool finality_known{false};
+    /** Minutes this Identity's submitted work has waited with no new block; 0 when finality flows. */
+    int finality_stall_minutes{0};
+    /** Highest finalized height peers announce (unverified), to show sync progress. */
+    quint64 sync_target_height{0};
     QString sync_error;
     QString data_directory;
     CybouGeoAdmissionStatus geo_admission{CybouGeoAdmissionStatus::Waiting};
@@ -476,6 +480,15 @@ private:
     /** Submits (or resumes) IdentityRotate once the backend secured the old keys. */
     void startRecoveryRotation(cybou::RecoveryWords words, const QString& vault_password, bool resume_pending);
     bool m_payment_pending{false};
+    /** Finality watch: no new block while own work waits means the network is not confirming. */
+    QDateTime m_last_finality_change;
+    QDateTime m_unconfirmed_since;
+    void updateFinalityStall();
+public:
+    /** Re-evaluates the finality watch at  now (tests pass their own clock). */
+    void checkFinalityStall(const QDateTime& now);
+private:
+    bool hasUnconfirmedWork() const;
     std::optional<quint64> m_payment_fee;
     bool m_recovery_rotation_pending{false};
     bool m_fixture_mode{false};

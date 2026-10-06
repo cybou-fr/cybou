@@ -43,6 +43,7 @@ private Q_SLOTS:
     void filesGateActions();
     void filesNavigationAndViews();
     void networkPageReflectsModel();
+    void headerSaysWhenTheNetworkStopsConfirming();
     void networkMonitorUsesCoreSnapshot();
     void authorityDashboardUsesLocalHeightObservation();
     void adapterSettersDrivePages();

@@ -604,7 +604,8 @@ void CybouMainWindow::refreshHeader()
     m_header_title->setText(PageTitle(static_cast<CybouPage>(m_pages->currentIndex())));
 
     const QString connection = cybouConnectionText(status);
-    const bool healthy = status.sync_error.isEmpty() && status.node_running && status.online;
+    const bool healthy = status.sync_error.isEmpty() && status.node_running && status.online &&
+        status.finality_stall_minutes == 0;
     m_status_text->setText(healthy ? tr("Online • %1").arg(connection) : connection);
     m_status_text->setAccessibleName(tr("Connection status: %1").arg(m_status_text->text()));
     m_status_dot->setProperty("tint", healthy && !status.syncing ? "mint"

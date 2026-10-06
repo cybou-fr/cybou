@@ -27,6 +27,7 @@
 #include <QFileInfo>
 #include <QHash>
 #include <QPointer>
+#include <QLocale>
 #include <QTimer>
 #include <QUuid>
 #include <QSettings>
@@ -78,7 +79,17 @@ QString cybouConnectionText(const CybouDesktopStatus& status)
     if (!status.sync_error.isEmpty()) return CybouDesktopModel::tr("Needs attention");
     if (!status.node_running) return CybouDesktopModel::tr("Offline");
     if (!status.online) return CybouDesktopModel::tr("Connecting");
-    if (status.syncing) return CybouDesktopModel::tr("Syncing");
+    if (status.finality_stall_minutes > 0)
+        return CybouDesktopModel::tr("Network not confirming for %n min", nullptr, status.finality_stall_minutes);
+    if (status.syncing) {
+        // Peers' announced heights are unverified; they only estimate how far there is to go.
+        if (status.finality_known && status.sync_target_height > status.finalized_height + 10) {
+            const auto percent = static_cast<int>(status.finalized_height * 100 / status.sync_target_height);
+            return CybouDesktopModel::tr("Syncing %1% (%2 blocks left)").arg(percent)
+                .arg(QLocale{}.toString(status.sync_target_height - status.finalized_height));
+        }
+        return CybouDesktopModel::tr("Syncing");
+    }
     return CybouDesktopModel::tr("Synced");
 }
 
@@ -94,6 +105,9 @@ CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     : QObject{parent}
 {
     m_status.network_name = std::move(network_name);
+    auto* finality_watch = new QTimer{this};
+    connect(finality_watch, &QTimer::timeout, this, &CybouDesktopModel::updateFinalityStall);
+    finality_watch->start(5000);
     connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::refreshStorageUsed);
     connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::rebuildActivity);
     connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildActivity);
@@ -208,6 +222,43 @@ void CybouDesktopModel::setFinalizedHeight(quint64 finalized_height)
     if (m_status.finality_known && m_status.finalized_height == finalized_height) return;
     m_status.finalized_height = finalized_height;
     m_status.finality_known = true;
+    m_last_finality_change = QDateTime::currentDateTimeUtc();
+    m_status.finality_stall_minutes = 0;
+    Q_EMIT statusChanged();
+}
+
+bool CybouDesktopModel::hasUnconfirmedWork() const
+{
+    if (m_payment_pending) return true;
+    const auto submitted = [](CybouOperationState state) { return state == CybouOperationState::Submitted; };
+    for (const auto& item : m_mail) if (submitted(item.operation_state)) return true;
+    for (const auto& item : m_files) if (submitted(item.operation_state)) return true;
+    for (const auto& entry : m_wallet_entries) if (submitted(entry.operation_state)) return true;
+    for (const auto& operation : m_operations) if (submitted(operation.state)) return true;
+    return false;
+}
+
+void CybouDesktopModel::updateFinalityStall()
+{
+    checkFinalityStall(QDateTime::currentDateTimeUtc());
+}
+
+void CybouDesktopModel::checkFinalityStall(const QDateTime& now)
+{
+    // Blocks are produced only for pending operations, so an idle network is quiet:
+    // only own work waiting without any new block means the network is not confirming.
+    int minutes{0};
+    if (m_status.online && !m_status.syncing && hasUnconfirmedWork()) {
+        if (!m_unconfirmed_since.isValid()) m_unconfirmed_since = now;
+        auto since = m_unconfirmed_since;
+        if (m_last_finality_change.isValid() && m_last_finality_change > since) since = m_last_finality_change;
+        const auto waited = since.secsTo(now);
+        if (waited >= 120) minutes = static_cast<int>(waited / 60);
+    } else {
+        m_unconfirmed_since = {};
+    }
+    if (minutes == m_status.finality_stall_minutes) return;
+    m_status.finality_stall_minutes = minutes;
     Q_EMIT statusChanged();
 }
 
@@ -833,6 +884,9 @@ void CybouDesktopModel::setResourceUsage(quint64 quota_used)
 void CybouDesktopModel::setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot)
 {
     m_network_diagnostics = std::move(snapshot);
+    quint64 target{0};
+    for (const auto& peer : m_network_diagnostics.peers) target = std::max<quint64>(target, peer.advertised_height);
+    m_status.sync_target_height = target;
     Q_EMIT statusChanged();
 }
 

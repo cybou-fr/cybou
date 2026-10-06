@@ -4104,3 +4104,37 @@ void CybouShellTests::networkRefreshCoalescesStatusBurst()
     QTRY_COMPARE(height->text(), QLocale{}.toString(quint64{2000}));
     QCOMPARE(page.findChildren<QLabel*>().size(), visible_labels);
 }
+
+void CybouShellTests::headerSaysWhenTheNetworkStopsConfirming()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    model.setNodeStatus(true, 3, true);
+    model.setSyncing(false);
+    model.setFinalizedHeight(10);
+    const auto start = QDateTime::currentDateTimeUtc();
+
+    // An idle network produces no blocks: no waiting work, no warning.
+    model.checkFinalityStall(start.addSecs(600));
+    QCOMPARE(model.status().finality_stall_minutes, 0);
+
+    // Submitted work and no new block for over two minutes: the header says so.
+    model.setOperationStatus({QStringLiteral("op-1"), CybouOperationState::Submitted});
+    model.checkFinalityStall(start.addSecs(1));
+    QCOMPARE(model.status().finality_stall_minutes, 0);
+    model.checkFinalityStall(start.addSecs(131));
+    QCOMPARE(model.status().finality_stall_minutes, 2);
+    QVERIFY(cybouConnectionText(model.status()).contains(QStringLiteral("not confirming")));
+
+    // A new block clears it.
+    model.setFinalizedHeight(11);
+    QCOMPARE(model.status().finality_stall_minutes, 0);
+    QVERIFY(!cybouConnectionText(model.status()).contains(QStringLiteral("not confirming")));
+
+    // Syncing shows how far there is to go from what peers announce.
+    cybou::NodeDiagnosticsSnapshot snap;
+    snap.peers = {{"51.255.46.58:29461", 1011, ""}};
+    model.setNetworkDiagnostics(snap);
+    model.setSyncing(true);
+    const auto text = cybouConnectionText(model.status());
+    QVERIFY2(text.contains(QStringLiteral("1%")) && text.contains(QStringLiteral("blocks left")), qPrintable(text));
+}
