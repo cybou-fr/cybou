@@ -317,13 +317,15 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
         .authorization_pop = *authorization_pop,
     };
 
-    if (const auto submitted = m_runtime.SubmitOperation(ProtocolOperation{op}); !submitted) {
+    // No peer acknowledgment is not a failure: this node already executed the
+    // operation and keeps relaying it, so creation waits for finality instead.
+    const auto submitted = m_runtime.SubmitOperation(ProtocolOperation{op});
+    const bool delivery_unconfirmed = !submitted && submitted.delivery_uncertain;
+    if (!submitted && !delivery_unconfirmed) {
         m_phase.store(IdentityCreationPhase::FAILED);
         // Say why: the difference decides what the user should do next.
         std::string reason;
-        if (submitted.delivery_uncertain) {
-            reason = "The CYBOU network did not answer. Check your connection and try again.";
-        } else {
+        {
             switch (submitted.status) {
             case OperationSubmitStatus::NETWORK_MISMATCH:
                 reason = "This app and the network it reached are on different CYBOU networks.";
@@ -382,7 +384,9 @@ IdentityCreationResult CybouIdentityService::CreateIdentitySync(
     }
 
     m_phase.store(IdentityCreationPhase::FAILED);
-    return Failure(IdentityCreationPhase::FAILED, m_cancelled.load() ? "Cancelled" : "Timed out waiting for PoA finality", account_id);
+    return Failure(IdentityCreationPhase::FAILED, m_cancelled.load() ? "Cancelled"
+        : delivery_unconfirmed ? "The CYBOU network did not answer. Check your connection and try again."
+        : "Timed out waiting for PoA finality", account_id);
 }
 
 void CybouIdentityService::CreateIdentityAsync(
