@@ -232,7 +232,7 @@ class Battle:
             if process.wait(timeout=2700) != 0:
                 raise RuntimeError("a Windows client failed to create its Identities; see prepare.log")
         for path, _ in self.wsl_clients():
-            deadline = time.time() + 900
+            deadline = time.time() + 2700
             while wsl(f"kill -0 $(cat {path}/prepare.pid) 2>/dev/null && echo running || true").strip() == "running":
                 if time.time() > deadline:
                     raise RuntimeError(f"WSL client {path} did not finish preparing")
