@@ -118,46 +118,35 @@ the same command registry used for dispatch and authorization.
 
 | Access | Implemented commands | Source and scope |
 | --- | --- | --- |
-| Any local session | `help`, `status`, `network`, `storage`, `peers`, `operations`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements |
-| Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values and active application tasks |
-| Unlocked genesis-key-proven Authority | `authority [status|candidates|totals]` | Local signer loop, volatile locally executed candidates and locally verified finalized totals |
+| Any local session | `help`, `status`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
+| Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values, active application tasks, real own-content leaf manifests and BLAKE3-256 integrity verification |
+| Unlocked genesis-key-proven Authority | `authority [status|candidates|totals|pause|resume|finalize|settle]` | Local signer loop, candidate queue age and waiting times, safety journal status, settlement preview, pause/resume/finalize controls and settlement submission (`confirm`) |
 
 Authority commands are hidden from ordinary help and denied by dispatch. A name,
 peer endpoint or displayed role does not authorize them. Every invocation checks
 current model proof; loss of proof, account change or locking clears console
-output, input and history. Commands do not activate signing, networking proofs,
-repair or retrieval. Shell execution, SQL, scripts and mutations remain absent.
+output, input and history. Ordinary commands do not activate signing, networking proofs,
+repair or retrieval. Central Authority control commands (`pause`, `resume`, `finalize`, `settle`)
+operate directly under the verified active PoA key session without re-prompting for a password,
+with `authority settle confirm` requiring explicit keyword confirmation to prevent accidental submission.
+Shell execution, SQL, scripts and arbitrary mutations remain absent.
 
 Output retains at most 500 text blocks, lists at most 100 rows, command history
 at most 100 entries and input at most 1024 characters. Nothing is persisted.
 Unknown capacity/replica/finality observations stay unknown; logical file bytes
 are not physical storage use. File size divided by 512 KiB is a billing-unit
-estimate, never a measured chunk count. `chunks` reports the owned content root
-and explicitly states that actual leaf lists and verification results are not
-available through the current model. No fabricated digest, verified leaf or
-self-capsule/finality claim is displayed.
+estimate, never a measured chunk count. `chunks` inspects the real own-content chunk tree
+and BLAKE3-256 integrity verification results from local storage when available, or explicitly
+reports when chunk evidence is not exposed. No fabricated digest, verified leaf or
+self-capsule/finality claim is displayed. Foreign provider chunks and common ChunkStore
+objects are never enumerated.
 
-### Further UI-to-console work
+### Implemented technical console capabilities
 
-The implemented commands cover technical values already available in Network,
-Files Advanced, Wallet and Authority. Keep normal Mail/Files/Wallet workflows in
-their pages. Candidates for a subsequent advanced console slice are:
-
-- Real own-content leaf manifests and integrity/retrieval evidence, after a
-  bounded cancellable ApplicationService API is available. Never enumerate the
-  common ChunkStore or foreign provider objects.
-- Paginated verified block/operation lookup, with history access on a worker and
-  explicit unavailable results. Current `operations` is a local tracked sample,
-  not a full blockchain explorer.
-- Authority queue ages, signer safety evidence summaries and settlement previews
-  when real APIs expose them. Off-chain storage observations cannot be presented
-  as canonical audit reliability or provider failure-domain independence.
-
-Pause/resume/finalize and settlement mutations currently stay in the Authority
-page with its established permission and review flow. Adding console mutations
-requires a separate product contract and the same authority checks and durable
-results; a typed command must not bypass that flow. These future features are
-not advertised by help until implemented.
+The technical console supports:
+- Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.
+- Paginated verified block, operation and history lookup via `block <height|hash>`, `op <id>`, and `history [page]`.
+- Central Authority diagnostics and controls via `authority [status|candidates|totals|pause|resume|finalize|settle]`, displaying candidate queue age, waiting times, safety journal status, settlement preview, and allowing pause/resume/finalize and settlement submission (requiring explicit confirmation) without re-prompting for password when already unlocked and authorized.
 
 ## Tests and benchmarks
 

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUDESKTOPCONTROLLER_H
@@ -15,6 +15,7 @@
 #include <thread>
 #include <mutex>
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 
@@ -61,6 +62,7 @@ private:
     std::chrono::steady_clock::time_point m_last_refresh{};
     /** Operator pause of the local block production loop (GUI thread). */
     std::atomic<bool> m_production_paused{false};
+    QHash<QString, qint64> m_candidate_seen_times;
     /** Runs one operator command (finalize now) off the GUI thread. */
     std::jthread m_operator_worker;
     void finalizeNow();

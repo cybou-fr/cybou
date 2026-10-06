@@ -3650,6 +3650,78 @@ void CybouShellTests::ownContentInspectorAndBoundedConsole()
     QVERIFY(!console.outputText().contains(QStringLiteral("Verified")));
     QVERIFY(!console.outputText().contains(QStringLiteral("Leaf:")));
 
+    // Real own-content chunk diagnostics when evidence is available
+    CybouFileChunkDiagnostics test_diag;
+    test_diag.available = true;
+    test_diag.file_id = QStringLiteral("f_own_1");
+    test_diag.file_name = QStringLiteral("contract.pdf");
+    test_diag.root_chunk_id = file1.content_root_id;
+    test_diag.chunk_count = 3;
+    test_diag.local_count = 3;
+    test_diag.verified_count = 3;
+    test_diag.chunks = {
+        {QStringLiteral("chunk_a"), true, true},
+        {QStringLiteral("chunk_b"), true, true},
+        {QStringLiteral("chunk_c"), true, true}
+    };
+    test_diag.retrieval_diagnosis = QStringLiteral("All chunks locally present and verified");
+    model->setFixtureChunkDiagnostics(QStringLiteral("f_own_1"), test_diag);
+
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("chunks f_own_1"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Chunk Tree & Integrity Diagnostics")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Verified (BLAKE3-256): 3")));
+    QVERIFY(console.outputText().contains(QStringLiteral("All chunks locally present and verified")));
+    QVERIFY(console.outputText().contains(QStringLiteral("chunk_a")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Verified (BLAKE3-256)")));
+
+    // Blockchain block inspection
+    CybouBlockExplorerInfo binfo;
+    binfo.found = true;
+    binfo.height = 42;
+    binfo.block_id = QStringLiteral("0000000000000000000000000000000000000000000000000000000000000042");
+    binfo.parent_block_id = QStringLiteral("0000000000000000000000000000000000000000000000000000000000000041");
+    binfo.state_root = QStringLiteral("1111111111111111111111111111111111111111111111111111111111111111");
+    binfo.has_poa_certificate = true;
+    binfo.operation_count = 1;
+    binfo.operation_ids = {QStringLiteral("op_hash_42")};
+    model->setFixtureBlock(QStringLiteral("42"), binfo);
+
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("block 42"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Block Height 42")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Verified PoA signature")));
+    QVERIFY(console.outputText().contains(QStringLiteral("op_hash_42")));
+
+    // Operation lookup
+    CybouOperationExplorerInfo opinfo;
+    opinfo.found = true;
+    opinfo.operation_id = QStringLiteral("op_hash_42");
+    opinfo.state = QStringLiteral("Finalized");
+    opinfo.height = 42;
+    opinfo.index = 0;
+    opinfo.kind = QStringLiteral("Payment");
+    model->setFixtureOperation(QStringLiteral("op_hash_42"), opinfo);
+
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("op op_hash_42"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Operation op_hash_42")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Finalized")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Payment")));
+
+    // Blockchain history
+    CybouHistoryItem hitem;
+    hitem.height = 42;
+    hitem.block_id = binfo.block_id;
+    hitem.state_root = binfo.state_root;
+    hitem.operation_count = 1;
+    model->setFixtureHistory({hitem});
+
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("history 1"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Blockchain History (Page 1)")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Height 42")));
+
     // peers and jobs commands
     console.executeCommand(QStringLiteral("peers"));
     console.executeCommand(QStringLiteral("jobs"));
@@ -3710,18 +3782,63 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("operation-1")));
 
     CybouNetworkAuthorityStatus authority;
-    authority.proven = true; authority.finalizer = CybouFinalizerState::Paused;
-    authority.candidates = 1; authority.candidate_ids = {QStringLiteral("candidate-1")};
+    authority.proven = true; authority.finalizer = CybouFinalizerState::Finalizing;
+    authority.candidates = 2; authority.candidate_ids = {QStringLiteral("candidate-1"), QStringLiteral("candidate-2")};
+    authority.candidate_wait_seconds = {15, 5};
+    authority.oldest_candidate_age_seconds = 15;
+    authority.safety_journal_status = QStringLiteral("Fail-closed durable append-only journal active.");
+    authority.settlement_due = true;
+    authority.next_settlement_period = 3;
+    authority.preview_payouts_count = 4;
+    authority.preview_payouts_amount = 80000;
     authority.total_balance = 12345; authority.finalized_height = 42;
     model->setNetworkAuthority(authority);
+
     console.clearOutput(); console.executeCommand(QStringLiteral("help"));
-    QVERIFY(console.outputText().contains(QStringLiteral("authority [status|candidates|totals]")));
+    QVERIFY(console.outputText().contains(QStringLiteral("authority [status|candidates|totals|pause|resume|finalize|settle]")));
+
     console.executeCommand(QStringLiteral("authority status"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Local finalizer: Paused")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Local finalizer: Finalizing")));
+    QVERIFY(console.outputText().contains(QStringLiteral("queue age: 15 s"), Qt::CaseInsensitive));
+    QVERIFY(console.outputText().contains(QStringLiteral("Fail-closed durable append-only journal active.")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Due now (period 3, 4 payouts, ") + cybouAmountText(80000) + QLatin1Char{')'}));
+
     console.executeCommand(QStringLiteral("authority candidates"));
-    QVERIFY(console.outputText().contains(QStringLiteral("candidate-1")));
+    QVERIFY(console.outputText().contains(QStringLiteral("candidate-1 (waiting 15 s)")));
+    QVERIFY(console.outputText().contains(QStringLiteral("candidate-2 (waiting 5 s)")));
+
     console.executeCommand(QStringLiteral("authority totals"));
     QVERIFY(console.outputText().contains(QStringLiteral("12345 CYBOU")));
+
+    // Control commands
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("authority pause"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Finalization paused")));
+
+    // Finalize on demand (requires paused state)
+    authority.finalizer = CybouFinalizerState::Paused;
+    model->setNetworkAuthority(authority);
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("authority finalize"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Requested finalization of one block")));
+
+    // Resume finalization
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("authority resume"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Finalization resumed")));
+
+    // Settle preview without confirm
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("authority settle"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Storage settlement preview for period 3")));
+    QVERIFY(console.outputText().contains(QStringLiteral("To submit this settlement, type: authority settle confirm")));
+
+    // Settle with confirm (does not re-prompt for password)
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("authority settle confirm"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Storage settlement for period 3 submitted")));
+
+    // Revoking authority clears output and history
     model->setNetworkAuthority({});
     QVERIFY(!console.outputText().contains(QStringLiteral("candidate-1")));
     QCOMPARE(console.historyCount(), 0);

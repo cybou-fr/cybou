@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUPRODUCT_H
@@ -208,6 +208,62 @@ struct CybouFileItem {
     QString operation_id;
     CybouOperationState operation_state{CybouOperationState::Finalized};
     bool operator==(const CybouFileItem&) const = default;
+};
+
+struct CybouChunkEntry {
+    QString chunk_id;
+    bool present_locally{false};
+    bool integrity_verified{false};
+    bool operator==(const CybouChunkEntry&) const = default;
+};
+
+struct CybouFileChunkDiagnostics {
+    bool available{false};
+    QString file_id;
+    QString file_name;
+    QString root_chunk_id;
+    quint64 chunk_count{0};
+    quint64 local_count{0};
+    quint64 verified_count{0};
+    quint64 missing_count{0};
+    quint64 corrupt_count{0};
+    QString retrieval_diagnosis;
+    QVector<CybouChunkEntry> chunks;
+    bool operator==(const CybouFileChunkDiagnostics&) const = default;
+};
+
+struct CybouBlockExplorerInfo {
+    bool found{false};
+    quint64 height{0};
+    QString block_id;
+    QString parent_block_id;
+    QString state_root;
+    QString operations_root;
+    int operation_count{0};
+    QStringList operation_ids;
+    bool has_poa_certificate{false};
+    bool operator==(const CybouBlockExplorerInfo&) const = default;
+};
+
+struct CybouOperationExplorerInfo {
+    bool found{false};
+    QString operation_id;
+    QString state;
+    quint64 height{0};
+    quint32 index{0};
+    QString block_id;
+    QString kind;
+    QString author;
+    bool operator==(const CybouOperationExplorerInfo&) const = default;
+};
+
+struct CybouHistoryItem {
+    quint64 height{0};
+    QString block_id;
+    QString state_root;
+    int operation_count{0};
+    QString summary;
+    bool operator==(const CybouHistoryItem&) const = default;
 };
 
 enum class CybouActivityKind {

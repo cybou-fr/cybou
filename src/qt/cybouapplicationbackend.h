@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUAPPLICATIONBACKEND_H
@@ -112,6 +112,12 @@ public:
     virtual void retryFile(const QString& id) { Q_UNUSED(id); }
     /** Drops a file change that was never submitted or was rejected; in-flight work is kept. */
     virtual void discardFile(const QString& id) { Q_UNUSED(id); }
+    /** Real chunk tree inspection and cryptographic integrity check for own files. */
+    virtual CybouFileChunkDiagnostics inspectFileChunks(const QString& file_id) const
+    {
+        Q_UNUSED(file_id);
+        return {};
+    }
 
 Q_SIGNALS:
     void availabilityChanged();

@@ -10,6 +10,8 @@
 #include <cybou/recovery_phrase.h>
 #include <cybou/name_registry.h>
 #include <cybou/name_service.h>
+#include <cybou/block.h>
+#include <cybou/protocol_operation.h>
 #include <cybou/node_runtime.h>
 #include <cybou/hex.h>
 #include <cybou/publication_service.h>
@@ -1834,4 +1836,203 @@ void CybouDesktopModel::refreshFinalizedName()
     m_names = names;
     Q_EMIT namesChanged();
     Q_EMIT statusChanged();
+}
+
+namespace {
+QString OperationKindString(const cybou::ProtocolOperation& op)
+{
+    if (std::holds_alternative<cybou::AccountCreateOp>(op)) return QStringLiteral("AccountCreate");
+    if (std::holds_alternative<cybou::AuthorizedPayment>(op)) return QStringLiteral("Payment");
+    if (std::holds_alternative<cybou::AuthorizedRootPublication>(op)) return QStringLiteral("RootPublication");
+    if (std::holds_alternative<cybou::AuthorizedStorageLease>(op)) return QStringLiteral("StorageLease");
+    if (std::holds_alternative<cybou::AuthorizedSystemLock>(op)) return QStringLiteral("SystemLock");
+    if (std::holds_alternative<cybou::IdentityRotate>(op)) return QStringLiteral("IdentityRotate");
+    if (std::holds_alternative<cybou::AuthorizedNameCommit>(op)) return QStringLiteral("NameCommit");
+    if (std::holds_alternative<cybou::AuthorizedNameReveal>(op)) return QStringLiteral("NameReveal");
+    if (std::holds_alternative<cybou::AuthorizedRevokePublication>(op)) return QStringLiteral("RevokePublication");
+    if (std::holds_alternative<cybou::StorageSettlement>(op)) return QStringLiteral("StorageSettlement");
+    return QStringLiteral("Unknown");
+}
+} // namespace
+
+CybouFileChunkDiagnostics CybouDesktopModel::inspectFileChunks(const QString& file_id) const
+{
+    if (m_backend) {
+        auto diag = m_backend->inspectFileChunks(file_id);
+        if (diag.available) return diag;
+    }
+    auto it = m_fixture_chunk_diagnostics.find(file_id);
+    if (it != m_fixture_chunk_diagnostics.end()) return it.value();
+    return {};
+}
+
+void CybouDesktopModel::setFixtureChunkDiagnostics(const QString& file_id, CybouFileChunkDiagnostics diag)
+{
+    m_fixture_chunk_diagnostics[file_id] = std::move(diag);
+}
+
+CybouBlockExplorerInfo CybouDesktopModel::inspectBlock(const QString& id_or_height) const
+{
+    auto fit = m_fixture_blocks.find(id_or_height);
+    if (fit != m_fixture_blocks.end()) return fit.value();
+
+    CybouBlockExplorerInfo info;
+    if (m_node_runtime) {
+        bool ok = false;
+        quint64 height = id_or_height.toULongLong(&ok);
+        std::optional<cybou::FinalizedBlock> block_opt;
+        if (ok) {
+            block_opt = m_node_runtime->GetBlockAtHeight(height);
+        } else if (id_or_height.size() == 64) {
+            const auto hash_opt = cybou::Hash256::FromHex(id_or_height.toStdString());
+            if (hash_opt) {
+                block_opt = m_node_runtime->GetStore().GetBlock(*hash_opt);
+            }
+        }
+        if (block_opt) {
+            info.found = true;
+            info.height = block_opt->block.height;
+            info.block_id = QString::fromStdString(cybou::ComputeBlockId(block_opt->block).GetHex());
+            info.parent_block_id = QString::fromStdString(block_opt->block.parent_block_id.GetHex());
+            info.state_root = QString::fromStdString(block_opt->block.resulting_state_root.GetHex());
+            info.operations_root = QString::fromStdString(cybou::ComputeOperationsRoot(block_opt->block.operations).GetHex());
+            info.operation_count = static_cast<int>(block_opt->block.operations.size());
+            for (const auto& op : block_opt->block.operations) {
+                auto oid = cybou::ComputeOperationId(op);
+                if (oid) info.operation_ids.append(QString::fromStdString(oid->GetHex()));
+            }
+            info.has_poa_certificate = (block_opt->certificate.height == block_opt->block.height);
+            return info;
+        }
+    }
+
+    if (m_network_diagnostics.initialized && m_network_diagnostics.height > 0) {
+        if (id_or_height == QString::number(m_network_diagnostics.height) ||
+            id_or_height.toStdString() == m_network_diagnostics.tip) {
+            info.found = true;
+            info.height = m_network_diagnostics.height;
+            info.block_id = QString::fromStdString(m_network_diagnostics.tip);
+            info.state_root = QString::fromStdString(m_network_diagnostics.state_root);
+            info.operation_count = static_cast<int>(m_network_diagnostics.operations.size());
+            info.has_poa_certificate = true;
+            return info;
+        }
+    }
+    return info;
+}
+
+void CybouDesktopModel::setFixtureBlock(const QString& key, CybouBlockExplorerInfo info)
+{
+    m_fixture_blocks[key] = std::move(info);
+}
+
+CybouOperationExplorerInfo CybouDesktopModel::inspectOperation(const QString& op_id) const
+{
+    auto fit = m_fixture_operations.find(op_id);
+    if (fit != m_fixture_operations.end()) return fit.value();
+
+    CybouOperationExplorerInfo info;
+    info.operation_id = op_id;
+    if (m_node_runtime) {
+        const auto hash_opt = cybou::Hash256::FromHex(op_id.toStdString());
+        if (hash_opt) {
+            if (m_node_runtime->HasCandidateOperation(*hash_opt)) {
+                info.found = true;
+                info.state = tr("Candidate (volatile pool)");
+                return info;
+            }
+            const auto res = m_node_runtime->FindFinalizedOperation(*hash_opt);
+            if (res.status == cybou::FinalizedOperationLookupStatus::FOUND) {
+                info.found = true;
+                info.state = tr("Finalized");
+                info.height = res.height;
+                info.index = res.operation_index;
+                info.block_id = QString::fromStdString(res.block_id.GetHex());
+                const auto blk = m_node_runtime->GetBlockAtHeight(res.height);
+                if (blk && res.operation_index < blk->block.operations.size()) {
+                    const auto& op = blk->block.operations[res.operation_index];
+                    info.kind = OperationKindString(op);
+                    if (const auto author = cybou::AuthorizingAccount(op)) {
+                        info.author = QString::fromStdString(author->Value().GetHex());
+                    }
+                }
+                return info;
+            }
+        }
+    }
+
+    for (const auto& cid : m_network_authority.candidate_ids) {
+        if (cid.compare(op_id, Qt::CaseInsensitive) == 0) {
+            info.found = true;
+            info.state = tr("Candidate (volatile pool)");
+            return info;
+        }
+    }
+    for (const auto& top : m_network_diagnostics.operations) {
+        if (QString::fromStdString(top.operation_id).compare(op_id, Qt::CaseInsensitive) == 0) {
+            info.found = true;
+            info.state = (top.state == static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED))
+                ? tr("Finalized") : tr("Submitted");
+            info.height = top.finalized_height;
+            return info;
+        }
+    }
+    return info;
+}
+
+void CybouDesktopModel::setFixtureOperation(const QString& op_id, CybouOperationExplorerInfo info)
+{
+    m_fixture_operations[op_id] = std::move(info);
+}
+
+QVector<CybouHistoryItem> CybouDesktopModel::inspectHistory(int page, int page_size) const
+{
+    if (!m_fixture_history.isEmpty()) return m_fixture_history;
+
+    page = qMax(1, page);
+    page_size = qBound(1, page_size, 100);
+    QVector<CybouHistoryItem> items;
+
+    if (m_node_runtime) {
+        const quint64 head = m_node_runtime->GetFinalizedHeight().value_or(0);
+        const quint64 offset = static_cast<quint64>((page - 1) * page_size);
+        if (head >= offset) {
+            const quint64 start = head - offset;
+            for (quint64 h = start; items.size() < page_size; --h) {
+                const auto blk = m_node_runtime->GetBlockAtHeight(h);
+                if (blk) {
+                    CybouHistoryItem item;
+                    item.height = h;
+                    item.block_id = QString::fromStdString(cybou::ComputeBlockId(blk->block).GetHex());
+                    item.state_root = QString::fromStdString(blk->block.resulting_state_root.GetHex());
+                    item.operation_count = static_cast<int>(blk->block.operations.size());
+                    items.append(item);
+                }
+                if (h == 0) break;
+            }
+        }
+    } else {
+        if (m_network_diagnostics.initialized && m_network_diagnostics.height > 0) {
+            CybouHistoryItem tip_item;
+            tip_item.height = m_network_diagnostics.height;
+            tip_item.block_id = QString::fromStdString(m_network_diagnostics.tip);
+            tip_item.state_root = QString::fromStdString(m_network_diagnostics.state_root);
+            tip_item.operation_count = static_cast<int>(m_network_diagnostics.operations.size());
+            items.append(tip_item);
+        }
+        for (const auto& op : m_network_diagnostics.operations) {
+            if (items.size() >= page_size) break;
+            CybouHistoryItem op_item;
+            op_item.height = op.finalized_height;
+            op_item.block_id = QString::fromStdString(op.operation_id);
+            op_item.summary = tr("Tracked operation (%1)").arg(QString::fromStdString(op.operation_id));
+            items.append(op_item);
+        }
+    }
+    return items;
+}
+
+void CybouDesktopModel::setFixtureHistory(QVector<CybouHistoryItem> items)
+{
+    m_fixture_history = std::move(items);
 }

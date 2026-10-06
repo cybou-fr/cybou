@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUDESKTOPMODEL_H
@@ -27,6 +27,7 @@ namespace cybou {
 class CybouIdentityService;
 class CybouWalletService;
 class CybouNameService;
+class CybouNodeRuntime;
 }
 
 class CybouApplicationBackend;
@@ -108,6 +109,8 @@ struct CybouNetworkAuthorityStatus {
     quint64 candidates{0};
     /** Their OperationIDs (hex), in pool order. */
     QStringList candidate_ids;
+    QList<quint64> candidate_wait_seconds;
+    quint64 oldest_candidate_age_seconds{0};
     quint64 finalized_height{0};
     quint64 identities{0};
     quint64 names{0};
@@ -115,6 +118,15 @@ struct CybouNetworkAuthorityStatus {
     quint64 total_balance{0};
     quint64 total_system_balance{0};
     quint64 storage_escrow{0};
+
+    // Safety and settlement preview
+    QString safety_journal_status;
+    quint64 next_settlement_period{0};
+    quint64 next_settlement_start_utc{0};
+    quint64 next_settlement_due_utc{0};
+    bool settlement_due{false};
+    quint64 preview_payouts_count{0};
+    quint64 preview_payouts_amount{0};
 };
 
 
@@ -313,6 +325,20 @@ public:
     void setWalletService(cybou::CybouWalletService* wallet_service);
     cybou::CybouWalletService* walletService() const { return m_wallet_service; }
 
+    /** Sets node runtime provider for verified history and chain lookups. */
+    void setNodeRuntime(cybou::CybouNodeRuntime* runtime) { m_node_runtime = runtime; }
+    cybou::CybouNodeRuntime* nodeRuntime() const { return m_node_runtime; }
+
+    /* ---- Technical diagnostics & blockchain inspection (console and inspector). ---- */
+    CybouFileChunkDiagnostics inspectFileChunks(const QString& file_id) const;
+    void setFixtureChunkDiagnostics(const QString& file_id, CybouFileChunkDiagnostics diag);
+    CybouBlockExplorerInfo inspectBlock(const QString& id_or_height) const;
+    void setFixtureBlock(const QString& key, CybouBlockExplorerInfo info);
+    CybouOperationExplorerInfo inspectOperation(const QString& op_id) const;
+    void setFixtureOperation(const QString& op_id, CybouOperationExplorerInfo info);
+    QVector<CybouHistoryItem> inspectHistory(int page, int page_size = 10) const;
+    void setFixtureHistory(QVector<CybouHistoryItem> items);
+
     /**
      * Short confirmation for the user ("Moved to Trash"), optionally with
      * one action such as Undo. Rendered by the shell's notifier.
@@ -472,6 +498,11 @@ private:
     cybou::NodeDiagnosticsSnapshot m_network_diagnostics;
     CybouNetworkAuthorityStatus m_network_authority;
     bool m_vault_locking{false};
+    cybou::CybouNodeRuntime* m_node_runtime{nullptr};
+    QHash<QString, CybouFileChunkDiagnostics> m_fixture_chunk_diagnostics;
+    QHash<QString, CybouBlockExplorerInfo> m_fixture_blocks;
+    QHash<QString, CybouOperationExplorerInfo> m_fixture_operations;
+    QVector<CybouHistoryItem> m_fixture_history;
 
     void refreshFinalizedName();
     /** True when private Mail/Files commands may be issued. */

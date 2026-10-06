@@ -3,6 +3,7 @@
 
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
+#include <cybou/chunk_id.h>
 #include <cybou/encrypted_chunk_tree.h>
 #include <QFile>
 #include <QFileInfo>
@@ -482,4 +483,65 @@ void CybouCoreApplicationAdapter::deleteFile(const QString& id)
             s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be deleted.")); });
         }
     });
+}
+
+CybouFileChunkDiagnostics CybouCoreApplicationAdapter::inspectFileChunks(const QString& file_id) const
+{
+    CybouFileChunkDiagnostics diag;
+    if (!m_session || !m_session->application) return diag;
+
+    const auto id = FromHex(file_id);
+    if (!id) return diag;
+
+    const auto record = m_session->application->GetFile(*id);
+    if (!record || !record->item.root_chunk_id || !record->item.content_key) return diag;
+
+    const auto& item = record->item;
+    diag.available = true;
+    diag.file_id = file_id;
+    diag.file_name = QString::fromStdString(item.name);
+    diag.root_chunk_id = ChunkHex(*item.root_chunk_id);
+
+    const auto& blobs = m_session->runtime.GetChunkBlobStore();
+    const auto binding = m_session->runtime.GetNetworkBinding();
+
+    const bool walked = cybou::EnumerateEncryptedTreeChunks(
+        std::span<const unsigned char, 32>{binding.begin(), 32},
+        *item.content_key,
+        *item.root_chunk_id,
+        [&](const cybou::ChunkId& cid) { return blobs.Get(cid); },
+        [&](const cybou::ChunkId& cid) {
+            CybouChunkEntry entry;
+            entry.chunk_id = ChunkHex(cid);
+            const auto blob = blobs.Get(cid);
+            if (blob) {
+                entry.present_locally = true;
+                if (cybou::ComputeChunkId(*blob) == cid) {
+                    entry.integrity_verified = true;
+                    ++diag.verified_count;
+                } else {
+                    ++diag.corrupt_count;
+                }
+                ++diag.local_count;
+            } else {
+                ++diag.missing_count;
+            }
+            ++diag.chunk_count;
+            if (diag.chunks.size() < 100) diag.chunks.append(entry);
+            return true;
+        });
+
+    if (!walked && diag.local_count == 0) {
+        diag.retrieval_diagnosis = tr("Root chunk not present locally. Remote provider retrieval required.");
+    } else if (diag.missing_count > 0) {
+        diag.retrieval_diagnosis = tr("%1 of %2 chunks missing locally. Remote retrieval required.")
+            .arg(diag.missing_count).arg(diag.chunk_count);
+    } else if (diag.corrupt_count > 0) {
+        diag.retrieval_diagnosis = tr("%1 corrupted chunk(s) detected. Remote retrieval required to replace corrupted data.")
+            .arg(diag.corrupt_count);
+    } else {
+        diag.retrieval_diagnosis = tr("All %1 chunk(s) present locally and verified with BLAKE3-256. Content available offline.")
+            .arg(diag.chunk_count);
+    }
+    return diag;
 }

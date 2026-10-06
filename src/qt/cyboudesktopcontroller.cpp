@@ -264,6 +264,7 @@ void CybouDesktopController::start()
         });
         m_node_service->Start();
         auto& runtime = m_node_service->Runtime();
+        m_model->setNodeRuntime(&runtime);
         // Starting the local node is not proof of network connectivity.
         m_model->setNodeStatus(true, 0, false, QString::fromStdString(m_data_directory.string()));
         m_model->setSyncing(true);
@@ -402,6 +403,7 @@ void CybouDesktopController::start()
         m_poa_signer_state.reset();
         m_model->setApplicationBackend(nullptr);
         m_application.reset();
+        m_model->setNodeRuntime(nullptr);
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
         m_wallet_service.reset();
@@ -437,13 +439,62 @@ void CybouDesktopController::publishNetworkAuthority()
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
         auto& runtime = m_node_service->Runtime();
         status.signer_enabled = runtime.IsPoaSignerActive();
-        for (const auto& id : runtime.CandidateOperationIds()) status.candidate_ids << QString::fromStdString(id.GetHex());
+        const auto now = QDateTime::currentDateTimeUtc();
+        const quint64 now_secs = static_cast<quint64>(now.toSecsSinceEpoch());
+
+        const auto candidate_ids = runtime.CandidateOperationIds();
+        QSet<QString> active_cids;
+        quint64 max_age = 0;
+        for (const auto& id : candidate_ids) {
+            const auto hex = QString::fromStdString(id.GetHex());
+            status.candidate_ids << hex;
+            active_cids.insert(hex);
+            if (!m_candidate_seen_times.contains(hex)) {
+                m_candidate_seen_times.insert(hex, static_cast<qint64>(now_secs));
+            }
+            const quint64 seen_at = static_cast<quint64>(m_candidate_seen_times.value(hex));
+            const quint64 wait_secs = now_secs >= seen_at ? (now_secs - seen_at) : 0;
+            status.candidate_wait_seconds.append(wait_secs);
+            if (wait_secs > max_age) max_age = wait_secs;
+        }
         status.candidates = static_cast<quint64>(status.candidate_ids.size());
+        status.oldest_candidate_age_seconds = status.candidates > 0 ? max_age : 0;
+
+        for (auto it = m_candidate_seen_times.begin(); it != m_candidate_seen_times.end(); ) {
+            if (!active_cids.contains(it.key())) it = m_candidate_seen_times.erase(it);
+            else ++it;
+        }
+
         status.finalizer = runtime.LastBlockProductionStatus() == cybou::BlockProductionStatus::SAFETY_HALT
             ? CybouFinalizerState::SafetyHalt
             : !status.signer_enabled ? CybouFinalizerState::SignerUnavailable
             : m_production_paused ? CybouFinalizerState::Paused
             : CybouFinalizerState::Finalizing;
+
+        const auto prod_status = runtime.LastBlockProductionStatus();
+        QString prod_status_text;
+        switch (prod_status) {
+        case cybou::BlockProductionStatus::PRODUCED: prod_status_text = QStringLiteral("Normal (block produced)"); break;
+        case cybou::BlockProductionStatus::SAFETY_HALT: prod_status_text = QStringLiteral("Safety halt"); break;
+        case cybou::BlockProductionStatus::SIGNER_UNAVAILABLE: prod_status_text = QStringLiteral("Signer inactive"); break;
+        case cybou::BlockProductionStatus::RETRY: prod_status_text = QStringLiteral("Idle / waiting for candidates"); break;
+        }
+        status.safety_journal_status = QStringLiteral("Fail-closed durable append-only journal active. Last loop status: %1. Conflicts resolved by min(BlockID).")
+            .arg(prod_status_text);
+
+        const auto cursor = runtime.GetStorageSettlementCursor();
+        if (cursor) {
+            const auto period_seconds = runtime.GetNetworkGenesis().GetProtocolParameters().storage_settlement_period_seconds;
+            if (period_seconds > 0) {
+                const std::uint64_t start = cursor->next_period_start_utc != 0 ? cursor->next_period_start_utc
+                                                                              : (now_secs / period_seconds - 1) * period_seconds;
+                status.next_settlement_period = cursor->next_period;
+                status.next_settlement_start_utc = start;
+                status.next_settlement_due_utc = start + period_seconds;
+                status.settlement_due = (now_secs >= start + period_seconds);
+            }
+        }
+
         const auto loaded = m_node_service->Runtime().GetStore().GetStateSnapshot();
         if (loaded && loaded.state) {
             const auto& state = *loaded.state;
@@ -561,6 +612,7 @@ void CybouDesktopController::stop()
     if (m_model) m_model->setApplicationBackend(nullptr);
     m_application.reset();
     if (m_model) {
+        m_model->setNodeRuntime(nullptr);
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
     }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUCOREAPPLICATIONADAPTER_H
@@ -88,6 +88,7 @@ public:
     void deleteMailForever(const QStringList& ids) override;
     void retryFile(const QString& id) override;
     void discardFile(const QString& id) override;
+    CybouFileChunkDiagnostics inspectFileChunks(const QString& file_id) const override;
 
 private:
     struct IdentitySession;

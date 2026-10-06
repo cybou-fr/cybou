@@ -18,6 +18,7 @@
 #include <QScrollBar>
 #include <QVBoxLayout>
 #include <QTextDocument>
+#include <QTimeZone>
 
 using namespace CybouUi;
 
@@ -41,14 +42,17 @@ const Command commands[] = {
     {"network", "network", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Network binding, chain tip and state root"), false, false},
     {"storage", "storage", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Physical storage usage and capacity policy"), false, false},
     {"peers", "peers", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Observed sessions and unverified peer heights"), false, false},
+    {"block", "block <height|hash>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Inspect verified block header and operations"), false, false},
+    {"op", "op <id>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Inspect finalized or candidate operation"), false, false},
+    {"history", "history [page]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Paginated verified blockchain history"), false, false},
     {"operations", "operations", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Locally tracked operations"), false, false},
     {"identity", "identity", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own AccountID, name and key epoch"), true, false},
     {"wallet", "wallet", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own Balance and System Balance"), true, false},
     {"files", "files [filter]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own files and replica status"), true, false},
     {"file", "file <id|name>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own file metadata and retrieval state"), true, false},
-    {"chunks", "chunks <id|name>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Chunk evidence availability for an own file"), true, false},
+    {"chunks", "chunks <id|name>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Real chunk tree, integrity and retrieval diagnostics"), true, false},
     {"jobs", "jobs", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own active application tasks"), true, false},
-    {"authority", "authority [status|candidates|totals]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local finalizer and finalized state totals"), true, true},
+    {"authority", "authority [status|candidates|totals|pause|resume|finalize|settle]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Central Authority controls, candidates, totals and settlement"), true, true},
     {"clear", "clear", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Clear output and command history"), false, false},
 };
 constexpr int kMaxRows = 100;
@@ -220,15 +224,25 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
 
     const bool unlocked = m_model->status().identity_state == CybouIdentityState::Active;
     const Command* spec = nullptr;
-    for (const auto& candidate : commands) if (cmd == QLatin1String{candidate.name} ||
-        (cmd == QLatin1String{"?"} && QLatin1String{candidate.name} == QLatin1String{"help"})) spec = &candidate;
+    for (const auto& candidate : commands) {
+        if (cmd == QLatin1String{candidate.name} ||
+            (cmd == QLatin1String{"?"} && QLatin1String{candidate.name} == QLatin1String{"help"}) ||
+            (cmd == QLatin1String{"operation"} && QLatin1String{candidate.name} == QLatin1String{"op"})) {
+            spec = &candidate;
+            break;
+        }
+    }
     if (!spec || (spec->authority && (!unlocked || !m_model->isNetworkAuthority()))) {
         appendOutput(tr("Error: Command '%1' is not recognized or not permitted. Type help for available commands.").arg(cmd));
         return;
     }
     if (spec->private_data && !unlocked) { appendOutput(tr("Unlock your Identity to use this command.")); return; }
-    if (!arg.isEmpty() && cmd != QLatin1String{"files"} && cmd != QLatin1String{"file"} &&
-        cmd != QLatin1String{"chunks"} && cmd != QLatin1String{"authority"}) {
+    const bool accepts_arg = (cmd == QLatin1String{"files"} || cmd == QLatin1String{"file"} ||
+        cmd == QLatin1String{"chunks"} || cmd == QLatin1String{"authority"} ||
+        cmd == QLatin1String{"block"} || cmd == QLatin1String{"op"} ||
+        cmd == QLatin1String{"operation"} || cmd == QLatin1String{"history"} ||
+        cmd == QLatin1String{"operations"});
+    if (!arg.isEmpty() && !accepts_arg) {
         appendOutput(tr("Usage: %1").arg(QLatin1String{spec->syntax})); return;
     }
     if (cmd == QLatin1String{"help"} || cmd == QLatin1String{"?"}) {
@@ -300,21 +314,191 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             appendOutput(QStringLiteral("  %1 | %2 | %3").arg(QString::fromStdString(op.operation_id),
                 op.state < unsigned(states.size()) ? states[op.state] : tr("Unknown"), QString::number(op.finalized_height)));
         }
+    } else if (cmd == QLatin1String{"block"}) {
+        if (arg.isEmpty()) {
+            appendOutput(tr("Usage: block <height|hash>"));
+            return;
+        }
+        const auto info = m_model->inspectBlock(arg);
+        if (!info.found) {
+            appendOutput(tr("Block not found: %1").arg(arg));
+            return;
+        }
+        appendOutput(tr(
+            "Block Height %1:\n"
+            "  Block ID: %2\n"
+            "  Parent Block ID: %3\n"
+            "  State Root: %4\n"
+            "  Operations Root: %5\n"
+            "  PoA Certificate: %6\n"
+            "  Operations (%7):")
+            .arg(info.height)
+            .arg(info.block_id.isEmpty() ? QStringLiteral("—") : info.block_id)
+            .arg(info.parent_block_id.isEmpty() ? QStringLiteral("—") : info.parent_block_id)
+            .arg(info.state_root.isEmpty() ? QStringLiteral("—") : info.state_root)
+            .arg(info.operations_root.isEmpty() ? QStringLiteral("—") : info.operations_root)
+            .arg(info.has_poa_certificate ? tr("Verified PoA signature") : tr("None / Unverified"))
+            .arg(info.operation_count));
+        int op_idx = 0;
+        for (const auto& op_id : info.operation_ids) {
+            if (op_idx == kMaxRows) {
+                appendOutput(tr("Output limited to 100 rows."));
+                break;
+            }
+            ++op_idx;
+            appendOutput(QStringLiteral("    [%1] %2").arg(op_idx).arg(op_id));
+        }
+        if (info.operation_count == 0) {
+            appendOutput(tr("    (No operations in this block)"));
+        }
+    } else if (cmd == QLatin1String{"op"} || cmd == QLatin1String{"operation"}) {
+        if (arg.isEmpty()) {
+            appendOutput(tr("Usage: op <id>"));
+            return;
+        }
+        const auto info = m_model->inspectOperation(arg);
+        if (!info.found) {
+            appendOutput(tr("Operation not found: %1").arg(arg));
+            return;
+        }
+        appendOutput(tr(
+            "Operation %1:\n"
+            "  Status: %2\n"
+            "  Height: %3\n"
+            "  Block ID: %4\n"
+            "  Index in Block: %5\n"
+            "  Kind: %6\n"
+            "  Author: %7")
+            .arg(info.operation_id)
+            .arg(info.state)
+            .arg(info.height > 0 || info.state == tr("Finalized") ? QString::number(info.height) : QStringLiteral("—"))
+            .arg(info.block_id.isEmpty() ? QStringLiteral("—") : info.block_id)
+            .arg(info.state == tr("Finalized") ? QString::number(info.index) : QStringLiteral("—"))
+            .arg(info.kind.isEmpty() ? QStringLiteral("—") : info.kind)
+            .arg(info.author.isEmpty() ? QStringLiteral("—") : info.author));
+    } else if (cmd == QLatin1String{"history"}) {
+        int page = 1;
+        if (!arg.isEmpty()) {
+            bool ok = false;
+            page = arg.toInt(&ok);
+            if (!ok || page < 1) {
+                appendOutput(tr("Usage: history [page] (page must be a positive integer)"));
+                return;
+            }
+        }
+        const auto items = m_model->inspectHistory(page, 10);
+        if (items.isEmpty()) {
+            appendOutput(tr("No history entries found for page %1.").arg(page));
+            return;
+        }
+        appendOutput(tr("Blockchain History (Page %1):").arg(page));
+        for (const auto& item : items) {
+            if (!item.summary.isEmpty()) {
+                appendOutput(QStringLiteral("  Height %1 | %2").arg(item.height).arg(item.summary));
+            } else {
+                appendOutput(QStringLiteral("  Height %1 | Block: %2 | State Root: %3 | Operations: %4")
+                    .arg(item.height)
+                    .arg(ShortHex(item.block_id))
+                    .arg(ShortHex(item.state_root))
+                    .arg(item.operation_count));
+            }
+        }
+        appendOutput(tr("Type 'history %1' for next page, or 'block <height>' to inspect a specific block.").arg(page + 1));
     } else if (cmd == QLatin1String{"authority"}) {
         const auto& a = m_model->networkAuthority();
-        if (arg.isEmpty() || arg == QLatin1String{"status"}) {
+        const QString sub = tokens.size() > 1 ? tokens[1].toLower() : QStringLiteral("status");
+        if (sub == QLatin1String{"status"}) {
             const QStringList states{tr("Signer unavailable"), tr("Finalizing"), tr("Paused"), tr("Safety halt")};
-            appendOutput(tr("Local finalizer: %1\nSigner enabled: %2\nCandidates: %3\nLocally verified height: %4")
-                .arg(states[int(a.finalizer)], a.signer_enabled ? tr("Yes") : tr("No")).arg(a.candidates).arg(a.finalized_height));
-        } else if (arg == QLatin1String{"candidates"}) {
-            appendOutput(tr("Locally executed candidates: %1 (volatile pool)").arg(a.candidates));
-            for (int i = 0; i < qMin(kMaxRows, int(a.candidate_ids.size())); ++i) appendOutput(a.candidate_ids[i]);
+            QString settlement_text;
+            if (a.settlement_due) {
+                settlement_text = tr("Due now (period %1, %2 payouts, %3)")
+                    .arg(a.next_settlement_period).arg(a.preview_payouts_count).arg(cybouAmountText(a.preview_payouts_amount));
+            } else if (a.next_settlement_due_utc > 0) {
+                settlement_text = tr("Due %1 UTC (period %2)")
+                    .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
+                    .arg(a.next_settlement_period);
+            } else {
+                settlement_text = tr("Unknown");
+            }
+            appendOutput(tr(
+                "Local finalizer: %1\n"
+                "Signer enabled: %2\n"
+                "Candidates: %3 (queue age: %4 s)\n"
+                "Locally verified height: %5\n"
+                "Signing safety: %6\n"
+                "Storage settlement: %7")
+                .arg(states[int(a.finalizer)], a.signer_enabled ? tr("Yes") : tr("No"))
+                .arg(a.candidates).arg(a.oldest_candidate_age_seconds)
+                .arg(a.finalized_height)
+                .arg(a.safety_journal_status.isEmpty() ? tr("Fail-closed durable append-only journal active.") : a.safety_journal_status)
+                .arg(settlement_text));
+        } else if (sub == QLatin1String{"candidates"}) {
+            appendOutput(tr("Locally executed candidates: %1 (volatile pool, queue age: %2 s)")
+                .arg(a.candidates).arg(a.oldest_candidate_age_seconds));
+            for (int i = 0; i < qMin(kMaxRows, int(a.candidate_ids.size())); ++i) {
+                const quint64 wait = i < a.candidate_wait_seconds.size() ? a.candidate_wait_seconds[i] : 0;
+                appendOutput(QStringLiteral("  [%1] %2 (waiting %3 s)").arg(i + 1).arg(a.candidate_ids[i]).arg(wait));
+            }
             if (a.candidate_ids.size() > kMaxRows) appendOutput(tr("Output limited to 100 rows."));
-        } else if (arg == QLatin1String{"totals"}) {
+        } else if (sub == QLatin1String{"totals"}) {
             appendOutput(tr("Finalized state at height %1\nIdentities: %2\nNames: %3\nPending name commits: %4\nBalance total: %5 CYBOU\nSystem Balance total: %6 CYBOU\nStorage escrow: %7 CYBOU")
                 .arg(a.finalized_height).arg(a.identities).arg(a.names).arg(a.pending_name_commits)
                 .arg(a.total_balance).arg(a.total_system_balance).arg(a.storage_escrow));
-        } else appendOutput(tr("Usage: authority [status|candidates|totals]"));
+        } else if (sub == QLatin1String{"pause"}) {
+            if (a.finalizer == CybouFinalizerState::Paused) {
+                appendOutput(tr("Finalization is already paused."));
+            } else if (a.finalizer == CybouFinalizerState::SafetyHalt) {
+                appendOutput(tr("Cannot pause: finalizer is in safety halt."));
+            } else {
+                m_model->requestFinalizationPaused(true);
+                appendOutput(tr("Finalization paused. Candidate operations will accumulate in the pool without producing blocks."));
+            }
+        } else if (sub == QLatin1String{"resume"}) {
+            if (a.finalizer == CybouFinalizerState::Finalizing) {
+                appendOutput(tr("Finalization is already active."));
+            } else if (a.finalizer == CybouFinalizerState::SafetyHalt) {
+                appendOutput(tr("Cannot resume: finalizer is in safety halt."));
+            } else {
+                m_model->requestFinalizationPaused(false);
+                appendOutput(tr("Finalization resumed. Waiting candidates will be finalized into blocks."));
+            }
+        } else if (sub == QLatin1String{"finalize"}) {
+            if (a.finalizer != CybouFinalizerState::Paused) {
+                appendOutput(tr("Cannot finalize on demand: finalization loop is currently active. Pause finalization first with 'authority pause'."));
+            } else {
+                m_model->requestFinalizeNow();
+                appendOutput(tr("Requested finalization of one block from waiting candidates."));
+            }
+        } else if (sub == QLatin1String{"settle"}) {
+            const bool confirmed = tokens.size() > 2 && tokens[2].toLower() == QLatin1String{"confirm"};
+            if (!confirmed) {
+                if (!a.settlement_due && a.next_settlement_due_utc > 0) {
+                    appendOutput(tr("The next storage settlement is due %1 UTC (period %2). Settlement cannot be submitted before the period ends.")
+                        .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
+                        .arg(a.next_settlement_period));
+                } else {
+                    appendOutput(tr(
+                        "Storage settlement preview for period %1:\n"
+                        "  Status: Due now\n"
+                        "  Eligible payouts: %2\n"
+                        "  Total amount: %3\n"
+                        "To submit this settlement, type: authority settle confirm")
+                        .arg(a.next_settlement_period).arg(a.preview_payouts_count).arg(cybouAmountText(a.preview_payouts_amount)));
+                }
+            } else {
+                if (!a.settlement_due && a.next_settlement_due_utc > 0) {
+                    appendOutput(tr("The next storage settlement is due %1 UTC (period %2). Settlement cannot be submitted before the period ends.")
+                        .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
+                        .arg(a.next_settlement_period));
+                } else {
+                    m_model->requestStorageSettlement();
+                    appendOutput(tr("Storage settlement for period %1 submitted. It will be finalized in the next block.")
+                        .arg(a.next_settlement_period));
+                }
+            }
+        } else {
+            appendOutput(tr("Usage: authority [status|candidates|totals|pause|resume|finalize|settle]"));
+        }
     } else if (cmd == QLatin1String{"files"}) {
         const auto files = m_model->fileItems();
         int matched = 0;
@@ -384,8 +568,51 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             appendOutput(tr("File not found in own catalog: %1").arg(arg));
             return;
         }
-        appendOutput(tr("Chunk evidence: %1\nContent root: %2\nActual chunk list and verification results are not exposed by the application model. No integrity check was performed.")
-            .arg(target->name, target->content_root_id.isEmpty() ? tr("Not reported") : target->content_root_id));
+        const auto diag = m_model->inspectFileChunks(target->id);
+        if (!diag.available) {
+            appendOutput(tr("Chunk evidence: %1\nContent root: %2\nActual chunk list and verification results are not exposed by the application model. No integrity check was performed.")
+                .arg(target->name, target->content_root_id.isEmpty() ? tr("Not reported") : target->content_root_id));
+            return;
+        }
+        appendOutput(tr(
+            "Chunk Tree & Integrity Diagnostics:\n"
+            "  File: %1\n"
+            "  Root Chunk ID: %2\n"
+            "  Total Chunks: %3\n"
+            "  Local Chunks: %4\n"
+            "  Verified (BLAKE3-256): %5\n"
+            "  Missing Locally: %6\n"
+            "  Corrupt: %7")
+            .arg(target->name,
+                 diag.root_chunk_id.isEmpty() ? (target->content_root_id.isEmpty() ? tr("Not reported") : target->content_root_id) : diag.root_chunk_id)
+            .arg(diag.chunk_count)
+            .arg(diag.local_count)
+            .arg(diag.verified_count)
+            .arg(diag.missing_count)
+            .arg(diag.corrupt_count));
+        if (!diag.retrieval_diagnosis.isEmpty()) {
+            appendOutput(tr("  Retrieval diagnosis: %1").arg(diag.retrieval_diagnosis));
+        }
+        if (!diag.chunks.isEmpty()) {
+            appendOutput(tr("Chunks:"));
+            int count = 0;
+            for (const auto& entry : diag.chunks) {
+                if (count == kMaxRows) {
+                    appendOutput(tr("Output limited to 100 rows."));
+                    break;
+                }
+                ++count;
+                QString status_str;
+                if (!entry.present_locally) {
+                    status_str = tr("Missing locally");
+                } else if (entry.integrity_verified) {
+                    status_str = tr("Verified (BLAKE3-256)");
+                } else {
+                    status_str = tr("Corrupt (hash mismatch)");
+                }
+                appendOutput(QStringLiteral("  [%1] %2 — %3").arg(count).arg(entry.chunk_id, status_str));
+            }
+        }
     } else if (cmd == QLatin1String{"peers"}) {
         const auto& d = m_model->networkDiagnostics();
         appendOutput(tr("Observed Peer Connections (%1 peers):").arg(d.peers.size()));
