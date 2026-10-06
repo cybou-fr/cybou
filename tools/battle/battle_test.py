@@ -551,7 +551,7 @@ def main() -> None:
     run.add_argument("--file-size", default="1MiB")
     run.add_argument("--replicas", type=int, default=2)
     run.add_argument("--capacity", default="15GiB")
-    run.add_argument("--fund-each", type=int, default=100000)
+    run.add_argument("--fund-each", type=int, default=20000)
     run.add_argument("--drain-timeout", default="10m")
     run.add_argument("--restore-timeout", default="30m", help="time for a clean restore to read everything back")
     run.add_argument("--warmup", type=int, default=30, help="seconds for nodes to sync before clients start")
