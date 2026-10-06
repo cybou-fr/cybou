@@ -3423,6 +3423,13 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
     }
     QVERIFY(found_lag_in_details);
 
+    // Rebuilding the details must replace their labels, not pile them up:
+    // leaked rows once reached thousands of siblings and overflowed painting.
+    const auto detail_labels = net_page->detailsWidget()->findChildren<QLabel*>().size();
+    for (int i = 0; i < 50; ++i) net_page->selectPeer(i % 3);
+    net_page->selectPeer(1);
+    QCOMPARE(net_page->detailsWidget()->findChildren<QLabel*>().size(), detail_labels);
+
     // 5. Test honest offline / empty state
     snap.peers.clear();
     model->setNetworkDiagnostics(snap);

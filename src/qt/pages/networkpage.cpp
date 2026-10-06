@@ -18,7 +18,10 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QTableWidget>
+#include <QShowEvent>
 #include <QTimer>
+
+#include <algorithm>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -465,8 +468,20 @@ void NetworkPage::onMapPeerClicked(int index)
     }
 }
 
+void NetworkPage::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    if (m_stale) refresh();
+}
+
 void NetworkPage::refresh()
 {
+    // Status changes several times a second; a hidden page only notes that it is stale.
+    if (!isVisibleTo(window())) {
+        m_stale = true;
+        return;
+    }
+    m_stale = false;
     m_last_update = QDateTime::currentDateTime();
     const auto& status = m_model->status();
     const auto& diag = m_model->networkDiagnostics();
@@ -515,6 +530,7 @@ void NetworkPage::refresh()
     m_metric_protection_sub->setText(tr("Own encrypted publications"));
 
     // 7. Process peers
+    const auto previous_peers = m_peers;
     m_peers.clear();
     for (const auto& p : diag.peers) {
         CybouPeerItem item;
@@ -541,6 +557,14 @@ void NetworkPage::refresh()
         }
         m_peers.append(item);
     }
+
+    // The table and details are rebuilt only when the observed peers change.
+    const auto same_peer = [](const CybouPeerItem& a, const CybouPeerItem& b) {
+        return a.endpoint == b.endpoint && a.advertised_height == b.advertised_height && a.storage_id == b.storage_id;
+    };
+    if (status.finalized_height == m_table_height &&
+        std::equal(m_peers.begin(), m_peers.end(), previous_peers.begin(), previous_peers.end(), same_peer)) return;
+    m_table_height = status.finalized_height;
 
     // 8. Update map
     m_map->setPeers(m_peers);
@@ -579,15 +603,13 @@ void NetworkPage::refresh()
 
 void NetworkPage::updateDetails()
 {
-    while (QLayoutItem* item = m_details_layout->takeAt(0)) {
-        if (QWidget* w = item->widget()) {
-            w->hide();
-            w->deleteLater();
-        }
-        delete item;
-    }
-
+    // Rows are nested layouts whose labels belong to the container: deleting only
+    // the layout items left every old label alive, piling up thousands of
+    // siblings until painting overflowed the stack. Delete the labels themselves.
     QWidget* parent = m_details_layout->parentWidget();
+    qDeleteAll(parent->findChildren<QWidget*>(Qt::FindDirectChildrenOnly));
+    while (QLayoutItem* item = m_details_layout->takeAt(0)) delete item;
+
     if (m_selected_peer_index < 0 || m_selected_peer_index >= m_peers.size()) {
         auto* empty_lbl = MutedText(tr("Select a peer from the list or map to view connection details."), parent);
         m_details_layout->addWidget(empty_lbl);

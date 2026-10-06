@@ -73,9 +73,16 @@ public:
     QTableWidget* tableWidget() const { return m_table; }
     QWidget* detailsWidget() const { return m_details_card; }
 
+protected:
+    void showEvent(QShowEvent* event) override;
+
 private:
     void onTableSelectionChanged();
     void onMapPeerClicked(int index);
+    /** A refresh was skipped while the page was hidden. */
+    bool m_stale{true};
+    /** Local tip the peer table was built for (its lag column depends on it). */
+    quint64 m_table_height{0};
 
     CybouDesktopModel* const m_model;
     QVector<CybouPeerItem> m_peers;
