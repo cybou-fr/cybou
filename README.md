@@ -17,7 +17,7 @@ contient le client de bureau, le nœud, le protocole et leurs tests.
   que les racines Merkle et les capsules des destinataires. Le stockage est payé
   par un bail et répliqué sur deux nœuds distants.
 - **Finalité.** Une clé PoA fixée par la genèse signe les blocs ; chaque nœud
-  réexécute tout et vérifie les signatures. Ce n'est pas un consensus BFT.
+  réexécute tout et vérifie les signatures.
 - **Réseau.** TLS 1.3 avec échange hybride `X25519MLKEM768` ; pairs admis
   uniquement depuis la France.
 
