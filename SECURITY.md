@@ -32,7 +32,7 @@ reproduce. Do not include real user secrets or recovery phrases.
   bootstrap or PoA machines. Network and `cybou.cybou` private provisioning
   material stays only under gitignored `/private/`.
 - Full nodes check genesis signatures, both PoA signature components, operation
-  execution, state roots, and Validation signatures independently.
+  execution and state roots independently.
 - Identity Recovery, Authorization, KEM, Network Key, PoA, Release Signing
   and Treasury have separate key purposes and material. No classical-only
   production signature fallback is permitted.

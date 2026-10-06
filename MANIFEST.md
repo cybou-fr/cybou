@@ -9,10 +9,10 @@ editing an included file.
 | File | Lines | SHA-256 prefix |
 |---|---:|---|
 | AGENTS.md | 498 | 8ae7081c016ea44b |
-| CONTRIBUTING.md | 50 | cf30228b23288058 |
+| CONTRIBUTING.md | 50 | 3a405dece6979d6c |
 | INSTALL.md | 37 | 21b5ef259577e6d2 |
 | README.md | 149 | 853e25a3bb20b007 |
-| SECURITY.md | 60 | 4e2f4c9f89344ebe |
+| SECURITY.md | 60 | 2b778dc87a772ffa |
 | docs/cybou/00_VISION.md | 73 | af47eb77b0dcd95d |
 | docs/cybou/02_ARCHITECTURE.md | 219 | fefba0ae9deb518d |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 213 | fb7b33f5a6ff1f0a |
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 70 | 4feac40ef33e8818 |
 | docs/cybou/24_DECISIONS.md | 227 | eb901b05675db65a |
 | docs/cybou/25_OPEN_QUESTIONS.md | 107 | 1f42abea9b07a437 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 406 | 742c110fdcb3a982 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 640 | d3dfe4a4cc8c5158 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 48 | 1e075f96cb806c7d |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 102 | 6f6310ef10b1a1ea |
@@ -66,7 +66,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/P2P_TRANSPORT.md | 110 | 88cb16883ec61588 |
+| docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
 | docs/cybou/README.md | 83 | 47725f729289ea91 |

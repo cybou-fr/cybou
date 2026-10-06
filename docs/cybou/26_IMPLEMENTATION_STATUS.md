@@ -3,6 +3,24 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Build, peer admission and battle evidence (2026-10-06)
+
+- The build uses CYBOU CMake modules only (`cmake/CybouBuildType`, `CybouFlags`,
+  `CybouTargets`, `ThirdParty`). Every CYBOU library and executable links
+  `core_interface`: stack protector, `_FORTIFY_SOURCE=3`, CET, ASLR/NX/high-entropy
+  VA, relro and warnings. The tree builds without warnings with MinGW GCC 13.
+- A node accepts 128 inbound sessions, at most 32 per public IP (was 8); local
+  addresses are not limited per address. Deployed to the DEV VPS bootstrap and
+  both storage peers.
+- The desktop network page no longer leaks peer-detail labels (a stack overflow
+  while painting) and refreshes only while shown. The status refresh no longer
+  re-enables the PoA signer on the GUI thread.
+- `tools/battle/battle_test.py` adds a clean-machine restore phase (each Identity
+  restarts from its vault alone and reads every protected file and incoming mail
+  back from the network) and a PASS/FAIL verdict with exit code. Provider loss,
+  repair and settlement are not yet exercised live; a full run with the restore
+  phase has not completed yet.
+
 ## Bounded console and redundant diagnostics removal (2026-10-06)
 
 The duplicate diagnostics text window and its entry points are removed. Its six

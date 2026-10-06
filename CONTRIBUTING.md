@@ -20,9 +20,9 @@ code from integration and deployment gates.
   using local Geo data (fails closed).
 - The finalizer uses the genesis-authorized hybrid-PQ PoA key operated from the
   Central Authority desktop. This is single-operator finality, not BFT consensus.
-  Every full node executes every candidate operation. Identities with finalized
-  AUTH > 10,000,000 may add Validation signatures after their own node validated
-  an operation; signatures are evidence only and PoA always re-executes.
+  Every full node, the PoA included, executes every candidate operation. There
+  is no AUTH or Validation (DEC-284): fees, storage rent and relay proof-of-work
+  price spam.
 - Generic `RootPublication` is the only application-content publication
   operation. Mail, Files, Backup, filenames, recipients, graph edges, and
   application schemas are private encrypted content.

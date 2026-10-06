@@ -484,7 +484,7 @@ const translations = {
     eCard3Desc: "Tous les échanges sont chiffrés de bout en bout sur les terminaux des employés via OpenSSL v3.5.2+ (ML-KEM-768 et ML-DSA). Même vos administrateurs système ne peuvent pas lire les correspondances confidentielles des comités de direction sans clé de capsule légitime.",
 
     eCard4Pill: "Résilience P2P",
-    eCard4Badge: "Zéro SPOF",
+    eCard4Badge: "Stockage répliqué",
     eCard4Title: "Stockage Distribué sans Point Unique de Panne",
     eCard4Desc: "Vos fichiers et messages chiffrés sont répliqués sur vos serveurs. Confirmations signées, audits de portions aléatoires et téléchargements vérifiés par BLAKE3 contrôlent les copies. Les pertes sont réparées à partir d’une copie valide lorsqu’un fournisseur est disponible.",
 
@@ -590,7 +590,7 @@ const translations = {
     ePriceT1F1: "Postes CYBOU Desktop illimités (zéro licence par utilisateur)",
     ePriceT1F2: "Genèse d'entreprise dédiée & Network ID cryptographiquement isolé",
     ePriceT1F3: "Station d'autorité PoA durcie sous contrôle direct de la DSI",
-    ePriceT1F4: "Cluster de 4 nœuds bootstrap & stockage répliqué (zéro SPOF)",
+    ePriceT1F4: "Cluster de 4 nœuds bootstrap & stockage répliqué sur plusieurs nœuds",
     ePriceT1F5: "Procédures PRA/PCA déterministes documentées & formation DSI",
     ePriceT2Badge: "Accompagnement VIP & Support Intégral",
     ePriceT2Title: "Appliance Clé-en-main & Support VIP",
@@ -768,7 +768,7 @@ const translations = {
     cmpSynCol2Title: "Dropbox / Google / Microsoft",
     cmpSynCol2Desc: "Pratiques pour un usage grand public non critique ou des documents non confidentiels. Totalement inadaptés pour les secrets d'affaires, les brevets, les données médicales HDS ou les organisations soumises à la directive NIS 2 et au RGPD souverain.",
     cmpSynCol3Title: "CYBOU Desktop & Entreprise",
-    cmpSynCol3Desc: "<strong>Le choix incontournable</strong> dès lors que la confidentialité, l'hébergement souverain hors juridiction cloud américaine, la résilience sans SPOF et la préparation à l'ère post-quantique sont des impératifs non négociables.",
+    cmpSynCol3Desc: "<strong>Le choix incontournable</strong> dès lors que la confidentialité, l'hébergement souverain hors juridiction cloud américaine, la résilience du stockage répliqué et la préparation à l'ère post-quantique sont des impératifs non négociables.",
     cmpCtaTitle: "Prêt à tester l'alternative souveraine CYBOU ?",
     cmpCtaDesc: "Explorez notre code open-source sur GitHub ou découvrez comment déployer un réseau privé d'entreprise dédié.",
     cmpCtaBtnEnterprise: "Solutions Entreprise",
@@ -1249,7 +1249,7 @@ const translations = {
     eCard3Desc: "All communications and files are encrypted end-to-end on employee endpoints via OpenSSL v3.5.2+ (ML-KEM-768 and ML-DSA). Even system administrators cannot read executive board correspondence without legitimate capsule keys.",
 
     eCard4Pill: "P2P Resilience",
-    eCard4Badge: "Zero SPOF",
+    eCard4Badge: "Replicated storage",
     eCard4Title: "Distributed Storage with No Single Point of Failure",
     eCard4Desc: "Your encrypted files and messages are replicated across your servers. Signed receipts, random-offset audits and BLAKE3-verified downloads check the copies. Losses are repaired from a valid copy when a provider is available.",
 
@@ -1355,7 +1355,7 @@ const translations = {
     ePriceT1F1: "Unlimited CYBOU Desktop workstations (zero recurring license per user)",
     ePriceT1F2: "Dedicated private enterprise genesis & cryptographically isolated Network ID",
     ePriceT1F3: "Hardened PoA authority station under direct IT & SecOps control",
-    ePriceT1F4: "Cluster of 4 bootstrap & replicated storage nodes (zero SPOF)",
+    ePriceT1F4: "Cluster of 4 bootstrap & replicated storage nodes",
     ePriceT1F5: "Deterministic DRP/BCP procedures documentation & IT admin training",
     ePriceT2Badge: "VIP Guidance & Full Support",
     ePriceT2Title: "Turnkey Appliance & VIP Support",
@@ -1533,7 +1533,7 @@ const translations = {
     cmpSynCol2Title: "Dropbox / Google / Microsoft",
     cmpSynCol2Desc: "Convenient for non-critical consumer workflows or unclassified documents. Completely inappropriate for trade secrets, patent filings, HDS health records, or entities subject to NIS 2 and sovereign GDPR.",
     cmpSynCol3Title: "CYBOU Desktop & Enterprise",
-    cmpSynCol3Desc: "<strong>The definitive choice</strong> whenever airtight confidentiality, sovereign hosting outside US cloud jurisdiction, zero-SPOF resilience, and future-proof post-quantum security are non-negotiable mandates.",
+    cmpSynCol3Desc: "<strong>The definitive choice</strong> whenever airtight confidentiality, sovereign hosting outside US cloud jurisdiction, replicated-storage resilience, and future-proof post-quantum security are non-negotiable mandates.",
     cmpCtaTitle: "Ready to Experience the Sovereign Alternative with CYBOU?",
     cmpCtaDesc: "Explore our open-source codebase on GitHub or discover how to deploy a dedicated enterprise private network.",
     cmpCtaBtnEnterprise: "Enterprise Solutions",

@@ -72,6 +72,10 @@ Production/DEV inbound and outbound admission remains France-only, with local
 Geo data failing closed. Development uses the same policy. Local
 rate limits protect connections, operation execution and storage proof signing.
 
+A node accepts at most 128 inbound sessions, and at most 32 from one public IP:
+an office, shared Wi-Fi or carrier-grade NAT puts many users behind one address.
+Local-network addresses (DEC-285) are not limited per address.
+
 ## Compact message assignments
 
 | ID | Message | ID | Message |
