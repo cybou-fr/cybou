@@ -66,6 +66,12 @@ struct Metrics {
     uint64_t expected_files{0}, recovered_files{0}, expected_mail{0}, recovered_mail{0};
 };
 Metrics metrics;
+std::string Hex(const cybou::ChunkId& id) {
+    static constexpr char digits[]="0123456789abcdef";
+    std::string out;
+    for (auto byte : id) { out+=digits[byte>>4]; out+=digits[byte&15]; }
+    return out;
+}
 struct Client {
     std::atomic_bool caught_up_known_peers{false};
     std::atomic<unsigned> last_sync_status{0};
@@ -82,6 +88,8 @@ struct Client {
     std::vector<std::string> jobs;
     std::map<std::string,cybou::PublicationJobPhase> phases;
     std::set<cybou::PrivateItemId> verified_files;
+    /** Restore diagnostics: the first chunk each unread file still misses. */
+    std::map<std::string,std::string> missing_chunk_of;
     std::vector<cybou::PrivateItemId> expected_incoming_mail;
     std::shared_ptr<cybou::EventWriter> events;
     std::chrono::steady_clock::time_point next_audit{std::chrono::steady_clock::now()+30s};
@@ -213,6 +221,7 @@ struct Client {
                 *file.item.content_key, *file.item.root_chunk_id,
                 [&](const cybou::ChunkId& id) {
                     auto bytes=storage->Fetch(id);
+                    if (!bytes && !missing_chunk) missing_chunk_of[file.item.name]=Hex(id);
                     if (!bytes) missing_chunk=true;
                     else ++fetched_chunks;
                     return bytes;
@@ -224,6 +233,7 @@ struct Client {
                     return true;
                 }, file.item.logical_size);
             if (missing_chunk) { done=false; continue; }
+            missing_chunk_of.erase(file.item.name);
             if (!written || offset != file.item.logical_size) throw std::runtime_error(
                 "synthetic file recovery failed: expected="+std::to_string(file.item.logical_size)+
                 " decoded="+std::to_string(offset)+" fetched_chunks="+std::to_string(fetched_chunks)+
@@ -544,6 +554,10 @@ int main(int argc,char* argv[]) {
             for (const auto& item : client->application->ListMail()) if (!item.outgoing) ++mail;
             if (profile=="recovery") {
                 metrics.recovered_files+=std::min<uint64_t>(client->verified_files.size(),client->expect_files);
+                // Which files a restore could not read, and how many providers it could ask.
+                const auto providers=client->transport->Providers().size();
+                for (const auto& [name,chunk] : client->missing_chunk_of)
+                    std::cerr << "unrecovered file=" << name << " missing_chunk=" << chunk << " providers=" << providers << '\n';
                 metrics.recovered_mail+=std::min(mail,client->expect_mail);
             } else if (submitted>0) {
                 // Only a load run defines what a restore must read back; Identity creation does not.

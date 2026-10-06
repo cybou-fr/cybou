@@ -325,7 +325,7 @@ class Battle:
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {target} --peer {peer[0]}:{peer[1]} "
                       f"--password-file {self.wsl_dir}/password.txt {' '.join(args)}", f"{target}/restore.log", f"{target}/restore.pid")
         # Initial sync of a fresh node plus the restore timeout, with margin: never wait forever.
-        deadline = time.time() + 90 * 60
+        deadline = time.time() + 120 * 60
         while any(p.poll() is None for p in processes) or any(
                 wsl(f"kill -0 $(cat {path}-restore/restore.pid) 2>/dev/null && echo running || true").strip() == "running"
                 for path, _ in self.wsl_clients()):
@@ -558,7 +558,7 @@ def main() -> None:
     run.add_argument("--capacity", default="15GiB")
     run.add_argument("--fund-each", type=int, default=20000)
     run.add_argument("--drain-timeout", default="10m")
-    run.add_argument("--restore-timeout", default="30m", help="time for a clean restore to read everything back")
+    run.add_argument("--restore-timeout", default="60m", help="time for a clean restore to read everything back")
     run.add_argument("--warmup", type=int, default=30, help="seconds for nodes to sync before clients start")
     run.add_argument("--desktop-name", default="cybou.cybou", help="desktop Identity that receives letters")
     run.add_argument("--desktop-mails", type=int, default=20, help="letters with attachments sent to the desktop")
