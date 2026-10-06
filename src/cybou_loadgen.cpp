@@ -431,11 +431,18 @@ int main(int argc,char* argv[]) {
                 }
                 if (!result) { ++metrics.failed[actual]; throw std::runtime_error("wallet load operation failed: error="+std::to_string(static_cast<unsigned>(result.error))+" "+result.error_message); }
                 // Do not allocate a replacement nonce while delivery is uncertain.
-                auto deadline=std::chrono::steady_clock::now()+120s;
+                // A finality stall is measured, not fatal: one slow block must not end the run.
+                auto deadline=std::chrono::steady_clock::now()+600s;
+                bool finalized{true};
                 while (!stop && client.node->Runtime().GetOperationStatus(result.op_id).kind!=cybou::OperationStatusKind::FINALIZED) {
                     client.node->Runtime().GetIdentityOperationCoordinator(client.identity->GetKeyStore()).GetStatus(result.op_id);
-                    if (std::chrono::steady_clock::now()>deadline) throw std::runtime_error("wallet finality timeout");
+                    if (std::chrono::steady_clock::now()>deadline) { finalized=false; break; }
                     std::this_thread::sleep_for(100ms);
+                }
+                if (!finalized) {
+                    ++metrics.failed["wallet_finality_timeout"];
+                    ++submitted; next+=std::chrono::microseconds{1000000/rate};
+                    continue;
                 }
                 metrics.wallet_finality.Add(Ms(Clock::now()-submitted_at));
             } else {
@@ -538,7 +545,8 @@ int main(int argc,char* argv[]) {
             if (profile=="recovery") {
                 metrics.recovered_files+=std::min<uint64_t>(client->verified_files.size(),client->expect_files);
                 metrics.recovered_mail+=std::min(mail,client->expect_mail);
-            } else {
+            } else if (submitted>0) {
+                // Only a load run defines what a restore must read back; Identity creation does not.
                 std::ofstream expected{client->dir/"expected.txt",std::ios::trunc};
                 expected << "files " << files << "\nmail " << mail << '\n';
             }

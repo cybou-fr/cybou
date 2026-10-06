@@ -324,9 +324,14 @@ class Battle:
             args[args.index("--drain-timeout") + 1] = self.args.restore_timeout
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {target} --peer {peer[0]}:{peer[1]} "
                       f"--password-file {self.wsl_dir}/password.txt {' '.join(args)}", f"{target}/restore.log", f"{target}/restore.pid")
+        # Initial sync of a fresh node plus the restore timeout, with margin: never wait forever.
+        deadline = time.time() + 90 * 60
         while any(p.poll() is None for p in processes) or any(
                 wsl(f"kill -0 $(cat {path}-restore/restore.pid) 2>/dev/null && echo running || true").strip() == "running"
                 for path, _ in self.wsl_clients()):
+            if time.time() > deadline:
+                log("restore: time limit reached; unfinished restores count as failed")
+                break
             self.sample()
             time.sleep(10)
 
