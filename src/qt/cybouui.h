@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUUI_H
@@ -232,7 +232,7 @@ inline QPixmap glyphWithBadge(Glyph glyph, const QSize& size, const QColor& stro
     painter.setRenderHint(QPainter::Antialiasing);
     painter.drawPixmap(0, 8, base);
 
-    const QRectF badge_rect{QPointF{size.width() - 6, 0}, QSizeF{16, 16}};
+    const QRectF badge_rect{QPointF(size.width() - 6, 0), QSizeF{16, 16}};
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor{CybouTheme::BADGE_RED});
     painter.drawEllipse(badge_rect);
@@ -335,7 +335,7 @@ inline QPixmap avatarPixmap(const QString& initials, QRgb background, int size)
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setPen(Qt::NoPen);
     painter.setBrush(CybouTheme::color(background));
-    painter.drawEllipse(QRectF{QPointF{0, 0}, QSizeF{size, size}}.adjusted(0.5, 0.5, -0.5, -0.5));
+    painter.drawEllipse(QRectF{QPointF{0, 0}, QSizeF(size, size)}.adjusted(0.5, 0.5, -0.5, -0.5));
     painter.setPen(QPen{QColor{0xffffff}});
     QFont font{painter.font()};
     font.setPixelSize(size * 0.42);
@@ -681,10 +681,10 @@ inline QString relTime(const QDateTime& when, const QDateTime& now = QDateTime::
 {
     if (!when.isValid()) return {};
     const qint64 seconds = when.secsTo(now);
-    if (seconds < 60) return QStringLiteral("just now");
-    if (seconds < 3600) return QStringLiteral("%1 min ago").arg(seconds / 60);
-    if (seconds < 86400) return QStringLiteral("%1 h ago").arg(seconds / 3600);
-    if (seconds < 86400 * 7) return QStringLiteral("%1 d ago").arg(seconds / 86400);
+    if (seconds < 60) return QCoreApplication::translate("CybouUi", "just now");
+    if (seconds < 3600) return QCoreApplication::translate("CybouUi", "%1 min ago").arg(seconds / 60);
+    if (seconds < 86400) return QCoreApplication::translate("CybouUi", "%1 h ago").arg(seconds / 3600);
+    if (seconds < 86400 * 7) return QCoreApplication::translate("CybouUi", "%1 d ago").arg(seconds / 86400);
     return when.toString(QStringLiteral("d MMM"));
 }
 

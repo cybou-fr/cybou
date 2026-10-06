@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_TEST_CYBOUSHELLTESTS_H
@@ -83,6 +83,17 @@ private Q_SLOTS:
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();
     void rotationKeepsLiveSessionWorking();
+    void searchScopeAndIncrementalIndex();
+    void walletAndAuthorityPreserveRowsWithoutChurn();
+    void relativeTimeLocalization();
+    void appearanceSwitchPreservesFullContext();
+    void filesProtectionAndOfflineDownload();
+    void walletForecastAndTransferReview();
+    void assuranceAndRestoreResponsiveness();
+    void networkPageAndSchematicFranceMap();
+    void authorityExplorerAndEvidenceWorkspace();
+    void ownContentInspectorAndBoundedConsole();
+    void assuranceLifecycleAndRecoveryGates();
 
 private:
     std::unique_ptr<CybouMainWindow> makeWindow();

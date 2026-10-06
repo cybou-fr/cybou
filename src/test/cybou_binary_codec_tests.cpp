@@ -19,7 +19,7 @@ BOOST_AUTO_TEST_CASE(rejects_unbounded_lengths_truncation_and_non_boolean_flags)
     BOOST_CHECK_THROW(trailing.Finish(), std::invalid_argument);
 }
 BOOST_AUTO_TEST_CASE(utf8_rejects_overlong_surrogate_truncated_and_out_of_range_sequences) {
-    for (const auto text : {std::string{"\xc0\x80"}, std::string{"\xed\xa0\x80"},
+    for (const auto& text : {std::string{"\xc0\x80"}, std::string{"\xed\xa0\x80"},
         std::string{"\xf4\x90\x80\x80"}, std::string{"\xe2\x82"}}) {
         BOOST_CHECK(!cybou::IsValidUtf8(text));
         cybou::BinaryWriter writer;

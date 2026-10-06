@@ -72,6 +72,8 @@ add_library(cybou_qt STATIC
   cybouuifixtures.h
   pages/diagnosticspage.cpp
   pages/diagnosticspage.h
+  pages/networkpage.cpp
+  pages/networkpage.h
   pages/networkauthoritypage.cpp
   pages/networkauthoritypage.h
   pages/emailpage.cpp
@@ -94,6 +96,8 @@ add_library(cybou_qt STATIC
   pages/walletpage.h
   recoveryphrasedialog.cpp
   recoveryphrasedialog.h
+  cybouconsoledialog.cpp
+  cybouconsoledialog.h
   ${CYBOU_QRC}
 )
 target_compile_definitions(cybou_qt PUBLIC QT_NO_KEYWORDS QT_USE_QSTRINGBUILDER)

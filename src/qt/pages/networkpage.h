@@ -1,0 +1,110 @@
+// Copyright (c) 2026 Stanislav Saveliev
+// SPDX-License-Identifier: Apache-2.0
+
+#ifndef CYBOU_QT_PAGES_NETWORKPAGE_H
+#define CYBOU_QT_PAGES_NETWORKPAGE_H
+
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QPointF>
+#include <QString>
+#include <QVector>
+#include <QWidget>
+
+#include <functional>
+
+class CybouDesktopModel;
+class QGridLayout;
+class QHBoxLayout;
+class QLabel;
+class QTableWidget;
+class QVBoxLayout;
+
+struct CybouPeerItem {
+    QString endpoint;
+    quint64 advertised_height{0};
+    QString storage_id;
+    bool is_lan{false};
+    QString classification;
+    QString region_label;
+    QPointF map_coord; // Normalized [0, 1] coordinate on the France map
+};
+
+class SchematicFranceMap final : public QWidget
+{
+    Q_DECLARE_TR_FUNCTIONS(SchematicFranceMap)
+
+public:
+    explicit SchematicFranceMap(QWidget* parent = nullptr);
+    ~SchematicFranceMap() override = default;
+
+    void setPeers(const QVector<CybouPeerItem>& peers);
+    void setSelectedPeer(int index);
+    int selectedPeer() const { return m_selected_index; }
+
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+
+    std::function<void(int)> on_peer_clicked;
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+
+private:
+    QVector<CybouPeerItem> m_peers;
+    int m_selected_index{-1};
+    QVector<QRectF> m_peer_hit_rects;
+};
+
+class NetworkPage final : public QWidget
+{
+    Q_DECLARE_TR_FUNCTIONS(NetworkPage)
+
+public:
+    explicit NetworkPage(CybouDesktopModel* model, QWidget* parent = nullptr);
+    ~NetworkPage() override = default;
+
+    int peerCount() const { return m_peers.size(); }
+    int selectedPeerIndex() const { return m_selected_peer_index; }
+    void selectPeer(int index);
+
+    SchematicFranceMap* mapWidget() const { return m_map; }
+    QTableWidget* tableWidget() const { return m_table; }
+    QWidget* detailsWidget() const { return m_details_card; }
+
+private:
+    void onTableSelectionChanged();
+    void onMapPeerClicked(int index);
+
+    CybouDesktopModel* const m_model;
+    QVector<CybouPeerItem> m_peers;
+    int m_selected_peer_index{-1};
+    QDateTime m_last_update;
+
+    // Header & summary
+    QLabel* m_scope_note{nullptr};
+    QLabel* m_metric_connectivity{nullptr};
+    QLabel* m_metric_connectivity_sub{nullptr};
+    QLabel* m_metric_height{nullptr};
+    QLabel* m_metric_height_sub{nullptr};
+    QLabel* m_metric_peers{nullptr};
+    QLabel* m_metric_peers_sub{nullptr};
+    QLabel* m_metric_storage{nullptr};
+    QLabel* m_metric_storage_sub{nullptr};
+    QLabel* m_metric_protection{nullptr};
+    QLabel* m_metric_protection_sub{nullptr};
+
+    // Main views
+    SchematicFranceMap* m_map{nullptr};
+    QTableWidget* m_table{nullptr};
+
+    // Details panel
+    QWidget* m_details_card{nullptr};
+    QVBoxLayout* m_details_layout{nullptr};
+
+    void refresh();
+    void updateDetails();
+};
+
+#endif // CYBOU_QT_PAGES_NETWORKPAGE_H

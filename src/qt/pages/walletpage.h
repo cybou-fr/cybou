@@ -1,10 +1,11 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_WALLETPAGE_H
 #define CYBOU_QT_PAGES_WALLETPAGE_H
 
 #include <QCoreApplication>
+#include <QMap>
 #include <QSet>
 #include <QWidget>
 
@@ -55,6 +56,7 @@ private:
     QLabel* m_send_status{nullptr};
     QPushButton* m_confirm{nullptr};
     QVBoxLayout* m_activity_rows{nullptr};
+    QMap<QString, QWidget*> m_activity_widgets;
     bool m_reviewing{false};
     QLabel* m_review{nullptr};
     QLabel* m_activity_empty{nullptr};

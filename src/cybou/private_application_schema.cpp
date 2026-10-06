@@ -104,7 +104,8 @@ template<typename T> void WriteOptional(BinaryWriter& writer, const std::optiona
     writer.U8(value.has_value()); if (value) writer.Fixed(*value);
 }
 template<typename T> std::optional<T> ReadOptional(BinaryReader& reader) {
-    if (!reader.Flag()) return std::nullopt; return reader.Fixed<T>();
+    if (!reader.Flag()) return std::nullopt;
+    return reader.Fixed<T>();
 }
 void Encode(BinaryWriter& writer, const MailMessage& mail) {
     Require(ValidMail(mail)); writer.U8(MAIL_TYPE);

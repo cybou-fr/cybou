@@ -218,7 +218,7 @@ QWidget* HomePage::buildDashboard()
     hero_text->addWidget(m_identity_name);
     hero_text->addWidget(HeroSubtitle(tr("Your CYBOU Identity"), hero));
     hero_layout->addLayout(hero_text, 1);
-    m_identity_state = Pill(tr("Protected"), Tint::Mint, hero);
+    m_identity_state = Pill(tr("Active"), Tint::Mint, hero);
     hero_layout->addWidget(m_identity_state, 0, Qt::AlignVCenter);
     auto* manage = new QPushButton{tr("Identity && Security"), hero};
     manage->setObjectName(QStringLiteral("secondaryButton"));
@@ -331,7 +331,7 @@ void HomePage::refresh()
     m_identity_name->setText(status.primary_name.isEmpty()
         ? CybouProduct::shortId(status.account_id) : status.primary_name);
     const bool attention = !status.sync_error.isEmpty();
-    m_identity_state->setText(attention ? tr("Needs attention") : tr("Protected"));
+    m_identity_state->setText(attention ? tr("Needs attention") : tr("Active"));
     m_identity_state->setProperty("tint", attention ? "amber" : "mint");
     m_identity_state->style()->unpolish(m_identity_state);
     m_identity_state->style()->polish(m_identity_state);
@@ -608,7 +608,7 @@ void HomePage::rebuildFirstSteps()
         }
     }
     if (open.contains(QStringLiteral("mail")))
-        step(tr("Send your first message"), tr("Mail is end-to-end encrypted and post-quantum protected."), tr("Compose"),
+        step(tr("Send your first message"), tr("Mail is end-to-end encrypted using hybrid post-quantum cryptography."), tr("Compose"),
             [this] { if (onCompose) onCompose(); });
     if (open.contains(QStringLiteral("files")))
         step(tr("Upload your first file"), tr("Files are encrypted on this computer before they leave it."), tr("Upload"),

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUMAINWINDOW_H
@@ -40,6 +40,7 @@ enum class CybouPage {
     Files,
     Wallet,
     Identity,
+    Network,
     Diagnostics,
     Settings,
     /** Only for the Identity proven from genesis to hold the PoA finalizer key. */
@@ -93,6 +94,7 @@ private:
     QLabel* m_header_title{nullptr};
     QLineEdit* m_global_search{nullptr};
     QCompleter* m_search_completer{nullptr};
+    QTimer* m_search_index_timer{nullptr};
     QLabel* m_status_dot{nullptr};
     QLabel* m_status_text{nullptr};
     QToolButton* m_identity_button{nullptr};
@@ -123,7 +125,9 @@ private:
     void applyStyle();
     void addPage(QWidget* page, bool scrolls);
     void refreshHeader();
+    void queueSearchIndexRebuild();
     void rebuildSearchIndex();
+    void updateSearchScope();
     void openSearchResult(const QString& kind, const QString& id);
     void submitSearch(const QString& text);
     void setSidebarCompact(bool compact);

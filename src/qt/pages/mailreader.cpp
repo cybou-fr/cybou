@@ -347,11 +347,11 @@ void MailReader::refresh()
 
     if (item->state == CybouContentState::Received) {
         // Finalized and opened here; the sender's storage durability is not claimed.
-        m_security->setText(tr("Protected end to end  •  Post-quantum protected  •  Network confirmed"));
+        m_security->setText(tr("End-to-end encrypted  •  Hybrid post-quantum  •  Network confirmed"));
     } else if (item->state == CybouContentState::Protected) {
-        m_security->setText(tr("Protected end to end  •  Post-quantum protected  •  Stored on the network"));
+        m_security->setText(tr("End-to-end encrypted  •  Hybrid post-quantum  •  Stored on the network"));
     } else if (outgoing) {
-        m_security->setText(tr("Protected end to end  •  %1").arg(item->draft ? CybouProduct::mailStateText(*item)
+        m_security->setText(tr("End-to-end encrypted  •  %1").arg(item->draft ? CybouProduct::mailStateText(*item)
             : CybouProduct::contentWithOperationText(item->state,
                 m_model->displayedOperationState(item->operation_id, item->operation_state), m_model->status().online)));
     } else {

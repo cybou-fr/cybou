@@ -16,13 +16,16 @@
 #include <qt/cybouuifixtures.h>
 #include <qt/pages/emailpage.h>
 #include <qt/pages/identitypage.h>
+#include <qt/pages/onboardingview.h>
 #include <qt/pages/homepage.h>
 #include <qt/pages/mailcompose.h>
 #include <qt/pages/mailreader.h>
 #include <qt/pages/storagepage.h>
 #include <qt/pages/diagnosticspage.h>
+#include <qt/pages/networkpage.h>
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/walletpage.h>
+#include <qt/cybouconsoledialog.h>
 #include <QTableWidget>
 #include <QProgressDialog>
 #include <QElapsedTimer>
@@ -224,7 +227,7 @@ void CybouShellTests::mainWindowStarts()
     QVERIFY(window);
     QVERIFY(window->centralWidget());
     QVERIFY(window->windowTitle().contains(QStringLiteral("CYBOU")));
-    QCOMPARE(window->pageCount(), 8);
+    QCOMPARE(window->pageCount(), 9);
     // The Network Authority entry exists only for the genesis-proven authority.
     auto* authority_nav = window->findChild<QAbstractButton*>(
         QStringLiteral("navButton%1").arg(static_cast<int>(CybouPage::NetworkAuthority)));
@@ -1330,7 +1333,7 @@ void CybouShellTests::darkAppearanceResolvesTokens()
     window->showPage(CybouPage::Files);
     window->reloadAppearance();
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
-    QCOMPARE(window->pageCount(), 8);
+    QCOMPARE(window->pageCount(), 9);
     window.reset();
     qunsetenv("CYBOU_APPEARANCE");
     CybouTheme::setAppearance(CybouTheme::Appearance::Light);
@@ -1348,7 +1351,8 @@ void CybouShellTests::languageSwitchRebuildsShell()
     QVERIFY(home);
     QCOMPARE(home->accessibleName(), QStringLiteral("Accueil"));
     window->desktopModel()->setNetworkAuthority(CybouNetworkAuthorityStatus{.proven = true});
-    auto* authority_nav = window->findChild<QToolButton*>(QStringLiteral("navButton7"));
+    auto* authority_nav = window->findChild<QToolButton*>(
+        QStringLiteral("navButton%1").arg(static_cast<int>(CybouPage::NetworkAuthority)));
     QVERIFY(authority_nav);
     QVERIFY(!authority_nav->isHidden());
     QCOMPARE(authority_nav->accessibleName(), QStringLiteral("Autorité centrale"));
@@ -1365,7 +1369,8 @@ void CybouShellTests::languageSwitchRebuildsShell()
     home = window->findChild<QToolButton*>(QStringLiteral("navButton0"));
     QVERIFY(home);
     QCOMPARE(home->accessibleName(), QStringLiteral("Home"));
-    authority_nav = window->findChild<QToolButton*>(QStringLiteral("navButton7"));
+    authority_nav = window->findChild<QToolButton*>(
+        QStringLiteral("navButton%1").arg(static_cast<int>(CybouPage::NetworkAuthority)));
     QVERIFY(authority_nav);
     QVERIFY(!authority_nav->isHidden());
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
@@ -2976,4 +2981,837 @@ void CybouShellTests::rotationKeepsLiveSessionWorking()
     QVERIFY(produce_until([&] { return note_item() && note_item()->state == CybouContentState::Protected; }));
     model.setApplicationBackend(nullptr);
 }
+
+void CybouShellTests::searchScopeAndIncrementalIndex()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    auto* search = window->globalSearch();
+    QVERIFY(search);
+
+    // Initial on Home/Mail: placeholder indicates Mail / global search.
+    window->showPage(CybouPage::Home);
+    QVERIFY(search->placeholderText().contains(QStringLiteral("mail"), Qt::CaseInsensitive));
+
+    // Switch to Files: placeholder & tooltip adapt to current Files view.
+    window->showPage(CybouPage::Files);
+    QVERIFY(search->placeholderText().contains(QStringLiteral("Files"), Qt::CaseInsensitive) ||
+            search->placeholderText().contains(QStringLiteral("folder"), Qt::CaseInsensitive));
+    QVERIFY(search->toolTip().contains(QStringLiteral("Files"), Qt::CaseInsensitive));
+
+    // Switch to Wallet: placeholder reverts to Mail scope.
+    window->showPage(CybouPage::Wallet);
+    QVERIFY(search->placeholderText().contains(QStringLiteral("mail"), Qt::CaseInsensitive));
+
+    // Bounded completer:
+    auto* completer = search->completer();
+    QVERIFY(completer);
+    auto* comp_model = completer->model();
+    QVERIFY(comp_model);
+    QVERIFY(comp_model->rowCount() > 0);
+    QVERIFY(comp_model->rowCount() <= 300);
+
+    // Enter while on Files page searches Files and stays on Files page.
+    window->showPage(CybouPage::Files);
+    search->setText(QStringLiteral("budget"));
+    Q_EMIT search->returnPressed();
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+}
+
+void CybouShellTests::walletAndAuthorityPreserveRowsWithoutChurn()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    window->showPage(CybouPage::Wallet);
+    window->show();
+
+    auto* wallet = dynamic_cast<WalletPage*>(window->page(CybouPage::Wallet));
+    QVERIFY(wallet);
+
+    QPointer<QWidget> wallet_row;
+    for (auto* w : wallet->findChildren<QWidget*>()) {
+        if (w->property("walletEntryId").toString() == QStringLiteral("w1")) {
+            wallet_row = w;
+            break;
+        }
+    }
+    QVERIFY(!wallet_row.isNull());
+
+    // Emitting mailChanged or filesChanged should NOT cause wallet activity rebuild.
+    Q_EMIT model->mailChanged();
+    Q_EMIT model->filesChanged();
+    QCoreApplication::processEvents();
+    QVERIFY(!wallet_row.isNull());
+
+    // Updating wallet entries in model preserves existing row widget pointer.
+    auto entries = model->walletEntries();
+    QVERIFY(!entries.isEmpty());
+    entries[0].counterparty_name = QStringLiteral("updated.cybou");
+    model->setWalletEntries(entries);
+    QCoreApplication::processEvents();
+    QVERIFY(!wallet_row.isNull());
+
+    // Switch to NetworkAuthorityPage.
+    CybouNetworkAuthorityStatus authority;
+    authority.proven = true;
+    authority.signer_enabled = true;
+    authority.finalizer = CybouFinalizerState::Finalizing;
+    authority.finalized_height = 100;
+    model->setNetworkAuthority(authority);
+    window->showPage(CybouPage::NetworkAuthority);
+    auto* auth = dynamic_cast<NetworkAuthorityPage*>(window->page(CybouPage::NetworkAuthority));
+    QVERIFY(auth);
+
+    QLabel* spendable_label = nullptr;
+    for (auto* l : auth->findChildren<QLabel*>()) {
+        if (l->text().contains(QStringLiteral("Spendable"), Qt::CaseInsensitive) ||
+            l->text().contains(QStringLiteral("disponible"), Qt::CaseInsensitive)) {
+            spendable_label = l;
+            break;
+        }
+    }
+    QVERIFY(spendable_label != nullptr);
+    QPointer<QLabel> guard{spendable_label};
+
+    // Re-triggering authority changed signal (refresh) preserves permanent widgets without deletion.
+    model->setNetworkAuthority(authority);
+    QCoreApplication::processEvents();
+    QVERIFY(!guard.isNull());
+}
+
+void CybouShellTests::relativeTimeLocalization()
+{
+    auto window = makeWindow();
+    window->setLanguage(QStringLiteral("fr"));
+    const auto now = QDateTime::currentDateTime();
+    QCOMPARE(CybouUi::relTime(now, now), QStringLiteral("à l'instant"));
+    QCOMPARE(CybouUi::relTime(now.addSecs(-120), now), QStringLiteral("il y a 2 min"));
+    QCOMPARE(CybouUi::relTime(now.addSecs(-7200), now), QStringLiteral("il y a 2 h"));
+    QCOMPARE(CybouUi::relTime(now.addDays(-3), now), QStringLiteral("il y a 3 j"));
+
+    window->setLanguage(QStringLiteral("en"));
+    QCOMPARE(CybouUi::relTime(now, now), QStringLiteral("just now"));
+    QCOMPARE(CybouUi::relTime(now.addSecs(-120), now), QStringLiteral("2 min ago"));
+    QCOMPARE(CybouUi::relTime(now.addSecs(-7200), now), QStringLiteral("2 h ago"));
+    QCOMPARE(CybouUi::relTime(now.addDays(-3), now), QStringLiteral("3 d ago"));
+}
+
+void CybouShellTests::appearanceSwitchPreservesFullContext()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+
+    // 1. Setup Mail context: Archive folder, search "dinner", open message "m-dinner" in reader
+    window->showPage(CybouPage::Mail);
+    auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QVERIFY(mail);
+    mail->setView(EmailPage::View::Archive);
+    mail->setSearchText(QStringLiteral("dinner"));
+    mail->openMessage(QStringLiteral("m-dinner"));
+    QCOMPARE(mail->view(), EmailPage::View::Archive);
+    QCOMPARE(mail->searchText(), QStringLiteral("dinner"));
+    QCOMPARE(mail->currentMessageId(), QStringLiteral("m-dinner"));
+
+    // 2. Setup Files context: open folder "f-docs", open details for "f-budget", enable Advanced
+    window->showPage(CybouPage::Files);
+    auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    files->openFolder(QStringLiteral("f-docs"));
+    files->setSearchText(QStringLiteral("budget"));
+    files->showDetails(QStringLiteral("f-budget"), true);
+    QCOMPARE(files->currentFolder(), QStringLiteral("f-docs"));
+    QCOMPARE(files->searchText(), QStringLiteral("budget"));
+    QCOMPARE(files->detailsId(), QStringLiteral("f-budget"));
+    QVERIFY(files->isDetailsVisible());
+    QVERIFY(files->isDetailsAdvanced());
+
+    // 3. Setup global search text
+    auto* search = window->globalSearch();
+    QVERIFY(search);
+    search->setText(QStringLiteral("global query"));
+
+    // 4. Trigger appearance reload (rebuilds entire shell)
+    window->reloadAppearance();
+
+    // Verify current page is still Files
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+
+    // Verify global search text preserved
+    search = window->globalSearch();
+    QVERIFY(search);
+    QCOMPARE(search->text(), QStringLiteral("global query"));
+
+    // Verify Files state preserved
+    files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    QCOMPARE(files->currentFolder(), QStringLiteral("f-docs"));
+    QCOMPARE(files->searchText(), QStringLiteral("budget"));
+    QCOMPARE(files->detailsId(), QStringLiteral("f-budget"));
+    QVERIFY(files->isDetailsVisible());
+    QVERIFY(files->isDetailsAdvanced());
+
+    // Verify Mail state preserved
+    mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QVERIFY(mail);
+    QCOMPARE(mail->view(), EmailPage::View::Archive);
+    QCOMPARE(mail->searchText(), QStringLiteral("dinner"));
+    QCOMPARE(mail->currentMessageId(), QStringLiteral("m-dinner"));
+    QVERIFY(mail->isDetailOpen());
+}
+
+void CybouShellTests::filesProtectionAndOfflineDownload()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    window->showPage(CybouPage::Files);
+    window->show();
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+
+    // f-archive is Securing (state != Protected), but available_offline is true.
+    const auto* archive = model->fileItem(QStringLiteral("f-archive"));
+    QVERIFY(archive != nullptr);
+    QCOMPARE(archive->state, CybouContentState::Securing);
+    QVERIFY(archive->available_offline);
+    QCOMPARE(archive->min_remote_replicas, 1);
+    QCOMPARE(archive->remote_replica_target, 2);
+
+    files->showDetails(QStringLiteral("f-archive"));
+    QVERIFY(files->isDetailsVisible());
+
+    // Download button MUST be enabled because file is available locally on this computer
+    QPushButton* dl = nullptr;
+    for (auto* btn : files->findChildren<QPushButton*>()) {
+        if (btn->property("cybouId").toString() == QLatin1String("fileDownload")) {
+            dl = btn;
+            break;
+        }
+    }
+    QVERIFY(dl != nullptr);
+    QVERIFY(dl->isEnabled());
+
+    // Details must explain replication progress honestly
+    bool found_replicating_text = false;
+    for (const auto* label : files->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("Replicating to network"), Qt::CaseInsensitive) ||
+            label->text().contains(QStringLiteral("en cours"), Qt::CaseInsensitive)) {
+            found_replicating_text = true;
+            break;
+        }
+    }
+    QVERIFY(found_replicating_text);
+
+    // Responsive test: at 1040x720 window size with details panel open, Size column remains visible
+    window->resize(1040, 720);
+    QCoreApplication::processEvents();
+    auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+    QVERIFY(table != nullptr);
+    // Column 1 is SizeColumn (Name=0, Size=1, Modified=2, Status=3)
+    QVERIFY(!table->isColumnHidden(1));
+}
+
+void CybouShellTests::walletForecastAndTransferReview()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    window->showPage(CybouPage::Wallet);
+    window->show();
+    auto* wallet = dynamic_cast<WalletPage*>(window->page(CybouPage::Wallet));
+    QVERIFY(wallet);
+
+    // 1. Forecast text must scope to standard fees and note storage rent exclusion
+    auto* hint = wallet->findChild<QLabel*>(QStringLiteral("walletSystemHint"));
+    QVERIFY(hint != nullptr);
+    QVERIFY(hint->text().contains(QStringLiteral("standard fees"), Qt::CaseInsensitive) ||
+            hint->text().contains(QStringLiteral("frais standard"), Qt::CaseInsensitive));
+    QVERIFY(hint->text().contains(QStringLiteral("storage rent"), Qt::CaseInsensitive) ||
+            hint->text().contains(QStringLiteral("loyer de stockage"), Qt::CaseInsensitive));
+
+    // 2. Transfer review must explicitly identify Available Balance and irreversible finality
+    wallet->openSend(QStringLiteral("bobby.cybou"));
+    auto* amount = wallet->findChild<QLineEdit*>(QStringLiteral("walletAmount"));
+    QVERIFY(amount != nullptr);
+    amount->setText(QStringLiteral("50"));
+
+    // Click Review
+    QPushButton* confirm_btn = nullptr;
+    for (auto* btn : wallet->findChildren<QPushButton*>()) {
+        if (btn->property("cybouId").toString() == QLatin1String("walletConfirm")) {
+            confirm_btn = btn;
+            break;
+        }
+    }
+    QVERIFY(confirm_btn != nullptr);
+    QVERIFY(confirm_btn->isEnabled());
+    confirm_btn->click();
+
+    // Check review text
+    auto* review_label = wallet->findChild<QLabel*>(QStringLiteral("walletReview"));
+    QVERIFY(review_label != nullptr);
+    QVERIFY(review_label->isVisible());
+    QVERIFY(review_label->text().contains(QStringLiteral("Available Balance"), Qt::CaseInsensitive) ||
+            review_label->text().contains(QStringLiteral("solde disponible"), Qt::CaseInsensitive));
+    QVERIFY(review_label->text().contains(QStringLiteral("cannot be reversed"), Qt::CaseInsensitive) ||
+            review_label->text().contains(QStringLiteral("irréversibles"), Qt::CaseInsensitive) ||
+            review_label->text().contains(QStringLiteral("final"), Qt::CaseInsensitive));
+}
+
+void CybouShellTests::assuranceAndRestoreResponsiveness()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("empty")));
+    window->showPage(CybouPage::Home);
+    window->show();
+    auto* home = dynamic_cast<HomePage*>(window->page(CybouPage::Home));
+    QVERIFY(home);
+
+    auto* onboarding = dynamic_cast<OnboardingView*>(home->findChild<QWidget*>(QStringLiteral("onboarding")));
+    QVERIFY(onboarding != nullptr);
+
+    // 1. Check Restore welcome button has no protocol jargon ("mnemonic")
+    QPushButton* restore_btn = nullptr;
+    for (auto* btn : onboarding->findChildren<QPushButton*>()) {
+        if (btn->property("cybouId").toString() == QLatin1String("restoreIdentity")) {
+            restore_btn = btn;
+            break;
+        }
+    }
+    QVERIFY(restore_btn != nullptr);
+    QVERIFY(!restore_btn->text().contains(QStringLiteral("mnemonic"), Qt::CaseInsensitive));
+    QVERIFY(restore_btn->text().contains(QStringLiteral("recovery phrase"), Qt::CaseInsensitive) ||
+            restore_btn->text().contains(QStringLiteral("phrase de récupération"), Qt::CaseInsensitive));
+
+    // 2. Open restore screen and test Enter key navigation through the 24 words to password fields
+    restore_btn->click();
+    QCOMPARE(onboarding->screen(), OnboardingView::Screen::Restore);
+
+    auto* word0 = onboarding->findChild<QLineEdit*>(QStringLiteral("recoveryWord0"));
+    auto* word23 = onboarding->findChild<QLineEdit*>(QStringLiteral("recoveryWord23"));
+    auto* password = onboarding->findChild<QLineEdit*>(QStringLiteral("restorePassword"));
+    auto* confirm = onboarding->findChild<QLineEdit*>(QStringLiteral("restorePasswordConfirm"));
+    QVERIFY(word0 != nullptr);
+    QVERIFY(word23 != nullptr);
+    QVERIFY(password != nullptr);
+    QVERIFY(confirm != nullptr);
+
+    // Enter on word 23 must advance focus to restorePassword
+    word23->setFocus();
+    QTest::keyClick(word23, Qt::Key_Return);
+    QCOMPARE(window->focusWidget(), password);
+
+    // Enter on restorePassword must advance focus to restorePasswordConfirm
+    QTest::keyClick(password, Qt::Key_Return);
+    QCOMPARE(window->focusWidget(), confirm);
+
+    // 3. StoragePage encryption copy: no "recovery capsules", clear recovery phrase copy
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    window->showPage(CybouPage::Files);
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    files->showDetails(QStringLiteral("f-report"));
+    QVERIFY(files->isDetailsVisible());
+
+    bool found_clean_encryption = false;
+    for (const auto* label : files->findChildren<QLabel*>()) {
+        const QString text = label->text();
+        QVERIFY(!text.contains(QStringLiteral("recovery capsules"), Qt::CaseInsensitive));
+        if (text.contains(QStringLiteral("recovery phrase"), Qt::CaseInsensitive) ||
+            text.contains(QStringLiteral("phrase de récupération"), Qt::CaseInsensitive)) {
+            found_clean_encryption = true;
+        }
+    }
+    QVERIFY(found_clean_encryption);
+
+    // 4. IdentityPage recovery copy: "Configured in vault" instead of vague "Secured"
+    window->showPage(CybouPage::Identity);
+    auto* identity = dynamic_cast<IdentityPage*>(window->page(CybouPage::Identity));
+    QVERIFY(identity);
+    bool found_vault_configured = false;
+    for (const auto* label : identity->findChildren<QLabel*>()) {
+        const QString text = label->text();
+        if (text.contains(QStringLiteral("Configured in vault"), Qt::CaseInsensitive) ||
+            text.contains(QStringLiteral("dans le coffre-fort"), Qt::CaseInsensitive)) {
+            found_vault_configured = true;
+        }
+    }
+    QVERIFY(found_vault_configured);
+}
+
+void CybouShellTests::networkPageAndSchematicFranceMap()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+
+    // 1. Navigate to NetworkPage
+    window->showPage(CybouPage::Network);
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Network));
+
+    auto* net_page = dynamic_cast<NetworkPage*>(window->page(CybouPage::Network));
+    QVERIFY(net_page != nullptr);
+    QVERIFY(net_page->mapWidget() != nullptr);
+    QVERIFY(net_page->tableWidget() != nullptr);
+    QVERIFY(net_page->detailsWidget() != nullptr);
+
+    // 2. Feed structured network diagnostics with known France and LAN peers
+    cybou::NodeDiagnosticsSnapshot snap;
+    snap.height = 1500;
+    snap.storage_used = 1024 * 1024 * 50;
+    snap.storage_capacity = 1024 * 1024 * 100;
+    snap.local_storage_used = 1024 * 1024 * 150;
+    snap.local_storage_capacity = 1024 * 1024 * 300;
+    snap.peers = {
+        {"51.255.46.58:29461", 1500, "c7b20e0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d"},
+        {"127.0.0.1:29462", 1498, "d8a30e0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d"},
+        {"192.168.1.50:29461", 1495, ""}
+    };
+    model->setNetworkDiagnostics(snap);
+    model->setNodeStatus(true, 3, true);
+    model->setFinalizedHeight(1500);
+
+    // Verify peer count & table rows
+    QCOMPARE(net_page->peerCount(), 3);
+    auto* table = net_page->tableWidget();
+    QCOMPARE(table->rowCount(), 3);
+
+    // Check peer classifications
+    QCOMPARE(table->item(0, 0)->text(), QStringLiteral("51.255.46.58:29461"));
+    QVERIFY(table->item(0, 1)->text().contains(QStringLiteral("France"), Qt::CaseInsensitive));
+    QCOMPARE(table->item(0, 2)->text(), QStringLiteral("1,500"));
+    QVERIFY(table->item(0, 3)->text().contains(QStringLiteral("0"), Qt::CaseInsensitive));
+
+    // Peer 1 is loopback LAN
+    QCOMPARE(table->item(1, 0)->text(), QStringLiteral("127.0.0.1:29462"));
+    QVERIFY(table->item(1, 1)->text().contains(QStringLiteral("LAN"), Qt::CaseInsensitive));
+    QCOMPARE(table->item(1, 2)->text(), QStringLiteral("1,498"));
+    QVERIFY(table->item(1, 3)->text().contains(QStringLiteral("2 blocks"), Qt::CaseInsensitive));
+
+    // Peer 2 is RFC1918 LAN with pending StorageId proof
+    QCOMPARE(table->item(2, 0)->text(), QStringLiteral("192.168.1.50:29461"));
+    QVERIFY(table->item(2, 1)->text().contains(QStringLiteral("LAN"), Qt::CaseInsensitive));
+    QVERIFY(table->item(2, 4)->text().contains(QStringLiteral("Pending"), Qt::CaseInsensitive));
+
+    // 3. Selection synchronization: select peer 0
+    net_page->selectPeer(0);
+    QCOMPARE(net_page->selectedPeerIndex(), 0);
+    QCOMPARE(net_page->mapWidget()->selectedPeer(), 0);
+
+    // Verify details panel shows full un-truncated StorageId
+    bool found_full_sid = false;
+    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("c7b20e0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d"))) {
+            found_full_sid = true;
+        }
+    }
+    QVERIFY(found_full_sid);
+
+    // 4. Select peer 1 via map click
+    net_page->mapWidget()->on_peer_clicked(1);
+    QCOMPARE(net_page->selectedPeerIndex(), 1);
+    QCOMPARE(table->currentRow(), 1);
+    bool found_lag_in_details = false;
+    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("2 blocks behind"), Qt::CaseInsensitive)) {
+            found_lag_in_details = true;
+        }
+    }
+    QVERIFY(found_lag_in_details);
+
+    // 5. Test honest offline / empty state
+    snap.peers.clear();
+    model->setNetworkDiagnostics(snap);
+    model->setNodeStatus(false, 0, false);
+    QCOMPARE(net_page->peerCount(), 0);
+    QCOMPARE(table->rowCount(), 0);
+
+    bool found_empty_prompt = false;
+    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("Select a peer"), Qt::CaseInsensitive)) {
+            found_empty_prompt = true;
+        }
+    }
+    QVERIFY(found_empty_prompt);
+}
+
+void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(model);
+
+    // 1. Setup authorized state with candidate operations and diagnostic history
+    CybouNetworkAuthorityStatus authority;
+    authority.proven = true;
+    authority.signer_enabled = true;
+    authority.finalizer = CybouFinalizerState::Finalizing;
+    authority.finalized_height = 42;
+    for (int i = 0; i < 12; ++i) {
+        authority.candidate_ids.append(QStringLiteral("cand_%1_%2").arg(i).arg(QString(60, QLatin1Char{'c'})));
+    }
+    authority.candidates = authority.candidate_ids.size();
+    model->setNetworkAuthority(authority);
+
+    cybou::NodeDiagnosticsSnapshot diag;
+    diag.height = 42;
+    diag.tip = std::string(64, 't');
+    for (int i = 0; i < 5; ++i) {
+        cybou::OperationDiagnostics op;
+        op.operation_id = std::string("op_") + std::to_string(i) + "_" + std::string(59, 'f');
+        op.finalized_height = 40 + i;
+        op.state = static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED);
+        diag.operations.push_back(op);
+    }
+    model->setNetworkDiagnostics(diag);
+
+    auto* page = dynamic_cast<NetworkAuthorityPage*>(window->page(CybouPage::NetworkAuthority));
+    QVERIFY(page);
+
+    // Total = 12 candidates + 5 finalized ops + 1 block tip = 18 items
+    QCOMPARE(page->explorerItemCount(), 18);
+    QCOMPARE(page->explorerPage(), 1);
+    QCOMPARE(page->explorerTable()->rowCount(), 10);
+
+    // 2. Pagination forward
+    auto* next_btn = page->findChild<QPushButton*>(QStringLiteral("authorityExplorerNext"));
+    QVERIFY(next_btn);
+    next_btn->click();
+    QCOMPARE(page->explorerPage(), 2);
+    QCOMPARE(page->explorerTable()->rowCount(), 8);
+
+    // 3. Selection reveals un-truncated identifier
+    page->selectExplorerItem(0);
+    QCOMPARE(page->explorerPage(), 1);
+    bool found_full_id = false;
+    for (const auto* label : page->explorerDetailWidget()->findChildren<QLabel*>()) {
+        if (label->text() == authority.candidate_ids.first()) {
+            found_full_id = true;
+        }
+    }
+    QVERIFY(found_full_id);
+
+    // 4. Filtering
+    page->setExplorerFilter(QStringLiteral("cand_1_"));
+    QVERIFY(page->explorerItemCount() >= 1);
+    page->setExplorerFilter({});
+    QCOMPARE(page->explorerItemCount(), 18);
+
+    // 5. Evidence labels and authorized notice
+    bool found_safety_journal = false;
+    bool found_settlement_readiness = false;
+    bool found_auth_notice = false;
+    for (const auto* label : page->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("Fail-closed durable append-only journal active"), Qt::CaseInsensitive)) {
+            found_safety_journal = true;
+        }
+        if (label->text().contains(QStringLiteral("Off-chain replica service receipts"), Qt::CaseInsensitive)) {
+            found_settlement_readiness = true;
+        }
+        if (label->text().contains(QStringLiteral("Genesis-authorized PoA signing key is active"), Qt::CaseInsensitive)) {
+            found_auth_notice = true;
+        }
+    }
+    QVERIFY(found_safety_journal);
+    QVERIFY(found_settlement_readiness);
+    QVERIFY(found_auth_notice);
+
+    // 6. Idle chain reassurance & read-only guard when signer is unavailable
+    authority.candidate_ids.clear();
+    authority.candidates = 0;
+    authority.signer_enabled = false;
+    model->setNetworkAuthority(authority);
+
+    bool found_idle_reassurance = false;
+    bool found_read_only_notice = false;
+    for (const auto* label : page->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("Idle chain: Pool is empty"), Qt::CaseInsensitive)) {
+            found_idle_reassurance = true;
+        }
+        if (label->text().contains(QStringLiteral("Read-only console"), Qt::CaseInsensitive)) {
+            found_read_only_notice = true;
+        }
+    }
+    QVERIFY(found_idle_reassurance);
+    QVERIFY(found_read_only_notice);
+
+    auto find_button = [page](const char* id) -> QPushButton* {
+        for (auto* btn : page->findChildren<QPushButton*>()) {
+            if (btn->property("cybouId").toString() == QLatin1String{id}) return btn;
+        }
+        return nullptr;
+    };
+    auto* pause = find_button("authorityPause");
+    auto* settle = find_button("authoritySettleStorage");
+    QVERIFY(pause);
+    QVERIFY(settle);
+    QVERIFY(!pause->isEnabled());
+    QVERIFY(!settle->isEnabled());
+}
+
+void CybouShellTests::ownContentInspectorAndBoundedConsole()
+{
+    auto window = makeWindow();
+    window->show();
+    auto* model = window->desktopModel();
+    QVERIFY(model);
+
+    // 1. Setup active Identity and own file with known size and content root ID
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct-1"), 100);
+    model->setPrimaryName(QStringLiteral("alice.cybou"));
+
+    CybouFileItem file1;
+    file1.id = QStringLiteral("f_own_1");
+    file1.name = QStringLiteral("contract.pdf");
+    file1.logical_size = 1500000; // ~1.43 MiB -> ceil(1500000 / 524288) = 3 chunks
+    file1.state = CybouContentState::Protected;
+    file1.available_offline = true;
+    file1.min_remote_replicas = 2;
+    file1.remote_replica_target = 2;
+    file1.content_root_id = QStringLiteral("d41d8cd98f00b204e9800998ecf8427e00000000000000000000000000000001");
+    model->setFileItems({file1});
+
+    // 2. StoragePage inspection in Advanced section
+    window->showPage(CybouPage::Files);
+    auto* storage = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(storage);
+    storage->showDetails(file1.id, true);
+    QVERIFY(storage->isDetailsVisible());
+    QVERIFY(storage->isDetailsAdvanced());
+
+    bool found_chunk_count = false;
+    bool found_integrity_evidence = false;
+    bool found_auth_reference = false;
+    for (const auto* label : storage->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("3 chunks (512 KiB unit)"))) {
+            found_chunk_count = true;
+        }
+        if (label->text().contains(QStringLiteral("BLAKE3 Merkle tree"), Qt::CaseInsensitive)) {
+            found_integrity_evidence = true;
+        }
+        if (label->text().contains(QStringLiteral("RootPublication"), Qt::CaseInsensitive)) {
+            found_auth_reference = true;
+        }
+    }
+    QVERIFY(found_chunk_count);
+    QVERIFY(found_integrity_evidence);
+    QVERIFY(found_auth_reference);
+
+    auto* inspect_btn = storage->findChild<QPushButton*>(QStringLiteral("inspectChunkTreeButton"));
+    QVERIFY(inspect_btn);
+
+    // 3. Diagnostics page button verification
+    window->showPage(CybouPage::Diagnostics);
+    auto* diag_page = dynamic_cast<DiagnosticsPage*>(window->page(CybouPage::Diagnostics));
+    QVERIFY(diag_page);
+    auto* console_open_btn = diag_page->findChild<QPushButton*>(QStringLiteral("readOnlyConsoleButton"));
+    QVERIFY(console_open_btn);
+
+    // 4. Bounded read-only console command execution
+    CybouConsoleDialog console{model};
+
+    // help command
+    console.executeCommand(QStringLiteral("help"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Available read-only commands")));
+
+    // status command
+    console.executeCommand(QStringLiteral("status"));
+    QVERIFY(console.outputText().contains(model->status().network_name));
+    QVERIFY(console.outputText().contains(QStringLiteral("alice.cybou")));
+
+    // storage summary command
+    console.executeCommand(QStringLiteral("storage"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Own Storage Summary")));
+    QVERIFY(console.outputText().contains(QStringLiteral("1 items")));
+
+    // files list command
+    console.executeCommand(QStringLiteral("files"));
+    QVERIFY(console.outputText().contains(QStringLiteral("contract.pdf")));
+
+    // single file info command
+    console.executeCommand(QStringLiteral("file f_own_1"));
+    QVERIFY(console.outputText().contains(file1.content_root_id));
+    QVERIFY(console.outputText().contains(QStringLiteral("Chunks: 3")));
+
+    // chunks command (chunk tree inspection)
+    console.executeCommand(QStringLiteral("chunks f_own_1"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Chunk Tree: contract.pdf")));
+    QVERIFY(console.outputText().contains(QStringLiteral("#0: 0..524287 bytes (512 KiB)")));
+    QVERIFY(console.outputText().contains(QStringLiteral("#1: 524288..1048575 bytes (512 KiB)")));
+    QVERIFY(console.outputText().contains(QStringLiteral("#2: 1048576..1499999 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Verified")));
+
+    // peers and jobs commands
+    console.executeCommand(QStringLiteral("peers"));
+    console.executeCommand(QStringLiteral("jobs"));
+
+    // 5. Restriction against shell / mutation commands
+    console.executeCommand(QStringLiteral("rm -rf /"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Error: Command 'rm' is not recognized or not permitted")));
+
+    console.executeCommand(QStringLiteral("exec drop table;"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Error: Command 'exec' is not recognized or not permitted")));
+
+    QVERIFY(console.historyCount() >= 5);
+
+    // 6. Private session history and output cleanup on lock
+    model->setIdentityState(CybouIdentityState::None);
+    QCOMPARE(console.historyCount(), 0);
+    QVERIFY(console.outputText().contains(QStringLiteral("Vault locked. Private session history and output cleared.")));
+}
+
+void CybouShellTests::assuranceLifecycleAndRecoveryGates()
+{
+    auto window = makeWindow();
+    window->show();
+    auto* model = window->desktopModel();
+    QVERIFY(model);
+
+    // 1. Setup active identity
+    model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct-assurance-1"), 50);
+    model->setPrimaryName(QStringLiteral("alice.cybou"));
+
+    // 2. Home page hero badge reflects session state "Active", not unqualified "Protected"
+    window->showPage(CybouPage::Home);
+    auto* home = dynamic_cast<HomePage*>(window->page(CybouPage::Home));
+    QVERIFY(home);
+    bool found_active_pill = false;
+    for (const auto* pill : home->findChildren<QLabel*>()) {
+        if (pill->text() == QStringLiteral("Active")) {
+            found_active_pill = true;
+            break;
+        }
+    }
+    QVERIFY(found_active_pill);
+
+    // 3. Identity page displays honest recovery guidance and scoped post-quantum claim
+    window->showPage(CybouPage::Identity);
+    auto* id_page = dynamic_cast<IdentityPage*>(window->page(CybouPage::Identity));
+    QVERIFY(id_page);
+    bool found_recovery_guide = false;
+    bool found_pq_scope = false;
+    for (const auto* label : id_page->findChildren<QLabel*>()) {
+        if (label->text().contains(QStringLiteral("Phrase presence in this vault is not a substitute for a tested restore"))) {
+            found_recovery_guide = true;
+        }
+        if (label->text().contains(QStringLiteral("Hybrid ML-KEM-768 with X25519 for messaging and storage capsules"))) {
+            found_pq_scope = true;
+        }
+    }
+    QVERIFY(found_recovery_guide);
+    QVERIFY(found_pq_scope);
+
+    // 4. StoragePage: 4 Assurance Pillars in Advanced file details
+    CybouFileItem active_file;
+    active_file.id = QStringLiteral("f_assure_1");
+    active_file.name = QStringLiteral("whitepaper.pdf");
+    active_file.logical_size = 1048576; // 1 MiB -> 2 chunks
+    active_file.state = CybouContentState::Protected;
+    active_file.available_offline = true;
+    active_file.min_remote_replicas = 2;
+    active_file.remote_replica_target = 2;
+    active_file.content_root_id = QStringLiteral("c0ffee0000000000000000000000000000000000000000000000000000000001");
+
+    CybouFileItem trashed_file;
+    trashed_file.id = QStringLiteral("f_assure_trash");
+    trashed_file.name = QStringLiteral("old_draft.txt");
+    trashed_file.logical_size = 12000;
+    trashed_file.trashed = true;
+    trashed_file.state = CybouContentState::Protected;
+
+    model->setFileItems({active_file, trashed_file});
+
+    window->showPage(CybouPage::Files);
+    auto* storage = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(storage);
+
+    // Check active file assurance pillars
+    storage->showDetails(active_file.id, true);
+    QVERIFY(storage->isDetailsVisible());
+    QVERIFY(storage->isDetailsAdvanced());
+
+    bool found_confidentiality = false;
+    bool found_integrity = false;
+    bool found_availability_scope = false;
+    bool found_recovery = false;
+
+    for (const auto* label : storage->findChildren<QLabel*>()) {
+        const QString txt = label->text();
+        if (txt.contains(QStringLiteral("Hybrid post-quantum encryption before upload (ML-KEM-768 + X25519)"))) {
+            found_confidentiality = true;
+        }
+        if (txt.contains(QStringLiteral("Content-addressed BLAKE3 Merkle tree"))) {
+            found_integrity = true;
+        }
+        if (txt.contains(QStringLiteral("Measured copies: 2 of 2 target")) &&
+            txt.contains(QStringLiteral("does not prove independent physical host failure domains"))) {
+            found_availability_scope = true;
+        }
+        if (txt.contains(QStringLiteral("Recoverable on any node using your account recovery phrase via owner self-capsule"))) {
+            found_recovery = true;
+        }
+    }
+    QVERIFY(found_confidentiality);
+    QVERIFY(found_integrity);
+    QVERIFY(found_availability_scope);
+    QVERIFY(found_recovery);
+
+    // 5. Trashed file: 5-phase Deletion Lifecycle card
+    storage->showDetails(trashed_file.id, false);
+    QVERIFY(storage->isDetailsVisible());
+
+    auto* trash_card = storage->findChild<QFrame*>(QStringLiteral("trashLifecycleCard"));
+    QVERIFY(trash_card);
+
+    bool found_lifecycle_title = false;
+    bool found_phase1 = false;
+    bool found_phase2 = false;
+    bool found_phase3 = false;
+    bool found_phase4_unconfirmed = false;
+    bool found_phase5_retained = false;
+
+    for (const auto* label : trash_card->findChildren<QLabel*>()) {
+        const QString txt = label->text();
+        if (txt.contains(QStringLiteral("Deletion lifecycle"))) {
+            found_lifecycle_title = true;
+        }
+        if (txt.contains(QStringLiteral("Phase 1: Local catalog removal (immediate)"))) {
+            found_phase1 = true;
+        }
+        if (txt.contains(QStringLiteral("Phase 2: Finalized publication revocation"))) {
+            found_phase2 = true;
+        }
+        if (txt.contains(QStringLiteral("Phase 3: Storage lease closure"))) {
+            found_phase3 = true;
+        }
+        if (txt.contains(QStringLiteral("Phase 4: Provider chunk purge (remote acknowledgements unconfirmed)"))) {
+            found_phase4_unconfirmed = true;
+        }
+        if (txt.contains(QStringLiteral("Phase 5: Retained copies"))) {
+            found_phase5_retained = true;
+        }
+    }
+    QVERIFY(found_lifecycle_title);
+    QVERIFY(found_phase1);
+    QVERIFY(found_phase2);
+    QVERIFY(found_phase3);
+    QVERIFY(found_phase4_unconfirmed);
+    QVERIFY(found_phase5_retained);
+
+    // Action buttons in trashed view
+    QPushButton* restore_btn{nullptr};
+    QPushButton* forever_btn{nullptr};
+    for (auto* btn : storage->findChildren<QPushButton*>()) {
+        if (btn->property("cybouId") == QLatin1String{"fileRestore"}) restore_btn = btn;
+        if (btn->property("cybouId") == QLatin1String{"fileDeleteForever"}) forever_btn = btn;
+    }
+    QVERIFY(restore_btn);
+    QVERIFY(forever_btn);
+}
+
+
 

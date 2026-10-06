@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_STORAGEPAGE_H
@@ -53,6 +53,7 @@ public:
     void setView(View view);
     void openFolder(const QString& folder_id);
     void setSearchText(const QString& text);
+    QString searchText() const;
     /** Moves items into a folder ("" = My files), refusing folder cycles. */
     bool moveFilesTo(const QStringList& ids, const QString& folder_id);
     QString currentFolder() const { return m_folder; }
@@ -62,7 +63,11 @@ public:
     QStringList visibleIds() const;
     /** Opens the details drawer for a file or folder. */
     void showDetails(const QString& id);
+    void showDetails(const QString& id, bool advanced);
     QString detailsId() const { return m_details_id; }
+    bool isDetailsVisible() const;
+    bool isDetailsAdvanced() const { return m_details_advanced; }
+    void setDetailsAdvanced(bool adv);
     /** Sort the list by Name (0), Size (1) or Modified (2); folders stay first. */
     void sortBy(int column, bool descending);
     /** Uploads local files into the current folder. */

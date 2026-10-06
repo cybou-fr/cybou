@@ -639,6 +639,11 @@ void EmailPage::setSearchText(const QString& text)
     m_search->setText(text);
 }
 
+QString EmailPage::searchText() const
+{
+    return m_search ? m_search->text() : QString{};
+}
+
 void EmailPage::setView(View view)
 {
     m_view = view;

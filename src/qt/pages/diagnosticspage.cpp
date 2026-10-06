@@ -4,6 +4,7 @@
 #include <qt/pages/diagnosticspage.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cybouconsoledialog.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
@@ -181,6 +182,16 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
         refresh(); dialog->show();
     });
     root->addWidget(monitor, 0, Qt::AlignLeft);
+
+    auto* console_btn = new QPushButton{tr("Open Read-Only Console"), this};
+    console_btn->setObjectName(QStringLiteral("readOnlyConsoleButton"));
+    console_btn->setCursor(Qt::PointingHandCursor);
+    connect(console_btn, &QPushButton::clicked, this, [this] {
+        auto* console = new CybouConsoleDialog{m_model, this};
+        console->setAttribute(Qt::WA_DeleteOnClose);
+        console->show();
+    });
+    root->addWidget(console_btn, 0, Qt::AlignLeft);
 
     auto* open = new QPushButton{tr("Open diagnostics window"), this};
     open->setObjectName(QStringLiteral("secondaryButton"));

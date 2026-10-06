@@ -337,7 +337,6 @@ std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
         !IsSupportedMessageType(bytes[4])) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[5 + i]} << (8 * i);
-    const auto type = static_cast<MessageType>(bytes[4]);
     if (size > MAX_FRAME_PAYLOAD || bytes.size() != HEADER_SIZE + size) return std::nullopt;
     return Frame{static_cast<MessageType>(bytes[4]),
         std::vector<unsigned char>{bytes.begin() + HEADER_SIZE, bytes.end()}};

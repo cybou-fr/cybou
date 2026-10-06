@@ -179,7 +179,8 @@ std::optional<Release> ParseReleasePage(const std::string_view page)
         R"(href=['"]https://download\.db-ip\.com/free/(dbip-country-lite-([0-9]{4})-([0-9]{2})\.csv\.gz)['"])",
         std::regex::icase};
     if (!std::regex_search(html, match, link_regex)) return std::nullopt;
-    unsigned linked_year{0}, linked_month{0};
+    int linked_year{0};
+    unsigned linked_month{0};
     const auto year_text = match[2].str();
     const auto month_text = match[3].str();
     const auto year_result = std::from_chars(year_text.data(), year_text.data() + year_text.size(), linked_year);

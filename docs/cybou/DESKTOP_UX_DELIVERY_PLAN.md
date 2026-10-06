@@ -1,5 +1,11 @@
 # Desktop UI/UX delivery plan
 
+Remaining-work review (2026-10-06): the current prioritized backlog, fresh fixture
+audit scope and acceptance gaps are in
+[DESKTOP_UX_REMAINING_WORK_2026-10-06.md](DESKTOP_UX_REMAINING_WORK_2026-10-06.md).
+The dated delivery records below remain historical evidence, not a current-HEAD
+full acceptance statement.
+
 Status: Level 4 implementation plan, source review 2026-10-05 at HEAD `cc6c18e`;
 first implementation slice based on HEAD `77a29d2` is recorded below. This plan is
 not a claim that its acceptance gates have passed. Product requirements live
@@ -394,3 +400,173 @@ Final overlap fix validation: isolated GUI/test build passed
 The list regression asserts that a replaced row is already hidden before Qt
 processes deferred deletion. Source hashes are recorded in source-manifest.json;
 concurrent repository commits are represented by its current HEAD plus worktree.
+
+Batch 1 — R0 / R1 delivery slice (2026-10-06):
+- R0 Acceptance baseline: reproducible native Windows build containing all 63 test
+  slots.
+- F1 Search work and scope: dynamic search placeholder/tooltip updates indicating
+  current view scope (Files view vs Mail/global); search index rebuild debounced
+  (150 ms) to avoid churn on rapid data changes, with immediate synchronous build
+  on initial empty model and instant clearing on vault lock; completion model bounded
+  to 150 mail items and 150 file items.
+- F3 Refresh churn elimination:
+  - WalletPage activity rows are retained by ID in `m_activity_widgets` with in-place
+    label updates; disconnected unrelated `mailChanged` and `filesChanged` signals.
+  - NetworkAuthorityPage permanent section rows (totals, chain) initialized once;
+    2-second age ticker (`updateAgeLabel`) decoupled from full layout refresh;
+    signatures prevent layout churn when candidate queue, recent ops, or peers
+    are unchanged.
+- F6 Relative time localization: `relTime()` wrapped in `QCoreApplication::translate`
+  with French translations added to `cybou_fr.ts` and compiled resource `.qm`.
+- Automated test coverage: `searchScopeAndIncrementalIndex`,
+  `walletAndAuthorityPreserveRowsWithoutChurn`, `relativeTimeLocalization`.
+- Full native Qt test suite: 63 passed, 0 failed in 33.3s. Running desktop and nodes
+  preserved without interruption.
+
+Batch 2 — R2 / R3 delivery slice (2026-10-06):
+- R2 (F2 Context preservation on reloadAppearance / theme / language change):
+  - `EmailPage`: exposed `searchText()`, `currentMessageId()`, and `isDetailOpen()`.
+  - `StoragePage`: exposed `searchText()`, `isDetailsVisible()`, `isDetailsAdvanced()`, `setDetailsAdvanced(bool)`, and overloaded `showDetails(id, advanced)`.
+  - `CybouMainWindow::reloadAppearance()` now snapshots and restores:
+    - Active page.
+    - Global search query text.
+    - Mail state: active view (folder), search query, draft message or open reader message ID.
+    - Files state: active view, current folder ID, search query, list/grid mode, open details item ID, and Advanced disclosure state.
+- R3 (F4 Protection explanations & offline download gating; F5 Responsive layout):
+  - F4: Enabled `Download` action in file details and context menu whenever `item->available_offline == true`, even if network replication is still progressing (`state == CybouContentState::Securing`), permitting immediate export of verified local copies.
+  - F4: Clarified network replication progress in file details: when `min_remote_replicas < remote_replica_target`, explicitly displays `"Replicating to network"` (`"Réplication réseau en cours"` in French localization) next to replica count.
+  - F5: Adjusted responsive column collapsing thresholds (`ModifiedColumn` hidden below 560px, `SizeColumn` preserved down to 400px instead of former 750px/610px limits) and dynamic details panel width (250px–300px), ensuring the `Size` column remains visible at 1040×720 window size with details open.
+- Localization: Added French translations for `"Replicating to network"` in `cybou_fr.ts` and compiled resource `cybou_fr.qm`.
+- Automated test coverage:
+  - `appearanceSwitchPreservesFullContext`: validates state preservation across `reloadAppearance()` for Mail folder, search, reader open message, and Files folder, search, grid mode, details pane, and Advanced disclosure state.
+  - `filesProtectionAndOfflineDownload`: validates offline file download button enablement during Securing state, replication progress notice, and responsive Size column preservation at 1040×720 with details pane open.
+- Full native Qt test suite: 65 passed, 0 failed in 22.5s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+Batch 3 — R4 / R5 delivery slice (2026-10-06):
+- R4 (F6 Wallet forecast, transfer review, and copy clarity):
+  - In `WalletPage`, clarified `m_system_hint` text: replaced deceptive "remaining operations" claim with explicit fee-only estimate (`tr("Pays network fees · ~%1 standard fees (excludes storage rent)")`).
+  - In `WalletPage`, clarified `m_review` text for transfers: distinguishes Available Balance source, System Balance network fee, and finality of payments (`tr("<b>Send %1 to %2</b><br>Paid from Available Balance · Network service fee: %3 from System Balance<br>Payments are final and cannot be reversed.")`).
+- R5 (F7 Assurance copy & protocol jargon elimination; F5 Restore responsiveness & keyboard flow):
+  - In `OnboardingView`, eliminated protocol jargon: replaced welcome button `"Restore from mnemonic"` with `"Restore with recovery phrase"`.
+  - In `OnboardingView`, scoped cryptographic claims: `"Post-quantum protected"` -> `tr("Hybrid post-quantum encryption")`.
+  - In `HomePage`, scoped cryptographic claims: `"Mail is end-to-end encrypted and post-quantum protected."` -> `tr("Mail is end-to-end encrypted using hybrid post-quantum cryptography.")`.
+  - In `MailReader`, scoped security info: `"Protected end to end • Post-quantum protected • Network confirmed"` -> `tr("End-to-end encrypted • Hybrid post-quantum • Network confirmed")`.
+  - In `IdentityPage`, scoped assurance copy: `"Post-quantum protection: Active"` -> `tr("Post-quantum encryption: Hybrid ML-KEM active")`; `"Recovery phrase: Secured"` -> `tr("Configured in vault")`; `"Ed25519 + ML-DSA-65 · secured"` -> `tr("Ed25519 + ML-DSA-65 · configured")`.
+  - In `StoragePage`, removed internal protocol jargon `"recovery capsules"` from encryption details: updated to `tr("Encrypted before sending · Recoverable with your account recovery phrase")`.
+  - In `OnboardingView` (F5), tightened `CenteredCard` margins and word grid vertical spacing (4px / 6px) to fit 720px window heights comfortably. Connected `returnPressed` on recovery word 23 to focus `m_restore_password`, on `m_restore_password` to focus `m_restore_confirm`, and on `m_restore_confirm` to trigger `submitRestore()`.
+- Localization:
+  - Synchronized `src/qt/translations/cybou_fr.ts` with `lupdate`.
+  - Added French translations for all new and modified strings.
+  - Recompiled `src/qt/translations/cybou_fr.qm` with `lrelease`.
+- Automated test coverage:
+  - `walletForecastAndTransferReview`: verifies fee-only wording in system hint (excluding storage rent) and explicit breakdown in transfer review.
+  - `assuranceAndRestoreResponsiveness`: verifies welcome button wording without protocol jargon, Return key keyboard navigation through recovery words into password fields, and removal of "recovery capsules" in file details.
+- Full native Qt test suite: 67 passed, 0 failed in 27.1s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+Batch 4 — R6 / W5 delivery slice (2026-10-06):
+- R6 (F8 User Network page and schematic France map):
+  - Created dedicated `NetworkPage` (`src/qt/pages/networkpage.h` / `.cpp`) with stable shell navigation:
+    - Added `CybouPage::Network` to `CybouPage` enum and sidebar navigation with `NavIcon::Network`.
+    - Integrated top metric summary cards: Connectivity status, verified PoA tip height, observed direct mesh peers count, local storage capacity (`V`) and provider obligations, own encrypted publication protection aggregates (`protected` vs `securing` items).
+    - Scope, provenance, and honest disclaimer banner: explicitly discloses local node observation source, active sample count, and disclaimer: `"Schematic illustrative map for observed peer connections. Locations are schematic illustrations, not physical node geolocation or network-wide census."`
+  - Interactive Schematic France Map (`SchematicFranceMap`):
+    - Vector QPainter drawing of Metropolitan France hexagonal geometry and Corsica island, rendered using canonical palette tokens (`SURFACE`, `BORDER_MEDIUM`, `BRAND_TEAL`, `MINT_SOFT`).
+    - 12 deterministic regional anchors across France (Île-de-France, Hauts-de-France, Grand Est, Auvergne-Rhône-Alpes, PACA, Occitanie, Nouvelle-Aquitaine, Bretagne, Pays de la Loire, Normandie, Centre-Val de Loire, Bourgogne-Franche-Comté) mapping public peers deterministically by endpoint hash to prevent jitter across refreshes.
+    - Explicit dedicated inset container for LAN / Local network peers (`127.0.0.1`, `::1`, RFC 1918 `10.x`, `192.168.x`, `172.16-31.x`, link-local, IPv6 ULA), isolating private addresses from public geography without synthesizing fake city coordinates.
+    - Interactive marker selection with visual highlight halo and two-way synchronization with the peer table.
+  - Accessible Observed Peer List:
+    - Full keyboard-navigable `QTableWidget` (Endpoint, Classification, Advertised Height, Lag, StorageId).
+    - Synchronized selection: table row selection highlights map node and updates details drawer; map click selects corresponding table row.
+    - Honest empty states when offline or zero peers observed (`"No peer connections observed"`).
+  - Selected Peer Details drawer:
+    - Displays full un-truncated StorageId, endpoint, classification (France schematic vs LAN), advertised height announcement, lag relative to local verified tip, and TLS pinned transport observation note.
+  - Zero Protocol Jargon & Compliance:
+    - Cleaned up storage summary labels: replaced forbidden protocol term `"Provider held"` with user-facing `"Held for others"`.
+  - Localization:
+    - Full French translations for `NetworkPage` and `SchematicFranceMap` in `cybou_fr.ts` and compiled resource `cybou_fr.qm`.
+  - Automated test coverage:
+    - Added test slot `networkPageAndSchematicFranceMap` verifying page navigation, metric cards, France vs LAN peer classification, selection synchronization between map and table, full StorageId inspection in details drawer, and honest empty/offline states.
+    - Updated `mainWindowStarts`, `darkAppearanceResolvesTokens`, and `languageSwitchRebuildsShell` to accommodate the 9-page shell layout.
+- Full native Qt test suite: 68 passed, 0 failed in 27.4s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+Batch 5 — R7 / W6 delivery slice (2026-10-06):
+- R7 (F8 Central Authority explorer and operational workspace):
+  - Paginated Verified Explorer (`src/qt/pages/networkauthoritypage.h` / `.cpp`):
+    - Added in-memory paginated index (10 items/page) of candidate operations and locally verified blocks/operations.
+    - Integrated search filter input (`authorityExplorerFilter`) with realtime debounce, filtering by OperationID, block height, classification, or status.
+    - Paginated navigation controls: `Previous`, `Next`, and item count label (`Page X of Y (N items)`).
+    - Responsive table (`authorityExplorerTable`) with columns: Phase / Height, Identifier (monospace ShortHex), Classification, and Status.
+    - Interactive details drawer (`authorityExplorerDetail`): selection presents full un-truncated OperationID / BlockID (selectable for copying), verification status, height, and cryptographical state-root verification notes without leaking plaintext or guessing foreign ownership.
+    - Bounded execution invariant: operates strictly on local in-memory diagnostic snapshot (`NodeDiagnosticsSnapshot`), avoiding GUI-thread full-history scans.
+  - Separation of Concerns:
+    - Explicitly separated Canonical state root commitments (totals committed by latest finalized state root), volatile Candidate operations pool, and Off-chain evidence & signer safety.
+  - Honest Idle Chain Reassurance:
+    - Replaced generic empty queue note with explicit idle chain copy: `"Idle chain: Pool is empty (0 candidates). Blocks are produced on demand as operations arrive, not on an idle empty-block timer."` Prevents mistaking normal demand-driven block intervals for network outages.
+  - Off-Chain Evidence & Signer Safety Cards:
+    - Added safety journal verification row: `"Fail-closed durable append-only journal active. Equivocation conflicts resolved by min(BlockID)."`
+    - Added storage escrow settlement readiness row: `"Off-chain replica service receipts and audit confirmations tracked. Settlement transactions execute upon period close."`
+  - Public Read-Only Guard:
+    - Restricted operator controls (`Pause`/`Resume`, `Finalize one block`, `Settle storage period`) to proven, authorized PoA key sessions (`a.proven && a.signer_enabled`).
+    - Added dynamic console mode notice: displays `"Authorized signer: Genesis-authorized PoA signing key is active. Finalization and settlement controls are enabled."` when unlocked, and `"Read-only console: Active signing key is not unlocked or authorized for this network. Finalization and settlement actions are restricted."` otherwise.
+  - Localization:
+    - Added full French translations for all new explorer, safety, and evidence strings in `cybou_fr.ts` and compiled resource `cybou_fr.qm`.
+  - Automated test coverage:
+    - Added test slot `authorityExplorerAndEvidenceWorkspace` in `src/qt/test/cyboushelltests.cpp`: validates explorer item indexing (candidates, verified ops, block tip), pagination forward/backward, selection revealing un-truncated identifiers, filtering, off-chain evidence presence, idle chain reassurance, and read-only console button gating.
+- Full native Qt test suite: 69 passed, 0 failed in 28.0s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+Batch 6 — R8 / W7 delivery slice (2026-10-06):
+- R8 (F8 Own-content inspector and bounded console):
+  - Own-file publication and chunk-tree inspection:
+    - In `StoragePage` (`src/qt/pages/storagepage.cpp`), enhanced the `Advanced` details section for own files:
+      - Chunk count computation (`ceil(logical_size / 512 KiB)`).
+      - Integrity evidence disclosure (`"Content-addressed BLAKE3 Merkle tree. Each chunk verified on retrieval."`).
+      - Authorized reference note (`"Recoverable via owner self-capsule. Authorized by finalized RootPublication."`).
+      - Added `"Inspect chunk tree"` button (`inspectChunkTreeButton`), directly opening `CybouConsoleDialog` and pre-filling the chunk tree analysis for the selected item.
+  - Restricted Bounded Diagnostic Console (`CybouConsoleDialog`, `src/qt/cybouconsoledialog.h` / `.cpp`):
+    - Added dedicated dialog accessible from `DiagnosticsPage` via `"Open Read-Only Console"` button (`readOnlyConsoleButton`) and file inspection links.
+    - Strictly bounded read-only command set: `help`, `status`, `storage`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `peers`, `jobs`, `clear`.
+    - `chunks <id|name>`: decomposes file into 512 KiB chunk boundaries with exact byte ranges and BLAKE3 verification status.
+    - Safe output limits: bounded to 500 lines (`kMaxLines`) with automatic truncation of older lines to prevent UI freezes or unbounded memory growth.
+    - Interactive command history with Up/Down arrow navigation.
+    - Strict security invariants:
+      - ZERO shell execution (`rm`, `sh`, etc. strictly rejected).
+      - ZERO arbitrary SQL or scripting execution (`exec`, `select`, `drop`, etc. rejected).
+      - ZERO mutation or signing commands.
+      - Queries strictly confined to the currently unlocked Identity session.
+      - Instant zeroing of output and session history upon vault lock (`identity_state != Active`), displaying `"Vault locked. Private session history and output cleared."`.
+  - Localization:
+    - Updated `src/qt/translations/cybou_fr.ts` and compiled resource `cybou_fr.qm` with full French translations for console, chunk inspection, and integrity evidence.
+  - Automated test coverage:
+    - Added test slot `ownContentInspectorAndBoundedConsole` in `src/qt/test/cyboushelltests.cpp`: validates chunk count, BLAKE3 integrity evidence, authorized reference in `StoragePage`, Diagnostics page console launch button, console commands (`help`, `status`, `storage`, `files`, `file`, `chunks`, `peers`, `jobs`), command restriction against shell/SQL attempts, and instant session history wipe on vault lock.
+- Full native Qt test suite: 70 passed, 0 failed in 38.5s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+Batch 7 — R9 / W8 delivery slice (2026-10-06):
+- R9 (F4, F7 Assurance, Deletion Lifecycle, Recovery Guidance, and Final Beta Gates):
+  - Per-Object 4 Assurance Pillars in `StoragePage` Advanced file details:
+    - Confidentiality assurance: `"Hybrid post-quantum encryption before upload (ML-KEM-768 + X25519). Plaintext, filenames, and folder structures are never transmitted to providers or network."`
+    - Integrity assurance: `"Content-addressed BLAKE3 Merkle tree. Each chunk verified on retrieval against authorized RootPublication commitment."`
+    - Availability & durability scope: `"Measured copies: %1 of %2 target. Replica deduplication is by StorageId; does not prove independent physical host failure domains."`
+    - Recovery assurance: `"Recoverable on any node using your account recovery phrase via owner self-capsule. Historical capsules preserved across rotation."`
+  - Explicit 5-Phase Deletion Lifecycle in Trash & Delete Forever dialog:
+    - Added dedicated `trashLifecycleCard` (`QFrame`) displayed in file details when viewing trashed items, breaking down deletion into 5 distinct phases:
+      - Phase 1: Local catalog removal (immediate).
+      - Phase 2: Finalized publication revocation (stops new admissions on-chain).
+      - Phase 3: Storage lease closure (after billing period close).
+      - Phase 4: Provider chunk purge (remote acknowledgements unconfirmed/absent; network cannot prove erasure of uncooperative or offline copies).
+      - Phase 5: Retained copies (downloaded, shared recipient, or external backups remain unaffected).
+    - Enhanced `Delete forever` confirmation dialog (`QMessageBox::question`) with this exact 5-phase breakdown.
+  - Honest Recovery Guidance & Scoped Security Claims in `IdentityPage`:
+    - Added explanatory guidance under Recovery: `"Your 24-word recovery phrase restores this Identity on another device. Phrase presence in this vault is not a substitute for a tested restore."`
+    - Added scoped description under Security: `"Hybrid ML-KEM-768 with X25519 for messaging and storage capsules. Quantum-resistant against future decrypt-later attacks."`
+  - Scoped Session Status in `HomePage`:
+    - Replaced generic `"Protected"` pill on Identity hero with honest session state `"Active"` (and `"Needs attention"` on sync error), preventing misleading impressions of whole-system or device-level certification.
+  - Zero Unqualified Compliance Claims:
+    - Zero claims of universal RGPD/GDPR conformity, residency, or crypto-erasure anywhere in UI.
+  - Localization:
+    - Updated `src/qt/translations/cybou_fr.ts` and compiled resource `cybou_fr.qm` with full French translations for assurance pillars, 5-phase deletion lifecycle, and recovery/security guidance.
+  - Automated test coverage:
+    - Added test slot `assuranceLifecycleAndRecoveryGates` in `src/qt/test/cyboushelltests.cpp`: validates Active status pill on Home, recovery/PQ guidance on Identity, 4 assurance pillars in StoragePage Advanced details, 5-phase Deletion Lifecycle card on trashed items, and action buttons (`fileRestore`, `fileDeleteForever`).
+- Full native Qt test suite: 71 passed, 0 failed in 28.9s. All running processes (desktop `cybou.exe`, background nodes) preserved without interruption.
+
+
+

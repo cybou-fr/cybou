@@ -268,10 +268,12 @@ QWidget* IdentityPage::buildContent()
     reveal->setProperty("cybouId", QStringLiteral("recoveryOptions"));
     connect(reveal, &QPushButton::clicked, this, [this] { revealRecoveryPhrase(); });
     recovery->addWidget(reveal, 0, Qt::AlignLeft);
+    recovery->addWidget(MutedText(tr("Your 24-word recovery phrase restores this Identity on another device. Phrase presence in this vault is not a substitute for a tested restore."), page));
 
     // Security.
     auto* security = Section(root, tr("Security"), page);
-    m_pq_state = DetailRow(security, tr("Post-quantum protection"), page);
+    m_pq_state = DetailRow(security, tr("Post-quantum encryption"), page);
+    security->addWidget(MutedText(tr("Hybrid ML-KEM-768 with X25519 for messaging and storage capsules. Quantum-resistant against future decrypt-later attacks."), page));
 
     // Danger zone: actions that replace keys are visually separated.
     auto* danger = Card(page);
@@ -337,9 +339,9 @@ void IdentityPage::refresh()
     m_name_caption->setText(status.primary_name.isEmpty() ? tr("No CYBOU name yet") : tr("Verified CYBOU name"));
     m_account_id->setText(CybouProduct::shortId(status.account_id));
     m_account_id->setToolTip(status.account_id);
-    m_recovery_state->setText(tr("Secured"));
+    m_recovery_state->setText(tr("Configured in vault"));
     m_vault_state->setText(status.identity_state == CybouIdentityState::Locked ? tr("Locked") : tr("Unlocked"));
-    m_pq_state->setText(tr("Active"));
+    m_pq_state->setText(tr("Hybrid ML-KEM active"));
 
     ClearLayout(m_names_rows);
     for (const auto& name : m_model->names()) {
@@ -371,7 +373,7 @@ void IdentityPage::refresh()
     add(tr("Account ID"), status.account_id);
     add(tr("Key epoch"), status.key_epoch > 0 ? QString::number(status.key_epoch) : tr("Not reported yet"));
     add(tr("Authorization"), tr("Ed25519 + ML-DSA-44 · valid"));
-    add(tr("Recovery"), tr("Ed25519 + ML-DSA-65 · secured"));
+    add(tr("Recovery"), tr("Ed25519 + ML-DSA-65 · configured"));
     add(tr("Key encapsulation"), tr("Hybrid post-quantum KEM · published"));
     add(tr("Created at finalized height"), status.creation_height > 0 ? QString::number(status.creation_height) : tr("Not reported yet"));
 }

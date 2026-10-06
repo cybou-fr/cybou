@@ -23,8 +23,8 @@ contient le client de bureau, le nœud, le protocole et leurs tests.
 
 ## État
 
-Développement actif sur DEVNET (bootstrap `51.255.46.58:29461`). MAINNET n'est
-pas encore provisionné. Le code et ses tests ne constituent ni une
+Développement actif sur le réseau de test DEVNET. MAINNET n'est pas encore
+provisionné. Le code et ses tests ne constituent ni une
 certification, ni un audit de sécurité indépendant.
 
 ## Compilation

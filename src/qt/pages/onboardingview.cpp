@@ -35,7 +35,7 @@ QWidget* CenteredCard(QWidget* parent, QVBoxLayout*& layout_out, int max_width =
 {
     auto* host = new QWidget{parent};
     auto* outer = new QVBoxLayout{host};
-    outer->setContentsMargins(24, 36, 24, 36);
+    outer->setContentsMargins(20, 20, 20, 20);
     auto* row = new QHBoxLayout;
     row->addStretch(1);
     auto* card = Card(host);
@@ -43,8 +43,8 @@ QWidget* CenteredCard(QWidget* parent, QVBoxLayout*& layout_out, int max_width =
     card->setMinimumWidth(qMin(max_width, 420));
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
     layout_out = new QVBoxLayout{card};
-    layout_out->setContentsMargins(36, 32, 36, 32);
-    layout_out->setSpacing(14);
+    layout_out->setContentsMargins(28, 22, 28, 22);
+    layout_out->setSpacing(10);
     row->addWidget(card, 4);
     row->addStretch(1);
     outer->addLayout(row);
@@ -217,7 +217,7 @@ QWidget* OnboardingView::buildWelcome()
     auto* create = Button(tr("Create Identity"), true, page);
     create->setObjectName(QStringLiteral("primaryButton"));
     create->setProperty("cybouId", QStringLiteral("createIdentity"));
-    auto* restore = Button(tr("Restore from mnemonic"), false, page);
+    auto* restore = Button(tr("Restore with recovery phrase"), false, page);
     restore->setProperty("cybouId", QStringLiteral("restoreIdentity"));
     layout->addWidget(create);
     layout->addWidget(restore);
@@ -228,7 +228,7 @@ QWidget* OnboardingView::buildWelcome()
     layout->addSpacing(8);
     auto* note = new QLabel{page};
     note->setPixmap(glyphPixmap(Glyph::ShieldCheck, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-    auto* note_text = MutedText(tr("Post-quantum protected"), page);
+    auto* note_text = MutedText(tr("Hybrid post-quantum encryption"), page);
     note_text->setWordWrap(false);
     auto* note_row = new QHBoxLayout;
     note_row->addStretch();
@@ -291,6 +291,7 @@ QWidget* OnboardingView::buildPassword()
     layout->addLayout(buttons);
 
     connect(m_password, &QLineEdit::textChanged, this, [this] { updatePasswordState(); });
+    connect(m_password, &QLineEdit::returnPressed, this, [this] { m_password_confirm->setFocus(); });
     connect(m_password_confirm, &QLineEdit::textChanged, this, [this] { updatePasswordState(); });
     connect(m_password_confirm, &QLineEdit::returnPressed, this, [this] {
         if (m_password_next->isEnabled()) acceptPassword();
@@ -359,8 +360,12 @@ QWidget* OnboardingView::buildConfirmWords()
             m_confirm_next->setEnabled(all);
             m_confirm_hint->clear();
         });
-        connect(input, &QLineEdit::returnPressed, this, [this] {
-            if (m_confirm_next->isEnabled()) acceptConfirmation();
+        connect(input, &QLineEdit::returnPressed, this, [this, i] {
+            if (i + 1 < m_confirm_inputs.size()) {
+                m_confirm_inputs.at(i + 1)->setFocus();
+            } else if (m_confirm_next->isEnabled()) {
+                acceptConfirmation();
+            }
         });
     }
     m_confirm_hint = MutedText({}, page);
@@ -419,9 +424,9 @@ QWidget* OnboardingView::buildRestore()
     auto* grid_host = new QWidget{page};
     grid_host->setObjectName(QStringLiteral("recoveryPhrase"));
     auto* grid = new QGridLayout{grid_host};
-    grid->setContentsMargins(0, 4, 0, 4);
+    grid->setContentsMargins(0, 2, 0, 2);
     grid->setHorizontalSpacing(8);
-    grid->setVerticalSpacing(6);
+    grid->setVerticalSpacing(4);
     auto* completer = new QCompleter{CybouDesktopModel::recoveryWordList(), grid_host};
     completer->setCaseSensitivity(Qt::CaseInsensitive);
     completer->setCompletionMode(QCompleter::InlineCompletion);
@@ -432,7 +437,7 @@ QWidget* OnboardingView::buildRestore()
         field->setPlaceholderText(QString::number(i + 1));
         field->setAccessibleName(tr("Word %1").arg(i + 1));
         field->setCompleter(completer);
-        field->setMinimumHeight(34);
+        field->setMinimumHeight(32);
         m_word_fields.append(field);
         grid->addWidget(field, i % (kPhraseWords / kColumns), i / (kPhraseWords / kColumns));
         connect(field, &QLineEdit::textEdited, this, [this, i](const QString& text) {
@@ -443,6 +448,7 @@ QWidget* OnboardingView::buildRestore()
         connect(field, &QLineEdit::textChanged, this, [this] { updateRestoreState(); });
         connect(field, &QLineEdit::returnPressed, this, [this, i] {
             if (i + 1 < m_word_fields.size()) m_word_fields.at(i + 1)->setFocus();
+            else m_restore_password->setFocus();
         });
     }
     layout->addWidget(grid_host);
@@ -491,6 +497,7 @@ QWidget* OnboardingView::buildRestore()
     layout->addLayout(buttons);
 
     connect(m_restore_password, &QLineEdit::textChanged, this, [this] { m_restore_hint->clear(); updateRestoreState(); });
+    connect(m_restore_password, &QLineEdit::returnPressed, this, [this] { m_restore_confirm->setFocus(); });
     connect(m_restore_confirm, &QLineEdit::textChanged, this, [this] { m_restore_hint->clear(); updateRestoreState(); });
     connect(m_restore_confirm, &QLineEdit::returnPressed, this, [this] {
         if (m_restore_button->isEnabled()) submitRestore();

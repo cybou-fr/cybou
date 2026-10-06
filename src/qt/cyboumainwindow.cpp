@@ -10,6 +10,7 @@
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouui.h>
 #include <qt/pages/diagnosticspage.h>
+#include <qt/pages/networkpage.h>
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/cybouactivity.h>
 #include <qt/pages/emailpage.h>
@@ -93,6 +94,7 @@ QString PageTitle(CybouPage page)
     case CybouPage::Files: return CybouMainWindow::tr("Files");
     case CybouPage::Wallet: return CybouMainWindow::tr("Wallet");
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
+    case CybouPage::Network: return CybouMainWindow::tr("Network");
     case CybouPage::Diagnostics: return CybouMainWindow::tr("Diagnostics");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
     case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Central Authority");
@@ -205,6 +207,7 @@ void CybouMainWindow::showPage(CybouPage page)
     if (auto* button = m_navigation->button(index)) button->setChecked(true);
     m_pages->setCurrentIndex(index);
     refreshHeader();
+    updateSearchScope();
     if (isMinimized()) showNormal();
 }
 
@@ -291,6 +294,7 @@ QFrame* CybouMainWindow::buildSidebar(QWidget* parent)
     layout->addSpacing(10);
 
     add_button(CybouPage::Identity, CybouTheme::NavIcon::Identity);
+    add_button(CybouPage::Network, CybouTheme::NavIcon::Network);
     add_button(CybouPage::Diagnostics, CybouTheme::NavIcon::Diagnostics);
     add_button(CybouPage::Settings, CybouTheme::NavIcon::Settings);
     add_button(CybouPage::NetworkAuthority, CybouTheme::NavIcon::Diagnostics);
@@ -435,6 +439,7 @@ void CybouMainWindow::buildShell()
     auto* files = new StoragePage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* wallet = new WalletPage{m_desktop_model, nullptr};
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
+    auto* network = new NetworkPage{m_desktop_model, nullptr};
     auto* diagnostics = new DiagnosticsPage{m_desktop_model, [this] { showDebugWindow(); }, nullptr};
     auto* settings = new SettingsPage{m_desktop_model, [this] { showPage(CybouPage::Diagnostics); }, nullptr};
     settings->onAppearanceChanged = [this] { reloadAppearance(); };
@@ -473,6 +478,7 @@ void CybouMainWindow::buildShell()
     addPage(files, false);
     addPage(wallet, true);
     addPage(identity, true);
+    addPage(network, true);
     addPage(diagnostics, true);
     addPage(settings, true);
     m_activity->onOpenFile = [this, files](const QString& id) {
@@ -501,11 +507,16 @@ void CybouMainWindow::buildShell()
     shell_layout->addWidget(main_column, 1);
     setCentralWidget(shell);
 
+    m_search_index_timer = new QTimer{this};
+    m_search_index_timer->setSingleShot(true);
+    connect(m_search_index_timer, &QTimer::timeout, this, [this] { rebuildSearchIndex(); });
+
     m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, [this] { refreshHeader(); }));
-    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildSearchIndex(); }));
-    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildSearchIndex(); }));
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::mailChanged, this, [this] { queueSearchIndexRebuild(); }));
+    m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::filesChanged, this, [this] { queueSearchIndexRebuild(); }));
     refreshHeader();
     rebuildSearchIndex();
+    updateSearchScope();
 
     m_notifier = new CybouUi::Notifier{main_column};
     m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::notificationRequested, this,
@@ -574,13 +585,56 @@ void CybouMainWindow::buildMenus()
     connect(quit, &QShortcut::activated, this, [this] { Q_EMIT quitRequested(); });
 }
 
+void CybouMainWindow::queueSearchIndexRebuild()
+{
+    auto* model = m_search_completer ? static_cast<QStandardItemModel*>(m_search_completer->model()) : nullptr;
+    const bool clear_or_empty = !m_desktop_model ||
+        m_desktop_model->status().identity_state != CybouIdentityState::Active ||
+        (m_desktop_model->mailItems().isEmpty() && m_desktop_model->fileItems().isEmpty());
+    if (clear_or_empty || (model && model->rowCount() == 0)) {
+        if (m_search_index_timer) m_search_index_timer->stop();
+        rebuildSearchIndex();
+    } else if (m_search_index_timer) {
+        m_search_index_timer->start(150);
+    } else {
+        rebuildSearchIndex();
+    }
+}
+
+void CybouMainWindow::updateSearchScope()
+{
+    if (!m_global_search) return;
+    if (currentPageIndex() == static_cast<int>(CybouPage::Files)) {
+        m_global_search->setPlaceholderText(tr("Search files (Enter for current view)"));
+        m_global_search->setToolTip(tr("Search files — Enter searches current view, or pick a suggestion (Ctrl+K)"));
+        m_global_search->setAccessibleName(tr("Search files (Enter for current view)"));
+    } else {
+        m_global_search->setPlaceholderText(tr("Search mail and files (Enter for mail)"));
+        m_global_search->setToolTip(tr("Search mail and files — Enter searches mail, or pick a suggestion (Ctrl+K)"));
+        m_global_search->setAccessibleName(tr("Search mail and files (Enter for mail)"));
+    }
+}
+
 void CybouMainWindow::rebuildSearchIndex()
 {
+    if (!m_search_completer) return;
+    // Do not interrupt the user while the search popup is open.
+    if (m_search_completer->popup() && m_search_completer->popup()->isVisible()) {
+        if (m_search_index_timer) m_search_index_timer->start(300);
+        return;
+    }
     auto* model = static_cast<QStandardItemModel*>(m_search_completer->model());
     model->clear();
+    if (!m_desktop_model || m_desktop_model->status().identity_state != CybouIdentityState::Active) return;
+
     const QIcon mail_icon{CybouUi::glyphPixmap(CybouUi::Glyph::Envelope, {16, 16}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK))};
     const QIcon file_icon{CybouUi::glyphPixmap(CybouUi::Glyph::FileText, {16, 16}, CybouTheme::color(CybouTheme::BLUE))};
     const QIcon folder_icon{CybouUi::glyphPixmap(CybouUi::Glyph::Folder, {16, 16}, CybouTheme::color(CybouTheme::BLUE))};
+
+    constexpr int kMaxIndexedMail = 150;
+    constexpr int kMaxIndexedFiles = 150;
+
+    int indexed_mail = 0;
     for (const auto& mail : m_desktop_model->mailItems()) {
         if (mail.folder == CybouMailFolder::Trash) continue;
         const QString peer = mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive
@@ -593,13 +647,17 @@ void CybouMainWindow::rebuildSearchIndex()
         item->setData(QStringLiteral("mail"), Qt::UserRole + 1);
         item->setData(mail.id, Qt::UserRole + 2);
         model->appendRow(item);
+        if (++indexed_mail >= kMaxIndexedMail) break;
     }
+
+    int indexed_files = 0;
     for (const auto& file : m_desktop_model->fileItems()) {
         if (file.trashed) continue;
         auto* item = new QStandardItem{file.folder ? folder_icon : file_icon, file.name};
         item->setData(QStringLiteral("file"), Qt::UserRole + 1);
         item->setData(file.id, Qt::UserRole + 2);
         model->appendRow(item);
+        if (++indexed_files >= kMaxIndexedFiles) break;
     }
 }
 
@@ -857,6 +915,8 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         showPage(CybouPage::Wallet);
         save(QStringLiteral("wallet"));
         save(QStringLiteral("wallet-pending")); // fixture activity: Waiting / Finalized
+        showPage(CybouPage::Network);
+        save(QStringLiteral("network"));
         showPage(CybouPage::Diagnostics);
         save(QStringLiteral("diagnostics"));
         showPage(CybouPage::Settings);
@@ -906,10 +966,42 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
 void CybouMainWindow::reloadAppearance()
 {
     const auto current = static_cast<CybouPage>(currentPageIndex());
+    const QString global_search_text = m_global_search ? m_global_search->text() : QString{};
+
+    // Snapshot EmailPage state
     std::optional<CybouMailItem> compose_state;
-    if (auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail)); mail && mail->isComposing()) {
-        compose_state = mail->composer()->snapshotForRebuild();
+    EmailPage::View mail_view{EmailPage::View::Inbox};
+    QString mail_search_text;
+    QString mail_opened_id;
+    bool mail_detail_open{false};
+    if (auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail))) {
+        if (mail->isComposing()) {
+            compose_state = mail->composer()->snapshotForRebuild();
+        }
+        mail_view = mail->view();
+        mail_search_text = mail->searchText();
+        mail_opened_id = mail->currentMessageId();
+        mail_detail_open = mail->isDetailOpen();
     }
+
+    // Snapshot StoragePage state
+    StoragePage::View files_view{StoragePage::View::MyFiles};
+    QString files_folder_id;
+    QString files_search_text;
+    QString files_details_id;
+    bool files_details_visible{false};
+    bool files_details_advanced{false};
+    bool files_grid_mode{false};
+    if (auto* files = static_cast<StoragePage*>(page(CybouPage::Files))) {
+        files_view = files->view();
+        files_folder_id = files->currentFolder();
+        files_search_text = files->searchText();
+        files_details_id = files->detailsId();
+        files_details_visible = files->isDetailsVisible();
+        files_details_advanced = files->isDetailsAdvanced();
+        files_grid_mode = files->gridMode();
+    }
+
     CybouTheme::setAppearance(CybouTheme::savedAppearance());
     applyStyle();
     // Pages bake colors into pixmaps and inline styles: rebuild them. All
@@ -924,8 +1016,32 @@ void CybouMainWindow::reloadAppearance()
     buildShell();
     setSidebarCompact(width() < 1180);
     showPage(current);
-    if (compose_state) {
-        static_cast<EmailPage*>(page(CybouPage::Mail))->openCompose(*compose_state);
+
+    // Restore global search text
+    if (m_global_search && !global_search_text.isEmpty()) {
+        m_global_search->setText(global_search_text);
+    }
+
+    // Restore EmailPage state
+    if (auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail))) {
+        mail->setView(mail_view);
+        if (!mail_search_text.isEmpty()) mail->setSearchText(mail_search_text);
+        if (compose_state) {
+            mail->openCompose(*compose_state);
+        } else if (mail_detail_open && !mail_opened_id.isEmpty()) {
+            mail->openMessage(mail_opened_id);
+        }
+    }
+
+    // Restore StoragePage state
+    if (auto* files = static_cast<StoragePage*>(page(CybouPage::Files))) {
+        files->setView(files_view);
+        if (!files_folder_id.isEmpty()) files->openFolder(files_folder_id);
+        if (files_grid_mode) files->setGridMode(true);
+        if (!files_search_text.isEmpty()) files->setSearchText(files_search_text);
+        if (files_details_visible && !files_details_id.isEmpty()) {
+            files->showDetails(files_details_id, files_details_advanced);
+        }
     }
 }
 

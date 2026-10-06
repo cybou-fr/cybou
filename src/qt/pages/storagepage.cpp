@@ -4,6 +4,7 @@
 #include <qt/pages/storagepage.h>
 
 #include <qt/cyboudesktopmodel.h>
+#include <qt/cybouconsoledialog.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
@@ -1018,18 +1019,40 @@ void StoragePage::activate(const QString& id)
     }
 }
 
+QString StoragePage::searchText() const
+{
+    return m_search ? m_search->text() : QString{};
+}
+
+bool StoragePage::isDetailsVisible() const
+{
+    return m_details && !m_details->isHidden();
+}
+
+void StoragePage::setDetailsAdvanced(bool adv)
+{
+    m_details_advanced = adv;
+    if (m_details && m_details->isVisible()) rebuildDetails();
+}
+
 void StoragePage::updateColumns()
 {
     if (!m_table) return;
     // Hide secondary columns before any horizontal scrolling can appear.
+    // At 1040x720 window size with details open, m_views width is ~428px.
+    // Modified is hidden below 560px, Size remains visible down to 400px.
     const int width = m_views->width();
-    m_table->setColumnHidden(ModifiedColumn, width < 750);
-    m_table->setColumnHidden(SizeColumn, width < 610);
+    m_table->setColumnHidden(ModifiedColumn, width < 560);
+    m_table->setColumnHidden(SizeColumn, width < 400);
 }
 
 void StoragePage::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
+    if (m_details) {
+        const int target_details_width = width() < 1000 ? 250 : (width() < 1200 ? 275 : 300);
+        m_details->setFixedWidth(target_details_width);
+    }
     // Measure after the layout has settled.
     QTimer::singleShot(0, this, [this] { updateColumns(); });
 }
@@ -1330,7 +1353,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     menu.addAction(tr("Open"), this, [this, id] { activate(id); });
     if (!item->folder) {
         auto* dl = menu.addAction(tr("Download"), this, [this, id] { download(id); });
-        dl->setEnabled(item->state == CybouContentState::Protected);
+        dl->setEnabled(item->state == CybouContentState::Protected || item->available_offline);
     }
     menu.addSeparator();
     menu.addAction(tr("Rename"), this, [this, id] { promptRename(id); })->setShortcut(QKeySequence{Qt::Key_F2});
@@ -1361,8 +1384,13 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
 
 void StoragePage::showDetails(const QString& id)
 {
-    if (m_details_id != id) m_details_advanced = false;
+    showDetails(id, m_details_id == id && m_details_advanced);
+}
+
+void StoragePage::showDetails(const QString& id, bool advanced)
+{
     m_details_id = id;
+    m_details_advanced = advanced;
     m_details->setVisible(!id.isEmpty());
     rebuildDetails();
     QTimer::singleShot(0, this, [this] { updateColumns(); });
@@ -1428,7 +1456,7 @@ void StoragePage::rebuildDetails()
     auto* title = new QLabel{m_details};
     title->setObjectName(QStringLiteral("sectionTitle"));
     title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    title->setText(title->fontMetrics().elidedText(item->name, Qt::ElideMiddle, DETAILS_TEXT_WIDTH - 90));
+    title->setText(title->fontMetrics().elidedText(item->name, Qt::ElideMiddle, qMax(120, m_details->width() - 54)));
     title->setToolTip(item->name);
     head->addWidget(title, 1);
     auto* close = new QPushButton{tr("Close"), m_details};
@@ -1459,13 +1487,17 @@ void StoragePage::rebuildDetails()
         } else {
             m_details->setToolTip({});
         }
-        DetailPair(layout, tr("On the network"), item->min_remote_replicas < 0
+        QString replica_info = item->min_remote_replicas < 0
             ? tr("Remote copies have not been measured yet")
             : item->remote_replica_target > 0
                 ? tr("Encrypted copies: %1 of %2").arg(item->min_remote_replicas).arg(item->remote_replica_target)
-                : tr("Encrypted copies: %1").arg(item->min_remote_replicas), m_details);
+                : tr("Encrypted copies: %1").arg(item->min_remote_replicas);
+        if (item->min_remote_replicas >= 0 && item->remote_replica_target > 0 && item->min_remote_replicas < item->remote_replica_target) {
+            replica_info += QStringLiteral("  ·  ") + tr("Replicating to network");
+        }
+        DetailPair(layout, tr("On the network"), replica_info, m_details);
     }
-    DetailPair(layout, tr("Encryption"), tr("Encrypted content; recovery capsules may preserve access"), m_details);
+    DetailPair(layout, tr("Encryption"), tr("Encrypted before sending · Recoverable with your account recovery phrase"), m_details);
     const auto& status = m_model->status();
     DetailPair(layout, tr("Owner"), status.primary_name.isEmpty() ? tr("You") : status.primary_name, m_details);
     layout->addSpacing(8);
@@ -1486,6 +1518,26 @@ void StoragePage::rebuildDetails()
         layout->addWidget(discard);
     }
     if (item->trashed) {
+        auto* trash_box = Card(m_details);
+        trash_box->setObjectName(QStringLiteral("trashLifecycleCard"));
+        auto* t_layout = new QVBoxLayout{trash_box};
+        t_layout->setContentsMargins(12, 10, 12, 10);
+        t_layout->setSpacing(4);
+        auto* t_title = new QLabel{tr("Deletion lifecycle"), trash_box};
+        t_title->setObjectName(QStringLiteral("metricCaption"));
+        t_layout->addWidget(t_title);
+
+        auto* t_desc = new QLabel{
+            tr("• Phase 1: Local catalog removal (immediate)\n"
+               "• Phase 2: Finalized publication revocation (stops new admissions)\n"
+               "• Phase 3: Storage lease closure (after period close)\n"
+               "• Phase 4: Provider chunk purge (remote acknowledgements unconfirmed)\n"
+               "• Phase 5: Retained copies (downloaded or shared copies remain)"), trash_box};
+        t_desc->setObjectName(QStringLiteral("rowTitle"));
+        t_desc->setWordWrap(true);
+        t_layout->addWidget(t_desc);
+        layout->addWidget(trash_box);
+
         auto* restore = new QPushButton{tr("Restore"), m_details};
         restore->setObjectName(QStringLiteral("primaryButton"));
         restore->setProperty("cybouId", QStringLiteral("fileRestore"));
@@ -1499,7 +1551,14 @@ void StoragePage::rebuildDetails()
         forever->setProperty("cybouId", QStringLiteral("fileDeleteForever"));
         connect(forever, &QPushButton::clicked, this, [this, id = item->id] {
             if (QMessageBox::question(this, tr("Delete forever"),
-                    tr("Delete this item from your catalog? After eligible publication revocation is finalized, providers are instructed to purge unshared chunks. Other copies may remain.")) != QMessageBox::Yes) return;
+                    tr("Delete this item from your catalog?\n\n"
+                       "Deletion proceeds through 5 distinct phases:\n"
+                       "1. Immediate removal from your local catalog view.\n"
+                       "2. Finalized RootPublication revocation on the network, stopping new admissions.\n"
+                       "3. Storage lease closure upon billing period expiration.\n"
+                       "4. Provider chunk purge: compliant providers purge unshared chunks. Remote purge acknowledgements are not cryptographically notarized; network cannot prove erasure of uncooperative or offline copies.\n"
+                       "5. Retained copies: any copies previously downloaded, shared with recipients, or backed up externally remain unaffected.\n\n"
+                       "Proceed with permanent deletion?")) != QMessageBox::Yes) return;
             m_model->requestDeleteFile(id);
             showDetails({});
         });
@@ -1509,9 +1568,10 @@ void StoragePage::rebuildDetails()
         auto* dl = new QPushButton{tr("Download"), m_details};
         dl->setObjectName(QStringLiteral("primaryButton"));
         dl->setProperty("cybouId", QStringLiteral("fileDownload"));
-        dl->setEnabled(item->state == CybouContentState::Protected &&
-            (item->retrieval == CybouRetrievalState::Idle || item->retrieval == CybouRetrievalState::Ready));
-        dl->setToolTip(item->state != CybouContentState::Protected ? tr("Download is available when network protection is complete.") : QString{});
+        const bool can_download = (item->state == CybouContentState::Protected || item->available_offline) &&
+            (item->retrieval == CybouRetrievalState::Idle || item->retrieval == CybouRetrievalState::Ready);
+        dl->setEnabled(can_download);
+        dl->setToolTip(!can_download ? tr("Download is available when network protection is complete.") : QString{});
         connect(dl, &QPushButton::clicked, this, [this, id = item->id] { download(id); });
         layout->addWidget(dl);
         auto* send = new QPushButton{tr("Send by Mail"), m_details};
@@ -1541,6 +1601,24 @@ void StoragePage::rebuildDetails()
         DetailPair(box_layout, tr("Root content identifier"), root_id.isEmpty() ? none
             : root_id.size() > 20 ? root_id.left(10) + QStringLiteral("…") + root_id.right(8) : root_id, box);
         box->setToolTip(root_id);
+        const quint64 chunk_count = (item->logical_size == 0) ? 1 : ((item->logical_size + 524287) / 524288);
+        DetailPair(box_layout, tr("Chunk count"), tr("%1 chunks (512 KiB unit)").arg(chunk_count), box);
+        DetailPair(box_layout, tr("Confidentiality assurance"), tr("Hybrid post-quantum encryption before upload (ML-KEM-768 + X25519). Plaintext and filename never sent to network."), box);
+        DetailPair(box_layout, tr("Integrity assurance"), tr("Content-addressed BLAKE3 Merkle tree. Each chunk verified on retrieval against authorized RootPublication commitment."), box);
+        DetailPair(box_layout, tr("Availability & durability scope"), tr("Measured copies: %1 of %2 target. Replica deduplication is by StorageId; does not prove independent physical host failure domains.").arg(item->min_remote_replicas).arg(item->remote_replica_target), box);
+        DetailPair(box_layout, tr("Recovery assurance"), tr("Recoverable on any node using your account recovery phrase via owner self-capsule. Historical capsules preserved across rotation."), box);
+
+        auto* inspect_chunks = new QPushButton{tr("Inspect chunk tree"), box};
+        inspect_chunks->setObjectName(QStringLiteral("inspectChunkTreeButton"));
+        inspect_chunks->setCursor(Qt::PointingHandCursor);
+        connect(inspect_chunks, &QPushButton::clicked, this, [this, id = item->id] {
+            auto* dialog = new CybouConsoleDialog{m_model, this};
+            dialog->setAttribute(Qt::WA_DeleteOnClose);
+            dialog->executeCommand(QStringLiteral("chunks ") + id);
+            dialog->show();
+        });
+        box_layout->addWidget(inspect_chunks);
+
         DetailPair(box_layout, tr("Finalized height"), item->finalized_height > 0 ? QString::number(item->finalized_height) : none, box);
         DetailPair(box_layout, tr("Protection status"), CybouProduct::contentStateText(item->state), box);
         DetailPair(box_layout, tr("Local availability"), CybouProduct::localAvailabilityText(*item), box);

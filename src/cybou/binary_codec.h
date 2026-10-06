@@ -30,8 +30,11 @@ inline bool IsValidUtf8(std::string_view text) {
         else if (c >= 0xf0 && c <= 0xf4) { count = 3; value = c & 7; minimum = 0x10000; }
         else return false;
         if (count > text.size() - i) return false;
-        while (count--) { const auto next = static_cast<unsigned char>(text[i++]);
-            if ((next & 0xc0) != 0x80) return false; value = (value << 6) | (next & 63); }
+        while (count--) {
+            const auto next = static_cast<unsigned char>(text[i++]);
+            if ((next & 0xc0) != 0x80) return false;
+            value = (value << 6) | (next & 63);
+        }
         if (value < minimum || value > 0x10ffff || (value >= 0xd800 && value <= 0xdfff)) return false;
     }
     return true;

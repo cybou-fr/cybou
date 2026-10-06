@@ -52,7 +52,7 @@ QSettings RunKey()
 }
 #endif
 
-QString LoginItemPath()
+[[maybe_unused]] QString LoginItemPath()
 {
 #if defined(Q_OS_MACOS)
     return QDir::home().filePath(QStringLiteral("Library/LaunchAgents/com.cybou.desktop.plist"));

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_PAGES_EMAILPAGE_H
@@ -53,6 +53,9 @@ public:
     QStringList visibleMessageIds() const;
     void openMessage(const QString& id);
     void setSearchText(const QString& text);
+    QString searchText() const;
+    QString currentMessageId() const { return m_current_id; }
+    bool isDetailOpen() const { return m_detail_open; }
     /** Moves messages the way a drop on a folder does (Undo offered). */
     void moveMessagesTo(const QStringList& ids, View target);
     /** Trash only: removes the messages from this mailbox for good, after confirmation. */

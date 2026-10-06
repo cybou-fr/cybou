@@ -289,7 +289,7 @@ int main(int argc,char* argv[]) {
         if (profile=="funder") {
             // One funded Identity per test site, named so the desktop can pay it.
             const auto label=opts.Get("funder-name","battlefunder");
-            Client funder{*net,std::filesystem::path{opts.Require("data-dir")},peer,password,target,false};
+            Client funder{*net,std::filesystem::path{opts.Require("data-dir")},peer,password,static_cast<unsigned>(target),false};
             if (!funder.identity->GetFinalizedPrimaryName()) {
                 cybou::CybouNameService names{funder.node->Runtime(),funder.identity->GetKeyStore(),
                     std::filesystem::path{opts.Require("data-dir")}/"identity.vault"};

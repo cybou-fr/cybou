@@ -249,21 +249,6 @@ std::optional<IdentityX25519PublicKey> DeriveIdentityX25519PublicKey(
     return public_key;
 }
 
-std::optional<MlKem768Seed> GenerateMlKem768Seed()
-{
-    MlKem768Seed seed{};
-    if (RAND_priv_bytes(seed.data(), static_cast<int>(seed.size())) != 1 || IsZero(seed)) {
-        crypto::CleanseMemory(seed.data(), seed.size());
-        return std::nullopt;
-    }
-    const auto key = GenerateMlKem768Key(seed);
-    if (!key) {
-        crypto::CleanseMemory(seed.data(), seed.size());
-        return std::nullopt;
-    }
-    return seed;
-}
-
 std::optional<MlKem768PublicKey> DeriveMlKem768PublicKey(
     const std::span<const unsigned char, ML_KEM_768_SEED_SIZE> seed)
 {

@@ -225,8 +225,6 @@ WalletPage::WalletPage(CybouDesktopModel* model, QWidget* parent)
         m_model->notify(ok ? tr("Moving CYBOU to System Balance. It updates once the network confirms it.")
                            : (error.isEmpty() ? tr("CYBOU could not be moved to System Balance.") : error));
     });
-    connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { rebuildActivity(); });
-    connect(m_model, &CybouDesktopModel::filesChanged, this, [this] { rebuildActivity(); });
     connect(cancel, &QPushButton::clicked, this, [this] {
         if (m_reviewing) {
             setReviewing(false);
@@ -325,7 +323,7 @@ void WalletPage::refresh()
         }
     }
     m_system_hint->setText(fee && *fee > 0
-        ? tr("Pays network fees: about %1 more operations").arg(QLocale{}.toString(status.system_balance / *fee))
+        ? tr("Pays network fees · ~%1 standard fees (excludes storage rent)").arg(QLocale{}.toString(status.system_balance / *fee))
         : tr("Pays network fees for Mail, Files and payments"));
     m_gate->setText(!active ? tr("Wallet needs your CYBOU Identity. Create or restore it on Home.")
         : !payments ? tr("Payments are not connected yet.")
@@ -375,8 +373,8 @@ void WalletPage::setReviewing(bool reviewing)
         const QString to = m_to->text().trimmed().toLower();
         const quint64 amount = m_amount->text().toULongLong();
         const auto fee = m_model->paymentFee();
-        m_review->setText(tr("<b>Send %1 to %2</b><br>Network service fee: %3 from System Balance<br>"
-                             "Payments cannot be reversed.")
+        m_review->setText(tr("<b>Send %1 to %2</b><br>Paid from Available Balance · Network service fee: %3 from System Balance<br>"
+                             "Payments are final and cannot be reversed.")
             .arg(cybouAmountText(amount), to.toHtmlEscaped(), fee ? cybouAmountText(*fee) : tr("calculated when sending")));
     }
     updateSendState();
@@ -552,13 +550,8 @@ void WalletPage::showLockDialog()
 
 void WalletPage::rebuildActivity()
 {
-    while (QLayoutItem* item = m_activity_rows->takeAt(0)) {
-        if (QWidget* widget = item->widget()) {
-            widget->hide();
-            widget->deleteLater();
-        }
-        delete item;
-    }
+    while (auto* item = m_activity_rows->takeAt(0)) delete item;
+    QSet<QString> retained;
     int shown = 0;
     const auto& entries = m_model->walletEntries();
     for (qsizetype i = 0; i < entries.size() && shown < 12; ++i) {
@@ -574,16 +567,29 @@ void WalletPage::rebuildActivity()
             qint64 total = 0;
             for (qsizetype k = i; k <= run_end; ++k) total += entries.at(k).amount;
             const qsizetype count = run_end - i + 1;
-            auto* row = ActivityRow(Glyph::Database, Tint::Indigo, tr("Network service fees  ·  %1").arg(count),
-                tr("System Balance  ·  latest: %1").arg(m_model->feePurpose(entry.operation_id)),
-                QStringLiteral("−") + cybouAmountText(static_cast<quint64>(std::llabs(total))),
-                m_activity_rows->parentWidget());
-            QStringList run_ids;
-            for (qsizetype k = i; k <= run_end; ++k) run_ids << entries.at(k).id;
-            row->setProperty("walletFeeGroup", run_ids);
-            row->setCursor(Qt::PointingHandCursor);
-            row->setToolTip(tr("Show each fee"));
-            row->installEventFilter(this);
+            const QString row_key = QStringLiteral("fee_group:") + entry.id + QStringLiteral(":") + QString::number(count);
+            retained.insert(row_key);
+
+            const QString title_text = tr("Network service fees  ·  %1").arg(count);
+            const QString sub_text = tr("System Balance  ·  latest: %1").arg(m_model->feePurpose(entry.operation_id));
+            const QString meta_text = QStringLiteral("−") + cybouAmountText(static_cast<quint64>(std::llabs(total)));
+
+            auto* row = qobject_cast<QFrame*>(m_activity_widgets.value(row_key));
+            if (!row) {
+                row = ActivityRow(Glyph::Database, Tint::Indigo, title_text, sub_text, meta_text,
+                    m_activity_rows->parentWidget());
+                QStringList run_ids;
+                for (qsizetype k = i; k <= run_end; ++k) run_ids << entries.at(k).id;
+                row->setProperty("walletFeeGroup", run_ids);
+                row->setCursor(Qt::PointingHandCursor);
+                row->setToolTip(tr("Show each fee"));
+                row->installEventFilter(this);
+                m_activity_widgets.insert(row_key, row);
+            } else {
+                if (auto* title = row->findChild<QLabel*>(QStringLiteral("rowTitle"))) title->setText(title_text);
+                if (auto* sub = row->findChild<QLabel*>(QStringLiteral("rowSub"))) sub->setText(sub_text);
+                if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta"))) meta->setText(meta_text);
+            }
             m_activity_rows->addWidget(row);
             ++shown;
             i = run_end;
@@ -599,19 +605,45 @@ void WalletPage::rebuildActivity()
                 ? tr("System Balance  ·  %1").arg(m_model->feePurpose(entry.operation_id))
             : entry.system_side ? tr("System Balance") : tr("Available");
         const QString when = EntryWhen(entry);
-        auto* row = ActivityRow(EntryGlyph(entry),
-            entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,
-            when.isEmpty() ? amount : amount + QStringLiteral("  ·  ") + when, m_activity_rows->parentWidget());
-        row->setProperty("walletEntryId", entry.id);
-        row->setCursor(Qt::PointingHandCursor);
-        row->setToolTip(tr("Show details"));
-        row->installEventFilter(this);
-        if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta")); meta && entry.amount > 0) {
-            meta->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1; font-weight: 700;")
-                .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+        const QString meta_text = when.isEmpty() ? amount : amount + QStringLiteral("  ·  ") + when;
+        const QString row_key = entry.id;
+        retained.insert(row_key);
+
+        auto* row = qobject_cast<QFrame*>(m_activity_widgets.value(row_key));
+        if (!row) {
+            row = ActivityRow(EntryGlyph(entry),
+                entry.amount >= 0 ? Tint::Mint : Tint::Indigo, EntryTitle(entry), subtitle,
+                meta_text, m_activity_rows->parentWidget());
+            row->setProperty("walletEntryId", entry.id);
+            row->setCursor(Qt::PointingHandCursor);
+            row->setToolTip(tr("Show details"));
+            row->installEventFilter(this);
+            if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta")); meta && entry.amount > 0) {
+                meta->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1; font-weight: 700;")
+                    .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+            }
+            m_activity_widgets.insert(row_key, row);
+        } else {
+            if (auto* title = row->findChild<QLabel*>(QStringLiteral("rowTitle"))) title->setText(EntryTitle(entry));
+            if (auto* sub = row->findChild<QLabel*>(QStringLiteral("rowSub"))) sub->setText(subtitle);
+            if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta"))) {
+                meta->setText(meta_text);
+                if (entry.amount > 0) {
+                    meta->setStyleSheet(QStringLiteral("background: transparent; border: none; color: %1; font-weight: 700;")
+                        .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+                }
+            }
         }
         m_activity_rows->addWidget(row);
         ++shown;
+    }
+    for (auto it = m_activity_widgets.begin(); it != m_activity_widgets.end();) {
+        if (!retained.contains(it.key())) {
+            if (it.value()) it.value()->deleteLater();
+            it = m_activity_widgets.erase(it);
+        } else {
+            ++it;
+        }
     }
     m_activity_empty->setVisible(shown == 0);
 }

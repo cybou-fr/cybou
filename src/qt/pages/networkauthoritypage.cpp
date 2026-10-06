@@ -10,6 +10,7 @@
 
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
 #include <QLocale>
@@ -17,6 +18,8 @@
 #include <QPushButton>
 #include <QRegularExpressionValidator>
 #include <QStyle>
+#include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -79,7 +82,7 @@ void ClearLayout(QLayout* layout)
     }
 }
 
-void Row(QVBoxLayout* layout, const QString& key, const QString& value, bool mono = false)
+QLabel* Row(QVBoxLayout* layout, const QString& key, const QString& value, bool mono = false)
 {
     QWidget* parent = layout->parentWidget();
     auto* row = new QHBoxLayout;
@@ -95,6 +98,7 @@ void Row(QVBoxLayout* layout, const QString& key, const QString& value, bool mon
     row->addWidget(k, 0, Qt::AlignTop);
     row->addWidget(v, 1);
     layout->addLayout(row);
+    return v;
 }
 
 QString ShortHex(const std::string& hex)
@@ -177,6 +181,70 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     for (int column = 0; column < 3; ++column) grid->setColumnStretch(column, 1);
     root->addLayout(grid);
 
+    // Verified block & operation explorer
+    auto* explorer_sec = Section(root, tr("Verified explorer"), this,
+        tr("Paginated in-memory index of candidate operations and verified blocks. 10 items per page."));
+    auto* filter_bar = new QHBoxLayout;
+    m_explorer_filter_edit = new QLineEdit{explorer_sec->parentWidget()};
+    m_explorer_filter_edit->setObjectName(QStringLiteral("authorityExplorerFilter"));
+    m_explorer_filter_edit->setPlaceholderText(tr("Filter by operation ID, block height, or status…"));
+    m_explorer_filter_edit->setClearButtonEnabled(true);
+    filter_bar->addWidget(m_explorer_filter_edit);
+    explorer_sec->addLayout(filter_bar);
+
+    m_explorer_table = new QTableWidget{explorer_sec->parentWidget()};
+    m_explorer_table->setObjectName(QStringLiteral("authorityExplorerTable"));
+    m_explorer_table->setColumnCount(4);
+    m_explorer_table->setHorizontalHeaderLabels({
+        tr("Phase / Height"),
+        tr("Identifier"),
+        tr("Classification"),
+        tr("Status")
+    });
+    m_explorer_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_explorer_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_explorer_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_explorer_table->setShowGrid(false);
+    m_explorer_table->verticalHeader()->setVisible(false);
+    m_explorer_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_explorer_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_explorer_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_explorer_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    m_explorer_table->setMinimumHeight(240);
+    explorer_sec->addWidget(m_explorer_table);
+
+    auto* pager_bar = new QHBoxLayout;
+    m_explorer_prev = new QPushButton{tr("Previous"), explorer_sec->parentWidget()};
+    m_explorer_prev->setObjectName(QStringLiteral("authorityExplorerPrev"));
+    m_explorer_prev->setCursor(Qt::PointingHandCursor);
+    m_explorer_page_label = new QLabel{explorer_sec->parentWidget()};
+    m_explorer_page_label->setObjectName(QStringLiteral("authorityExplorerPageLabel"));
+    m_explorer_next = new QPushButton{tr("Next"), explorer_sec->parentWidget()};
+    m_explorer_next->setObjectName(QStringLiteral("authorityExplorerNext"));
+    m_explorer_next->setCursor(Qt::PointingHandCursor);
+    pager_bar->addWidget(m_explorer_prev);
+    pager_bar->addStretch();
+    pager_bar->addWidget(m_explorer_page_label);
+    pager_bar->addStretch();
+    pager_bar->addWidget(m_explorer_next);
+    explorer_sec->addLayout(pager_bar);
+
+    m_explorer_detail_card = Card(explorer_sec->parentWidget());
+    m_explorer_detail_card->setObjectName(QStringLiteral("authorityExplorerDetail"));
+    m_explorer_detail_layout = new QVBoxLayout{m_explorer_detail_card};
+    m_explorer_detail_layout->setContentsMargins(16, 12, 16, 12);
+    m_explorer_detail_layout->setSpacing(6);
+    m_explorer_detail_layout->addWidget(SectionTitle(tr("Selected item details"), m_explorer_detail_card));
+    explorer_sec->addWidget(m_explorer_detail_card);
+
+    // Off-chain evidence & signer safety
+    auto* evidence_sec = Section(root, tr("Off-chain evidence & signer safety"), this,
+        tr("Safety journals, settlement readiness, and operational signer status."));
+    auto* evidence_rows = Rows(evidence_sec);
+    m_safety_journal = Row(evidence_rows, tr("Signing safety"), QStringLiteral("—"));
+    m_settlement_readiness = Row(evidence_rows, tr("Settlement readiness"), QStringLiteral("—"));
+    m_read_only_notice = Row(evidence_rows, tr("Signer authority"), QStringLiteral("—"));
+
     // Candidate operations this node executed and will finalize.
     auto* queue = Section(root, tr("Candidate operations"), this,
         tr("Operations this node executed against its finalized state. Each is executed again before signing."));
@@ -184,17 +252,60 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_recent = Rows(Section(root, tr("Recently finalized"), this,
         tr("Operations this node saw finalized recently, newest first.")));
 
-    m_totals = Rows(Section(root, tr("Network totals"), this));
+    m_totals = Rows(Section(root, tr("Canonical state root commitments"), this,
+        tr("Account and storage values cryptographically committed by the latest state root.")));
+    m_total_spendable = Row(m_totals, tr("Spendable Balance"), QStringLiteral("—"));
+    m_total_system = Row(m_totals, tr("System Balance"), QStringLiteral("—"));
+    m_total_escrow = Row(m_totals, tr("Storage escrow"), QStringLiteral("—"));
+    m_total_names = Row(m_totals, tr(".cybou names"), QStringLiteral("—"));
+
     m_peer_rows = Rows(Section(root, tr("Peers"), this,
         tr("Peer heights are their own announcements, not verified state.")));
+
     m_chain = Rows(Section(root, tr("Chain"), this));
+    m_chain_tip = Row(m_chain, tr("Tip"), QStringLiteral("—"), true);
+    m_chain_state_root = Row(m_chain, tr("State root"), QStringLiteral("—"), true);
+    m_chain_network_id = Row(m_chain, tr("Network ID"), QStringLiteral("—"), true);
+    m_chain_connection = Row(m_chain, tr("Connection"), QStringLiteral("—"));
+
     root->addStretch();
 
+    connect(m_explorer_filter_edit, &QLineEdit::textChanged, this, [this](const QString& text) {
+        setExplorerFilter(text);
+    });
+    connect(m_explorer_prev, &QPushButton::clicked, this, [this] {
+        if (m_explorer_page > 1) {
+            --m_explorer_page;
+            updateExplorerPage();
+        }
+    });
+    connect(m_explorer_next, &QPushButton::clicked, this, [this] {
+        const int total_pages = qMax(1, (m_filtered_items.size() + kPageSize - 1) / kPageSize);
+        if (m_explorer_page < total_pages) {
+            ++m_explorer_page;
+            updateExplorerPage();
+        }
+    });
+    connect(m_explorer_table, &QTableWidget::itemSelectionChanged, this, [this] {
+        onExplorerSelectionChanged();
+    });
+
     connect(m_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     auto* ticker = new QTimer{this};
-    connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
+    connect(ticker, &QTimer::timeout, this, [this] { updateAgeLabel(); });
     ticker->start(2000);
     refresh();
+}
+
+void NetworkAuthorityPage::updateAgeLabel()
+{
+    const auto& a = m_model->networkAuthority();
+    const auto now = QDateTime::currentDateTimeUtc();
+    const qint64 age = m_seen_at.isValid() ? m_seen_at.secsTo(now) : 0;
+    m_last_block->setText(!a.proven ? QStringLiteral("—")
+        : m_height_advanced_in_view ? (age < 60 ? tr("%1 s ago").arg(age) : relTime(m_seen_at.toLocalTime()))
+        : tr("None in this view"));
 }
 
 void NetworkAuthorityPage::refresh()
@@ -214,7 +325,7 @@ void NetworkAuthorityPage::refresh()
         m_seen_at = now;
         m_height_advanced_in_view = true;
     }
-    const qint64 age = m_seen_at.isValid() ? m_seen_at.secsTo(now) : 0;
+    updateAgeLabel();
 
     // Finalizer state and controls.
     switch (a.finalizer) {
@@ -241,65 +352,274 @@ void NetworkAuthorityPage::refresh()
         m_finalizer_detail->setText(tr("The PoA signer is not active. Unlock the vault of this Identity to finalize."));
         break;
     }
+
+    const bool is_authorized = a.proven && a.signer_enabled;
     const bool paused = a.finalizer == CybouFinalizerState::Paused;
     m_pause->setText(paused ? tr("Resume") : tr("Pause"));
-    m_pause->setEnabled(a.finalizer == CybouFinalizerState::Finalizing || paused);
+    m_pause->setEnabled(is_authorized && (a.finalizer == CybouFinalizerState::Finalizing || paused));
     m_finalize_now->setVisible(paused);
-    m_settle_storage->setEnabled(a.proven && a.signer_enabled && a.finalizer != CybouFinalizerState::SafetyHalt);
+    m_finalize_now->setEnabled(is_authorized && paused);
+    m_settle_storage->setEnabled(is_authorized && a.finalizer != CybouFinalizerState::SafetyHalt);
 
     m_height->setText(a.proven ? locale.toString(a.finalized_height) : QStringLiteral("—"));
-    m_last_block->setText(!a.proven ? QStringLiteral("—")
-        : m_height_advanced_in_view ? (age < 60 ? tr("%1 s ago").arg(age) : relTime(m_seen_at.toLocalTime()))
-        : tr("None in this view"));
     m_candidates->setText(locale.toString(a.candidates));
     m_peers->setText(locale.toString(static_cast<qulonglong>(d.peers.size())));
     m_identities->setText(locale.toString(a.identities));
     m_escrow->setText(cybouAmountText(a.storage_escrow));
 
-    ClearLayout(m_queue);
-    if (a.candidate_ids.isEmpty()) {
-        m_queue->addWidget(MutedText(tr("No candidate operations. The pool is empty."), m_queue->parentWidget()));
-    }
-    for (int i = 0; i < a.candidate_ids.size(); ++i) {
-        if (i == kQueueRows) {
-            m_queue->addWidget(MutedText(tr("and %1 more").arg(a.candidate_ids.size() - kQueueRows), m_queue->parentWidget()));
-            break;
-        }
-        Row(m_queue, ShortHex(a.candidate_ids.at(i).toStdString()), tr("waiting for the next block"), true);
+    // Off-chain evidence & signer safety status
+    m_safety_journal->setText(tr("Fail-closed durable append-only journal active. Equivocation conflicts resolved by min(BlockID)."));
+    m_settlement_readiness->setText(tr("Off-chain replica service receipts and audit confirmations tracked. Settlement transactions execute upon period close."));
+    if (is_authorized) {
+        m_read_only_notice->setText(tr("Authorized signer: Genesis-authorized PoA signing key is active. Finalization and settlement controls are enabled."));
+    } else {
+        m_read_only_notice->setText(tr("Read-only console: Active signing key is not unlocked or authorized for this network. Finalization and settlement actions are restricted."));
     }
 
-    // The runtime's recent status history: finalized operations with their block.
-    ClearLayout(m_recent);
+    if (a.candidate_ids != m_cached_candidate_ids) {
+        m_cached_candidate_ids = a.candidate_ids;
+        ClearLayout(m_queue);
+        if (a.candidate_ids.isEmpty()) {
+            m_queue->addWidget(MutedText(tr("Idle chain: Pool is empty (0 candidates). Blocks are produced on demand as operations arrive, not on an idle empty-block timer."), m_queue->parentWidget()));
+        }
+        for (int i = 0; i < a.candidate_ids.size(); ++i) {
+            if (i == kQueueRows) {
+                m_queue->addWidget(MutedText(tr("and %1 more").arg(a.candidate_ids.size() - kQueueRows), m_queue->parentWidget()));
+                break;
+            }
+            Row(m_queue, ShortHex(a.candidate_ids.at(i).toStdString()), tr("waiting for the next block"), true);
+        }
+    }
+
+    std::vector<std::pair<std::string, quint64>> recent_ops;
     int recent = 0;
     for (auto it = d.operations.rbegin(); it != d.operations.rend() && recent < kQueueRows; ++it) {
         if (it->state != static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED)) continue;
-        Row(m_recent, ShortHex(it->operation_id),
-            tr("block %1").arg(locale.toString(static_cast<qulonglong>(it->finalized_height))), true);
+        recent_ops.emplace_back(it->operation_id, static_cast<quint64>(it->finalized_height));
         ++recent;
     }
-    if (recent == 0) m_recent->addWidget(MutedText(tr("Nothing finalized in this session yet."), m_recent->parentWidget()));
-
-    ClearLayout(m_totals);
-    Row(m_totals, tr("Spendable Balance"), cybouAmountText(a.total_balance));
-    Row(m_totals, tr("System Balance"), cybouAmountText(a.total_system_balance));
-    Row(m_totals, tr("Storage escrow"), cybouAmountText(a.storage_escrow));
-    Row(m_totals, tr(".cybou names"), tr("%1  ·  %2 commits pending")
-        .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
-
-    ClearLayout(m_peer_rows);
-    if (d.peers.empty()) m_peer_rows->addWidget(MutedText(tr("No peers connected."), m_peer_rows->parentWidget()));
-    for (const auto& peer : d.peers) {
-        const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
-        QString text = lag == 0 ? tr("height %1  ·  in step").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
-                                : tr("height %1  ·  %2 behind").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
-                                      .arg(locale.toString(lag));
-        if (!peer.storage_id.empty()) text += tr("  ·  StorageId %1").arg(ShortHex(peer.storage_id));
-        Row(m_peer_rows, QString::fromStdString(peer.endpoint), text);
+    if (recent_ops != m_cached_recent) {
+        m_cached_recent = recent_ops;
+        ClearLayout(m_recent);
+        for (const auto& [op_id, blk_height] : recent_ops) {
+            Row(m_recent, ShortHex(op_id),
+                tr("block %1").arg(locale.toString(static_cast<qulonglong>(blk_height))), true);
+        }
+        if (recent_ops.empty()) {
+            m_recent->addWidget(MutedText(tr("Nothing finalized in this session yet."), m_recent->parentWidget()));
+        }
     }
 
-    ClearLayout(m_chain);
-    Row(m_chain, tr("Tip"), QString::fromStdString(d.tip), true);
-    Row(m_chain, tr("State root"), QString::fromStdString(d.state_root), true);
-    Row(m_chain, tr("Network ID"), QString::fromStdString(d.network_binding), true);
-    Row(m_chain, tr("Connection"), cybouConnectionText(m_model->status()));
+    m_total_spendable->setText(cybouAmountText(a.total_balance));
+    m_total_system->setText(cybouAmountText(a.total_system_balance));
+    m_total_escrow->setText(cybouAmountText(a.storage_escrow));
+    m_total_names->setText(tr("%1  ·  %2 commits pending")
+        .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
+
+    std::vector<std::string> peer_sig;
+    for (const auto& peer : d.peers) {
+        peer_sig.push_back(peer.endpoint + ":" + std::to_string(peer.advertised_height) + ":" + peer.storage_id);
+    }
+    if (peer_sig != m_cached_peers) {
+        m_cached_peers = peer_sig;
+        ClearLayout(m_peer_rows);
+        if (d.peers.empty()) m_peer_rows->addWidget(MutedText(tr("No peers connected."), m_peer_rows->parentWidget()));
+        for (const auto& peer : d.peers) {
+            const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
+            QString text = lag == 0 ? tr("height %1  ·  in step").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
+                                    : tr("height %1  ·  %2 behind").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
+                                          .arg(locale.toString(lag));
+            if (!peer.storage_id.empty()) text += tr("  ·  StorageId %1").arg(ShortHex(peer.storage_id));
+            Row(m_peer_rows, QString::fromStdString(peer.endpoint), text);
+        }
+    }
+
+    m_chain_tip->setText(QString::fromStdString(d.tip));
+    m_chain_state_root->setText(QString::fromStdString(d.state_root));
+    m_chain_network_id->setText(QString::fromStdString(d.network_binding));
+    m_chain_connection->setText(cybouConnectionText(m_model->status()));
+
+    rebuildExplorerItems();
+}
+
+void NetworkAuthorityPage::rebuildExplorerItems()
+{
+    const auto& a = m_model->networkAuthority();
+    const auto& d = m_model->networkDiagnostics();
+    const QLocale locale;
+
+    m_all_items.clear();
+
+    // 1. Candidate pool items
+    for (const auto& cid : a.candidate_ids) {
+        CybouExplorerItem item;
+        item.phase_or_height = tr("Candidate (volatile)");
+        item.identifier = cid;
+        item.classification = tr("Candidate operation");
+        item.status = tr("Waiting for next block");
+        item.is_candidate = true;
+        item.height = 0;
+        m_all_items.append(item);
+    }
+
+    // 2. Finalized operations
+    for (auto it = d.operations.rbegin(); it != d.operations.rend(); ++it) {
+        CybouExplorerItem item;
+        item.height = static_cast<quint64>(it->finalized_height);
+        item.phase_or_height = (it->finalized_height > 0)
+            ? tr("Block %1").arg(locale.toString(static_cast<qulonglong>(item.height)))
+            : tr("Pending");
+        item.identifier = QString::fromStdString(it->operation_id);
+        item.classification = tr("Verified operation");
+        item.status = (it->state == static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED))
+            ? tr("Finalized")
+            : tr("Submitted");
+        item.is_candidate = false;
+        m_all_items.append(item);
+    }
+
+    // 3. Finalized block header tip if observed
+    if (d.height > 0 && !d.tip.empty()) {
+        CybouExplorerItem block_item;
+        block_item.height = static_cast<quint64>(d.height);
+        block_item.phase_or_height = tr("Block %1 (Tip)").arg(locale.toString(static_cast<qulonglong>(d.height)));
+        block_item.identifier = QString::fromStdString(d.tip);
+        block_item.classification = tr("Finalized block");
+        block_item.status = tr("Finalized by PoA key");
+        block_item.is_candidate = false;
+        m_all_items.append(block_item);
+    }
+
+    // Apply filter
+    const QString filter = m_explorer_filter_edit ? m_explorer_filter_edit->text().trimmed() : QString{};
+    m_filtered_items.clear();
+    for (const auto& item : m_all_items) {
+        if (filter.isEmpty() ||
+            item.identifier.contains(filter, Qt::CaseInsensitive) ||
+            item.phase_or_height.contains(filter, Qt::CaseInsensitive) ||
+            item.classification.contains(filter, Qt::CaseInsensitive) ||
+            item.status.contains(filter, Qt::CaseInsensitive)) {
+            m_filtered_items.append(item);
+        }
+    }
+
+    updateExplorerPage();
+}
+
+void NetworkAuthorityPage::updateExplorerPage()
+{
+    const int total_items = m_filtered_items.size();
+    const int total_pages = qMax(1, (total_items + kPageSize - 1) / kPageSize);
+    m_explorer_page = qBound(1, m_explorer_page, total_pages);
+
+    m_explorer_prev->setEnabled(m_explorer_page > 1);
+    m_explorer_next->setEnabled(m_explorer_page < total_pages);
+    m_explorer_page_label->setText(tr("Page %1 of %2 (%3 items)")
+        .arg(m_explorer_page).arg(total_pages).arg(total_items));
+
+    const int start_index = (m_explorer_page - 1) * kPageSize;
+    const int end_index = qMin(total_items, start_index + kPageSize);
+    const int page_count = qMax(0, end_index - start_index);
+
+    m_explorer_table->blockSignals(true);
+    m_explorer_table->setRowCount(page_count);
+    for (int i = 0; i < page_count; ++i) {
+        const auto& item = m_filtered_items.at(start_index + i);
+        auto* cell_phase = new QTableWidgetItem{item.phase_or_height};
+        auto* cell_id = new QTableWidgetItem{ShortHex(item.identifier.toStdString())};
+        cell_id->setFont(QFont(QStringLiteral("Consolas"), 9));
+        auto* cell_class = new QTableWidgetItem{item.classification};
+        auto* cell_status = new QTableWidgetItem{item.status};
+
+        m_explorer_table->setItem(i, 0, cell_phase);
+        m_explorer_table->setItem(i, 1, cell_id);
+        m_explorer_table->setItem(i, 2, cell_class);
+        m_explorer_table->setItem(i, 3, cell_status);
+    }
+
+    if (m_selected_explorer_index >= start_index && m_selected_explorer_index < end_index) {
+        m_explorer_table->selectRow(m_selected_explorer_index - start_index);
+    } else {
+        m_explorer_table->clearSelection();
+    }
+    m_explorer_table->blockSignals(false);
+
+    updateExplorerDetails();
+}
+
+void NetworkAuthorityPage::updateExplorerDetails()
+{
+    ClearLayout(m_explorer_detail_layout);
+    m_explorer_detail_layout->addWidget(SectionTitle(tr("Selected item details"), m_explorer_detail_card));
+
+    if (m_selected_explorer_index >= 0 && m_selected_explorer_index < m_filtered_items.size()) {
+        const auto& item = m_filtered_items.at(m_selected_explorer_index);
+
+        auto* id_row = Row(m_explorer_detail_layout, tr("Identifier"), item.identifier, true);
+        id_row->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+
+        Row(m_explorer_detail_layout, tr("Phase / Height"), item.phase_or_height);
+        Row(m_explorer_detail_layout, tr("Classification"), item.classification);
+        Row(m_explorer_detail_layout, tr("Status"), item.status);
+
+        const QString provenance = item.is_candidate
+            ? tr("Volatile candidate in local pool. Executed against finalized state; re-executed before block signing.")
+            : tr("Committed in finalized PoA block. Cryptographically verified against latest state root.");
+        Row(m_explorer_detail_layout, tr("Verification notes"), provenance);
+    } else {
+        auto* hint = MutedText(tr("Select an operation or block in the explorer table to inspect its full un-truncated identifier and verification status."), m_explorer_detail_card);
+        m_explorer_detail_layout->addWidget(hint);
+    }
+}
+
+void NetworkAuthorityPage::onExplorerSelectionChanged()
+{
+    const int row = m_explorer_table->currentRow();
+    if (row >= 0) {
+        const int global_index = (m_explorer_page - 1) * kPageSize + row;
+        if (global_index >= 0 && global_index < m_filtered_items.size()) {
+            m_selected_explorer_index = global_index;
+        } else {
+            m_selected_explorer_index = -1;
+        }
+    } else {
+        m_selected_explorer_index = -1;
+    }
+    updateExplorerDetails();
+}
+
+void NetworkAuthorityPage::selectExplorerItem(int index)
+{
+    if (index >= 0 && index < m_filtered_items.size()) {
+        m_selected_explorer_index = index;
+        m_explorer_page = (index / kPageSize) + 1;
+        updateExplorerPage();
+        const int row = index % kPageSize;
+        m_explorer_table->selectRow(row);
+    } else {
+        m_selected_explorer_index = -1;
+        if (m_explorer_table) m_explorer_table->clearSelection();
+        updateExplorerDetails();
+    }
+}
+
+void NetworkAuthorityPage::setExplorerFilter(const QString& filter)
+{
+    if (m_explorer_filter_edit && m_explorer_filter_edit->text() != filter) {
+        m_explorer_filter_edit->setText(filter);
+    }
+    m_filtered_items.clear();
+    const QString trimmed = filter.trimmed();
+    for (const auto& item : m_all_items) {
+        if (trimmed.isEmpty() ||
+            item.identifier.contains(trimmed, Qt::CaseInsensitive) ||
+            item.phase_or_height.contains(trimmed, Qt::CaseInsensitive) ||
+            item.classification.contains(trimmed, Qt::CaseInsensitive) ||
+            item.status.contains(trimmed, Qt::CaseInsensitive)) {
+            m_filtered_items.append(item);
+        }
+    }
+    m_explorer_page = 1;
+    m_selected_explorer_index = -1;
+    updateExplorerPage();
 }

@@ -37,7 +37,8 @@ bool OwnedPrivate(HANDLE file) {
                     if(!EqualSid(sid,owner)&&!EqualSid(sid,system)&&!EqualSid(sid,owner_rights)) ok=false;
                 } else if(header->AceType!=ACCESS_DENIED_ACE_TYPE) ok=false;
             }
-            if(system)LocalFree(system);if(owner_rights)LocalFree(owner_rights);
+            if(system)LocalFree(system);
+            if(owner_rights)LocalFree(owner_rights);
         }
         CloseHandle(token);
     }
@@ -91,7 +92,7 @@ std::optional<std::vector<unsigned char>> ReadSecretFile(const std::filesystem::
     HANDLE file=CreateFileW(path.c_str(),GENERIC_READ|READ_CONTROL,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
     if(file==INVALID_HANDLE_VALUE)return std::nullopt;
     BY_HANDLE_FILE_INFORMATION info{};LARGE_INTEGER size{};
-    if(!GetFileInformationByHandle(file,&info)||(info.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT)||GetFileType(file)!=FILE_TYPE_DISK||!GetFileSizeEx(file,&size)||size.QuadPart<=0||size.QuadPart>max_bytes||!OwnedPrivate(file)) {CloseHandle(file);return std::nullopt;}
+    if(!GetFileInformationByHandle(file,&info)||(info.dwFileAttributes&FILE_ATTRIBUTE_REPARSE_POINT)||GetFileType(file)!=FILE_TYPE_DISK||!GetFileSizeEx(file,&size)||size.QuadPart<=0||static_cast<unsigned long long>(size.QuadPart)>max_bytes||!OwnedPrivate(file)) {CloseHandle(file);return std::nullopt;}
     std::vector<unsigned char> bytes(size.QuadPart);DWORD read=0;
     const bool ok=ReadFile(file,bytes.data(),bytes.size(),&read,nullptr)&&read==bytes.size();CloseHandle(file);
 #else
