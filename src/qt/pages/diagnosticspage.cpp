@@ -140,7 +140,7 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, std::function<void()>
         head->setTextInteractionFlags(Qt::TextSelectableByMouse);
         layout->addWidget(head);
         auto table = [dialog,layout](const QStringList& headings) {
-            auto* widget = new QTableWidget{0,headings.size(),dialog};
+            auto* widget = new QTableWidget{0,static_cast<int>(headings.size()),dialog};
             widget->setHorizontalHeaderLabels(headings);
             widget->setEditTriggers(QAbstractItemView::NoEditTriggers);
             widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
