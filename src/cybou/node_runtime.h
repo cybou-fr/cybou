@@ -658,6 +658,8 @@ private:
         std::unique_ptr<StorageIoScheduler> storage_io;
         mutable std::mutex mutex;
         std::map<Endpoint, PeerRetryState> peer_retry_after;
+        /** The previous sync pass applied a full batch: this node is still catching up. */
+        bool catching_up{false};
         std::chrono::steady_clock::time_point next_peer_ping{};
         std::chrono::steady_clock::time_point next_peer_discovery{};
         // Peer callbacks can consult routes while session I/O owns mutex.

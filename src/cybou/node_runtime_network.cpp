@@ -303,10 +303,18 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
         return left.port < right.port;
     });
 
+    // Candidate operations move before blocks: each peer's block sync can take seconds
+    // (8 peers x 5 s timeouts), and operations queued behind it reached the PoA late.
+    // Own and relayed operations are always pushed; others' are polled once caught up.
+    m_network.peer_manager->PushOperationRelays();
+    if (!m_network.catching_up) m_network.peer_manager->PollOperationRelays();
+
     SyncPeerResult result{.status = SyncPeerStatus::CONNECTION_FAILED};
     bool any_peer_up_to_date{false};
     bool all_peers_caught_up{!peers.empty()};
     for (const auto& peer : peers) {
+        // An operation that arrived during a slow peer's block sync leaves before the next one.
+        m_network.peer_manager->PushOperationRelays();
         const auto attempt = m_network.peer_manager->SyncFromPeer(peer.address, peer.port, max_blocks-result.blocks_applied);
         // Completion covers known reachable peers only; it conveys no consensus trust.
         if (!attempt.caught_up_with_known_peers) all_peers_caught_up = false;
@@ -335,13 +343,12 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     }
     result.caught_up_with_known_peers = all_peers_caught_up;
     if (result.blocks_applied==0 && any_peer_up_to_date) result.status = SyncPeerStatus::UP_TO_DATE;
-    // While catching up (a full batch arrived) serve nobody: polling operations and fanning
-    // blocks out to other lagging peers would stretch every pass of our own initial sync.
-    if (result.blocks_applied < max_blocks) {
-        m_network.peer_manager->PollOperationRelays();
-        m_network.peer_manager->PushOperationRelays();
-        m_network.peer_manager->FanoutFinalizedBlocks();
-    }
+    // Operations admitted while blocks synced go out now, in the same pass.
+    m_network.peer_manager->PushOperationRelays();
+    // While catching up (a full batch arrived) fan blocks out to nobody: serving other
+    // lagging peers would stretch every pass of our own initial sync.
+    m_network.catching_up = result.blocks_applied >= max_blocks;
+    if (!m_network.catching_up) m_network.peer_manager->FanoutFinalizedBlocks();
     return result;
 }
 
