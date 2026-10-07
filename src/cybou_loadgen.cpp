@@ -165,9 +165,19 @@ struct Client {
         jobs=publication->Jobs(); // Restart resumes durable exact operations and publication intents.
         events->Write(cybou::NodeEvent::node_started,{{"network_binding",runtime.GetNetworkBinding().GetHex()}});
     }
+    std::chrono::steady_clock::time_point next_progress{std::chrono::steady_clock::now()+30s};
     bool Advance() {
         publication->ProcessDurability(*storage);
         application->Scan();
+        if (std::chrono::steady_clock::now()>=next_progress) {
+            // Restore diagnostics: how far the scan is and what it still waits for.
+            const auto progress=application->Progress();
+            std::cerr << "scan: identity=" << dir.filename().string() << " scanned=" << progress.scanned_height
+                      << " finalized=" << progress.finalized_height << " unavailable_roots=" << progress.unavailable_roots
+                      << " lost_roots=" << progress.lost_roots << " providers=" << transport->Providers().size()
+                      << " verified_files=" << verified_files.size() << std::endl;
+            next_progress=std::chrono::steady_clock::now()+30s;
+        }
         events->Observe(node->Runtime().GetDiagnostics());
         if (std::chrono::steady_clock::now()>=next_audit) {
             storage->AuditNextPlacement(1);

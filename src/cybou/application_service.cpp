@@ -381,8 +381,10 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         height = 0;
         m_repairing = true;
     }
-    // Retry roots that were unavailable earlier, with backoff (30 s doubling to 1 h): each retry
-    // fetches over the network, and lost content must not be requested on every pass.
+    // Retry roots that were unavailable earlier, with backoff (30 s doubling to 5 min): each retry
+    // fetches over the network, so lost content is not requested on every pass. The cap stays
+    // short: a fresh node often lacks providers at first, and an hour-long wait once they
+    // appear left a clean restore incomplete.
     const auto now = std::chrono::steady_clock::now();
     for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
         auto& retry = m_unavailable_retry[operation_id];
@@ -396,7 +398,7 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
         } else {
             retry.attempts = std::min(retry.attempts + 1, 8U);
             retry.next = now + std::min(std::chrono::seconds{30} * (1U << (retry.attempts - 1)),
-                std::chrono::seconds{std::chrono::hours{1}});
+                std::chrono::seconds{std::chrono::minutes{5}});
         }
         batch.Commit();
     }

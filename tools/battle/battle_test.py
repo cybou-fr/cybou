@@ -273,11 +273,13 @@ class Battle:
                                          "--subject", "Battle test letter", "--body", "Battle test letter with an attachment",
                                          "--attachment-size", self.args.attachment_size,
                                          "--max-operations", str(self.args.desktop_mails)] + args, path / "load.log"))
+        self.load_processes = {}
         for path, peer in self.win_clients():
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
                                          "--password-file", str(PASSWORD_FILE)] +
                                         self.client_args(self.args.profile, self.args.duration, str(path / "metrics.json")) +
                                         ["--linger", "1"], path / "load.log"))
+            self.load_processes[path] = processes[-1]
         for path, peer in self.wsl_clients():
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {self.wsl_dir}/password.txt "
                       f"{' '.join(self.client_args(self.args.profile, self.args.duration, path + '/metrics.json'))} --linger 1",
@@ -291,15 +293,28 @@ class Battle:
             time.sleep(10)
         self.sample()
 
+    def restored_win(self) -> list[tuple[Path, tuple[str, int]]]:
+        return self.win_clients()[:1]
+
+    def restored_wsl(self) -> list[tuple[str, tuple[str, int]]]:
+        return self.wsl_clients()[:1]
+
     def restore(self) -> None:
         """Clean-machine restore: each client's Identities start again from their vault alone.
 
         A fresh data directory holds only identity.vault and expected.txt (what the load run
         left protected); the restore rebuilds Mail and Files from the chain and fetches every
         file back from the network, checking each byte."""
-        log("restore: rebuilding every client Identity from its vault on a clean data directory")
+        # A lost machine: the restored client's own Full Node is switched off first, while every
+        # other client keeps serving the replicas it holds. One client per site is restored, so
+        # the test loses two machines, not the whole provider set.
+        log("restore: one client per site loses its machine and restarts from its vault alone")
         processes = []
-        for path, peer in self.win_clients():
+        for path, peer in self.restored_win():
+            original = self.load_processes.get(path)
+            if original and original.poll() is None:
+                original.terminate()
+                original.wait(timeout=60)
             target = path.with_name(path.name + "-restore")
             for i in range(self.args.identities):
                 source, dest = path / f"identity-{i}", target / f"identity-{i}"
@@ -313,7 +328,8 @@ class Battle:
             processes.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(target),
                                          "--peer", f"{peer[0]}:{peer[1]}", "--password-file", str(PASSWORD_FILE)] + args,
                                         target / "restore.log"))
-        for path, peer in self.wsl_clients():
+        for path, peer in self.restored_wsl():
+            wsl(f"kill $(cat {path}/load.pid) 2>/dev/null; sleep 3", check=False)
             target = path + "-restore"
             copies = " ".join(f"mkdir -p {target}/identity-{i}/node && cp {path}/identity-{i}/identity.vault {target}/identity-{i}/ && "
                               f"cp {path}/identity-{i}/expected.txt {target}/identity-{i}/ 2>/dev/null; "
@@ -328,7 +344,7 @@ class Battle:
         deadline = time.time() + 120 * 60
         while any(p.poll() is None for p in processes) or any(
                 wsl(f"kill -0 $(cat {path}-restore/restore.pid) 2>/dev/null && echo running || true").strip() == "running"
-                for path, _ in self.wsl_clients()):
+                for path, _ in self.restored_wsl()):
             if time.time() > deadline:
                 log("restore: time limit reached; unfinished restores count as failed")
                 break
@@ -402,11 +418,11 @@ class Battle:
             if text:
                 metrics.append(("wsl:" + path.rsplit("/", 1)[1], json.loads(text)))
         restores = []
-        for path, _ in self.win_clients():
+        for path, _ in self.restored_win():
             file = path.with_name(path.name + "-restore") / "metrics.json"
             if file.exists():
                 restores.append(("windows:" + path.name, json.loads(file.read_text())))
-        for path, _ in self.wsl_clients():
+        for path, _ in self.restored_wsl():
             text = wsl(f"cat {path}-restore/metrics.json 2>/dev/null || true").strip()
             if text:
                 restores.append(("wsl:" + path.rsplit("/", 1)[1], json.loads(text)))
@@ -444,10 +460,10 @@ class Battle:
             checks.append((f"{name}: load drained", m["result"] == "PASS", m["result"]))
             checks.append((f"{name}: no failed operations", not m["failed"], str(m["failed"] or "none")))
         restore_names = {n for n, _ in restores}
-        for path, _ in self.win_clients():
+        for path, _ in self.restored_win():
             if "windows:" + path.name not in restore_names:
                 checks.append((f"windows:{path.name}: restore reported", False, "no metrics"))
-        for path, _ in self.wsl_clients():
+        for path, _ in self.restored_wsl():
             if "wsl:" + path.rsplit("/", 1)[1] not in restore_names:
                 checks.append((f"wsl:{path.rsplit('/', 1)[1]}: restore reported", False, "no metrics"))
         for name, m in restores:
