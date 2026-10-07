@@ -85,6 +85,7 @@ CybouNodeRuntime::NetworkCore::NetworkCore(const NodeRuntimeConfig& config)
 CybouNodeRuntime::NetworkCore::~NetworkCore()
 {
     // Drain jobs while routing, peer policy and runtime domains still exist.
+    if (storage_prober.joinable()) storage_prober.join();
     storage_io.reset();
     storage_sessions.reset();
     peer_manager.reset();
@@ -177,11 +178,26 @@ std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationPr
     });
 }
 
+void CybouNodeRuntime::StartStorageProbe()
+{
+    if (m_network.storage_probe_running.exchange(true)) return;
+    // The previous probe has finished (the flag was clear): reclaim its thread first.
+    if (m_network.storage_prober.joinable()) m_network.storage_prober.join();
+    m_network.storage_prober = std::thread{[this] {
+        try { ProbeOneStorageEndpoint(); } catch (const std::exception&) {}
+        m_network.storage_probe_running.store(false);
+    }};
+}
+
 void CybouNodeRuntime::ProbeOneStorageEndpoint()
 {
     const auto now = std::chrono::steady_clock::now();
     std::set<Endpoint> connected;
-    for (const auto& peer : m_network.peer_manager->Peers()) connected.insert({peer.address, peer.port});
+    {
+        std::lock_guard p2p_lock(m_network.mutex);
+        if (!m_network.peer_manager) return;
+        for (const auto& peer : m_network.peer_manager->Peers()) connected.insert({peer.address, peer.port});
+    }
     const auto known = GetPeerEndpointsForGossip();
     const auto configured = GetConfiguredPeerEndpoints();
     std::optional<Endpoint> target;
@@ -410,7 +426,7 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     m_network.catching_up = result.blocks_applied >= max_blocks;
     if (!m_network.catching_up) {
         m_network.peer_manager->FanoutFinalizedBlocks();
-        ProbeOneStorageEndpoint();
+        StartStorageProbe();
     }
     return result;
 }

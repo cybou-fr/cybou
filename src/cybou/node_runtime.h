@@ -38,6 +38,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <optional>
 #include <set>
 #include <span>
@@ -614,6 +615,8 @@ private:
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
     /// rief Proves the StorageId of one known, unconnected endpoint in a short session.
     void ProbeOneStorageEndpoint();
+    /// rief Starts one probe on the prober thread unless one is already running.
+    void StartStorageProbe();
     void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
@@ -672,6 +675,10 @@ private:
         mutable std::mutex storage_probe_mutex;
         std::map<Endpoint, ProbedStorage> probed_storage;
         std::map<Endpoint, std::chrono::steady_clock::time_point> next_storage_probe;
+        /** Probes run on their own thread: a dial to an unreachable endpoint waits for its
+            timeout and must never hold back block sync or operation relay. */
+        std::atomic_bool storage_probe_running{false};
+        std::thread storage_prober;
         std::chrono::steady_clock::time_point next_peer_ping{};
         std::chrono::steady_clock::time_point next_peer_discovery{};
         // Peer callbacks can consult routes while session I/O owns mutex.
