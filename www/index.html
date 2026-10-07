@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CYBOU — Bureau privé souverain : Mail, Files et Identité protégés</title>
-  <meta name="description" content="CYBOU réunit messagerie privée, stockage de fichiers et identité souveraine dans une application de bureau protégée par chiffrement client, transport TLS 1.3 et cryptographie post-quantique en France.">
-  <meta name="keywords" content="CYBOU, identité numérique, communication sécurisée, messagerie chiffrée, souveraineté numérique, post-quantique, P2P, France, Europe, TLS 1.3, alternative Gmail, alternative Google Drive">
+  <title>CYBOU — Infrastructure souveraine de cybersécurité, communication et données</title>
+  <meta name="description" content="CYBOU est une infrastructure souveraine de cybersécurité, de communication et de données, conçue en France autour d'un cœur P2P open source. Réseau public de référence et réseaux privés dédiés aux organisations.">
+  <meta name="keywords" content="CYBOU, cybersécurité souveraine, infrastructure P2P, communication sécurisée, identité cryptographique, post-quantique, France, Europe, TLS 1.3, réseau d'entreprise privé">
   <meta name="author" content="Stanislav Saveliev">
   <meta name="copyright" content="Stanislav Saveliev">
   <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
@@ -20,8 +20,8 @@
 
   <!-- OpenGraph Metadata -->
   <meta property="og:site_name" content="CYBOU">
-  <meta property="og:title" content="CYBOU — Bureau privé souverain : Mail, Files et Identité">
-  <meta property="og:description" content="Alternative souveraine à Big Tech : messagerie et fichiers chiffrés sur votre ordinateur, transport sécurisé TLS 1.3 et réseau souverain en France.">
+  <meta property="og:title" content="CYBOU — Infrastructure souveraine de cybersécurité, communication et données">
+  <meta property="og:description" content="Infrastructure souveraine conçue en France autour d'un cœur P2P open source. Réseau public ouvert et réseaux d'entreprise privés dédiés.">
   <meta property="og:image" content="https://cybou.fr/assets/cybou.png">
   <meta property="og:url" content="https://cybou.fr/">
   <meta property="og:type" content="website">
@@ -30,8 +30,8 @@
 
   <!-- Twitter Metadata -->
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="CYBOU — Bureau privé souverain : Mail, Files et Identité">
-  <meta name="twitter:description" content="Messagerie et cloud personnel souverains. Chiffrement de bout en bout, transport TLS 1.3 et cryptographie post-quantique.">
+  <meta name="twitter:title" content="CYBOU — Infrastructure souveraine de cybersécurité, communication et données">
+  <meta name="twitter:description" content="Infrastructure souveraine de cybersécurité, de communication et de données. Cœur P2P open source, transport TLS 1.3 et cryptographie post-quantique.">
   <meta name="twitter:image" content="https://cybou.fr/assets/cybou.png">
 
   <!-- Favicon -->
@@ -49,7 +49,7 @@
         "name": "CYBOU",
         "operatingSystem": "Linux, Windows",
         "applicationCategory": "SecurityApplication, CommunicationApplication",
-        "description": "Sovereign desktop privacy suite providing encrypted Mail, Files and Identity. Transport protected by TLS 1.3, client-side encryption, and post-quantum NIST algorithms.",
+        "description": "Sovereign cybersecurity, communications and data infrastructure designed in France around an open-source P2P core. Powers an open public reference network and dedicated private enterprise networks.",
         "url": "https://cybou.fr",
         "codeRepository": "https://github.com/cybou-fr/cybou",
         "license": "https://github.com/cybou-fr/cybou/blob/main/LICENSE",
@@ -70,8 +70,8 @@
       {
         "@type": "TechArticle",
         "@id": "https://cybou.fr/#architecture-spec",
-        "headline": "Architecture du protocole et de la suite CYBOU",
-        "description": "Sécurité de transport TLS 1.3, chiffrement client de bout en bout, finalité PoA sur DEVNET, Identity et arbre de chunks BLAKE3.",
+        "headline": "Architecture de l'infrastructure souveraine CYBOU",
+        "description": "Cœur open source C++20, transport TLS 1.3 post-quantique, chiffrement client de bout en bout, finalité PoA sur DEVNET, identité cryptographique et réseaux privés d'entreprise.",
         "inLanguage": "fr",
         "author": {
           "@type": "Person",
@@ -87,7 +87,7 @@
             "name": "Qu'est-ce que CYBOU en termes simples ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3."
+              "text": "CYBOU est une infrastructure souveraine de cybersécurité, de communication et de données, conçue en France autour d'un cœur P2P open source. Elle réunit messagerie privée (Mail), stockage de fichiers chiffré (Files) et identité cryptographique (Identity) sans dépendre d'un plan de contrôle cloud centralisé étranger."
             }
           },
           {
@@ -95,7 +95,7 @@
             "name": "En quoi le transport chiffré en TLS 1.3 protège-t-il mes connexions sur Wi-Fi public ou chez mon FAI ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Le protocole CYBOU P2P encapsule chaque flux réseau dans un tunnel TLS 1.3 strict. Que vous soyez sur un Wi-Fi public (gare, aéroport, café) ou sur votre box internet, aucun tiers ni votre fournisseur d'accès ne peut espionner vos communications ni altérer un octet de données."
+              "text": "Le protocole CYBOU P2P encapsule chaque flux réseau dans un tunnel TLS 1.3 strict avec échange de clés hybride X25519MLKEM768. Que vous soyez sur un Wi-Fi public ou sur votre box internet, aucun tiers ni votre fournisseur d'accès ne peut espionner vos communications ni altérer un octet de données."
             }
           },
           {
@@ -103,7 +103,7 @@
             "name": "En quoi CYBOU diffère-t-il des services comme Gmail ou Google Drive ?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "Contrairement aux géants du Web qui analysent vos emails et fichiers pour la publicité ou pour entraîner des IA, CYBOU chiffre tout localement sur votre processeur. Aucun serveur intermédiaire ne possède vos clés ni n'a accès à vos données privées."
+              "text": "Contrairement aux plateformes SaaS qui centralisent vos identifiants, détiennent vos clés de chiffrement et peuvent analyser vos données, CYBOU est conçu au niveau du protocole sans plan de contrôle central étranger. Les clés d'identité et de déchiffrement restent sous votre contrôle exclusif, chaque Full Node vérifie l'état de manière autonome, et les organisations peuvent déployer leur propre réseau CYBOU privé."
             }
           }
         ]
@@ -133,18 +133,18 @@
 
       <nav class="desktop-nav" aria-label="Navigation principale">
         <ul class="nav-links">
+          <li><a href="#solutions" data-i18n="navSolutions">Architecture</a></li>
           <li><a href="#services" data-i18n="navProducts">Produits</a></li>
-          <li><a href="#showcase" data-i18n="navShowcase">Aperçu</a></li>
-          <li><a href="entreprise.html" data-i18n="navEnterprise">Entreprise</a></li>
-          <li><a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a></li>
+          <li><a href="#security" data-i18n="navSecurity">Sécurité</a></li>
           <li><a href="conformite.html" data-i18n="navCompliance">Conformité</a></li>
-          <li><a href="#comparatif" data-i18n="navComparison">Comparatif</a></li>
+          <li><a href="comparatif.html" data-i18n="navComparison">Comparatif</a></li>
           <li><a href="#architecture" data-i18n="navArch">Sous le capot</a></li>
           <li><a href="#faq" data-i18n="navFaq">FAQ</a></li>
         </ul>
       </nav>
 
       <div class="nav-actions">
+        <a href="entreprise.html" class="btn-nav-enterprise" data-i18n="navEnterprise">CYBOU Entreprise</a>
         <div class="lang-switch" role="group" aria-label="Choix de la langue">
           <button id="lang-fr" class="lang-btn active" type="button">FR</button>
           <button id="lang-en" class="lang-btn" type="button">EN</button>
@@ -155,12 +155,13 @@
       </div>
     </div>
     <nav class="mobile-menu" id="mobile-menu" aria-label="Navigation mobile" hidden>
+      <a href="#solutions" data-i18n="navSolutions">Architecture</a>
       <a href="#services" data-i18n="navProducts">Produits</a>
       <a href="#showcase" data-i18n="navShowcase">Aperçu</a>
-      <a href="entreprise.html" data-i18n="navEnterprise">Entreprise</a>
-      <a href="#security" data-i18n="navSecurity">Sécurité &amp; TLS</a>
+      <a href="entreprise.html" data-i18n="navEnterprise">CYBOU Entreprise</a>
+      <a href="#security" data-i18n="navSecurity">Sécurité</a>
       <a href="conformite.html" data-i18n="navCompliance">Conformité</a>
-      <a href="#comparatif" data-i18n="navComparison">Comparatif</a>
+      <a href="comparatif.html" data-i18n="navComparison">Comparatif</a>
       <a href="#architecture" data-i18n="navArch">Sous le capot</a>
       <a href="#faq" data-i18n="navFaq">FAQ</a>
     </nav>
@@ -174,37 +175,39 @@
 
     <div class="hero-tag">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-      <span data-i18n="heroTag">Cryptographie standard OpenSSL v3.5.2+ • Souveraineté France • Post-Quantique NIST</span>
+      <span data-i18n="heroTag">Infrastructure souveraine conçue en France • Cœur P2P open source • Cryptographie post-quantique</span>
     </div>
 
     <h1 class="hero-title">
       CYBOU<br>
-      <span class="accent-text" data-i18n="heroAccent">Votre espace privé souverain. Messagerie, fichiers et identité.</span>
+      <span class="accent-text" data-i18n="heroAccent">Infrastructure souveraine de cybersécurité, de communication et de données.</span>
     </h1>
 
-    <p class="hero-subtitle" data-i18n="heroSubtitle">CYBOU réunit messagerie privée, fichiers et identité numérique portable dans une seule application. Vos contenus sont chiffrés sur votre ordinateur avant tout envoi.</p>
+    <p class="hero-subtitle" data-i18n="heroSubtitle">Un cœur P2P open source conçu en France pour réunir identité cryptographique, messagerie chiffrée, fichiers distribués et vérification indépendante — sans dépendre d'un cloud central pour détenir vos clés ou votre état privé.</p>
 
     <div class="hero-slogan-pill">
-      <span data-i18n="heroPillSlogan">Vos clés. Votre espace. Votre identité vous accompagne.</span>
+      <span data-i18n="heroPillSlogan">Rejoignez le réseau public CYBOU ou déployez un réseau CYBOU privé pour votre organisation.</span>
     </div>
 
     <div class="hero-buttons">
-      <a href="#showcase" class="btn-primary">
-        <span data-i18n="heroBtnShowcase">Découvrir l'application</span>
+      <a href="entreprise.html" class="btn-primary">
+        <span data-i18n="heroBtnEnterprise">CYBOU Entreprise (B2B)</span>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </a>
-      <a href="#security" class="btn-secondary" data-i18n="heroBtnSecurity">Pourquoi CYBOU ?</a>
+      <a href="#solutions" class="btn-secondary" data-i18n="heroBtnSolutions">Découvrir la technologie</a>
+      <a href="#showcase" class="btn-secondary" data-i18n="heroBtnShowcase">Aperçu Desktop</a>
+      <a href="https://github.com/cybou-fr/cybou" target="_blank" rel="noopener noreferrer" class="btn-secondary" data-i18n="heroBtnCode">Code open source</a>
     </div>
 
     <!-- Trust Badges Strip (Immediate User Advantages) -->
     <div class="trust-badges" aria-label="Points forts de sécurité">
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span data-i18n="badgeOpenssl">Primitives standard OpenSSL · Compositions documentées</span>
+        <span data-i18n="badgeOpenssl">Cœur open source C++20 · Primitives standard OpenSSL</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-        <span data-i18n="badgeFrance">Réseau à admission IP française</span>
+        <span data-i18n="badgeFrance">Réseau public à admission IP France</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -212,11 +215,91 @@
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
-        <span data-i18n="badgePhrase">Clés Identity · Coffre local protégé</span>
+        <span data-i18n="badgePhrase">Identité cryptographique · Chiffrement client</span>
       </div>
       <div class="trust-badge-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-        <span data-i18n="badgeNoAds">Zéro Collecte &amp; Zéro Publicité</span>
+        <span data-i18n="badgeNoAds">Zéro Cloud central étranger · Zéro Publicité</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==========================================================================
+       Section: Sovereign Core & Two Product Verticals
+       ========================================================================== -->
+  <section class="section" id="solutions">
+    <div class="section-header">
+      <div class="section-label" data-i18n="solLabel">Architecture &amp; Déclinaisons</div>
+      <h2 class="section-title" data-i18n="solTitle">Un cœur technologique souverain, deux déclinaisons produit.</h2>
+      <p class="section-description" data-i18n="solDesc">Le protocole CYBOU et son cœur Full Node open source fournissent la base de confiance cryptographique. Il s'incarne dans un réseau public ouvert et permet le déploiement de réseaux privés dédiés aux organisations.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-top: 36px;">
+      <!-- Card 1: CYBOU Public -->
+      <div class="bento-card" style="display: flex; flex-direction: column; justify-content: space-between; border-radius: var(--radius-xl);">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <span class="badge-done" data-i18n="solPubPill">Réseau Public &amp; Communauté</span>
+            <span style="font-size: 0.76rem; font-weight: 600; color: #0284c7; background: #e0f2fe; padding: 3px 10px; border-radius: var(--radius-pill);" data-i18n="solPubStatus">Open Source</span>
+          </div>
+          <h3 style="font-size: 1.3rem; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);" data-i18n="solPubTitle">CYBOU Public — Le réseau de référence</h3>
+          <p style="color: var(--text-secondary); font-size: 0.94rem; line-height: 1.55; margin-bottom: 18px;" data-i18n="solPubDesc">CYBOU Public est le réseau public de référence de l'écosystème CYBOU. Il utilise le cœur open source CYBOU, une identité réseau propre, une autorité PoA de référence et une politique d'admission P2P limitée aux adresses IP publiques françaises.</p>
+          <ul style="list-style: none; padding: 0; margin: 0 0 24px 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: var(--brand-teal); font-weight: bold;">✓</span> <span data-i18n="solPubF1">Réseau public partagé pour citoyens, indépendants et équipes</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: var(--brand-teal); font-weight: bold;">✓</span> <span data-i18n="solPubF2">Application de bureau unifiée : Mail, Files et Identité .cybou</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: var(--brand-teal); font-weight: bold;">✓</span> <span data-i18n="solPubF3">Politique d'admission France (politique du réseau public, non du protocole)</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px;">
+              <span style="color: var(--brand-teal); font-weight: bold;">✓</span> <span data-i18n="solPubF4">Vérification d'état indépendante par chaque Full Node</span>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <a href="#showcase" class="btn-secondary" style="width: 100%; text-align: center; justify-content: center;" data-i18n="solPubCta">Découvrir l'application Desktop</a>
+        </div>
+      </div>
+
+      <!-- Card 2: CYBOU Enterprise -->
+      <div class="bento-card" style="display: flex; flex-direction: column; justify-content: space-between; border-radius: var(--radius-xl); border-color: rgba(5,150,105,0.35); background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <span class="badge-done" style="background: #dcfce7; color: #15803d;" data-i18n="solEntPill">Offre B2B &amp; Organisations</span>
+            <span style="font-size: 0.76rem; font-weight: 600; color: #047857; background: #a7f3d0; padding: 3px 10px; border-radius: var(--radius-pill);" data-i18n="solEntStatus">Réseaux Privés</span>
+          </div>
+          <h3 style="font-size: 1.3rem; font-weight: 600; margin-bottom: 12px; color: var(--text-primary);" data-i18n="solEntTitle">CYBOU Entreprise — Réseaux privés dédiés</h3>
+          <p style="color: var(--text-secondary); font-size: 0.94rem; line-height: 1.55; margin-bottom: 18px;" data-i18n="solEntDesc">Créez votre propre réseau CYBOU privé : un domaine de confiance cryptographiquement indépendant, fondé sur le même cœur CYBOU, avec votre propre identité réseau, votre propre genèse, votre autorité PoA et vos politiques de déploiement.</p>
+          <ul style="list-style: none; padding: 0; margin: 0 0 24px 0; font-size: 0.9rem; line-height: 1.8; color: var(--text-secondary);">
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #059669; font-weight: bold;">✓</span> <span data-i18n="solEntF1">Domaine de confiance étanche sous le contrôle exclusif de la DSI</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #059669; font-weight: bold;">✓</span> <span data-i18n="solEntF2">Politique d'accès sur mesure : VPN entreprise, LAN, plages CIDR, international</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px;">
+              <span style="color: #059669; font-weight: bold;">✓</span> <span data-i18n="solEntF3">Hébergement sur vos infrastructures (On-Premise, cloud privé qualifié)</span>
+            </li>
+            <li style="display: flex; align-items: flex-start; gap: 8px;">
+              <span style="color: #059669; font-weight: bold;">✓</span> <span data-i18n="solEntF4">Outillage d'administration, gouvernance de flotte et support dédié (en cours)</span>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <a href="entreprise.html" class="btn-primary" style="width: 100%; text-align: center; justify-content: center;" data-i18n="solEntCta">Explorer l'offre Entreprise</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Protocol-level Moat Callout -->
+    <div style="margin-top: 28px; padding: 24px 28px; border-radius: var(--radius-lg); background: #f8fafc; border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px;">
+      <h3 style="font-size: 1.12rem; font-weight: 600; color: var(--text-primary); margin: 0;" data-i18n="solMoatTitle">Une infrastructure conçue au niveau du protocole, pas une surcouche de cloud existant</h3>
+      <p style="color: var(--text-secondary); font-size: 0.94rem; line-height: 1.55; margin: 0;" data-i18n="solMoatDesc">CYBOU ne repose sur aucun plan de contrôle SaaS étranger pour l'identité, le déchiffrement ou l'état. Nous ouvrons ce que les organisations doivent pouvoir auditer et vérifier (le cœur protocolaire open source) et nous commercialisons le déploiement, l'intégration, la gouvernance et le support avec CYBOU Entreprise.</p>
+      <div style="margin-top: 6px;">
+        <a href="entreprise.html#offre-b2b" style="font-weight: 600; color: var(--brand-teal-dark); font-size: 0.92rem;" data-i18n="solMoatCta">Programme Partenaire Pilote &rarr;</a>
       </div>
     </div>
   </section>
@@ -759,10 +842,10 @@
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
         </div>
         <div class="card-content">
-          <h3 data-i18n="bento1Title">PoA DEVNET à opérateur unique</h3>
-          <p data-i18n="bento1Desc">CYBOU exploite l'unique signataire de finalité du réseau DEVNET. Chaque nœud complet vérifie indépendamment les blocs et l'état ; cette vérification ne transforme pas le modèle de confiance en BFT.</p>
-          <div class="card-metric">DEVNET</div>
-          <div class="card-metric-label" data-i18n="bento1Metric">Centralisé — pas de tolérance BFT</div>
+          <h3 data-i18n="bento1Title">Finalité PoA autorisée par genesis</h3>
+          <p data-i18n="bento1Desc">La finalité canonique repose sur un signataire d'autorité (PoA) désigné par le genesis immutable. Sur le réseau public DEVNET, l'autorité est opérée par CYBOU ; sur un réseau privé d'entreprise, elle est opérée directement par l'organisation. Chaque nœud complet vérifie indépendamment chaque bloc et transition d'état.</p>
+          <div class="card-metric">PoA</div>
+          <div class="card-metric-label" data-i18n="bento1Metric">PoA autorisée par genesis · Vérification Full Node</div>
         </div>
       </div>
 
@@ -848,8 +931,8 @@
         </div>
 
         <div class="spec-item">
-          <dt data-i18n="dtConsensus">Finalité actuelle sur DEVNET</dt>
-          <dd data-i18n="ddConsensus">PoA hybride à un signataire exploité par CYBOU sur DEVNET. Les nœuds complets vérifient indépendamment ; pas de revendication BFT. Cible : PoA sur poste Central Authority.</dd>
+          <dt data-i18n="dtConsensus">Finalité et consensus</dt>
+          <dd data-i18n="ddConsensus">PoA hybride post-quantique sous clé d'autorité désignée par le genesis (opérée par CYBOU sur le réseau public DEVNET ; sous contrôle de l'organisation sur réseau privé d'entreprise). Les nœuds complets vérifient indépendamment chaque bloc.</dd>
         </div>
 
         <div class="spec-item">
@@ -972,7 +1055,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-1" aria-hidden="false">
-          <p data-i18n="faqA1">CYBOU est une suite logicielle souveraine réunissant messagerie privée (Mail), stockage de fichiers chiffré (Files) et gestionnaire d'identité (Identity). Vos données sont chiffrées sur votre ordinateur avant tout envoi et tout le transport réseau est protégé en TLS 1.3.</p>
+          <p data-i18n="faqA1">CYBOU est une infrastructure souveraine de cybersécurité, de communication et de données, conçue en France autour d'un cœur P2P open source. Elle réunit messagerie privée (Mail), stockage de fichiers chiffré (Files) et identité cryptographique (Identity) sans dépendre d'un plan de contrôle cloud centralisé étranger.</p>
         </div>
       </article>
 
@@ -1011,7 +1094,7 @@
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-3" aria-hidden="true">
-          <p data-i18n="faqA2">Contrairement à Google qui centralise vos données, possède les clés et scanne les contenus pour la publicité ou l'entraînement d'IA, CYBOU chiffre tout sur votre ordinateur. Aucun serveur ne peut lire vos emails ou fichiers, et tout le réseau public est localisé en France, à l'abri du Cloud Act américain.</p>
+          <p data-i18n="faqA2">Contrairement aux plateformes SaaS qui centralisent vos identifiants, détiennent vos clés de chiffrement et peuvent analyser vos données, CYBOU est conçu au niveau du protocole sans plan de contrôle central étranger. Les clés d'identité et de déchiffrement restent sous votre contrôle exclusif, chaque Full Node vérifie l'état de manière autonome, et les organisations peuvent déployer leur propre réseau CYBOU privé.</p>
         </div>
       </article>
 
@@ -1029,11 +1112,11 @@
       <!-- FAQ 5: Why France and Europe -->
       <article class="faq-card">
         <button class="faq-trigger" type="button" aria-expanded="false" aria-controls="faq-answer-5">
-          <span class="faq-question" data-i18n="faqQFrance">Pourquoi CYBOU est-il hébergé exclusivement en France et en Europe ?</span>
+          <span class="faq-question" data-i18n="faqQFrance">Pourquoi le réseau public CYBOU est-il restreint aux adresses IP françaises ?</span>
           <svg class="faq-chevron" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="faq-answer" id="faq-answer-5" aria-hidden="true">
-          <p data-i18n="faqAFrance">La souveraineté numérique repose sur une indépendance d'infrastructure. En restreignant les nœuds publics au territoire français, CYBOU assure que vos flux de données et vos fragments chiffrés restent hébergés en France sur une infrastructure P2P souveraine hors juridiction cloud américaine.</p>
+          <p data-i18n="faqAFrance">La restriction géographique aux adresses IP publiques françaises est une politique de souveraineté spécifique au réseau public CYBOU (réseau de référence). Ce n'est pas une limitation du protocole CYBOU : les organisations déployant CYBOU Entreprise configurent leurs propres politiques de réseau (VPN d'entreprise, réseaux locaux LAN, plages multi-sites ou sans filtrage géographique).</p>
         </div>
       </article>
 
@@ -1078,7 +1161,7 @@
             </div>
             <span>CYBOU</span>
           </div>
-          <p data-i18n="footBrand">L'alternative souveraine pour vos communications et fichiers privés.<br>Conçu et développé en France.</p>
+          <p data-i18n="footBrand">Infrastructure souveraine de cybersécurité, de communication et de données.<br>Cœur P2P open source conçu en France.</p>
         </div>
 
         <!-- Col 2: Product -->

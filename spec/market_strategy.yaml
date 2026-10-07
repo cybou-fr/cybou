@@ -1,6 +1,32 @@
 positioning:
-  en: CYBOU — a European sovereign identity and communication network, designed in France.
-  fr: CYBOU — réseau européen souverain d'identité et de communication, conçu en France.
+  en: CYBOU — sovereign cybersecurity, communications and data infrastructure, designed in France around an open-source P2P core.
+  fr: CYBOU — infrastructure souveraine de cybersécurité, de communication et de données, conçue en France autour d'un cœur P2P open source.
+product_architecture:
+  shared_core: true
+  trust_core_properties:
+  - native_cpp20_full_node
+  - p2p_protocol
+  - network_identity_and_genesis
+  - independent_state_verification
+  - genesis_authorized_poa_finality
+  - cryptographic_identity_and_roles
+  - client_side_encryption
+  - hybrid_post_quantum_signatures_and_kem
+  - generic_root_publication
+  - blake3_encrypted_chunk_tree
+  - distributed_storage_and_recovery
+  public:
+    one_public_network: true
+    open_source: true
+    admission_policy: france_public_ip
+    role: public_reference_network_and_product
+    policy_note: France-only public-IP admission is a deployment policy of the public CYBOU network, not a limitation of the CYBOU protocol.
+  enterprise:
+    private_networks: many
+    shared_protocol_core: true
+    custom_network_policy: true
+    proprietary_extensions_allowed: true
+    role: b2b_organization_private_networks_and_management_tooling
 ownership:
   commercial_owner_operator: true
   dao: false
@@ -8,14 +34,14 @@ ownership:
   operational_decentralization: true
 rollout:
 - phase: France
-  purpose: R&D, native Email pilot, France-first sovereign P2P network, operational proof
+  purpose: R&D, native Email and Files pilot, France-first sovereign P2P reference network, operational proof
 - phase: European Union
   purpose: cross-border expansion and European pilots under sovereign P2P architecture
 - phase: Global
   purpose: later commercial expansion after EU maturity
 go_to_market:
   first_product: CYBOU Email
-  product_thesis: Identity is the platform primitive; Email is the first product.
+  product_thesis: Identity is the platform primitive; Email is the first product surface over sovereign infrastructure.
   first_adoption_unit: organization/team
   isolated_consumer_launch: false
   beta_services:
@@ -25,12 +51,14 @@ go_to_market:
   service_expansion_requires_product_gates: true
   initial_public_channels: false
   lead_message:
-  - sovereign E2E encrypted email
-  - consensus registration/finality
-  - network-native identity
-  - operational resilience
-  - European independence
-  - user-controlled network identity
+  - sovereign cybersecurity infrastructure
+  - private communications and sensitive data
+  - open-source shared trust core
+  - user-controlled and organization-controlled network identity
+  - independent full-node verification
+  - hybrid post-quantum security
+  - distributed encrypted storage
+  - dedicated private enterprise networks with custom policy
   do_not_lead_with:
   - blockchain
   - coin

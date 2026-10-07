@@ -5,46 +5,63 @@ CYBOU should not be designed around grants.
 The correct order is:
 
 ```text
-working prototype
--> measurable innovation
--> pilot
--> evidence
--> funding/partnership for scale
+working implementation
+-> verifiable technological depth
+-> B2B pilot / PoC
+-> operational evidence
+-> funding / partnerships for scale
 ```
 
 ## France — strategic fit
 
-CYBOU can plausibly fit French strategic priorities when presented as:
+CYBOU aligns with French and European strategic priorities when presented as:
 
 ```text
-cybersecurity
-digital infrastructure
-European sovereignty
-privacy
-cryptographic agility / PQ transition
-resilient communications
+cybersecurity infrastructure
+digital sovereignty
+cryptographic agility and post-quantum transition (hybrid PQ)
+resilient interpersonal communications and file distribution
+distributed trust systems without foreign SaaS control planes
 ```
 
-not as a speculative cryptocurrency.
+not as a consumer privacy app or speculative cryptocurrency.
+
+## Technological depth vs. Deeptech qualification
+
+CYBOU embodies significant technological depth by engineering its trust architecture
+at the protocol level rather than assembling third-party cloud APIs:
+- native C++20 Full Node runtime;
+- custom P2P protocol over TLS 1.3 with mandatory `X25519MLKEM768` hybrid key exchange;
+- account-level cryptographic Identity with domain-separated roles (ML-DSA, Ed25519, X-Wing);
+- client-side encrypted content trees with BLAKE3-256 chunk addressing;
+- deterministic candidate state execution and independent full-node block validation;
+- verified distributed chunk replication and clean-machine restore.
+
+**Important boundary:**
+- *Technological depth:* demonstrated in the implementation, test suites, and protocol architecture.
+- *Funding category fit:* eligibility for advanced technology and cybersecurity programmes.
+- *Formal qualification/status:* CYBOU has **not** received an official French "Deeptech" label, ANSSI visa, or government certification. Any future qualification requires formal application, external evaluation, and empirical evidence.
+
+The project must never use "Deeptech" as an unsupported badge or claim formal status it does not hold.
 
 ## French Tech 2030
 
 French Tech 2030 explicitly covers strategic sectors including:
-
 - cybersecurity;
-- quantum;
-- digital infrastructure.
+- post-quantum cryptography / transition;
+- sovereign digital infrastructure.
 
-The programme targets relatively mature strategic technology; current criteria describe at least a functional prototype demonstrated in a realistic/simulated operational environment (TRL 6+).
+The programme targets mature strategic technology demonstrating functional prototypes
+in operational environments (TRL 6+).
 
 Implication:
-
-> architecture alone is not enough; demonstrate a working Beta Mail flow with
-> Store-backed encrypted attachments and later retrieval by an offline recipient.
+> Architecture alone is not enough; demonstrate working pilots with client-encrypted
+> attachments, offline recipient synchronization, and clean-machine recovery under live conditions.
 
 ## ANSSI / NCC-FR
 
-The French National Coordination Centre (NCC-FR), operated by ANSSI, helps the French cybersecurity ecosystem access European funding, particularly:
+The French National Coordination Centre (NCC-FR), operated by ANSSI, helps the French
+cybersecurity ecosystem access European funding, particularly:
 
 ```text
 Digital Europe
@@ -53,61 +70,46 @@ European consortium building
 ```
 
 CYBOU should engage when it has:
-
 - clear technical work packages;
 - demonstrable prototype;
-- pilot partners;
-- measurable security objectives.
+- pilot partners (B2B design partners);
+- measurable security and resilience objectives.
 
 ## Digital Europe
 
-As of September 2026, Digital Europe has cybersecurity calls covering areas including:
-
+Digital Europe cybersecurity calls cover areas including:
 - dual-use cybersecurity technologies;
-- strengthening EU cyber capacities/capabilities in line with legislation;
+- strengthening European cyber capacities and infrastructure resilience;
 - NCC ecosystem support.
 
-These programmes often favor European deployment and consortium structure.
+CYBOU's open-source core and sovereign deployment models fit these programmes when
+paired with clear European sovereignty and interoperability cases.
 
-CYBOU's France-first public P2P policy can fit European cybersecurity
-programmes when paired with a clear sovereignty, security, and interoperability
-case. Any expansion of the permitted peer region would require an explicit
-network-policy decision.
+## EIC Accelerator
 
-## EIC
-
-The EIC 2026 work programme provides over €1.4B across its schemes for strategic/deep technology innovation and scale-up.
-
-Potential fit becomes stronger only if CYBOU demonstrates a defensible technological innovation beyond "another encrypted email product".
-
-Possible differentiators:
-
-```text
-sovereign full-node consensus-registered mail architecture
-identity without external provider
-consensus registration with offline recipient synchronization
-crypto-agile PQ migration
-cooperative Object Storage integrated with Beta Mail attachments
-```
+The EIC work programme provides funding for breakthrough and deep technology innovations.
+Fit becomes viable only through defensible technological moats beyond "another encrypted email":
+- sovereign protocol-level trust core combining Identity, communications, and files;
+- independent state verification without third-party authority;
+- hybrid classical/post-quantum cryptographic agility;
+- verifiable distributed encrypted storage with clean-machine recovery.
 
 ## Funding readiness gate
 
-Do not spend major founder time on grants before all are true:
+Do not spend founder time on grant applications before all criteria are satisfied:
 
 ```text
-[ ] working CYBOU Email prototype
-[ ] Store-backed encrypted attachment upload, offline retrieval and repair evidence
-[ ] PoA-finalized RootPublication, offline recipient recovery, and verified
-    encrypted-chunk retrieval evidence; clearly disclose the single operator
-[ ] clear architecture/IP/innovation statement
-[ ] security roadmap
-[ ] French legal entity or clear plan
-[ ] pilot target / partner interest
+[ ] working CYBOU Email and Files flows on DEVNET
+[ ] verified distributed chunk retrieval and offline recipient recovery
+[ ] PoA-finalized RootPublication with transparent single-operator disclosure
+[ ] clear intellectual property and open-source architecture definition
+[ ] security roadmap and CRA vulnerability disclosure policy
+[ ] French legal entity
+[ ] committed B2B design partner / pilot interest
 [ ] measurable 12–18 month technical work packages
 ```
 
 ## Funding is acceleration, not dependency
 
-The project must retain a development path if no grant is won.
-
-A grant-dependent network is not sovereign.
+The project must retain a self-sustained development path. A grant-dependent
+network is not sovereign.

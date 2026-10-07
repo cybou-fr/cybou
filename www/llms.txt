@@ -1,97 +1,78 @@
 # CYBOU
 
-CYBOU is an open-source project building an identity-centered protocol and
-desktop software for private messaging and user-controlled files. It is
-experimental software, not a public mail or cloud-storage service.
+CYBOU is a sovereign cybersecurity, communications and data infrastructure designed
+in France around an open-source Full Node P2P core. It provides protocol-level
+foundations for cryptographic identity, end-to-end encrypted messaging (Mail), and
+distributed encrypted storage (Files), without dependence on a foreign SaaS control plane.
 
-## Current status
+## Product verticals and architecture
 
-- The DEVNET VPS runs an ordinary headless full peer (`cybou node run`) on DEVNET
-  at locator `51.255.46.58:29461` with state under `/var/lib/cybou/node/state`;
-  legacy prototype services are retired and inactive.
-- Finality is single-operator hybrid-PQ PoA; full nodes independently validate
-  blocks, state roots, and certificates. This is a centralized trust model,
-  **not BFT**, and the network makes no Byzantine fault tolerance claim.
-- The protocol substrate includes account Identity, `.cybou` names,
-  `RootPublication`, an encrypted ROOT/INDEX/DATA chunk tree, finalized chunk
-  admission proofs, and CYBOU P2P block/chunk transport.
-- Mail and Files are not complete public services. Publication construction,
-  discovery/indexing, retrieval, clean-machine restore, provider selection,
-  replica tracking, GET/hash availability checks and repair attempts are integrated. Sustained soak and
-  clean-install desktop Beta acceptance remain open. DEVNET requires one remote
-  replica; Beta targets two independent remote replicas; local cache is excluded.
-  Current placement distinguishes proven StorageIds, which do not establish
-  independent disks, hosts or operators. A successful GET/hash check establishes
-  availability of the checked chunk at that time, not continuous storage.
-- DEVNET pins the X-Wing / HPKE IETF draft-05 profile. This is DEVNET-only and is not
-  an external security audit or production guarantee.
+```text
+                           CYBOU
+                             │
+                     Shared CYBOU Core
+                 (Open-source trust core)
+                             │
+            ┌────────────────┴────────────────┐
+            ▼                                 ▼
+      CYBOU Public                      CYBOU Enterprise
+   (One shared network)             (Private CYBOU networks)
+            │                                 │
+   Reference deployment              Organization trust domain
+   France-first public IP policy     Custom admission (VPN, LAN, CIDR)
+   CYBOU-operated PoA                Organization-controlled PoA
+   Community ecosystem               Enterprise tooling (planned)
+```
 
-## Architecture rules
+- **Shared CYBOU Core:** Native C++20 Full Node, P2P protocol, cryptographic Identity
+  with separated roles (Ed25519, ML-DSA-44/65, X-Wing), generic `RootPublication`,
+  BLAKE3-256 chunk trees, deterministic state execution, and clean-machine recovery.
+- **CYBOU Public:** The single public reference network demonstrating the technology,
+  using an offline-signed public genesis, CYBOU-operated PoA finalizer, and a public-IP
+  admission policy restricted to French IP space.
+- **CYBOU Enterprise:** Commercial B2B product direction enabling organizations to deploy
+  independent private CYBOU networks with their own NetworkID, signed genesis, PoA
+  authority, and network perimeter (corporate VPN, internal LAN, CIDR allowlists),
+  coupled with enterprise management tooling, deployment services, and SLA support.
 
-- All participants run the same full-node core. Storage is intrinsic with a local quota; PoA finalization requires the private key. Bootstrap is an ordinary CYBOU full peer for initial discovery.
-- Official network public data is compiled into the client: Network Public Key
-  (`NetworkID`), immutable signed genesis, initial state and bootstrap locators.
-  No external official network file is loaded. The Network Private Key is strictly
-  offline and signs genesis once at network creation.
-- DEVNET uses bootstrap `51.255.46.58:29461`. MAINNET remains unprovisioned,
-  without a bootstrap locator, and disabled in the GUI until provisioning.
-- `cybou.cybou` is an ordinary Identity with a distinct genesis-authorized PoA
-  key role; its name and balances do not grant finalization rights.
-- The Central Authority finalizer is operated from its desktop after unlock using
-  the genesis-authorized PoA key. Its blocks are authenticated by genesis-authorized PoA certificates.
-- Accounts hold only CYBOU (Balance, System Balance); there is no AUTH or
-  Validation. Spam is priced by fees, storage rent and a flat relay proof-of-work.
-  Every full node executes every candidate. PoA re-executes everything and alone finalizes.
-- Blockchain acts as a canonical Notarial Register: it records publications, Merkle roots
-  and recipient capsules. Mutual storage-proof notarization is a target, not implemented.
-  Storage admission requires an active finalized StorageLease paid from System Balance
-  into escrow; local declarations convey zero authority.
-- CYBOU service units account for resources used by operations and storage.
-  Identities have an initial service budget; storage leases and verified service
-  records govern resource accounting.
-  Each Full Node chooses explicit local capacity of at least 15 GiB.
-- Storage audit primitives (`StorageAuditChallenge`, `CreateStorageAuditProof`,
-  `VerifyStorageAuditProof`) verify stored chunks via randomized offset and nonce proofs;
-  network periodic audit relay and block notarization are not implemented.
-  Operational StorageService checks use full-chunk GET and BLAKE3 verification,
-  not that challenge-response primitive. Repair requires a valid surviving source
-  and an available admitting provider.
-  Finalized revocation stops new admission; compliant providers attempt managed
-  purge of chunks no other publication authorizes. Historical capsules remain:
-  local key deletion does not establish per-object crypto-erasure or remove
-  copies already retained by recipients.
-- Public P2P admission is France-only in production and DEVNET (inbound and outbound)
-  using local Geo data (fails closed). Optional VPN/proxy/Tor filtering is local
-  operator policy and never changes consensus.
-- `RootPublication` is the only application-content publication operation.
-- Mail, Files, Backup, names, recipients, and application schemas are encrypted
-  client payloads; no permanent per-message or per-file consensus objects.
-- Chunk IDs use the full BLAKE3-256 hash of stored encrypted bytes.
-- Providers require valid inclusion proofs against finalized publications.
-- Finality authorizes admission; it does not prove availability or durability.
-- Clients own rebuildable Inbox, Sent, and Files indexes.
-- No runtime compatibility layer or dual operation decoder for the superseded
-  protocol is part of the active architecture.
+*Policy note:* French public-IP admission is a deployment policy of the public CYBOU
+network, not an intrinsic limitation of the CYBOU protocol.
 
-## Product direction
+## Current implementation status
 
-- Mail aims for familiar Gmail workflows with private publications and
-  attachments through the shared application substrate.
-- Files aims for familiar Google Drive workflows on the same encrypted content
-  substrate.
-- Attachments depend on measured storage durability and recovery.
-- Backup is post-Beta.
-- CYBOU P2P uses TLS 1.3; on-demand storage key proofs bind both HELLOs, a fresh challenge and the TLS
-  session. PoA authority is proved only by finalized block certificates. Ordinary peers do not have global authenticated identities.
+- **Development state:** Active development on the DEVNET test network. MAINNET is
+  unprovisioned. Enterprise private provisioning and management tooling are in active
+  product development and do not yet constitute an off-the-shelf commercial product.
+- **Consensus & finality:** Canonical finality is hybrid post-quantum Proof-of-Authority (PoA)
+  authorized by network genesis (operated by CYBOU on DEVNET; controlled directly by the organization
+  on private enterprise networks). Every full node independently validates blocks, state roots,
+  and PoA certificates against genesis authority.
+- **Application plane:** Mail and Files expose familiar desktop workflows over generic
+  `RootPublication` and BLAKE3 chunk trees. All application payloads and indexes are
+  encrypted client-side. The protocol contains no universal decryption key.
+- **Storage durability:** DEVNET requires one remote replica; Beta targets two independent
+  remote replicas (local cache excluded). Distinguishing proven StorageIds does not establish
+  independent physical disks, hosts, or operators. GET/hash verification establishes
+  availability at check time, not continuous retention proof.
+- **Post-quantum profile:** DEVNET pins the experimental X-Wing / HPKE IETF draft-05 profile
+  and OpenSSL 3.5+ ML-KEM/ML-DSA primitives. This is not an external security certification.
+- **Regulatory readiness:** The project evaluates RGPD, NIS 2, CRA, and French cryptology
+  frameworks as engineering targets. The software is not certified by ANSSI, HDS, or GDPR auditors.
+
+## Commercial & GTM model
+
+- **First adoption unit:** Organization/team (no isolated consumer launch).
+- **Target customers:** French and European enterprises, PME/ETI, critical infrastructure
+  operators, and teams handling sensitive communications or intellectual property.
+- **Immediate objective:** Design partners and structured B2B pilots (20–100 users, 8–12 weeks).
+- **Economics:** Internal deterministic resource budgeting (System Balance, fees, storage rent).
+  No ICO, no public token sale, no cryptocurrency exchange listing objective.
 
 ## Documentation hierarchy
 
 - Level 0 (Implementation authority): `AGENTS.md`
 - Level 1 (Frozen decisions / architecture): `docs/cybou/24_DECISIONS.md`, `docs/cybou/02_ARCHITECTURE.md`
-- Level 2 (Normative domain specs): `04_NETWORK_LIFECYCLE.md`, `POA_FINALITY.md`, `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`, `ROOT_PUBLICATION.md`, `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, `57_IDENTITY_AUTHORITY.md`, etc.
+- Level 2 (Normative domain specs): `04_NETWORK_LIFECYCLE.md`, `POA_FINALITY.md`, `37_FRANCE_SOVEREIGN_NETWORK_POLICY.md`, `ROOT_PUBLICATION.md`, `ENCRYPTED_CHUNK_TREE.md`, `STORAGE_ADMISSION.md`, `57_IDENTITY_AUTHORITY.md`
 - Level 3 (Implementation status): `docs/cybou/26_IMPLEMENTATION_STATUS.md`
 - Level 4 (Roadmap): `docs/cybou/22_ROADMAP.md`, `25_OPEN_QUESTIONS.md`
 - Level 5 (Product contracts): `docs/cybou/82_MAIL_UI_UX.md`, `83_STORAGE_UI_UX.md`, `85_BETA_UI_ACCEPTANCE.md`
-
-Do not describe CYBOU as a public production service, BFT network, or completed
-Gmail/Google Drive replacement.
