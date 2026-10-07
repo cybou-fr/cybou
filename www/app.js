@@ -495,7 +495,7 @@ const translations = {
     eArt2P1: "La direction Entreprise repose sur un réseau distinct, avec sa propre genèse et son identité réseau. L’organisation maîtrise la clé de finalité PoA et choisit son infrastructure de stockage. Le déploiement et l’outillage dédiés font partie du produit à construire :",
 
     eStep1Title: "Définition de Genèse",
-    eStep1Desc: "Génération d'un fichier genesis.json signé par la clé privée de réseau (hors-ligne), avec un identifiant de réseau propre et les paramètres d'autorité.",
+    eStep1Desc: "Hors ligne, la clé privée du réseau signe une seule fois la genèse propre à l'entreprise (identifiant de réseau et paramètres d'autorité) ; elle est compilée dans les binaires CYBOU, qui ne chargent jamais de fichier de genèse.",
     eStep2Title: "Autorité Centrale PoA",
     eStep2Desc: "La DSI génère la clé de finalisation PoA sur un poste sécurisé (SecOps) pour sceller les blocs d'entreprise.",
     eStep3Title: "Points de contact initiaux",
@@ -1260,7 +1260,7 @@ const translations = {
     eArt2P1: "The Enterprise direction is based on a distinct network with its own genesis and network identity. The organization controls the PoA finality key and chooses its storage infrastructure. Dedicated deployment procedures and tooling are part of the product we are building:",
 
     eStep1Title: "Genesis Definition",
-    eStep1Desc: "Generation of a genesis.json file signed by the offline Network Private Key, with a custom enterprise network identifier and initial authority parameters.",
+    eStep1Desc: "Offline, the Network Private Key signs the enterprise genesis once (network identifier and authority parameters); it is compiled into the CYBOU binaries, which never load a genesis file.",
     eStep2Title: "PoA Central Authority",
     eStep2Desc: "IT SecOps generates the PoA finalization key on a secured internal machine to seal enterprise blocks.",
     eStep3Title: "Initial contact points",

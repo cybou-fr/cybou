@@ -60,7 +60,7 @@ struct CybouDesktopStatus {
     bool finality_known{false};
     /** Minutes this Identity's submitted work has waited with no new block; 0 when finality flows. */
     int finality_stall_minutes{0};
-    /** Highest finalized height peers announce (unverified), to show sync progress. */
+    /** Median finalized height connected peers announce (unverified), to show sync progress. */
     quint64 sync_target_height{0};
     QString sync_error;
     QString data_directory;

@@ -3795,7 +3795,7 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     model->setNetworkAuthority(authority);
 
     console.clearOutput(); console.executeCommand(QStringLiteral("help"));
-    QVERIFY(console.outputText().contains(QStringLiteral("authority [status|candidates|totals|pause|resume|finalize|settle]")));
+    QVERIFY(console.outputText().contains(QStringLiteral("authority [status|candidates|totals|settle]")));
 
     console.executeCommand(QStringLiteral("authority status"));
     QVERIFY(console.outputText().contains(QStringLiteral("Local finalizer: Finalizing")));
@@ -3810,33 +3810,22 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.executeCommand(QStringLiteral("authority totals"));
     QVERIFY(console.outputText().contains(QStringLiteral("12345 CYBOU")));
 
-    // Control commands
-    console.clearOutput();
-    console.executeCommand(QStringLiteral("authority pause"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Finalization paused")));
+    // The console is read-only: control commands point to the Central Authority page.
+    for (const auto& command : {QStringLiteral("authority pause"), QStringLiteral("authority resume"),
+                                QStringLiteral("authority finalize")}) {
+        console.clearOutput();
+        console.executeCommand(command);
+        QVERIFY(console.outputText().contains(QStringLiteral("read-only")));
+    }
 
-    // Finalize on demand (requires paused state)
-    authority.finalizer = CybouFinalizerState::Paused;
-    model->setNetworkAuthority(authority);
-    console.clearOutput();
-    console.executeCommand(QStringLiteral("authority finalize"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Requested finalization of one block")));
-
-    // Resume finalization
-    console.clearOutput();
-    console.executeCommand(QStringLiteral("authority resume"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Finalization resumed")));
-
-    // Settle preview without confirm
+    // Settlement is previewed, never submitted, from the console.
     console.clearOutput();
     console.executeCommand(QStringLiteral("authority settle"));
     QVERIFY(console.outputText().contains(QStringLiteral("Storage settlement preview for period 3")));
-    QVERIFY(console.outputText().contains(QStringLiteral("To submit this settlement, type: authority settle confirm")));
-
-    // Settle with confirm (does not re-prompt for password)
+    QVERIFY(console.outputText().contains(QStringLiteral("Central Authority page")));
     console.clearOutput();
     console.executeCommand(QStringLiteral("authority settle confirm"));
-    QVERIFY(console.outputText().contains(QStringLiteral("Storage settlement for period 3 submitted")));
+    QVERIFY(!console.outputText().contains(QStringLiteral("submitted")));
 
     // Revoking authority clears output and history
     model->setNetworkAuthority({});
@@ -4137,4 +4126,9 @@ void CybouShellTests::headerSaysWhenTheNetworkStopsConfirming()
     model.setSyncing(true);
     const auto text = cybouConnectionText(model.status());
     QVERIFY2(text.contains(QStringLiteral("1%")) && text.contains(QStringLiteral("blocks left")), qPrintable(text));
+
+    // One peer announcing an absurd height cannot drive the estimate: the median is used.
+    snap.peers = {{"51.255.46.58:29461", 1011, ""}, {"51.255.46.58:29462", 1011, ""}, {"203.0.113.9:29461", 9000000000, ""}};
+    model.setNetworkDiagnostics(snap);
+    QCOMPARE(model.status().sync_target_height, quint64{1011});
 }

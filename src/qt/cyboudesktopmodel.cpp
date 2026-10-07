@@ -231,9 +231,10 @@ bool CybouDesktopModel::hasUnconfirmedWork() const
 {
     if (m_payment_pending) return true;
     const auto submitted = [](CybouOperationState state) { return state == CybouOperationState::Submitted; };
-    for (const auto& item : m_mail) if (submitted(item.operation_state)) return true;
-    for (const auto& item : m_files) if (submitted(item.operation_state)) return true;
-    for (const auto& entry : m_wallet_entries) if (submitted(entry.operation_state)) return true;
+    // The displayed state merges canonical finality: a finalized operation never counts as waiting.
+    for (const auto& item : m_mail) if (submitted(displayedOperationState(item.operation_id, item.operation_state))) return true;
+    for (const auto& item : m_files) if (submitted(displayedOperationState(item.operation_id, item.operation_state))) return true;
+    for (const auto& entry : m_wallet_entries) if (submitted(displayedOperationState(entry.operation_id, entry.operation_state))) return true;
     for (const auto& operation : m_operations) if (submitted(operation.state)) return true;
     return false;
 }
@@ -884,9 +885,12 @@ void CybouDesktopModel::setResourceUsage(quint64 quota_used)
 void CybouDesktopModel::setNetworkDiagnostics(cybou::NodeDiagnosticsSnapshot snapshot)
 {
     m_network_diagnostics = std::move(snapshot);
-    quint64 target{0};
-    for (const auto& peer : m_network_diagnostics.peers) target = std::max<quint64>(target, peer.advertised_height);
-    m_status.sync_target_height = target;
+    // Announced heights are unverified: the median of connected peers resists one peer
+    // claiming an absurd height, where the maximum would follow it.
+    std::vector<quint64> heights;
+    for (const auto& peer : m_network_diagnostics.peers) heights.push_back(peer.advertised_height);
+    std::sort(heights.begin(), heights.end());
+    m_status.sync_target_height = heights.empty() ? 0 : heights[heights.size() / 2];
     Q_EMIT statusChanged();
 }
 

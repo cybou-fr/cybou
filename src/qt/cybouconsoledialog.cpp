@@ -52,7 +52,7 @@ const Command commands[] = {
     {"file", "file <id|name>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own file metadata and retrieval state"), true, false},
     {"chunks", "chunks <id|name>", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Real chunk tree, integrity and retrieval diagnostics"), true, false},
     {"jobs", "jobs", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Own active application tasks"), true, false},
-    {"authority", "authority [status|candidates|totals|pause|resume|finalize|settle]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Central Authority controls, candidates, totals and settlement"), true, true},
+    {"authority", "authority [status|candidates|totals|settle]", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Central Authority status, candidates, totals and settlement preview"), true, true},
     {"clear", "clear", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Clear output and command history"), false, false},
 };
 constexpr int kMaxRows = 100;
@@ -444,60 +444,25 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             appendOutput(tr("Finalized state at height %1\nIdentities: %2\nNames: %3\nPending name commits: %4\nBalance total: %5 CYBOU\nSystem Balance total: %6 CYBOU\nStorage escrow: %7 CYBOU")
                 .arg(a.finalized_height).arg(a.identities).arg(a.names).arg(a.pending_name_commits)
                 .arg(a.total_balance).arg(a.total_system_balance).arg(a.storage_escrow));
-        } else if (sub == QLatin1String{"pause"}) {
-            if (a.finalizer == CybouFinalizerState::Paused) {
-                appendOutput(tr("Finalization is already paused."));
-            } else if (a.finalizer == CybouFinalizerState::SafetyHalt) {
-                appendOutput(tr("Cannot pause: finalizer is in safety halt."));
-            } else {
-                m_model->requestFinalizationPaused(true);
-                appendOutput(tr("Finalization paused. Candidate operations will accumulate in the pool without producing blocks."));
-            }
-        } else if (sub == QLatin1String{"resume"}) {
-            if (a.finalizer == CybouFinalizerState::Finalizing) {
-                appendOutput(tr("Finalization is already active."));
-            } else if (a.finalizer == CybouFinalizerState::SafetyHalt) {
-                appendOutput(tr("Cannot resume: finalizer is in safety halt."));
-            } else {
-                m_model->requestFinalizationPaused(false);
-                appendOutput(tr("Finalization resumed. Waiting candidates will be finalized into blocks."));
-            }
-        } else if (sub == QLatin1String{"finalize"}) {
-            if (a.finalizer != CybouFinalizerState::Paused) {
-                appendOutput(tr("Cannot finalize on demand: finalization loop is currently active. Pause finalization first with 'authority pause'."));
-            } else {
-                m_model->requestFinalizeNow();
-                appendOutput(tr("Requested finalization of one block from waiting candidates."));
-            }
         } else if (sub == QLatin1String{"settle"}) {
-            const bool confirmed = tokens.size() > 2 && tokens[2].toLower() == QLatin1String{"confirm"};
-            if (!confirmed) {
-                if (!a.settlement_due && a.next_settlement_due_utc > 0) {
-                    appendOutput(tr("The next storage settlement is due %1 UTC (period %2). Settlement cannot be submitted before the period ends.")
-                        .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
-                        .arg(a.next_settlement_period));
-                } else {
-                    appendOutput(tr(
-                        "Storage settlement preview for period %1:\n"
-                        "  Status: Due now\n"
-                        "  Eligible payouts: %2\n"
-                        "  Total amount: %3\n"
-                        "To submit this settlement, type: authority settle confirm")
-                        .arg(a.next_settlement_period).arg(a.preview_payouts_count).arg(cybouAmountText(a.preview_payouts_amount)));
-                }
+            // Preview only: the console never signs. Settlement is submitted from the Central Authority page.
+            if (!a.settlement_due && a.next_settlement_due_utc > 0) {
+                appendOutput(tr("The next storage settlement is due %1 UTC (period %2). Settlement cannot be submitted before the period ends.")
+                    .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
+                    .arg(a.next_settlement_period));
             } else {
-                if (!a.settlement_due && a.next_settlement_due_utc > 0) {
-                    appendOutput(tr("The next storage settlement is due %1 UTC (period %2). Settlement cannot be submitted before the period ends.")
-                        .arg(QDateTime::fromSecsSinceEpoch(static_cast<qint64>(a.next_settlement_due_utc), QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm")))
-                        .arg(a.next_settlement_period));
-                } else {
-                    m_model->requestStorageSettlement();
-                    appendOutput(tr("Storage settlement for period %1 submitted. It will be finalized in the next block.")
-                        .arg(a.next_settlement_period));
-                }
+                appendOutput(tr(
+                    "Storage settlement preview for period %1:\n"
+                    "  Status: Due now\n"
+                    "  Eligible payouts: %2\n"
+                    "  Total amount: %3\n"
+                    "Submit it from the Central Authority page.")
+                    .arg(a.next_settlement_period).arg(a.preview_payouts_count).arg(cybouAmountText(a.preview_payouts_amount)));
             }
+        } else if (sub == QLatin1String{"pause"} || sub == QLatin1String{"resume"} || sub == QLatin1String{"finalize"}) {
+            appendOutput(tr("This console is read-only. Pause, resume and finalize from the Central Authority page."));
         } else {
-            appendOutput(tr("Usage: authority [status|candidates|totals|pause|resume|finalize|settle]"));
+            appendOutput(tr("Usage: authority [status|candidates|totals|settle]"));
         }
     } else if (cmd == QLatin1String{"files"}) {
         const auto files = m_model->fileItems();

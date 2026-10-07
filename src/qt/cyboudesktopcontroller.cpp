@@ -51,7 +51,13 @@ std::shared_ptr<cybou::EventWriter> OpenDesktopEventLog(const std::filesystem::p
     const auto path = data_directory / "events.jsonl";
     std::error_code ec;
     if (std::filesystem::file_size(path, ec) > 64ull * 1024 * 1024 && !ec) {
-        std::filesystem::rename(path, data_directory / "events.1.jsonl", ec);
+        // Rename does not reliably replace an existing file on Windows: drop the old segment first.
+        const auto previous = data_directory / "events.1.jsonl";
+        std::filesystem::remove(previous, ec);
+        ec.clear();
+        std::filesystem::rename(path, previous, ec);
+        // A log that cannot rotate must not grow without bound: start it afresh.
+        if (ec) std::filesystem::remove(path, ec);
     }
     try {
         auto writer = std::make_shared<cybou::EventWriter>(path);

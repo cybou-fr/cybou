@@ -127,6 +127,26 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message>
+        <source>This console is read-only. Pause, resume and finalize from the Central Authority page.</source>
+        <translation>Cette console est en lecture seule. Mettez en pause, reprenez et finalisez depuis la page Autorité centrale.</translation>
+    </message>
+    <message>
+        <source>Storage settlement preview for period %1:
+  Status: Due now
+  Eligible payouts: %2
+  Total amount: %3
+Submit it from the Central Authority page.</source>
+        <translation>Aperçu du règlement de stockage pour la période %1 :
+  Statut : à régler maintenant
+  Versements éligibles : %2
+  Montant total : %3
+Soumettez-le depuis la page Autorité centrale.</translation>
+    </message>
+    <message>
+        <source>Central Authority status, candidates, totals and settlement preview</source>
+        <translation>État de l'Autorité centrale, candidats, totaux et aperçu du règlement</translation>
+    </message>
     <message><source>  [File task] %1: %2 | Retrieval: %3</source><translation>  [Tâche fichier] %1 : %2 | Récupération : %3</translation></message>
     <message><source>Application preparation: %1 / %2 publications scanned</source><translation>Préparation de l’application : %1 / %2 publications parcourues</translation></message>
     <message>
