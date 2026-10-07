@@ -23,10 +23,16 @@
 #include <qt/pages/storagepage.h>
 #include <qt/pages/diagnosticspage.h>
 #include <qt/pages/networkpage.h>
+#include <qt/benchmarkreference.h>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/walletpage.h>
 #include <qt/cybouconsoledialog.h>
 #include <QTableWidget>
+#include <QTabWidget>
+#include <QFile>
 #include <QProgressDialog>
 #include <QProgressBar>
 #include <QElapsedTimer>
@@ -1684,7 +1690,7 @@ void CybouShellTests::activityRefreshPreservesRows()
     QCOMPARE(FindById<QFrame>(home, QStringLiteral("event-a")), row.data());
     QCOMPARE(row->findChild<QLabel*>(QStringLiteral("rowTitle"))->text(), QStringLiteral("Updated"));
     QVERIFY(row->findChild<QLabel*>(QStringLiteral("rowSub"))->isVisible());
-    auto* refresh = FindById<QPushButton>(home, QStringLiteral("activityRefresh"));
+    auto* refresh = FindById<QToolButton>(home, QStringLiteral("activityRefresh"));
     QVERIFY(refresh && refresh->isEnabled());
     refresh->click();
     QVERIFY(model->applicationRefreshing());
@@ -2984,7 +2990,7 @@ void CybouShellTests::searchScopeAndIncrementalIndex()
     auto* search = window->globalSearch();
     QVERIFY(search);
 
-    // Initial on Home/Mail: placeholder indicates Mail / global search.
+    // Home offers both products; Mail and Files suggestions stay in context.
     window->showPage(CybouPage::Home);
     QVERIFY(search->placeholderText().contains(QStringLiteral("mail"), Qt::CaseInsensitive));
 
@@ -2993,13 +2999,29 @@ void CybouShellTests::searchScopeAndIncrementalIndex()
     QVERIFY(search->placeholderText().contains(QStringLiteral("Files"), Qt::CaseInsensitive) ||
             search->placeholderText().contains(QStringLiteral("folder"), Qt::CaseInsensitive));
     QVERIFY(search->toolTip().contains(QStringLiteral("Files"), Qt::CaseInsensitive));
+    auto* completer = search->completer();
+    for (int i = 0; i < completer->model()->rowCount(); ++i)
+        QCOMPARE(completer->model()->index(i, 0).data(Qt::UserRole + 1).toString(), QStringLiteral("file"));
+    window->showPage(CybouPage::Mail);
+    for (int i = 0; i < completer->model()->rowCount(); ++i)
+        QCOMPARE(completer->model()->index(i, 0).data(Qt::UserRole + 1).toString(), QStringLiteral("mail"));
 
-    // Switch to Wallet: placeholder reverts to Mail scope.
+    // Wallet shows its title; Ctrl+K exposes global search without leaving it.
     window->showPage(CybouPage::Wallet);
-    QVERIFY(search->placeholderText().contains(QStringLiteral("mail"), Qt::CaseInsensitive));
+    QVERIFY(search->isHidden());
+    auto* title = window->findChild<QLabel*>(QStringLiteral("headerPageTitle"));
+    QVERIFY(title && !title->isHidden());
+    window->show();
+    window->activateWindow();
+    QTest::qWait(50);
+    QTest::keyClick(window.get(), Qt::Key_K, Qt::ControlModifier);
+    QTRY_VERIFY(!search->isHidden());
+    QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Wallet));
+    QTest::keyClick(search, Qt::Key_Escape);
+    QVERIFY(search->isHidden());
+    QVERIFY(!title->isHidden());
 
     // Bounded completer:
-    auto* completer = search->completer();
     QVERIFY(completer);
     auto* comp_model = completer->model();
     QVERIFY(comp_model);
@@ -3009,8 +3031,27 @@ void CybouShellTests::searchScopeAndIncrementalIndex()
     // Enter while on Files page searches Files and stays on Files page.
     window->showPage(CybouPage::Files);
     search->setText(QStringLiteral("budget"));
+    auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+    QCOMPARE(files->searchText(), QStringLiteral("budget"));
+    QVERIFY(files->findChild<QLineEdit*>(QStringLiteral("filesSearch"))->isHidden());
+    search->clear();
+    QCOMPARE(files->searchText(), QString{});
+    search->setText(QStringLiteral("budget"));
     Q_EMIT search->returnPressed();
     QCOMPARE(window->currentPageIndex(), static_cast<int>(CybouPage::Files));
+    window->showPage(CybouPage::Mail);
+    search->setText(QStringLiteral("dinner"));
+    auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+    QCOMPARE(mail->searchText(), QStringLiteral("dinner"));
+    QVERIFY(mail->findChild<QLineEdit*>(QStringLiteral("mailSearch"))->isHidden());
+    window->showPage(CybouPage::Files);
+    QCOMPARE(search->text(), QStringLiteral("budget"));
+    files->openFolder(QStringLiteral("f-docs"));
+    QVERIFY(search->text().isEmpty()); // Folder navigation clears the same query.
+    window->showPage(CybouPage::Mail);
+    QCOMPARE(search->text(), QStringLiteral("dinner"));
+    model->setIdentityState(CybouIdentityState::Locked, QStringLiteral("locked"));
+    QVERIFY(search->text().isEmpty());
 }
 
 void CybouShellTests::walletAndAuthorityPreserveRowsWithoutChurn()
@@ -3122,10 +3163,10 @@ void CybouShellTests::appearanceSwitchPreservesFullContext()
     QVERIFY(files->isDetailsVisible());
     QVERIFY(files->isDetailsAdvanced());
 
-    // 3. Setup global search text
+    // 3. The shell and current Files filter now share one query.
     auto* search = window->globalSearch();
     QVERIFY(search);
-    search->setText(QStringLiteral("global query"));
+    search->setText(QStringLiteral("budget"));
 
     // 4. Trigger appearance reload (rebuilds entire shell)
     window->reloadAppearance();
@@ -3136,7 +3177,7 @@ void CybouShellTests::appearanceSwitchPreservesFullContext()
     // Verify global search text preserved
     search = window->globalSearch();
     QVERIFY(search);
-    QCOMPARE(search->text(), QStringLiteral("global query"));
+    QCOMPARE(search->text(), QStringLiteral("budget"));
 
     // Verify Files state preserved
     files = static_cast<StoragePage*>(window->page(CybouPage::Files));
@@ -3396,7 +3437,20 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
     QCOMPARE(net_page->selectedPeerIndex(), 0);
     QCOMPARE(net_page->mapWidget()->selectedPeer(), 0);
 
-    // Verify details panel shows full un-truncated StorageId
+    // Normal peer cards show illustrative admission, without endpoint/key/city detail.
+    QVERIFY(net_page->detailsWidget()->parentWidget() == net_page->mapWidget());
+    QTRY_VERIFY(net_page->detailsWidget()->height() > 160);
+    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
+        QVERIFY(!label->text().contains(QStringLiteral("51.255.46.58")));
+        QVERIFY(!label->text().contains(QStringLiteral("c7b20e010203")));
+        QVERIFY(!label->text().contains(QStringLiteral("Paris")));
+    }
+    net_page->showAdvanced();
+    auto* advanced = net_page->findChild<QWidget*>(QStringLiteral("networkAdvanced"));
+    QVERIFY(advanced->isAncestorOf(net_page->detailsWidget()));
+    QCOMPARE(net_page->selectedPeerIndex(), 0);
+    QCOMPARE(net_page->mapWidget()->selectedPeer(), 0);
+    // Advanced retains full un-truncated StorageId evidence.
     bool found_full_sid = false;
     for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>()) {
         if (label->text().contains(QStringLiteral("c7b20e0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d"))) {
@@ -3404,6 +3458,19 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
         }
     }
     QVERIFY(found_full_sid);
+
+    // An ahead announcement is unverified, never evidence of synchronization.
+    snap.peers[0].advertised_height = 1600;
+    model->setNetworkDiagnostics(snap);
+    QTRY_VERIFY(table->item(0, 3)->text().contains(QStringLiteral("ahead")));
+    net_page->selectPeer(0);
+    bool found_ahead = false;
+    for (const auto* label : net_page->detailsWidget()->findChildren<QLabel*>())
+        if (label->text().contains(QStringLiteral("100 blocks ahead of local tip (unverified)"))) found_ahead = true;
+    QVERIFY(found_ahead);
+    snap.peers[0].advertised_height = 1500;
+    model->setNetworkDiagnostics(snap);
+    QTRY_VERIFY(table->item(0, 3)->text().contains(QStringLiteral("same height")));
 
     // 4. Select peer 1 via map click
     net_page->mapWidget()->on_peer_clicked(1);
@@ -3416,6 +3483,12 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
         }
     }
     QVERIFY(found_lag_in_details);
+
+    auto* toggle = net_page->findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"));
+    toggle->setChecked(false);
+    QVERIFY(net_page->detailsWidget()->parentWidget() == net_page->mapWidget());
+    QCOMPARE(net_page->selectedPeerIndex(), 1);
+    QVERIFY(!net_page->detailsWidget()->isHidden());
 
     // Rebuilding the details must replace their labels, not pile them up:
     // leaked rows once reached thousands of siblings and overflowed painting.
@@ -3433,7 +3506,6 @@ void CybouShellTests::networkPageAndSchematicFranceMap()
     QTRY_VERIFY(table->item(0, 1)->text().contains(QStringLiteral("disconnected")));
     QCOMPARE(table->item(0, 2)->text(), QStringLiteral("Unknown"));
     QCOMPARE(table->item(0, 3)->text(), QStringLiteral("Unknown"));
-    auto* advanced = net_page->findChild<QWidget*>(QStringLiteral("networkAdvanced"));
     QVERIFY(advanced->isHidden());
     net_page->showAdvanced();
     QVERIFY(!advanced->isHidden());
@@ -4044,22 +4116,119 @@ void CybouShellTests::applicationLoadingWaitsForProjection()
     QCOMPARE(progress->maximum(), 0);
     Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 25, 100, {});
     QCOMPARE(progress->value(), 25);
+    auto* background = dialog->findChild<QPushButton*>(QStringLiteral("applicationLoadingLocalButton"));
+    QVERIFY(background && background->isVisible());
+    background->click();
+    QVERIFY(dialog->isHidden());
+    auto* banner = window->findChild<QFrame*>(QStringLiteral("backgroundRecoveryBanner"));
+    QVERIFY(banner && !banner->isHidden());
+    Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 50, 100, {});
+    QVERIFY(dialog->isHidden());
+    window->reloadAppearance();
+    banner = window->centralWidget()->findChild<QFrame*>(QStringLiteral("backgroundRecoveryBanner"));
+    QVERIFY(banner && !banner->isHidden());
+    window->centralWidget()->findChild<QToolButton*>(QStringLiteral("backgroundRecoveryDetails"))->click();
+    QVERIFY(dialog->isVisible());
+    QVERIFY(banner->isHidden());
     Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 100, 100, {});
     QCOMPARE(progress->value(), 99); // Scan progress is not proof the semantic view was applied.
     QVERIFY(dialog->isVisible());
     dialog->reject();
     QVERIFY(dialog->isVisible());
+    background->click();
+    QVERIFY(dialog->isHidden());
     Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Failed, 0, 0, QStringLiteral("Load failed"));
+    QVERIFY(dialog->isVisible()); // Background mode must never suppress a failure.
     QCOMPARE(dialog->findChild<QLabel*>(QStringLiteral("applicationLoadingStage"))->text(), QStringLiteral("Load failed"));
     Q_EMIT backend.mailSnapshot({});
     Q_EMIT backend.filesSnapshot({});
     Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
     QVERIFY(dialog->isHidden()); // An empty Identity is a valid prepared view, including offline.
+    QVERIFY(banner->isHidden());
     model->setIdentityState(CybouIdentityState::Locked, QStringLiteral("loading-account"));
     Q_EMIT backend.applicationLoadChanged(CybouApplicationLoadState::Loading, 0, 100, {});
     QCOMPARE(model->applicationLoadState(), CybouApplicationLoadState::Closed);
     QVERIFY(dialog->isHidden());
     model->setApplicationBackend(nullptr);
+}
+
+void CybouShellTests::filesSelectionToolbarFollowsView()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    window->showPage(CybouPage::Files);
+    auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+    auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+    auto* bar = files->findChild<QFrame*>(QStringLiteral("selectionBar"));
+    auto* star = files->findChild<QToolButton*>(QStringLiteral("filesSelectionStar"));
+    auto* trash = files->findChild<QToolButton*>(QStringLiteral("filesSelectionTrash"));
+    auto* restore = files->findChild<QToolButton*>(QStringLiteral("filesSelectionRestore"));
+    QVERIFY(table && bar && star && trash && restore);
+    table->clearSelection();
+    QVERIFY(bar->isHidden());
+    QVERIFY(table->topLevelItemCount() > 0);
+    table->topLevelItem(0)->setSelected(true);
+    QVERIFY(!bar->isHidden());
+    QVERIFY(!star->isHidden() && !trash->isHidden() && restore->isHidden());
+    QVERIFY(!star->accessibleName().isEmpty());
+    QCOMPARE(star->focusPolicy(), Qt::StrongFocus);
+    files->setGridMode(true);
+    QVERIFY(!bar->isHidden()); // Selection carries into grid mode.
+    files->setView(StoragePage::View::Trash);
+    files->setGridMode(false);
+    QVERIFY(table->topLevelItemCount() > 0);
+    table->topLevelItem(0)->setSelected(true);
+    QVERIFY(!bar->isHidden());
+    QVERIFY(star->isHidden() && trash->isHidden() && !restore->isHidden());
+    model->setIdentityState(CybouIdentityState::Locked, QStringLiteral("locked"));
+    QVERIFY(bar->isHidden());
+}
+
+void CybouShellTests::networkReferenceAndAdvancedScopes()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    NetworkPage page{&model};
+    page.resize(1040, 720);
+    page.show();
+    auto* summary = page.findChild<QLabel*>(QStringLiteral("networkBenchmarkSummary"));
+    auto* scope = page.findChild<QLabel*>(QStringLiteral("networkBenchmarkScope"));
+    auto* tabs = page.findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"));
+    QVERIFY(summary && scope && tabs);
+    QCOMPARE(tabs->count(), 4);
+    QTRY_VERIFY(summary->text().contains(QStringLiteral("Unknown")));
+    QFile evidence{QStringLiteral(":/evidence/benchmark.json")};
+    QVERIFY(evidence.open(QIODevice::ReadOnly));
+    const auto reference = CybouBenchmarkReference::Parse(evidence.readAll());
+    cybou::NodeDiagnosticsSnapshot snapshot;
+    if (reference) snapshot.network_binding = reference->network_binding.toStdString();
+    snapshot.peers = {{"127.0.0.1:29461", 100, ""}};
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_COMPARE(page.peerCount(), 1);
+    if (reference) {
+        QTRY_VERIFY(summary->text().contains(QLocale{}.toString(reference->finalized_per_s*60,'f',1)));
+        QVERIFY(scope->text().contains(QStringLiteral("historical reference")));
+        if (reference->co_located_wsl) QVERIFY(scope->text().contains(QStringLiteral("Same-host simulation")));
+    }
+    QVERIFY(summary->isVisibleTo(&page));
+    page.selectPeer(0);
+    page.showAdvanced();
+    QCOMPARE(tabs->currentIndex(), 1);
+    QCOMPARE(page.selectedPeerIndex(), 0);
+    QVERIFY(!summary->isVisibleTo(&page));
+    page.showBenchmarkDetails();
+    QCOMPARE(tabs->currentIndex(), 0);
+    QCOMPARE(page.selectedPeerIndex(), 0);
+    page.showTechnicalDetails();
+    QCOMPARE(tabs->currentIndex(), 3);
+    page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
+    QVERIFY(summary->isVisibleTo(&page));
+    QCOMPARE(page.selectedPeerIndex(), 0);
+    QVERIFY(page.detailsWidget()->parentWidget() == page.mapWidget());
+    snapshot.network_binding = "different-network";
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_VERIFY(summary->text().contains(QStringLiteral("Unknown")));
+    QTRY_COMPARE(page.selectedPeerIndex(), -1);
 }
 
 void CybouShellTests::networkRefreshCoalescesStatusBurst()
@@ -4131,4 +4300,31 @@ void CybouShellTests::headerSaysWhenTheNetworkStopsConfirming()
     snap.peers = {{"51.255.46.58:29461", 1011, ""}, {"51.255.46.58:29462", 1011, ""}, {"203.0.113.9:29461", 9000000000, ""}};
     model.setNetworkDiagnostics(snap);
     QCOMPARE(model.status().sync_target_height, quint64{1011});
+}
+
+void CybouShellTests::benchmarkReferenceRequiresAcceptedEvidence()
+{
+    QJsonObject o{{"result","PASS"},{"run_id","20261007-120000"},{"network_binding",QString(64,'a')},
+        {"profile","files"},{"attempted_operations",5},{"submitted_operations",3},{"finalized_operations",3},
+        {"measurement_window_s",10},{"finalized_ops_per_s",0.3},{"replicas",2},{"file_size","64KiB"},
+        {"clients",QJsonObject{{"test-client",QJsonObject{}}}},{"co_located_wsl",true},
+        {"provenance",QJsonObject{{"revision",QString(40,'b')},{"windows_loadgen_sha256",QString(64,'c')},{"dirty",true}}},
+        {"checks",QJsonArray{QJsonArray{"restore",true,"3/3"}}}};
+    const auto parse=[](const QJsonObject& object) { return CybouBenchmarkReference::Parse(QJsonDocument{object}.toJson()); };
+    const auto accepted=parse(o);
+    QVERIFY(accepted);
+    QCOMPARE(accepted->finalized,quint64{3});
+    QCOMPARE(accepted->finalized_per_s,0.3);
+    QVERIFY(accepted->co_located_wsl);
+    for (const auto& [key,value] : std::vector<std::pair<QString,QJsonValue>>{
+        {"result","FAIL"},{"finalized_operations",2},{"attempted_operations",1},
+        {"measurement_window_s",0},{"finalized_ops_per_s",10},{"checks",QJsonArray{}},
+        {"checks",QJsonArray{QJsonArray{"restore",false,"failed"}}},{"provenance",QJsonObject{}},
+        {"run_id","20269999-120000"},{"network_binding","unknown"},{"replicas",0},
+        {"clients",QJsonObject{}},{"file_size","unknown"}}) {
+        auto bad=o; bad.insert(key,value); QVERIFY2(!parse(bad),qPrintable(key));
+    }
+    QVERIFY(!CybouBenchmarkReference::Parse("{}"));
+    QVERIFY(!CybouBenchmarkReference::Parse("{\"operations\":3,\"operations_per_s\":1}"));
+    QVERIFY(!CybouBenchmarkReference::Parse(QByteArray(1024*1024+1,' ')));
 }

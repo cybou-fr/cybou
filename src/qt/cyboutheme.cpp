@@ -144,9 +144,10 @@ QString CybouTheme::applicationStyleSheet()
         QLabel#stripCaption { color: @text_muted@; font-size: 11px; }
         QLabel#stripValue { color: @text_primary@; font-size: 13px; font-weight: 700; }
         QLabel#stripValue[tint="teal"] { color: @teal_dark@; }
-        QToolButton#iconButton { border: none; border-radius: 14px; padding: 6px; background: transparent; }
-        QToolButton#iconButton:hover { background: @surface@; }
-        QToolButton#iconButton:checked { background: @mint_soft@; }
+        QToolButton#iconButton, QToolButton[cybouIconButton="true"] { border: none; border-radius: 14px; padding: 6px; background: transparent; }
+        QToolButton#iconButton:hover, QToolButton[cybouIconButton="true"]:hover { background: @surface@; }
+        QToolButton#iconButton:focus, QToolButton[cybouIconButton="true"]:focus { border: 1px solid @teal@; }
+        QToolButton#iconButton:checked, QToolButton[cybouIconButton="true"]:checked { background: @mint_soft@; }
         QLabel#sectionLink { color: @teal_dark@; font-size: 13px; font-weight: 700; }
         QLabel#rowTitle, QLabel#diagnosticValue { color: @text_primary@; font-size: 14px; font-weight: 700; background: transparent; border: none; }
         QLabel#rowSub { color: @text_muted@; font-size: 12px; background: transparent; border: none; }

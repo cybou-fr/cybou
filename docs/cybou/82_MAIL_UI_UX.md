@@ -2,6 +2,13 @@
 
 Status: canonical Beta Mail product UX contract.
 
+The desktop shell exposes one contextual header search. Typing and clearing use
+the existing current-mailbox filter; choosing a suggestion opens its semantic
+item. Mail retains its query when visiting Files and restores it on return.
+Ctrl+K and the Mail `/` shortcut focus the visible header field. Identity lock
+clears the query and private suggestions. Standalone page fixtures retain their
+local search control, hidden when embedded in the shell.
+
 This document defines the normal desktop experience for CYBOU Mail. The
 interaction benchmark is the familiarity and efficiency of mature webmail
 products such as Gmail; CYBOU does not copy Google branding, visual identity,

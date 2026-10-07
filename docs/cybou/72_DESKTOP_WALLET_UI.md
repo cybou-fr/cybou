@@ -3,6 +3,12 @@
 The desktop client surfaces the two protocol balances from doc 52 natively.
 CYBOU has no block subsidy; the wallet shows only these finalized balances.
 
+Normal product wording is Available / Network balance (French: Disponible /
+Solde réseau). Network balance is the canonical System Balance from doc 52,
+not a separate asset or credit. Funding remains an irreversible Balance ->
+System Balance operation with explicit review. Identity does not duplicate
+Wallet balances; technical diagnostics retain canonical field names.
+
 ## Where balances live
 
 ```text

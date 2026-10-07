@@ -3,6 +3,8 @@
 
 #include <qt/cyboumainwindow.h>
 
+#include <QKeyEvent>
+
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
@@ -34,6 +36,7 @@
 #include <qt/cybouapplicationbackend.h>
 #include <QLineEdit>
 #include <QShortcut>
+#include <QSignalBlocker>
 #include <QStandardItemModel>
 #include <QFileDialog>
 #include <QFile>
@@ -49,12 +52,16 @@
 #include <QProgressBar>
 #include <QResizeEvent>
 #include <QScrollArea>
+#include <cybou/official_networks.h>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QLocale>
 
 #include <cstdlib>
 #include <optional>
+#include <utility>
+#include <QTreeWidget>
+#include <QTabWidget>
 #include <QStackedWidget>
 #include <QStyle>
 #include <QSystemTrayIcon>
@@ -106,7 +113,7 @@ QString PageTitle(CybouPage page)
     case CybouPage::Files: return CybouMainWindow::tr("Files");
     case CybouPage::Wallet: return CybouMainWindow::tr("Wallet");
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
-    case CybouPage::Network: return CybouMainWindow::tr("Network");
+    case CybouPage::Network: return CybouMainWindow::tr("Public CYBOU network");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
     case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Central Authority");
     }
@@ -190,7 +197,12 @@ void CybouMainWindow::refreshApplicationLoading()
     const auto state = m_desktop_model->applicationLoadState();
     const bool preparing = state == CybouApplicationLoadState::Opening || state == CybouApplicationLoadState::Loading ||
         state == CybouApplicationLoadState::Failed;
-    if (state == CybouApplicationLoadState::Closed) m_application_loading_dismissed = false;
+    if (state == CybouApplicationLoadState::Closed || state == CybouApplicationLoadState::Failed)
+        m_application_loading_dismissed = false;
+    if (m_recovery_banner) {
+        m_recovery_banner->setVisible(state == CybouApplicationLoadState::Loading && m_application_loading_dismissed);
+        m_recovery_text->setText(tr("Preparing Mail and Files in the background…"));
+    }
     if (!preparing || m_application_loading_dismissed) {
         if (m_application_loading) m_application_loading->hide();
         return;
@@ -228,11 +240,12 @@ void CybouMainWindow::refreshApplicationLoading()
         network->setWordWrap(true);
         network->setAlignment(Qt::AlignCenter);
         layout->addWidget(network);
-        auto* local = new QPushButton{tr("Open the local view while loading continues"), m_application_loading};
+        auto* local = new QPushButton{tr("Continue in background"), m_application_loading};
         local->setObjectName(QStringLiteral("applicationLoadingLocalButton"));
         connect(local, &QPushButton::clicked, this, [this] {
             m_application_loading_dismissed = true;
             m_application_loading->hide();
+            refreshApplicationLoading();
         });
         layout->addWidget(local);
         auto* lock = new QPushButton{tr("Return to unlock"), m_application_loading};
@@ -242,9 +255,9 @@ void CybouMainWindow::refreshApplicationLoading()
     }
     auto* stage = m_application_loading->findChild<QLabel*>(QStringLiteral("applicationLoadingStage"));
     stage->setText(state == CybouApplicationLoadState::Failed ? m_desktop_model->applicationLoadError()
-        : state == CybouApplicationLoadState::Opening ? tr("Opening your encrypted local data…")
+        : state == CybouApplicationLoadState::Opening ? tr("Step 1 of 2 · Opening your encrypted local data…")
         : !m_desktop_model->applicationLoadError().isEmpty() ? m_desktop_model->applicationLoadError()
-        : tr("Discovering and decrypting your content…"));
+        : tr("Step 2 of 2 · Discovering and decrypting your content…"));
     auto* progress = m_application_loading->findChild<QProgressBar*>(QStringLiteral("applicationLoadingProgress"));
     const auto total = m_desktop_model->applicationLoadTotal();
     if (state == CybouApplicationLoadState::Loading && total > 0) {
@@ -267,7 +280,7 @@ void CybouMainWindow::refreshApplicationLoading()
 void CybouMainWindow::showNetworkDiagnostics()
 {
     showPage(CybouPage::Network);
-    if (auto* network = dynamic_cast<NetworkPage*>(page(CybouPage::Network))) network->showAdvanced();
+    if (auto* network = dynamic_cast<NetworkPage*>(page(CybouPage::Network))) network->showTechnicalDetails();
 }
 
 void CybouMainWindow::showPage(CybouPage page)
@@ -383,10 +396,14 @@ QFrame* CybouMainWindow::buildHeader(QWidget* parent)
     layout->setSpacing(10);
 
     m_header_title = new QLabel{header};
+    m_header_title->setObjectName(QStringLiteral("headerPageTitle"));
+    m_header_title->setStyleSheet(QStringLiteral("font-weight: 600;"));
     m_header_title->hide();
+    layout->addWidget(m_header_title, 1);
     // Global search across Mail and Files (local, never sent to the network).
     m_global_search = new QLineEdit{header};
     m_global_search->setObjectName(QStringLiteral("globalSearch"));
+    m_global_search->installEventFilter(this);
     m_global_search->setPlaceholderText(tr("Search mail and files"));
     m_global_search->setAccessibleName(tr("Search mail and files"));
     m_global_search->setToolTip(tr("Search mail and files (Ctrl+K)"));
@@ -500,6 +517,23 @@ void CybouMainWindow::buildShell()
     main_layout->setContentsMargins(0, 0, 0, 0);
     main_layout->setSpacing(0);
     main_layout->addWidget(buildHeader(main_column));
+    m_recovery_banner = new QFrame{main_column};
+    m_recovery_banner->setObjectName(QStringLiteral("backgroundRecoveryBanner"));
+    auto* recovery_layout = new QHBoxLayout{m_recovery_banner};
+    recovery_layout->setContentsMargins(24, 8, 16, 8);
+    m_recovery_text = new QLabel{m_recovery_banner};
+    m_recovery_text->setWordWrap(true);
+    m_recovery_text->setTextFormat(Qt::PlainText);
+    recovery_layout->addWidget(m_recovery_text, 1);
+    auto* recovery_details = CybouUi::IconButton(CybouUi::Glyph::Info, m_recovery_banner, tr("Recovery details"));
+    recovery_details->setObjectName(QStringLiteral("backgroundRecoveryDetails"));
+    connect(recovery_details, &QToolButton::clicked, this, [this] {
+        m_application_loading_dismissed = false;
+        refreshApplicationLoading();
+    });
+    recovery_layout->addWidget(recovery_details);
+    m_recovery_banner->hide();
+    main_layout->addWidget(m_recovery_banner);
 
     auto* home = new HomePage{m_desktop_model,
         [this] { showNetworkDiagnostics(); },
@@ -510,6 +544,24 @@ void CybouMainWindow::buildShell()
         nullptr};
     auto* mail = new EmailPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* files = new StoragePage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
+    // The header drives the exact same per-page filters. Standalone pages retain
+    // their search control; the shell exposes only one visible search field.
+    for (const auto& entry : {std::pair{static_cast<QWidget*>(mail), CybouPage::Mail},
+                              std::pair{static_cast<QWidget*>(files), CybouPage::Files}}) {
+        auto* field = entry.first->findChild<QLineEdit*>(entry.second == CybouPage::Mail
+            ? QStringLiteral("mailSearch") : QStringLiteral("filesSearch"));
+        field->hide();
+        connect(field, &QLineEdit::textChanged, m_global_search, [this, scope = entry.second](const QString& text) {
+            if (currentPageIndex() == static_cast<int>(scope)) {
+                const QSignalBlocker blocker{m_global_search};
+                m_global_search->setText(text);
+            }
+        });
+        connect(m_global_search, &QLineEdit::textChanged, entry.first, [this, field, scope = entry.second](const QString& text) {
+            if (currentPageIndex() == static_cast<int>(scope)) field->setText(text);
+        });
+    }
+    mail->onSearchRequested = [this] { m_global_search->setFocus(Qt::ShortcutFocusReason); };
     auto* wallet = new WalletPage{m_desktop_model, nullptr};
     auto* identity = new IdentityPage{m_desktop_model, [this] { showPage(CybouPage::Home); }, nullptr};
     auto* network = new NetworkPage{m_desktop_model, nullptr};
@@ -601,6 +653,7 @@ void CybouMainWindow::buildShell()
 void CybouMainWindow::refreshHeader()
 {
     const auto& status = m_desktop_model->status();
+    if (status.identity_state != CybouIdentityState::Active) m_global_search->clear();
     m_header_title->setText(PageTitle(static_cast<CybouPage>(m_pages->currentIndex())));
 
     const QString connection = cybouConnectionText(status);
@@ -652,6 +705,9 @@ void CybouMainWindow::buildMenus()
     }
     auto* search = new QShortcut{QKeySequence{QStringLiteral("Ctrl+K")}, this};
     connect(search, &QShortcut::activated, this, [this] {
+        // Global search is available on title-only pages without navigation.
+        m_header_title->hide();
+        m_global_search->show();
         m_global_search->setFocus(Qt::ShortcutFocusReason);
         m_global_search->selectAll();
     });
@@ -678,15 +734,31 @@ void CybouMainWindow::queueSearchIndexRebuild()
 void CybouMainWindow::updateSearchScope()
 {
     if (!m_global_search) return;
-    if (currentPageIndex() == static_cast<int>(CybouPage::Files)) {
-        m_global_search->setPlaceholderText(tr("Search files (Enter for current view)"));
-        m_global_search->setToolTip(tr("Search files — Enter searches current view, or pick a suggestion (Ctrl+K)"));
-        m_global_search->setAccessibleName(tr("Search files (Enter for current view)"));
+    const auto current = static_cast<CybouPage>(currentPageIndex());
+    const bool searchable = current == CybouPage::Home || current == CybouPage::Mail || current == CybouPage::Files;
+    m_header_title->setVisible(!searchable);
+    m_global_search->setVisible(searchable);
+    {
+        const QSignalBlocker blocker{m_global_search};
+        m_global_search->setText(current == CybouPage::Files
+            ? static_cast<StoragePage*>(page(CybouPage::Files))->searchText()
+            : current == CybouPage::Mail ? static_cast<EmailPage*>(page(CybouPage::Mail))->searchText() : QString{});
+    }
+    if (current == CybouPage::Files) {
+        m_global_search->setPlaceholderText(tr("Search files"));
+        m_global_search->setToolTip(tr("Search files in the current view, or pick a suggestion (Ctrl+K)"));
+        m_global_search->setAccessibleName(tr("Search files"));
+    } else if (current == CybouPage::Mail) {
+        m_global_search->setPlaceholderText(tr("Search mail"));
+        m_global_search->setToolTip(tr("Search mail in the current mailbox, or pick a suggestion (Ctrl+K)"));
+        m_global_search->setAccessibleName(tr("Search mail"));
     } else {
         m_global_search->setPlaceholderText(tr("Search mail and files (Enter for mail)"));
         m_global_search->setToolTip(tr("Search mail and files — Enter searches mail, or pick a suggestion (Ctrl+K)"));
         m_global_search->setAccessibleName(tr("Search mail and files (Enter for mail)"));
     }
+    if (m_search_completer->popup()) m_search_completer->popup()->hide();
+    rebuildSearchIndex();
 }
 
 void CybouMainWindow::rebuildSearchIndex()
@@ -710,6 +782,7 @@ void CybouMainWindow::rebuildSearchIndex()
 
     int indexed_mail = 0;
     for (const auto& mail : m_desktop_model->mailItems()) {
+        if (currentPageIndex() == static_cast<int>(CybouPage::Files)) break;
         if (mail.folder == CybouMailFolder::Trash) continue;
         const QString peer = mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive
             ? mail.from_name : mail.to_name;
@@ -726,6 +799,7 @@ void CybouMainWindow::rebuildSearchIndex()
 
     int indexed_files = 0;
     for (const auto& file : m_desktop_model->fileItems()) {
+        if (currentPageIndex() == static_cast<int>(CybouPage::Mail)) break;
         if (file.trashed) continue;
         auto* item = new QStandardItem{file.folder ? folder_icon : file_icon, file.name};
         item->setData(QStringLiteral("file"), Qt::UserRole + 1);
@@ -885,6 +959,19 @@ void CybouMainWindow::setupNotificationsAndLock()
 
 bool CybouMainWindow::eventFilter(QObject* watched, QEvent* event)
 {
+    if (watched == m_global_search) {
+        if (event->type() == QEvent::KeyPress && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Escape) {
+            m_global_search->clearFocus();
+            updateSearchScope();
+            return true;
+        }
+        if (event->type() == QEvent::FocusOut) {
+            QTimer::singleShot(0, this, [this] {
+                if (m_global_search && !m_global_search->hasFocus() && !m_search_completer->popup()->isVisible())
+                    updateSearchScope();
+            });
+        }
+    }
     switch (event->type()) {
     case QEvent::KeyPress:
     case QEvent::MouseButtonPress:
@@ -972,6 +1059,11 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         showPage(CybouPage::Files);
         files->setView(StoragePage::View::MyFiles);
         save(QStringLiteral("files-list"));
+        if (auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable")); table && table->topLevelItemCount()) {
+            table->topLevelItem(0)->setSelected(true);
+            save(QStringLiteral("files-selection"));
+            table->clearSelection();
+        }
         files->setGridMode(true);
         save(QStringLiteral("files-grid"));
         files->setGridMode(false);
@@ -995,12 +1087,23 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
         showPage(CybouPage::Network);
         // Synthetic local diagnostics only in the explicit screenshot fixture.
         cybou::NodeDiagnosticsSnapshot map_snapshot;
+        // The fixture uses the compiled public DEVNET profile. Peer observations
+        // remain synthetic; the benchmark resource, if accepted, remains historical.
+        map_snapshot.network_binding = cybou::ComputeNetworkBinding(
+            cybou::RequireOfficialNetwork("devnet").genesis.GetNetworkPublicKey()).GetHex();
         map_snapshot.peers = {{"51.255.46.58:29461", 48213, ""}, {"51.255.46.58:29462", 48212, ""}, {"127.0.0.1:29461", 48213, ""}};
         model->setNetworkDiagnostics(map_snapshot);
         save(QStringLiteral("network"));
         auto* network = static_cast<NetworkPage*>(page(CybouPage::Network));
         network->selectPeer(0);
         save(QStringLiteral("network-peer"));
+        network->showAdvanced();
+        save(QStringLiteral("network-advanced-peer"));
+        network->showBenchmarkDetails();
+        save(QStringLiteral("network-benchmark"));
+        network->findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"))->setCurrentIndex(2);
+        save(QStringLiteral("network-storage"));
+        network->findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
         map_snapshot.peers.erase(map_snapshot.peers.begin());
         model->setNetworkDiagnostics(map_snapshot);
         save(QStringLiteral("network-known-peer"));
@@ -1008,6 +1111,9 @@ void CybouMainWindow::runScreenshotHarness(const QString& directory)
             Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Loading, 35, 100, {});
             qApp->processEvents();
             if (m_application_loading) m_application_loading->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("identity-loading.png")));
+            showPage(CybouPage::Files);
+            m_application_loading->findChild<QPushButton*>(QStringLiteral("applicationLoadingLocalButton"))->click();
+            save(QStringLiteral("recovery-background"));
             Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
         }
         showNetworkDiagnostics();
@@ -1153,6 +1259,7 @@ void CybouMainWindow::reloadAppearance()
             files->showDetails(files_details_id, files_details_advanced);
         }
     }
+    refreshApplicationLoading();
 }
 
 void CybouMainWindow::setLanguage(const QString& language)

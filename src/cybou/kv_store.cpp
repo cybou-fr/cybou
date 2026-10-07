@@ -35,6 +35,29 @@ void CheckLevelDB(const leveldb::Status& status)
     if (!status.ok()) throw std::runtime_error("CYBOU LevelDB error: " + status.ToString());
 }
 
+// LevelDB's create_if_missing can recreate a DB when CURRENT is lost, then
+// discard the old tables as obsolete. Preserve damaged evidence instead.
+void RefuseMissingManifestPointer(const std::filesystem::path& path)
+{
+    std::error_code ec;
+    const bool current_exists = std::filesystem::exists(path / "CURRENT", ec);
+    if (ec) throw std::runtime_error("cannot inspect CYBOU database CURRENT: " + ec.message());
+    if (current_exists) return;
+    for (std::filesystem::directory_iterator it{path, ec}, end; !ec && it != end; it.increment(ec)) {
+        const auto name = it->path().filename().string();
+        const auto extension = it->path().extension().string();
+        const auto stem = it->path().stem().string();
+        const auto digits = [](const std::string& s) {
+            return !s.empty() && std::all_of(s.begin(),s.end(),[](char c) { return c>='0' && c<='9'; });
+        };
+        if ((name.starts_with("MANIFEST-") && digits(name.substr(9))) ||
+            (digits(stem) && (extension==".ldb" || extension==".sst" || extension==".log"))) {
+            throw std::runtime_error("CYBOU database CURRENT is missing; existing database files preserved");
+        }
+    }
+    if (ec) throw std::runtime_error("cannot inspect CYBOU database files: " + ec.message());
+}
+
 } // namespace
 
 KVStore::Batch::Batch() : m_batch{std::make_unique<leveldb::WriteBatch>()} {}
@@ -109,6 +132,7 @@ KVStore::KVStore(const KVStoreOptions& config)
         std::error_code ec;
         std::filesystem::create_directories(config.path, ec);
         if (ec) throw std::runtime_error("cannot create CYBOU database directory: " + ec.message());
+        if (!config.wipe_data) RefuseMissingManifestPointer(config.path);
         if (config.wipe_data) CheckLevelDB(leveldb::DestroyDB(PathAsUtf8(config.path), impl.options));
     }
 

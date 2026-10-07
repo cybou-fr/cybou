@@ -246,9 +246,8 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     m_download_folder->setWordWrap(true);
     m_download_folder->setMinimumWidth(0);
     folder_row->addWidget(m_download_folder, 1);
-    auto* choose = new QPushButton{tr("Change…"), this};
-    choose->setObjectName(QStringLiteral("secondaryButton"));
-    connect(choose, &QPushButton::clicked, this, [this] {
+    auto* choose = IconButton(Glyph::Folder, this, tr("Change download folder"), IconButtonSize::Toolbar);
+    connect(choose, &QToolButton::clicked, this, [this] {
         const QString folder = QFileDialog::getExistingDirectory(this, tr("Download folder"), DownloadFolder());
         if (folder.isEmpty()) return;
         QSettings{}.setValue(downloadFolderKey(), folder);

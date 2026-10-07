@@ -115,6 +115,9 @@ private:
     QString m_crumbs_key;
     QFrame* m_selection_bar{nullptr};
     QLabel* m_selection_text{nullptr};
+    QToolButton* m_selection_star{nullptr};
+    QToolButton* m_selection_trash{nullptr};
+    QToolButton* m_selection_restore{nullptr};
     int m_sort_column{0};
     QPoint m_press_pos;
     QString m_press_id;

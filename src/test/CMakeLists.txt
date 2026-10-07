@@ -10,6 +10,7 @@ add_executable(cybou-core-test
   cybou_identity_crypto_tests.cpp
   cybou_identity_kem_tests.cpp
   cybou_hex_tests.cpp
+  cybou_loadgen_metrics_tests.cpp
   cybou_identity_registry_tests.cpp
   cybou_identity_material_tests.cpp
   cybou_identity_service_tests.cpp

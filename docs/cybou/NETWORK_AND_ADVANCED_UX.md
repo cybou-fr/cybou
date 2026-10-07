@@ -58,12 +58,43 @@ and the scrollable Advanced drawer overlay it; opening Advanced does not shrink
 the map or grow the page. Network presentation coalesces status signals and pauses
 while hidden. Diagnostic rows are retained and only their values are updated.
 
+A compact historical benchmark reference occupies the lower-right map margin.
+It shows finalized op/min, the UTC run date, workload/count and same-host
+simulation scope where applicable. Details opens the accepted evidence in
+Advanced Overview. Missing, rejected or wrong-network evidence shows Unknown.
+The fitted France/Corsica silhouette uses spare horizontal space so the reference
+does not cover Corsica, retaining its size/aspect and placement when Advanced
+opens. This is a historical workload result, never a live throughput counter.
+
+Advanced has four bounded scrollable sections: Overview (local finality/mesh
+summary and reference details), Peers (observed sessions and the selected-peer
+card), Storage (local capacity and own-content protection), and Technical
+(existing diagnostics, monitor and console entry points). Selecting a peer opens
+Peers while Advanced is active; closing returns the same selected card to the
+map. Reference and Technical entry points select their corresponding sections.
+Unknown capacity is not rendered as a measured zero. Mesh sessions and storage
+relationship proofs remain separate observations; no provider census or storage
+reliability is inferred from the peer table.
+
 The initial map is a schematic France silhouette with visually balanced,
 stable placement of locally observed peers. Label it clearly: positions are
 illustrative, not measured locations. Current Geo admission supplies country
 classification, not city coordinates. Public France admission does not locate
 LAN/loopback peers; show local/unknown observations separately, without
 inventing a French city or geographic guarantee about stored data.
+
+The compiled silhouette uses Natural Earth mainland France and Corsica, with
+aspect ratio preserved and no map service or regional boundaries. Its source hash
+and offline generation tool accompany the asset. Public markers use P labels;
+local markers use L labels in a compact inset. These labels identify only this
+view's observations, never protocol node identities or storage-provider counts.
+
+A selected peer has one detail card: floating on the map while Advanced is
+closed, inside the drawer while Advanced is open. Selection survives switching.
+Normal details show connection, admission, explicitly illustrative positioning
+and the unverified advertised height. Endpoint, StorageId, tip delta and transport
+detail appear in Advanced. Disconnected observations never present stale height
+or storage proof as current evidence.
 
 Use bounded session pseudonyms rather than full public endpoints on the normal
 map. Do not create or announce a new protocol NodeID, role or Identity mapping.
@@ -160,6 +191,45 @@ An optional DEVNET test-build panel can consume their results after a reviewed
 resource/safety design; production cybou does not gain a load generator merely
 to fill a dashboard. No automatic benchmark on page opening, no additional PoA
 signer and no reset/secret export. Real live testing is a separate planned run.
+
+The current loadgen measurement contract has no schema version. It distinguishes
+`attempted_operations` (service calls, including busy refusals and staged intents),
+`submitted_operations` (unique OperationIDs handed to the runtime, including
+uncertain delivery), and `finalized_operations` (those same IDs observed in locally
+verified PoA-finalized state). Existing historical jobs never enter the measured
+cohort. Repeated observations/retries do not increase either operation count.
+Wallet operations that complete during drain count once; pending wallet operations
+prevent a successful drain verdict.
+
+`measurement_window_s` covers the client's load and final drain, after Identity
+preparation/funding and before recovery/teardown; `load_window_s` also records the
+generation phase. Both `submitted_ops_per_s` and `finalized_ops_per_s` use that
+explicit measured window. The battle aggregate uses its controller's monotonic
+window from first load-client launch to last metrics receipt, including reconnect,
+load and drain. It does not divide total operations by the longest individual
+client window. Rates describe that cohort/workload, not the network capacity.
+Missing latency samples render Unknown with n=0 in the report.
+
+Network Advanced can display a compiled benchmark reference separately from live
+peer observations. It requires PASS, successful nonempty acceptance checks,
+consistent counts/rate, nonzero finalized operations, binary/revision provenance,
+and the current node's matching NetworkBinding. No valid reference means Unknown.
+The compiled resource is an evidence artifact, not network/genesis configuration;
+opening Network never runs a test. `tools/battle/battle_test.py` writes
+`benchmark.json` with counts, timing scope, profile, binding, build provenance and
+acceptance checks; only a reviewed successful result may replace
+`docs/cybou/battle/benchmark_reference.json`.
+
+An operator-authorized Windows/WSL simulation records `co_located_wsl: true` in
+the reference and displays that scope explicitly. WSL can exercise a second
+network address through ordinary private-LAN admission, but shares the Windows
+physical host. Two successful placement addresses in this exercise are not
+evidence of independent remote machines, operators or failure domains. No public
+proxy or admission bypass is required for this simulation.
+
+The desktop displays finalized operations per minute (`op/min`), rounded to one
+decimal from the unrounded per-second reference rate multiplied by 60. The
+measurement artifact retains its per-second fields and exact measurement window.
 
 ## Data confidence, CIA and deletion
 

@@ -59,10 +59,9 @@ Historical blocks remain immutable, but active consensus state does not accumula
 - no per-Mail/per-file canonical state object: the register holds one record per
   finalized RootPublication (which may bundle many encrypted trees), with no
   plaintext metadata;
-- each Identity's `usage.stored_chunks` equals the sum of its register records;
 - no wall-clock consensus arithmetic;
 - Authority never grants PoA finalization weight or consensus voting power;
-- Balance, System Balance and Authority are three distinct canonical account values;
+- Balance and System Balance are the two canonical account values; there is no Authority unit;
 - all consensus state arithmetic is bounded integer arithmetic.
 
 ## Canonical encoding
@@ -77,18 +76,16 @@ exactly. All sections are always encoded, in order: accounts, identities, names,
 allocations, `usage`, `publications`, settlement cursor, `leases`; maps strictly
 ordered, no trailing bytes.
 
-## Storage economy (implemented in M5; active from the M7 genesis)
+## Storage economy
 
-Compared with the superseded DEVNET state:
-
-- OnboardingPool is removed; the whole genesis monetary base is the `cybou`
+- The whole genesis monetary base is the `cybou`
   Treasury allocation; AccountCreate transfers `onboarding_bonus` from Treasury
   to the new System Balance.
-- `TotalSupply` becomes `TotalCybou` = unclaimed genesis Balances + Balances +
+- `TotalCybou` = unclaimed genesis Balances + Balances +
   System Balances + StorageEscrow; every block preserves it exactly.
 - System Balance records its onboarding-origin portion (DEC-281).
-- New records: StorageLease (publication, payer, units, replicas, period, escrow
-  by origin, status ACTIVE/CLOSING/EXPIRED, rate remainder) and the last settled
-  StorageSettlement period.
-- per-account usage counters and storage quota checks are removed; the
-  publication register remains.
+- StorageLease records publication, payer, units, replicas, period, escrow
+  by origin, status ACTIVE/CLOSING/EXPIRED and rate remainder. State also records
+  the last settled StorageSettlement period.
+- Storage rights derive from finalized leases; the publication register
+  authorizes content admission.

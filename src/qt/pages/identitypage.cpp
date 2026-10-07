@@ -225,10 +225,9 @@ QWidget* IdentityPage::buildContent()
     hero_text->addWidget(m_name);
     hero_text->addWidget(m_name_caption);
     hero_layout->addLayout(hero_text, 1);
-    m_lock = Button(tr("Lock vault"), false, hero);
-    m_lock->setObjectName(QStringLiteral("secondaryButton"));
+    m_lock = IconButton(Glyph::Lock, hero, tr("Lock vault"), IconButtonSize::Toolbar);
     m_lock->setProperty("cybouId", QStringLiteral("lockVault"));
-    connect(m_lock, &QPushButton::clicked, this, [this] {
+    connect(m_lock, &QToolButton::clicked, this, [this] {
         m_model->requestLockVault();
         if (m_home_requested) m_home_requested();
     });
@@ -237,12 +236,10 @@ QWidget* IdentityPage::buildContent()
 
     // Account.
     auto* account = Section(root, tr("Account"), page);
-    auto* copy = Button(tr("Copy"), false, page);
+    auto* copy = IconButton(Glyph::Copy, page, tr("Copy Account ID"));
     copy->setProperty("cybouId", QStringLiteral("copyAccountId"));
-    connect(copy, &QPushButton::clicked, this, [this] { copyAccountId(); });
+    connect(copy, &QToolButton::clicked, this, [this] { copyAccountId(); });
     m_account_id = DetailRow(account, tr("Account ID"), page, copy);
-    m_balance = DetailRow(account, tr("Balance"), page);
-    m_system_balance = DetailRow(account, tr("System Balance"), page);
     account->addWidget(MutedText(tr("Share your Account ID only if someone cannot find your .cybou name."), page));
 
     // Names.
@@ -362,9 +359,6 @@ void IdentityPage::refresh()
     m_claim->setEnabled(!status.name_claim_pending);
     m_claim_status->setText(status.name_claim_status);
     m_claim_status->setVisible(status.name_claim_pending);
-
-    m_balance->setText(cybouAmountText(status.balance));
-    m_system_balance->setText(cybouAmountText(status.system_balance));
 
     ClearLayout(m_advanced_rows);
     const auto add = [this](const QString& key, const QString& value) {

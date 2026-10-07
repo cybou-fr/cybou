@@ -13,6 +13,7 @@
 #include <cybou/crypto/cleanse.h>
 #include <cybou/p2p/geo_database_updater.h>
 #include <cybou/name_service.h>
+#include <test/util/loadgen_metrics.h>
 #include <boost/asio/ip/address.hpp>
 #include <algorithm>
 #include <atomic>
@@ -58,9 +59,8 @@ struct Samples {
 };
 
 /** Run-wide measurements written by --metrics. */
-struct Metrics {
+struct Metrics : LoadgenOperationMetrics {
     Samples wallet_finality, publication_finality, publication_protected, publication_queue_wait, publication_signed_to_final;
-    std::map<std::string,uint64_t> submitted, failed, busy;
     uint64_t bytes_published{0};
     /** Recovery profile: content each restored Identity had to read back, and what it did. */
     uint64_t expected_files{0}, recovered_files{0}, expected_mail{0}, recovered_mail{0};
@@ -98,6 +98,8 @@ struct Client {
     uint64_t expect_files{0}, expect_mail{0};
     /** Submission time of each job not yet finalized / protected (for --metrics). */
     std::map<std::string,Clock::time_point> awaiting_finality, awaiting_protection, awaiting_sign, signed_at;
+    std::map<std::string,std::string> measured_jobs;
+    std::map<cybou::Hash256,std::pair<std::string,Clock::time_point>> pending_wallet;
     Client(const cybou::OfficialNetwork& net, const std::filesystem::path& dir,
            const std::pair<std::string,uint16_t>& peer, const std::string& password, unsigned target, bool recovery) {
         std::filesystem::create_directories(dir);
@@ -165,6 +167,11 @@ struct Client {
         jobs=publication->Jobs(); // Restart resumes durable exact operations and publication intents.
         events->Write(cybou::NodeEvent::node_started,{{"network_binding",runtime.GetNetworkBinding().GetHex()}});
     }
+    ~Client() {
+        // The runtime owns coordinators referring to the Identity's keys. Stop
+        // its callbacks while every service and the key store is still alive.
+        if (node) { node->StopBlockProduction(); node->StopNetwork(); }
+    }
     std::chrono::steady_clock::time_point next_progress{std::chrono::steady_clock::now()+30s};
     bool Advance() {
         publication->ProcessDurability(*storage);
@@ -184,6 +191,13 @@ struct Client {
             next_audit=std::chrono::steady_clock::now()+30s;
         }
         bool done=true;
+        for (auto it=pending_wallet.begin(); it!=pending_wallet.end();) {
+            if (node->Runtime().GetOperationStatus(it->first).kind==cybou::OperationStatusKind::FINALIZED) {
+                metrics.Finalized(it->second.first,it->first);
+                metrics.wallet_finality.Add(Ms(Clock::now()-it->second.second));
+                it=pending_wallet.erase(it);
+            } else { done=false; ++it; }
+        }
         for (const auto& job : jobs) {
             auto result=publication->GetJob(job);
             if (!result) throw std::runtime_error("missing durable publication job");
@@ -197,6 +211,7 @@ struct Client {
             if (current != cybou::PublicationJobPhase::PROTECTED) done=false;
             // Queue wait ends when the job is signed and submitted (it has an operation id).
             if (!result->operation_id.IsNull()) if (auto it=awaiting_sign.find(job); it!=awaiting_sign.end()) {
+                metrics.Submitted(measured_jobs.at(job),result->operation_id);
                 metrics.publication_queue_wait.Add(Ms(Clock::now()-it->second));
                 signed_at[job]=Clock::now();
                 awaiting_sign.erase(it);
@@ -206,6 +221,7 @@ struct Client {
                 signed_at.erase(it);
             }
             if (result->finalized_height) if (auto it=awaiting_finality.find(job); it!=awaiting_finality.end()) {
+                metrics.Finalized(measured_jobs.at(job),result->operation_id);
                 metrics.publication_finality.Add(Ms(Clock::now()-it->second));
                 awaiting_finality.erase(it);
             }
@@ -288,7 +304,9 @@ int main(int argc,char* argv[]) {
         if (address.starts_with('[') && address.ends_with(']')) address=address.substr(1,address.size()-2);
         const auto peer=std::pair{boost::asio::ip::make_address(address).to_string(),static_cast<uint16_t>(cybou::cli::Number(endpoint.substr(colon+1),1,65535))};
         const auto recipient_name=opts.Get("recipient", "");
-        const auto count=cybou::cli::Number(opts.Get("identities","2"),recipient_name.empty() ? 2 : 1,100);
+        auto profile=opts.Get("profile","files");
+        const bool needs_pair=profile=="payments" || profile=="mixed" || (profile=="mail" && recipient_name.empty());
+        const auto count=cybou::cli::Number(opts.Get("identities","2"),needs_pair ? 2 : 1,100);
         const auto rate=cybou::cli::Number(opts.Get("operations-per-second","1"),1,1000);
         const auto maximum=cybou::cli::Number(opts.Get("max-operations","100000"),1,100000);
         const auto size=cybou::cli::Quantity(opts.Get("file-size","4MiB"));
@@ -297,7 +315,6 @@ int main(int argc,char* argv[]) {
         const auto duration=ZeroOrQuantity(opts.Get("duration","15m"),true);
         if (size>(64ULL<<20) || duration>86400000) throw std::runtime_error("load bounds exceeded");
         const auto target=cybou::cli::Number(opts.Get("replicas","2"),1,2);
-        auto profile=opts.Get("profile","files");
         if ((!recipient_name.empty() || opts.Has("subject") || opts.Has("body")) && profile!="mail")
             throw std::runtime_error("recipient, subject and body require the mail profile");
         if (recipient_name.empty() && (opts.Has("subject") || opts.Has("body")))
@@ -423,6 +440,7 @@ int main(int argc,char* argv[]) {
         if (profile=="payments" || profile=="system-locks" || profile=="mixed")
             for (const auto& client : clients) if (client->wallet->GetBalances().first==0)
                 throw std::runtime_error("financial profile requires pre-funded DEVNET identities; no test funding bypass exists");
+        const auto window_started_ms=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         auto start=std::chrono::steady_clock::now(); uint64_t submitted{0};
         auto next=start;
         while (!stop && profile!="recovery" && std::chrono::steady_clock::now()-start < std::chrono::milliseconds{duration}) {
@@ -437,7 +455,7 @@ int main(int argc,char* argv[]) {
             if (client.jobs.size()>=100000) throw std::runtime_error("publication job ceiling reached");
             auto actual=profile;
             if (actual=="mixed") actual=submitted%10<5 ? "payments" : submitted%10<7 ? "mail" : submitted%10<9 ? "files" : "system-locks";
-            ++metrics.submitted[actual];
+            ++metrics.attempted[actual];
             if (actual=="payments" || actual=="system-locks") {
                 const auto submitted_at=Clock::now();
                 auto result=actual=="payments" ? client.wallet->SendPayment(*clients[(submitted+1)%count]->identity->GetAccountId(),1) : client.wallet->LockToSystemBalance(1);
@@ -450,6 +468,8 @@ int main(int argc,char* argv[]) {
                     continue;
                 }
                 if (!result) { ++metrics.failed[actual]; throw std::runtime_error("wallet load operation failed: error="+std::to_string(static_cast<unsigned>(result.error))+" "+result.error_message); }
+                metrics.Submitted(actual,result.op_id);
+                client.pending_wallet[result.op_id]={actual,submitted_at};
                 // Do not allocate a replacement nonce while delivery is uncertain.
                 // A finality stall is measured, not fatal: one slow block must not end the run.
                 auto deadline=std::chrono::steady_clock::now()+600s;
@@ -459,12 +479,13 @@ int main(int argc,char* argv[]) {
                     if (std::chrono::steady_clock::now()>deadline) { finalized=false; break; }
                     std::this_thread::sleep_for(100ms);
                 }
-                if (!finalized) {
+                if (!finalized || stop) {
                     ++metrics.failed["wallet_finality_timeout"];
                     ++submitted; next+=std::chrono::microseconds{1000000/rate};
                     continue;
                 }
-                metrics.wallet_finality.Add(Ms(Clock::now()-submitted_at));
+                // Advance observes finality once, including operations completing during drain.
+                client.Advance();
             } else {
                 const auto job="load-"+std::to_string(client.jobs.size());
                 cybou::PublicationJobResult result;
@@ -516,12 +537,14 @@ int main(int argc,char* argv[]) {
                 }
                 if (result.phase==cybou::PublicationJobPhase::NEEDS_ATTENTION) { ++metrics.failed[actual]; throw std::runtime_error("publication submission failed: "+result.error); }
                 client.jobs.push_back(job);
+                client.measured_jobs[job]=actual;
                 client.awaiting_finality[job]=client.awaiting_protection[job]=client.awaiting_sign[job]=Clock::now();
                 if (actual=="files") metrics.bytes_published+=size;
             }
             ++submitted; next+=std::chrono::microseconds{1000000/rate};
             while (!stop && std::chrono::steady_clock::now()<next) std::this_thread::sleep_for(20ms);
         }
+        const auto load_window_s=std::chrono::duration<double>(Clock::now()-start).count();
         auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds{cybou::cli::Quantity(opts.Get("drain-timeout","5m"),true)};
         bool done=false, drain_timeout=false;
         while (!stop && !done) {
@@ -552,6 +575,7 @@ int main(int argc,char* argv[]) {
             }
             if (!done) std::this_thread::sleep_for(1s);
         }
+        const auto measurement_window_s=std::chrono::duration<double>(Clock::now()-start).count();
         for (auto& client : clients) {
             uint64_t files{0}, mail{0};
             for (const auto& file : client->application->ListFiles()) {
@@ -575,11 +599,18 @@ int main(int argc,char* argv[]) {
                 expected << "files " << files << "\nmail " << mail << '\n';
             }
             client->events->Write(cybou::NodeEvent::node_stopping);
+            const bool vault_exists=std::filesystem::exists(client->dir/"identity.vault");
+            const bool current_exists=std::filesystem::exists(client->dir/"node"/"CURRENT");
+            const bool binding_exists=client->node->Runtime().GetStore().GetStoredNetworkBinding().has_value();
+            std::cerr << "persistence preflight: identity=" << client->dir.filename().string()
+                      << " vault=" << vault_exists << " CURRENT=" << current_exists << " network_binding=" << binding_exists << '\n';
+            if (!vault_exists || !current_exists || !binding_exists)
+                throw std::runtime_error("synthetic client persistence preflight failed; data preserved");
         }
         const auto elapsed_s=std::chrono::duration<double>(Clock::now()-start).count();
-        // Attempts refused because the account was busy are not operations.
-        for (const auto& [_,n] : metrics.busy) submitted-=std::min<uint64_t>(submitted,n);
-        std::cout << "operations=" << submitted << " result=" << (done ? "PASS" : drain_timeout ? "DRAIN_TIMEOUT" : "INTERRUPTED") << '\n';
+        const auto total=[](const auto& counts) { uint64_t n{0}; for (const auto& [_,v] : counts) n+=v; return n; };
+        std::cout << "submitted_operations=" << metrics.submitted_ids.size() << " finalized_operations=" << metrics.finalized_ids.size()
+                  << " result=" << (done ? "PASS" : drain_timeout ? "DRAIN_TIMEOUT" : "INTERRUPTED") << '\n';
         if (opts.Has("metrics")) {
             std::ofstream out{opts.Get("metrics")};
             const auto counts=[](const std::map<std::string,uint64_t>& m) {
@@ -588,10 +619,18 @@ int main(int argc,char* argv[]) {
                 return s+"}";
             };
             out << "{\"profile\":\"" << profile << "\",\"identities\":" << count << ",\"result\":\"" << (done ? "PASS" : drain_timeout ? "DRAIN_TIMEOUT" : "INTERRUPTED")
-                << "\",\"elapsed_s\":" << elapsed_s << ",\"operations\":" << submitted
-                << ",\"operations_per_s\":" << (elapsed_s>0 ? submitted/elapsed_s : 0.0)
+                << "\",\"elapsed_s\":" << elapsed_s
+                << ",\"network_binding\":\"" << clients.front()->node->Runtime().GetNetworkBinding().GetHex() << "\""
+                << ",\"measurement_started_unix_ms\":" << window_started_ms
+                << ",\"measurement_window_s\":" << measurement_window_s << ",\"load_window_s\":" << load_window_s
+                << ",\"attempted_operations\":" << total(metrics.attempted)
+                << ",\"submitted_operations\":" << metrics.submitted_ids.size()
+                << ",\"finalized_operations\":" << metrics.finalized_ids.size()
+                << ",\"submitted_ops_per_s\":" << (measurement_window_s>0 ? metrics.submitted_ids.size()/measurement_window_s : 0.0)
+                << ",\"finalized_ops_per_s\":" << (measurement_window_s>0 ? metrics.finalized_ids.size()/measurement_window_s : 0.0)
                 << ",\"bytes_published\":" << metrics.bytes_published
-                << ",\"submitted\":" << counts(metrics.submitted) << ",\"failed\":" << counts(metrics.failed)
+                << ",\"attempted\":" << counts(metrics.attempted) << ",\"submitted\":" << counts(metrics.submitted)
+                << ",\"finalized\":" << counts(metrics.finalized) << ",\"failed\":" << counts(metrics.failed)
                 << ",\"busy\":" << counts(metrics.busy)
                 << ",\"wallet_submit_to_final\":" << metrics.wallet_finality.Json()
                 << ",\"publication_submit_to_final\":" << metrics.publication_finality.Json()

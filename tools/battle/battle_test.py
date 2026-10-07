@@ -24,7 +24,9 @@ Test data lives under %USERPROFILE%\\cybou-battle (never in %LOCALAPPDATA%\\CYBO
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -52,6 +54,33 @@ BOOTSTRAP = (VPS_IP, 29461)
 
 WIN_PORT, WSL_PORT, VPS_PORT = 29501, 29601, 29471
 NFT_COMMENT = "cybou-battle"
+
+
+def summarize_metrics(metrics: list[tuple[str, dict]], window_s: float) -> dict:
+    """Validate the current contract before deriving a cohort throughput."""
+    if not metrics or not math.isfinite(window_s) or window_s <= 0:
+        raise ValueError("benchmark requires clients and a positive finite controller window")
+    bindings = {m["network_binding"] for _, m in metrics}
+    if len(bindings) != 1:
+        raise ValueError("benchmark clients disagree on network binding")
+    totals = {key: 0 for key in ("attempted_operations", "submitted_operations", "finalized_operations")}
+    for name, m in metrics:
+        counts = [m[key] for key in totals]
+        if any(type(n) is not int or n < 0 for n in counts) or not counts[0] >= counts[1] >= counts[2]:
+            raise ValueError(f"{name}: invalid operation counts")
+        for key, field in zip(totals, ("attempted", "submitted", "finalized")):
+            if any(type(n) is not int or n < 0 for n in m[field].values()) or sum(m[field].values()) != m[key]:
+                raise ValueError(f"{name}: inconsistent {field} total")
+            totals[key] += m[key]
+        duration = m["measurement_window_s"]
+        if not math.isfinite(duration) or duration <= 0:
+            raise ValueError(f"{name}: invalid measurement window")
+        for key, field in (("submitted_operations", "submitted_ops_per_s"), ("finalized_operations", "finalized_ops_per_s")):
+            if not math.isclose(m[field], m[key] / duration, rel_tol=1e-4, abs_tol=1e-6):
+                raise ValueError(f"{name}: inconsistent {field}")
+    return {**totals, "measurement_window_s": window_s, "network_binding": bindings.pop(),
+            "submitted_ops_per_s": totals["submitted_operations"] / window_s,
+            "finalized_ops_per_s": totals["finalized_operations"] / window_s}
 
 
 def log(message: str) -> None:
@@ -135,6 +164,18 @@ class Battle:
         self.vps_dir = f"{VPS_BASE}/{self.run_id}"
         self.processes: list[subprocess.Popen] = []
         self.samples: list[dict] = []
+        diff = subprocess.run(["git", "diff", "HEAD", "--binary"], cwd=REPO, capture_output=True, check=True).stdout
+        self.provenance = {
+            "revision": sh(["git", "-C", str(REPO), "rev-parse", "HEAD"]).strip(),
+            "dirty": bool(sh(["git", "-C", str(REPO), "status", "--porcelain"]).strip()),
+            "tracked_diff_sha256": hashlib.sha256(diff).hexdigest(),
+            "windows_loadgen_sha256": hashlib.sha256((WIN_BIN / "cybou-loadgen.exe").read_bytes()).hexdigest(),
+            "windows_node_sha256": hashlib.sha256((WIN_BIN / "cybou.exe").read_bytes()).hexdigest(),
+        }
+        if args.wsl_clients:
+            self.provenance["wsl_loadgen_sha256"] = wsl(f"sha256sum {WSL_BIN}/cybou-loadgen").split()[0]
+        if args.wsl_nodes:
+            self.provenance["wsl_node_sha256"] = wsl(f"sha256sum {WSL_BIN}/cybou").split()[0]
 
     # -- topology ------------------------------------------------------------
     def endpoints(self) -> dict[str, list[tuple[str, int]]]:
@@ -198,8 +239,8 @@ class Battle:
                 "--replicas", str(a.replicas), "--drain-timeout", a.drain_timeout] + extra
 
     def win_clients(self) -> list[tuple[Path, tuple[str, int]]]:
-        eps = self.endpoints()["win"] or [BOOTSTRAP]
-        return [(self.dir / f"win-client-{i}", ("127.0.0.1", eps[i % len(eps)][1]) if self.endpoints()["win"] else BOOTSTRAP)
+        eps = self.endpoints()["win"] or self.endpoints()["wsl"] or [BOOTSTRAP]
+        return [(self.dir / f"win-client-{i}", ("127.0.0.1", eps[i % len(eps)][1]) if self.endpoints()["win"] else eps[i % len(eps)])
                 for i in range(self.args.win_clients)]
 
     def wsl_clients(self) -> list[tuple[str, tuple[str, int]]]:
@@ -217,7 +258,7 @@ class Battle:
             for i in range(self.args.identities):
                 seed_geo(path / f"identity-{i}" / "node")
             waits.append(self.spawn([str(WIN_BIN / "cybou-loadgen.exe"), "--data-dir", str(path), "--peer", f"{peer[0]}:{peer[1]}",
-                                     "--password-file", str(PASSWORD_FILE)] + self.client_args("mail", "0s", None),
+                                     "--password-file", str(PASSWORD_FILE)] + self.client_args("files", "0s", None),
                                     path / "prepare.log"))
         wsl_password = f"{self.wsl_dir}/password.txt"
         if self.wsl_clients():
@@ -227,7 +268,7 @@ class Battle:
                              for i in range(self.args.identities))
             wsl(f"{seeds} true")
             wsl_spawn(f"{WSL_BIN}/cybou-loadgen --data-dir {path} --peer {peer[0]}:{peer[1]} --password-file {wsl_password} "
-                      f"{' '.join(self.client_args('mail', '0s', None))}", f"{path}/prepare.log", f"{path}/prepare.pid")
+                      f"{' '.join(self.client_args('files', '0s', None))}", f"{path}/prepare.log", f"{path}/prepare.pid")
         for process in waits:
             if process.wait(timeout=2700) != 0:
                 raise RuntimeError("a Windows client failed to create its Identities; see prepare.log")
@@ -257,6 +298,9 @@ class Battle:
 
     def load(self) -> None:
         log(f"load: profile={self.args.profile} rate={self.args.rate}/s per client duration={self.args.duration}")
+        # One controller clock bounds all clients, including reconnect and final drain.
+        # Do not divide their sum by the longest individual client window.
+        load_started = time.monotonic()
         processes = []
         if self.args.desktop_mails:
             # Letters with attachments to the desktop Identity: its chunks are then stored by battle nodes.
@@ -292,6 +336,7 @@ class Battle:
             self.sample()
             time.sleep(10)
         self.sample()
+        self.load_window_s = time.monotonic() - load_started
 
     def restored_win(self) -> list[tuple[Path, tuple[str, int]]]:
         return self.win_clients()[:1]
@@ -427,29 +472,48 @@ class Battle:
             if text:
                 restores.append(("wsl:" + path.rsplit("/", 1)[1], json.loads(text)))
         (self.dir / "samples.json").write_text(json.dumps(self.samples), encoding="utf-8")
-        total_ops = sum(m["operations"] for _, m in metrics)
-        elapsed = max((m["elapsed_s"] for _, m in metrics), default=0)
+        if not metrics:
+            self.passed = False
+            failure = {"run_id": self.run_id, "result": "FAIL", "reason": "No load client reported metrics",
+                       "provenance": self.provenance, "clients": {}, "checks": [["load metrics available", False, "none"]]}
+            (self.dir / "benchmark.json").write_text(json.dumps(failure, indent=2) + "\n", encoding="utf-8")
+            text = (f"# CYBOU battle test {self.run_id}\n\n## Verdict: FAIL\n\n"
+                    "No load client reported metrics. Attempted, submitted, finalized counts and throughput are Unknown.\n"
+                    "No benchmark reference may be published from this run. See client load/restore logs.\n")
+            (self.dir / "report.md").write_text(text, encoding="utf-8")
+            archive = REPO / "docs" / "cybou" / "battle"
+            archive.mkdir(parents=True, exist_ok=True)
+            (archive / f"{self.run_id}.md").write_text(text, encoding="utf-8")
+            print(text)
+            return
+        summary = summarize_metrics(metrics, self.load_window_s)
+        attempted, submitted, finalized = (summary[k] for k in ("attempted_operations", "submitted_operations", "finalized_operations"))
+        elapsed = self.load_window_s
         peak = {"windows_mib": 0.0, "wsl_mib": 0.0, "vps_mib": 0.0}
         for s in self.samples:
             peak["windows_mib"] = max(peak["windows_mib"], sum(p.get("WorkingSet64", 0) for p in s["windows"]) / 2**20)
             for site in ("wsl", "vps"):
                 rss = sum(int(line.split()[-1]) for line in s[site] if line.strip())
                 peak[f"{site}_mib"] = max(peak[f"{site}_mib"], rss / 1024)
-        revision = sh(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"], check=False).strip() or "unknown"
-        lines = [f"# CYBOU battle test {self.run_id}", "", f"Revision: `{revision}`", "",
+        revision = self.provenance["revision"]
+        lines = [f"# CYBOU battle test {self.run_id}", "", f"Revision: `{revision}`; dirty: `{self.provenance['dirty']}`", "",
                  f"Topology: Windows nodes {self.args.win_nodes}, WSL nodes {self.args.wsl_nodes}, "
                  f"VPS extra nodes {self.args.vps_nodes} + bootstrap; clients Windows {self.args.win_clients}, "
                  f"WSL {self.args.wsl_clients} × {self.args.identities} Identities.",
                  f"Load: profile `{self.args.profile}`, {self.args.rate} op/s per client, {self.args.duration}, "
                  f"file size {self.args.file_size}, replicas {self.args.replicas}.", "",
-                 f"**Total operations:** {total_ops} in {elapsed:.0f} s → **{(total_ops / elapsed if elapsed else 0):.2f} op/s**", "",
-                 "| Client | Result | Ops | op/s | Wallet final p50/p95 ms | Publication final p50/p95 ms | Protected p50/p95 ms | Failed |",
+                 f"**Finalized throughput:** {(finalized / elapsed if elapsed else 0):.2f} op/s; "
+                 f"{finalized} finalized, {submitted} submitted, {attempted} attempted in {elapsed:.1f} s.",
+                 "Controller window: first client launch through last metrics receipt, including reconnect, load and drain. "
+                 "Client windows exclude Identity preparation/funding and cover load plus drain. These are cohort measurements, not network capacity.", "",
+                 "| Client | Result | Attempted / Submitted / Finalized | Submitted / Finalized op/s | Wallet final p50/p95 ms | Publication final p50/p95 ms | Protected p50/p95 ms | Failed |",
                  "|---|---|---:|---:|---|---|---|---|"]
         for name, m in metrics:
             w, f, p = m["wallet_submit_to_final"], m["publication_submit_to_final"], m["publication_submit_to_protected"]
-            lines.append(f"| {name} | {m['result']} | {m['operations']} | {m['operations_per_s']:.2f} | "
-                         f"{w['p50_ms']:.0f} / {w['p95_ms']:.0f} | {f['p50_ms']:.0f} / {f['p95_ms']:.0f} | "
-                         f"{p['p50_ms']:.0f} / {p['p95_ms']:.0f} | {m['failed']} |")
+            latency = lambda s: f"{s['p50_ms']:.0f} / {s['p95_ms']:.0f} (n={s['count']})" if s['count'] else "Unknown (n=0)"
+            lines.append(f"| {name} | {m['result']} | {m['attempted_operations']} / {m['submitted_operations']} / {m['finalized_operations']} | "
+                         f"{m['submitted_ops_per_s']:.2f} / {m['finalized_ops_per_s']:.2f} | "
+                         f"{latency(w)} | {latency(f)} | {latency(p)} | {m['failed']} |")
         # Verdict: correctness gates only; latencies are reported, not judged.
         checks: list[tuple[str, bool, str]] = []
         load_clients = [n for n, _ in metrics]
@@ -459,6 +523,8 @@ class Battle:
         for name, m in metrics:
             checks.append((f"{name}: load drained", m["result"] == "PASS", m["result"]))
             checks.append((f"{name}: no failed operations", not m["failed"], str(m["failed"] or "none")))
+            checks.append((f"{name}: every submitted operation finalized", m["submitted_operations"] == m["finalized_operations"],
+                           f"{m['finalized_operations']} of {m['submitted_operations']}"))
         restore_names = {n for n, _ in restores}
         for path, _ in self.restored_win():
             if "windows:" + path.name not in restore_names:
@@ -474,6 +540,12 @@ class Battle:
                            f"files {rec.get('recovered_files')}/{rec.get('expected_files')}, "
                            f"mail {rec.get('recovered_mail')}/{rec.get('expected_mail')}, {m['result']}, {m['elapsed_s']:.0f} s"))
         self.passed = all(ok for _, ok, _ in checks)
+        reference = {**summary, "run_id": self.run_id, "result": "PASS" if self.passed else "FAIL",
+                     "profile": self.args.profile, "replicas": self.args.replicas, "file_size": self.args.file_size,
+                     "co_located_wsl": bool(self.args.wsl_nodes or self.args.wsl_clients),
+                     "topology": {key: getattr(self.args,key) for key in ("win_nodes","wsl_nodes","vps_nodes","win_clients","wsl_clients","identities")},
+                     "provenance": self.provenance, "clients": dict(metrics), "checks": checks}
+        (self.dir / "benchmark.json").write_text(json.dumps(reference, indent=2) + "\n", encoding="utf-8")
         verdict = ["", f"## Verdict: {'PASS' if self.passed else 'FAIL'}", "", "| Check | Result | Detail |", "|---|---|---|"]
         verdict += [f"| {name} | {'PASS' if ok else 'FAIL'} | {detail} |" for name, ok, detail in checks]
         lines[6:6] = verdict
@@ -496,11 +568,17 @@ class Battle:
         lines += ["", f"Peak memory of battle processes: Windows {peak['windows_mib']:.0f} MiB, "
                       f"WSL {peak['wsl_mib']:.0f} MiB, VPS {peak['vps_mib']:.0f} MiB.",
                   "", f"Raw data: `{self.dir}` (metrics.json, events.jsonl, node.log, samples.json)."]
+        lines += ["", f"Network binding: `{summary['network_binding']}`.",
+                  f"Windows loadgen SHA-256: `{self.provenance['windows_loadgen_sha256']}`.",
+                  f"Tracked source diff SHA-256: `{self.provenance['tracked_diff_sha256']}`."]
+        if reference["co_located_wsl"]:
+            lines += ["", "Simulation: Windows and WSL share one physical host. Distinct virtual network addresses "
+                      "and StorageIds do not establish independent remote machines or failure domains. No Geo bypass or proxy is used."]
         (self.dir / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
         # Acceptance evidence lives in Git: a compact copy per run under docs/cybou/battle/.
         archive = REPO / "docs" / "cybou" / "battle"
         archive.mkdir(parents=True, exist_ok=True)
-        (archive / f"{self.run_id}.md").write_text("\n".join(lines[:-2]) + "\n", encoding="utf-8")
+        (archive / f"{self.run_id}.md").write_text("\n".join(line for line in lines if not line.startswith("Raw data:")) + "\n", encoding="utf-8")
         print("\n".join(lines))
 
     def stop(self) -> None:

@@ -71,7 +71,7 @@ private:
     QLabel* m_activity_empty{nullptr};
     QStringList m_activity_presentation;
     QHash<QString, QWidget*> m_activity_widgets;
-    QPushButton* m_activity_refresh{nullptr};
+    QToolButton* m_activity_refresh{nullptr};
     QLabel* m_activity_refresh_hint{nullptr};
     QFrame* m_first_steps{nullptr};
     QVBoxLayout* m_first_steps_rows{nullptr};

@@ -7,6 +7,20 @@ fixtures (`CYBOU_UI_FIXTURE`). Connection is not full Beta acceptance: see
 `26_IMPLEMENTATION_STATUS.md` and `DESKTOP_UX_DELIVERY_PLAN.md` for remaining
 interaction and evidence gaps. Local-only content is never `Protected`.
 
+The shell's contextual header search drives the current Files view's filter,
+including its existing name/status matching. Clearing it removes that filter;
+folder navigation clears the same query. Switching products retains each query;
+Identity lock clears private search state. The embedded page has no second
+visible search control.
+
+Selection actions appear for one or multiple items and carry across list/grid
+views. Star toggles all selected items according to whether all are already
+starred. Trash offers Restore instead of Star/Move to Trash. Single selection
+also offers Details; Clear selection remains available. Utility icons have
+accessible names, tooltips and keyboard focus, and mutation actions require an
+active Identity and available Files backend. Permanent deletion keeps its
+explicit existing review. These actions do not imply finality or protection.
+
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file
 management patterns; CYBOU does not copy Google branding, provider account

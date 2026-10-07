@@ -3,6 +3,173 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Network reference and Advanced sections package (2026-10-07)
+
+The main Network map now carries a compact accepted-reference card: finalized
+op/min, UTC run date, workload/count and historical same-host simulation scope.
+Missing/rejected/wrong-network evidence renders Unknown. Details opens the full
+existing evidence in Overview, retaining its exact counts/window and provenance.
+Opening Network or its reference does not run a benchmark. Spare horizontal map
+space keeps Corsica clear of the lower-right card without shrinking/distorting
+the silhouette or changing its geometry when Advanced opens.
+
+Advanced now separates Overview, Peers, Storage and Technical into bounded
+scrollable tabs. Overview holds local finality/mesh observations and reference;
+Peers holds session observations and the one selected-peer card; Storage holds
+local capacity and own-content protection, with an explicit mesh/storage evidence
+boundary; Technical hosts the existing diagnostics and monitor/console launchers.
+The selected peer survives drawer close and reference/technical navigation.
+Selecting a peer while Advanced is open chooses Peers. The Identity/desktop
+diagnostics entry point opens Technical directly. Unavailable capacity shows
+Unknown instead of an apparent zero measurement.
+
+Isolated MinGW GUI/test builds passed. Focused suite: 5/0 including setup/cleanup;
+final complete Qt suite: 77 passed/0 failed. Native Windows light 1040×720 and
+dark 1280×860 Network, selected-peer, reference and Storage captures were visually
+inspected under `artifacts/ux-r5-20261007/`. The captures combine synthetic peer
+observations with the genuine compiled historical reference; they do not form a
+new live network measurement. No network reset, deployment or signer change was
+performed. Professional Monitor/Console/Authority work and complete physical
+DPI/accessibility/FR-EN acceptance remain subsequent packages.
+
+## Recovery and Mail/Files interaction package (2026-10-07)
+
+Identity preparation labels local encrypted opening and discovery/decryption as
+two stages. Continue in background keeps the worker running and shows a persistent
+strip with Recovery details. Progress remains a verified-history scan, capped at
+99 until projection readiness, not a claim of downloaded/protected content.
+Failures reopen the scoped dialog after background continuation; Ready/lock hide
+the strip. Appearance rebuild preserves background mode and its details action.
+
+The shell now exposes one search field on Mail/Files. Typing and clearing feed
+their existing current-view filters; switching products restores the respective
+query and folder navigation clears the Files query. Ctrl+K and Mail `/` reach the
+visible control. Lock clears search and private suggestions. Standalone page
+fixtures retain their local control. Appearance rebuild retains the shared query.
+
+Files selection actions now support one/multiple items, list/grid and Trash. Star
+toggles the cohort, ordinary views offer Move to Trash, and Trash offers Restore.
+Single selection offers Details; Clear selection is always available. Mutation
+controls follow active Identity/backend availability. Permanent deletion keeps
+its existing explicit review. Shared icon styling follows a dedicated property,
+so named controls retain their size, hover and keyboard focus presentation.
+
+Isolated MinGW GUI/test builds passed. Complete Qt suite: 76 passed/0 failed after
+the icon style fix; the subsequent background-strip appearance retention change
+passed its focused regression (3/0 including setup/cleanup). Native light 1040×720 and dark 1280×860
+fixtures are under `artifacts/ux-r4-20261007/`. These are presentation evidence;
+no additional signer, deployment or network reset is involved. Broader quiet
+success-state review, physical DPI/accessibility and complete FR/EN acceptance
+remain. This package did not restart or replace the user's PoA desktop binary.
+Final native captures of the two-stage dialog, background recovery strip, single
+header Mail search and Files selection toolbar were visually inspected. An early
+capture exposed named icon buttons losing the common padding style; the dedicated
+icon property correction is included in the final captures and build.
+
+## Desktop benchmark accounting package (2026-10-07)
+
+Loadgen now reports attempted/submitted/finalized operations separately, tracks
+unique measured OperationIDs, excludes historical jobs and observes wallet
+finalization during drain. The battle report uses one controller measurement
+window, validates per-client counters/rates and shows missing latency samples as
+Unknown. Network Advanced consumes a bounded compiled reference only after PASS,
+successful acceptance checks and matching NetworkBinding; it labels provenance,
+workload, measurement window and Windows/WSL simulation scope. Opening the page
+does not generate load. French translations accompany the reference display.
+
+The first live run exposed a database missing CURRENT and a missing client vault;
+its files and failed verdict are retained. Opening an existing LevelDB without
+CURRENT now fails before create_if_missing can replace its metadata. A real-disk
+regression verifies that rejection preserves the files, and a later single-client
+run preserved vault, CURRENT and NetworkBinding across close/reopen. The cause of
+the original file disappearance remains unresolved; automatic repair is absent.
+Loadgen also stops its runtime before destroying referenced Identity services.
+
+Core suite: 267 passed; final Qt suite: 75 passed, including the simulation scope
+and accepted-reference parser regression; Python report suite: 6 passed.
+Build/test logs are under `artifacts/ux-r3-20261007/`. Failed runs
+`battle/20261007-195003.md` and `battle/20261007-203645.md` remain evidence: the
+first produced no load metrics, and the second finalized six operations but
+timed out at one of two required replicas. Their results are not accepted
+benchmark references.
+
+Accepted reference: `battle/20261007-205703.md`, current DEVNET, files profile,
+one Windows client/Identity, seven 64 KiB files, two-replica target, ordinary WSL
+Full Node plus the existing DEVNET peers. All seven operations finalized, load
+drained with no failed operations and clean vault-only restore verified 7/7
+files after the source client stopped. Controller throughput was 7/88.8 s,
+approximately 0.08 finalized op/s; client load/drain throughput was approximately
+0.22 op/s. These denominators differ by documented reconnect/controller overhead.
+The desktop displays the unrounded reference rate as 4.7 finalized op/min;
+the artifact and historical report retain the per-second measurement contract.
+This short low-rate workload is not a capacity benchmark. Windows and WSL share
+one physical host; two placement addresses do not prove independent remote
+machines or failure domains. No proxy, Geo bypass, additional signer or network
+reset was used. Its reviewed public `benchmark_reference.json` is compiled into
+the isolated desktop build; the user's running PoA desktop is untouched.
+Native Windows light 1040×720 and dark 1280×860 reference captures were visually
+inspected: the accepted historical number, French workload/window text, binary
+hash and same-host simulation caveat are readable. Peer/map snapshots in those
+captures are synthetic fixtures, separate from the real reference evidence.
+
+## Desktop Network presentation package (2026-10-07)
+
+The schematic Network map now uses a compiled Natural Earth mainland/Corsica
+outline with preserved aspect ratio (284/32 simplified vertices). The generated
+header records the GeoJSON SHA-256 and `tools/ui/generate_france_outline.py`
+reproduces it offline. No map SDK, runtime geography fetch, city assignment or
+regional boundary is introduced. P markers are mesh observations; L markers are
+in a bounded compact LAN inset, including a selected peer when the inset overflows.
+
+The normal map shows its Public CYBOU/France scope, local connection/protection
+summary and illustrative-position note. One selected-peer card moves between
+the map and Advanced without losing selection. Normal rows show admission,
+connection and unverified advertised height; endpoint, StorageId and tip delta
+appear in Advanced. Floating row height is measured after row widgets become
+visible. Closing the icon clears the selection. Disconnected observations retain
+no current storage proof or advertised-height claim.
+
+Ahead height announcements and matching heights are explicitly unverified;
+neither renders as proof of synchronization. The provenance timestamp is labelled
+Last sync, not diagnostics freshness. These changes concern local presentation,
+not consensus, peer admission or provider placement.
+
+Native Windows light/dark fixture captures are under `artifacts/ux-r2-20261007/`.
+The final MinGW GUI/test build passed and the complete Qt suite passed 74/74
+after the advertised-height correction, including selected-card height, drawer
+selection retention, ahead-announcement and disconnected-evidence regressions.
+Network, floating card and Advanced captures were visually inspected at 1040×720
+(light) and 1280×860 (dark); fixture snapshots are not network/benchmark evidence.
+Full DPI and FR/EN acceptance remain. Benchmark,
+VPS deployment and signer/network changes remain outside this package.
+
+## Desktop UX first implementation package (2026-10-07)
+
+Implemented against `7f043f95`: Compact/Toolbar utility icon buttons with accessible
+names and keyboard focus; Home activity refresh and Identity shortcut, Identity
+copy/lock and Settings download-folder controls use them. Primary and sensitive
+actions keep their text and existing reviews. Home, Wallet, Mail support fees,
+activity and wallet errors use Network balance / Solde réseau for the canonical
+System Balance. Identity no longer duplicates Wallet balances.
+
+Header search is contextual on Home/Mail/Files; other pages show their title.
+Ctrl+K temporarily opens search there without navigation; Escape or focus leaving
+the field restores the title. Subsequent single-header Mail/Files integration is
+recorded in the package above. Suggestions are scoped to the corresponding product, and Home/global
+suggestions still span both local indexes.
+
+Validation: MinGW GUI and Qt test targets built; the complete Qt suite passed
+74/74 results. Native Windows fixture captures at 1040×720 (light) and 1280×860
+(dark) are under `artifacts/ux-r1-20261007/`; Home, Identity and Wallet captures
+were visually inspected. Offscreen captures had missing font glyphs and are not
+visual acceptance evidence. These are synthetic UI fixtures, not network or
+performance evidence; Windows DPI and the complete FR/EN acceptance pass remain.
+
+Subsequent benchmark work is recorded in the dated package above. Remaining
+packages from the accepted desktop proposal include recovery and Mail/Files
+polish, Console and Authority professional workflows.
+No fresh benchmark, VPS deployment or network reset was performed in this package.
+
 ## Build, peer admission and battle evidence (2026-10-06)
 
 - The build uses CYBOU CMake modules only (`cmake/CybouBuildType`, `CybouFlags`,

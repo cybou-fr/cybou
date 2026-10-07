@@ -47,12 +47,14 @@ enum class Glyph {
     Palette, User, Users, Key, Refresh, Trash, Archive, Inbox, ChevronRight,
     ChevronLeft, Copy, Info, Database, CloudUp, Camera, Gear, Sparkles,
     ArrowUpRight, ArrowDownLeft, ArrowRight, WalletCard, GridView, ListView,
-    Compose, Transfer, Filter, History, MapPin, Server, Eye, Envelope,
+    Compose, Transfer, Filter, History, MapPin, Server, Eye, Envelope, Close,
 };
 
 inline QString glyphPaths(Glyph glyph)
 {
     switch (glyph) {
+    case Glyph::Close:
+        return QStringLiteral(R"(<path d="M6 6l12 12M18 6 6 18"/>)");
     case Glyph::Bell:
         return QStringLiteral(R"(<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/>)");
     case Glyph::Send:
@@ -372,16 +374,22 @@ inline QLabel* Dot(Tint tint, QWidget* parent, int size = 8)
 }
 
 /** Flat circular icon button (search options, view toggle, more, starâ€¦). */
-inline QToolButton* IconButton(Glyph glyph, QWidget* parent, const QString& tooltip = {})
+enum class IconButtonSize { Compact, Toolbar };
+
+inline QToolButton* IconButton(Glyph glyph, QWidget* parent, const QString& tooltip = {},
+    IconButtonSize size = IconButtonSize::Compact)
 {
     auto* button = new QToolButton{parent};
     button->setObjectName(QStringLiteral("iconButton"));
+    button->setProperty("cybouIconButton", true);
     button->setAutoRaise(true);
-    const int extent = 28;
+    const int extent = size == IconButtonSize::Toolbar ? 34 : 28;
     button->setFixedSize(extent, extent);
     button->setIconSize(QSize{18, 18});
     button->setIcon(QIcon{glyphPixmap(glyph, {18, 18}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))});
-    if (!tooltip.isEmpty()) button->setToolTip(tooltip);
+    button->setToolTip(tooltip);
+    button->setAccessibleName(tooltip);
+    button->setFocusPolicy(Qt::StrongFocus);
     return button;
 }
 

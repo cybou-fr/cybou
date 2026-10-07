@@ -383,6 +383,11 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshBanner(); });
+    connect(m_model, &CybouDesktopModel::applicationLoadChanged, this,
+        [this, previous = m_model->applicationLoadState()]() mutable {
+            const auto state = m_model->applicationLoadState();
+            if (state != previous) { previous = state; refreshBanner(); }
+        });
     connect(m_model, &CybouDesktopModel::contactsChanged, this, [this] { rebuildContacts(); });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {
         if (m_current_id == old_id) m_current_id = new_id;
@@ -408,7 +413,9 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     };
     shortcut(QKeySequence{QStringLiteral("Ctrl+N")}, [this] { openCompose(); });
     shortcut(QKeySequence{Qt::Key_C}, [this, typing] { if (!typing()) openCompose(); });
-    shortcut(QKeySequence{Qt::Key_Slash}, [this, typing] { if (!typing()) m_search->setFocus(); });
+    shortcut(QKeySequence{Qt::Key_Slash}, [this, typing] {
+        if (!typing()) { if (onSearchRequested) onSearchRequested(); else m_search->setFocus(); }
+    });
     shortcut(QKeySequence{Qt::Key_R}, [this, typing] {
         if (!typing() && m_detail->currentWidget() == m_reader) openCompose(replyTo(m_reader->messageId()));
     });
@@ -812,6 +819,9 @@ void EmailPage::refreshBanner()
     const bool connected = m_model->featureAvailability().mail;
     m_banner->setVisible(!identity || !connected);
     m_banner_text->setText(!identity ? tr("Mail needs your CYBOU Identity. Create or restore it on Home.")
+        : m_model->applicationLoadState() == CybouApplicationLoadState::Loading ||
+          m_model->applicationLoadState() == CybouApplicationLoadState::Opening
+            ? tr("Your local view is still being prepared. Items appear progressively.")
                                      : tr("Mail is not connected yet. Messages will appear here once it is."));
     m_banner_action->setVisible(!identity);
     m_compose_button->setEnabled(identity);

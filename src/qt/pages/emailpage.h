@@ -54,6 +54,7 @@ public:
     void openMessage(const QString& id);
     void setSearchText(const QString& text);
     QString searchText() const;
+    std::function<void()> onSearchRequested;
     QString currentMessageId() const { return m_current_id; }
     bool isDetailOpen() const { return m_detail_open; }
     /** Moves messages the way a drop on a folder does (Undo offered). */

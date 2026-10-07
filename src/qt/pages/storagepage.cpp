@@ -328,27 +328,36 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     m_selection_text->setObjectName(QStringLiteral("rowTitle"));
     selection_layout->addWidget(m_selection_text);
     selection_layout->addStretch();
-    const auto selection_action = [this, selection_layout](const QString& text, auto&& handler) {
-        auto* button = new QPushButton{text, m_selection_bar};
-        button->setObjectName(QStringLiteral("secondaryButton"));
+    const auto selection_action = [this, selection_layout](Glyph glyph, const QString& text, auto&& handler) {
+        auto* button = IconButton(glyph, m_selection_bar, text, IconButtonSize::Toolbar);
         connect(button, &QPushButton::clicked, this, std::forward<decltype(handler)>(handler));
         selection_layout->addWidget(button);
         return button;
     };
-    selection_action(tr("Star"), [this] {
-        for (const auto& id : selectedIds()) m_model->requestFileStarred(id, true);
+    m_selection_star = selection_action(Glyph::Star, tr("Star"), [this] {
+        const auto ids = selectedIds();
+        const bool remove = std::all_of(ids.begin(), ids.end(), [this](const auto& id) {
+            const auto* item = m_model->fileItem(id); return item && item->starred;
+        });
+        for (const auto& id : ids) m_model->requestFileStarred(id, !remove);
     });
-    selection_action(tr("Move to Trash"), [this] {
+    m_selection_trash = selection_action(Glyph::Trash, tr("Move to Trash"), [this] {
         const auto ids = selectedIds();
         for (const auto& id : ids) m_model->requestTrashFile(id);
         m_model->notify(tr("%1 items moved to Trash").arg(ids.size()), tr("Undo"),
             [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
     });
-    auto* clear_selection = new QToolButton{m_selection_bar};
-    clear_selection->setObjectName(QStringLiteral("iconButton"));
-    clear_selection->setText(QStringLiteral("✕"));
-    clear_selection->setToolTip(tr("Clear selection"));
-    clear_selection->setAccessibleName(tr("Clear selection"));
+    m_selection_restore = selection_action(Glyph::History, tr("Restore"), [this] {
+        for (const auto& id : selectedIds()) m_model->requestRestoreFile(id);
+    });
+    m_selection_star->setObjectName(QStringLiteral("filesSelectionStar"));
+    m_selection_trash->setObjectName(QStringLiteral("filesSelectionTrash"));
+    m_selection_restore->setObjectName(QStringLiteral("filesSelectionRestore"));
+    selection_action(Glyph::Info, tr("Details"), [this] {
+        const auto ids = selectedIds();
+        if (ids.size() == 1) showDetails(ids.front());
+    })->setObjectName(QStringLiteral("filesSelectionDetails"));
+    auto* clear_selection = IconButton(Glyph::Close, m_selection_bar, tr("Clear selection"), IconButtonSize::Toolbar);
     connect(clear_selection, &QToolButton::clicked, this, [this] {
         m_table->clearSelection();
         m_tiles->clearSelection();
@@ -520,6 +529,11 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshChrome(); if (m_import) advanceImport(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshChrome(); if (m_import) advanceImport(); });
+    connect(m_model, &CybouDesktopModel::applicationLoadChanged, this,
+        [this, previous = m_model->applicationLoadState()]() mutable {
+            const auto state = m_model->applicationLoadState();
+            if (state != previous) { previous = state; refreshChrome(); }
+        });
 
     m_nav->setCurrentRow(0);
     refreshChrome();
@@ -974,9 +988,23 @@ void StoragePage::rebuildCrumbs()
 
 void StoragePage::refreshSelectionBar()
 {
-    const int count = selectedIds().size();
-    m_selection_bar->setVisible(count > 1 && m_view != View::Trash);
+    const auto ids = selectedIds();
+    const int count = ids.size();
+    m_selection_bar->setVisible(count > 0);
     m_selection_text->setText(tr("%1 selected").arg(count));
+    const bool trash = m_view == View::Trash;
+    m_selection_star->setVisible(!trash);
+    m_selection_trash->setVisible(!trash);
+    m_selection_restore->setVisible(trash);
+    const bool starred = count && std::all_of(ids.begin(), ids.end(), [this](const auto& id) {
+        const auto* item = m_model->fileItem(id); return item && item->starred;
+    });
+    m_selection_star->setToolTip(starred ? tr("Remove star") : tr("Star"));
+    m_selection_star->setAccessibleName(m_selection_star->toolTip());
+    const bool editable = m_model->status().identity_state == CybouIdentityState::Active &&
+        m_model->featureAvailability().files;
+    for (auto* button : {m_selection_star, m_selection_trash, m_selection_restore}) button->setEnabled(editable);
+    m_selection_bar->findChild<QToolButton*>(QStringLiteral("filesSelectionDetails"))->setVisible(count == 1);
 }
 
 void StoragePage::sortBy(int column, bool descending)
@@ -994,6 +1022,9 @@ void StoragePage::refreshChrome()
     const bool connected = m_model->featureAvailability().files;
     m_banner->setVisible(!identity || !connected);
     m_banner_text->setText(!identity ? tr("Files needs your CYBOU Identity. Create or restore it on Home.")
+        : m_model->applicationLoadState() == CybouApplicationLoadState::Loading ||
+          m_model->applicationLoadState() == CybouApplicationLoadState::Opening
+            ? tr("Your local view is still being prepared. Items appear progressively.")
                                      : tr("Files is not connected yet. Your files will appear here once it is."));
     m_new->setEnabled(identity && connected);
     const quint64 quota = status.storage_quota;

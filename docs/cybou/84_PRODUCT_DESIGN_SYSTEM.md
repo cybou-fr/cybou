@@ -2,6 +2,17 @@
 
 Status: canonical shared desktop product design and interaction contract.
 
+## Identity opening and background preparation
+
+Opening the encrypted local data is step 1; discovery/decryption of accessible
+Mail and Files is step 2. Step 2 offers Continue in background, retaining a visible
+status strip and a keyboard-accessible Recovery details action. Returning to the
+local view does not cancel the worker or mark it Ready. History scan progress
+stays below 100% until the semantic projection is applied; it does not measure
+content download, completeness or remote protection. Failures reopen the scoped
+error view even after background continuation. Ready and Identity lock clear the
+strip. Return to unlock remains an explicit action.
+
 This document defines the cross-service UX language for Home, Mail, Files,
 Wallet, Identity/Security, and Settings. Page-specific behavior is owned by the
 page documents, especially `82_MAIL_UI_UX.md` and `83_STORAGE_UI_UX.md`.
@@ -101,6 +112,13 @@ Search follows context:
 Search fields should be prominent where users expect them, especially Mail and
 Files.
 
+The header offers combined local suggestions on Home, Mail suggestions on Mail
+and Files suggestions on Files. Enter filters the current mailbox/Files view;
+on Home it opens Mail search. Wallet, Identity, Network, Settings and Authority
+show a page title. Ctrl+K exposes search there without navigating away; Escape
+or leaving the field restores the title. Page-local search remains until header
+search has parity with its filtering, view scope and keyboard behavior.
+
 ## 6. Visual language
 
 Use CYBOU-owned theme tokens rather than hardcoded page colors.
@@ -181,6 +199,16 @@ Remove local vault
 
 Do not style routine operations as destructive merely because they produce a
 protocol operation.
+
+Routine utility actions use icon buttons with a translated tooltip, accessible
+name and visible keyboard focus: Compact (28 px) or Toolbar (34 px). Primary,
+sensitive and irreversible actions retain explicit text and existing reviews.
+
+Normal account surfaces call System Balance **Network balance** in English and
+**Solde réseau** in French. This names the same finalized, non-transferable CYBOU
+service budget; canonical fields remain System Balance in technical surfaces.
+Balances belong to Home and Wallet; Identity focuses on account identification,
+names, recovery and security.
 
 ## 10. Lists
 

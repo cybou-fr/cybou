@@ -1,4 +1,7 @@
 <RCC>
+    <qresource prefix="/evidence">
+        <file alias="benchmark.json">../../docs/cybou/battle/benchmark_reference.json</file>
+    </qresource>
     <qresource prefix="/i18n">
     </qresource>
     <qresource prefix="/icons">

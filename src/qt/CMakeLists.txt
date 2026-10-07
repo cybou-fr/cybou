@@ -68,6 +68,9 @@ add_library(cybou_qt STATIC
   cyboutheme.h
   cybouproduct.h
   cybouui.h
+  franceoutline.h
+  benchmarkreference.h
+  benchmarkreference.cpp
   cybouuifixtures.cpp
   cybouuifixtures.h
   pages/diagnosticspage.cpp

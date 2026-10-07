@@ -460,7 +460,7 @@ void MailCompose::updateGates()
     } else if (m_to->text().trimmed().toLower() == CybouDesktopModel::supportName()) {
         // Support mail pays a higher network fee on purpose (anti-spam); the network never sees the recipient.
         const auto fee = m_model->supportMailFee();
-        m_to_hint->setText(fee ? tr("CYBOU Support  ·  a message here costs about %1 from System Balance (support rate)")
+        m_to_hint->setText(fee ? tr("CYBOU Support  ·  a message here costs about %1 from Network balance (support rate)")
                                      .arg(cybouAmountText(*fee))
                                : tr("CYBOU Support  ·  messages here cost more than usual (support rate)"));
     } else if (const auto* contact = resolvedContact()) {

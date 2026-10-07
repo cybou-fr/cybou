@@ -49,9 +49,7 @@ private:
     QPushButton* m_setup_create{nullptr};
     QPushButton* m_setup_restore{nullptr};
     QLabel* m_claim_status{nullptr};
-    QPushButton* m_lock{nullptr};
-    QLabel* m_balance{nullptr};
-    QLabel* m_system_balance{nullptr};
+    QToolButton* m_lock{nullptr};
     QToolButton* m_advanced_toggle{nullptr};
     QFrame* m_advanced{nullptr};
     QVBoxLayout* m_advanced_rows{nullptr};

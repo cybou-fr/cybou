@@ -1007,7 +1007,7 @@ bool CybouDesktopModel::requestPayment(const QString& to_name, quint64 amount)
         switch (result.error) {
         case cybou::WalletOperationError::NONE: break;
         case cybou::WalletOperationError::INSUFFICIENT_BALANCE: error = tr("Not enough CYBOU available."); break;
-        case cybou::WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE: error = tr("Not enough System Balance for the network service fee."); break;
+        case cybou::WalletOperationError::INSUFFICIENT_SYSTEM_BALANCE: error = tr("Not enough Network balance for the network service fee."); break;
         case cybou::WalletOperationError::SELF_PAYMENT: error = tr("You cannot send CYBOU to yourself."); break;
         case cybou::WalletOperationError::SUBMIT_FAILED: error = tr("CYBOU could not reach the network. Try again."); break;
         default: error = tr("The payment could not be sent."); break;
@@ -1046,7 +1046,7 @@ bool CybouDesktopModel::requestLockToSystemBalance(quint64 amount)
         case cybou::WalletOperationError::NONE: break;
         case cybou::WalletOperationError::INSUFFICIENT_BALANCE: error = tr("Not enough CYBOU available."); break;
         case cybou::WalletOperationError::SUBMIT_FAILED: error = tr("CYBOU could not reach the network. Try again."); break;
-        default: error = tr("CYBOU could not be moved to System Balance."); break;
+        default: error = tr("CYBOU could not be moved to Network balance."); break;
         }
         QMetaObject::invokeMethod(this, [finish, ok = static_cast<bool>(result), error] { finish(ok, error); },
             Qt::QueuedConnection);

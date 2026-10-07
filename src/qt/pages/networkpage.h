@@ -22,6 +22,7 @@ class QTimer;
 class QScrollArea;
 class QPushButton;
 class QVBoxLayout;
+class QTabWidget;
 
 struct CybouPeerItem {
     QString endpoint;
@@ -30,7 +31,6 @@ struct CybouPeerItem {
     bool is_lan{false};
     bool connected{true};
     QString classification;
-    QString region_label;
     QDateTime last_seen; // when this session last had it connected
     QPointF map_coord; // Normalized [0, 1] coordinate on the France map
 };
@@ -45,6 +45,7 @@ public:
 
     void setPeers(const QVector<CybouPeerItem>& peers);
     void setSelectedPeer(int index);
+    void setOverview(const QString& network, const QString& summary);
     int selectedPeer() const { return m_selected_index; }
 
     QSize sizeHint() const override;
@@ -61,6 +62,8 @@ private:
     QVector<CybouPeerItem> m_peers;
     int m_selected_index{-1};
     QVector<QRectF> m_peer_hit_rects;
+    QString m_network;
+    QString m_summary;
 };
 
 class NetworkPage final : public QWidget
@@ -76,6 +79,8 @@ public:
     void selectPeer(int index);
     void setDiagnosticsWidget(QWidget* widget);
     void showAdvanced();
+    void showBenchmarkDetails();
+    void showTechnicalDetails();
 
     SchematicFranceMap* mapWidget() const { return m_map; }
     QTableWidget* tableWidget() const { return m_table; }
@@ -102,9 +107,17 @@ private:
     QScrollArea* m_advanced_scroll{nullptr};
     QPushButton* m_advanced_button{nullptr};
     QVBoxLayout* m_advanced_layout{nullptr};
+    QTabWidget* m_advanced_tabs{nullptr};
+    QWidget* m_peer_section{nullptr};
+    QVBoxLayout* m_peer_layout{nullptr};
+    QVBoxLayout* m_technical_layout{nullptr};
 
     // Header & summary
     QLabel* m_scope_note{nullptr};
+    QLabel* m_benchmark_reference{nullptr};
+    QWidget* m_benchmark_card{nullptr};
+    QLabel* m_benchmark_summary{nullptr};
+    QLabel* m_benchmark_scope{nullptr};
     QLabel* m_metric_height{nullptr};
     QLabel* m_metric_height_sub{nullptr};
     QLabel* m_metric_peers{nullptr};
@@ -120,12 +133,14 @@ private:
 
     // Details panel
     QWidget* m_details_card{nullptr};
+    QLabel* m_details_title{nullptr};
     QVBoxLayout* m_details_layout{nullptr};
 
     QTimer* m_refresh_timer{nullptr};
     void scheduleRefresh();
     void refresh();
     void updateDetails();
+    void positionOverlays();
 };
 
 #endif // CYBOU_QT_PAGES_NETWORKPAGE_H

@@ -220,9 +220,8 @@ QWidget* HomePage::buildDashboard()
     hero_layout->addLayout(hero_text, 1);
     m_identity_state = Pill(tr("Active"), Tint::Mint, hero);
     hero_layout->addWidget(m_identity_state, 0, Qt::AlignVCenter);
-    auto* manage = new QPushButton{tr("Identity && Security"), hero};
-    manage->setObjectName(QStringLiteral("secondaryButton"));
-    connect(manage, &QPushButton::clicked, this, [this] { m_identity_requested(); });
+    auto* manage = IconButton(Glyph::ShieldCheck, hero, tr("Identity & Security"), IconButtonSize::Toolbar);
+    connect(manage, &QToolButton::clicked, this, [this] { m_identity_requested(); });
     hero_layout->addWidget(manage, 0, Qt::AlignVCenter);
     root->addWidget(hero);
 
@@ -279,8 +278,7 @@ QWidget* HomePage::buildDashboard()
     activity_layout->setSpacing(4);
     auto* activity_header = new QHBoxLayout;
     activity_header->addWidget(SectionTitle(tr("Recent activity"), activity), 1);
-    m_activity_refresh = new QPushButton{tr("Refresh"), activity};
-    m_activity_refresh->setObjectName(QStringLiteral("secondaryButton"));
+    m_activity_refresh = IconButton(Glyph::Refresh, activity, tr("Refresh local activity"), IconButtonSize::Toolbar);
     m_activity_refresh->setProperty("cybouId", QStringLiteral("activityRefresh"));
     m_activity_refresh->setAccessibleName(tr("Refresh local activity"));
     m_activity_refresh->setToolTip(tr("Read current local Mail and Files indexes. This does not force network sync or storage audits."));
@@ -288,7 +286,7 @@ QWidget* HomePage::buildDashboard()
     activity_layout->addLayout(activity_header);
     m_activity_refresh_hint = MutedText(tr("Current local activity"), activity);
     activity_layout->addWidget(m_activity_refresh_hint);
-    connect(m_activity_refresh, &QPushButton::clicked, this, [this] {
+    connect(m_activity_refresh, &QToolButton::clicked, this, [this] {
         const QPointer<HomePage> guard{this};
         if (!m_model->requestApplicationRefresh([guard](bool ok, const QString& error) {
             if (guard && !ok) guard->m_model->notify(error);
@@ -360,7 +358,7 @@ void HomePage::refresh()
     m_files_caption->setText(tr("%1 used").arg(CybouProduct::sizeText(status.storage_used)));
 
     m_wallet_value->setText(cybouAmountText(status.balance));
-    m_wallet_caption->setText(tr("System Balance %1").arg(cybouAmountText(status.system_balance)));
+    m_wallet_caption->setText(tr("Network balance %1").arg(cybouAmountText(status.system_balance)));
 
     auto items = m_model->activity();
     std::stable_sort(items.begin(), items.end(), [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
@@ -591,7 +589,7 @@ void HomePage::rebuildFirstSteps()
     }
     if (reminders.contains(QStringLiteral("system"))) {
         const quint64 fee = LatestFee(*m_model);
-        step(tr("System Balance is running low"),
+        step(tr("Network balance is running low"),
             tr("It covers about %1 more network operations for Mail, Files and payments.")
                 .arg(QLocale{}.toString(fee > 0 ? m_model->status().system_balance / fee : 0)),
             tr("Wallet"), [this] { m_wallet_requested(); });

@@ -47,4 +47,8 @@ target/
 
 # Local run artifacts (binaries, logs, screenshots, tokens) and generated battle reports
 /artifacts/
-/docs/cybou/battle/
+/docs/cybou/battle/*
+!/docs/cybou/battle/benchmark_reference.json
+!/docs/cybou/battle/20261007-195003.md
+!/docs/cybou/battle/20261007-203645.md
+!/docs/cybou/battle/20261007-205703.md

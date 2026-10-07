@@ -69,7 +69,7 @@ QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel&
         QString title;
         switch (entry.kind) {
         case CybouWalletEntryKind::Sent: title = tr("Sending %1 to %2").arg(amount, entry.counterparty_name); break;
-        case CybouWalletEntryKind::MovedToSystemBalance: title = tr("Moving %1 to System Balance").arg(amount); break;
+        case CybouWalletEntryKind::MovedToSystemBalance: title = tr("Moving %1 to Network balance").arg(amount); break;
         default: continue; // fees and credits follow their own operation
         }
         add({Kind::Payment, entry.id, title, CybouProduct::operationStateText(operation), failed});

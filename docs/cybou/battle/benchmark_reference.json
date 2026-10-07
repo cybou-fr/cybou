@@ -1,0 +1,128 @@
+{
+  "attempted_operations": 7,
+  "submitted_operations": 7,
+  "finalized_operations": 7,
+  "measurement_window_s": 88.75157880003098,
+  "network_binding": "eee26eca805d5a16b2f550d66b3355ecf50d90c43138bc1fefc34df92f7f3665",
+  "submitted_ops_per_s": 0.07887183636216685,
+  "finalized_ops_per_s": 0.07887183636216685,
+  "run_id": "20261007-205703",
+  "result": "PASS",
+  "profile": "files",
+  "replicas": 2,
+  "file_size": "64KiB",
+  "co_located_wsl": true,
+  "topology": {
+    "win_nodes": 0,
+    "wsl_nodes": 1,
+    "vps_nodes": 0,
+    "win_clients": 1,
+    "wsl_clients": 0,
+    "identities": 1
+  },
+  "provenance": {
+    "revision": "7f043f95bed4997f57c33649115c66d92f95878b",
+    "dirty": true,
+    "tracked_diff_sha256": "6134229b83f190570f7cd70a214ae6e00372420ad7283c98e75a8836f4ad0c35",
+    "windows_loadgen_sha256": "eccd71a1aa55745c4d9c4ce5741c893af25e4e95078f032fbef2a78cc717ef81",
+    "windows_node_sha256": "ae004651c5360bb5f0232e2d1c56511947a1eb90ccae8fc06e0b358bdbe5552c",
+    "wsl_node_sha256": "84ca928038cc084fc9f664e8f6fa118c8c5aa71ce5c5804a35921521bbede63c"
+  },
+  "clients": {
+    "windows:win-client-0": {
+      "profile": "files",
+      "identities": 1,
+      "result": "PASS",
+      "elapsed_s": 31.8447,
+      "network_binding": "eee26eca805d5a16b2f550d66b3355ecf50d90c43138bc1fefc34df92f7f3665",
+      "measurement_started_unix_ms": 1791406993755,
+      "measurement_window_s": 31.8441,
+      "load_window_s": 11.1445,
+      "attempted_operations": 7,
+      "submitted_operations": 7,
+      "finalized_operations": 7,
+      "submitted_ops_per_s": 0.219821,
+      "finalized_ops_per_s": 0.219821,
+      "bytes_published": 458752,
+      "attempted": {
+        "files": 7
+      },
+      "submitted": {
+        "files": 7
+      },
+      "finalized": {
+        "files": 7
+      },
+      "failed": {},
+      "busy": {},
+      "wallet_submit_to_final": {
+        "count": 0,
+        "mean_ms": 0.0,
+        "p50_ms": 0.0,
+        "p95_ms": 0.0,
+        "max_ms": 0.0
+      },
+      "publication_submit_to_final": {
+        "count": 7,
+        "mean_ms": 12448.5,
+        "p50_ms": 12808.7,
+        "p95_ms": 20141.2,
+        "max_ms": 20141.2
+      },
+      "publication_submit_to_protected": {
+        "count": 7,
+        "mean_ms": 14230.2,
+        "p50_ms": 12808.7,
+        "p95_ms": 22691.5,
+        "max_ms": 22691.5
+      },
+      "publication_queue_wait": {
+        "count": 7,
+        "mean_ms": 10042.6,
+        "p50_ms": 9781.3,
+        "p95_ms": 20141.2,
+        "max_ms": 20141.2
+      },
+      "publication_signed_to_final": {
+        "count": 7,
+        "mean_ms": 2405.9,
+        "p50_ms": 2502.9,
+        "p95_ms": 6242.2,
+        "max_ms": 6242.2
+      },
+      "recovery": {
+        "expected_files": 0,
+        "recovered_files": 0,
+        "expected_mail": 0,
+        "recovered_mail": 0
+      }
+    }
+  },
+  "checks": [
+    [
+      "every client reported metrics",
+      true,
+      "1 of 1"
+    ],
+    [
+      "windows:win-client-0: load drained",
+      true,
+      "PASS"
+    ],
+    [
+      "windows:win-client-0: no failed operations",
+      true,
+      "none"
+    ],
+    [
+      "windows:win-client-0: every submitted operation finalized",
+      true,
+      "7 of 7"
+    ],
+    [
+      "windows:win-client-0: clean restore",
+      true,
+      "files 7/7, mail 0/0, PASS, 25 s"
+    ]
+  ]
+}

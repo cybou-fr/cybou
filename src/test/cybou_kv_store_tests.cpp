@@ -10,6 +10,9 @@
 #include <span>
 #include <string>
 #include <vector>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 
 BOOST_AUTO_TEST_SUITE(cybou_kv_store_tests)
 
@@ -66,6 +69,39 @@ BOOST_AUTO_TEST_CASE(local_record_encoding_preserves_existing_database_bytes)
     BOOST_CHECK(cybou::detail::DeserializeLocalRecord(std::span{encoded_head}, decoded_head));
     BOOST_CHECK(decoded_head.block_id == head.block_id);
     BOOST_CHECK_EQUAL(decoded_head.height, head.height);
+}
+
+BOOST_AUTO_TEST_CASE(disk_restart_preserves_records_and_missing_current_preserves_evidence)
+{
+    const auto path=std::filesystem::temp_directory_path() /
+        ("cybou-kv-reopen-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    BOOST_REQUIRE(std::filesystem::create_directory(path));
+    struct Cleanup { std::filesystem::path path; ~Cleanup() { std::error_code ec; std::filesystem::remove_all(path,ec); } } cleanup{path};
+    std::filesystem::create_directory(path/"geo"); // A new node's non-DB files are allowed.
+    {
+        cybou::KVStore db{{.path=path}};
+        db.Write(std::string{"cybou/network-id"},cybou::Hash256{uint8_t{1}},true);
+        const std::vector<unsigned char> payload(1024*1024,0x5a);
+        for (unsigned i=0;i<12;++i) db.Write("payload-"+std::to_string(i),payload,true);
+    }
+    BOOST_REQUIRE(std::filesystem::exists(path/"CURRENT"));
+    {
+        cybou::KVStore db{{.path=path}};
+        cybou::Hash256 binding;
+        BOOST_REQUIRE(db.Read(std::string{"cybou/network-id"},binding));
+        BOOST_CHECK(binding==cybou::Hash256{uint8_t{1}});
+        std::vector<unsigned char> payload;
+        BOOST_REQUIRE(db.Read(std::string{"payload-0"},payload));
+        BOOST_CHECK_EQUAL(payload.size(),1024*1024);
+    }
+    std::filesystem::rename(path/"CURRENT",path/"CURRENT.saved");
+    std::map<std::string,uintmax_t> before,after;
+    for (const auto& entry : std::filesystem::directory_iterator{path}) if(entry.is_regular_file())
+        before[entry.path().filename().string()]=entry.file_size();
+    BOOST_CHECK_THROW(cybou::KVStore(cybou::KVStoreOptions{.path=path}),std::runtime_error);
+    for (const auto& entry : std::filesystem::directory_iterator{path}) if(entry.is_regular_file())
+        after[entry.path().filename().string()]=entry.file_size();
+    BOOST_CHECK(before==after); // No recovery, table deletion or replacement CURRENT.
 }
 
 BOOST_AUTO_TEST_SUITE_END()

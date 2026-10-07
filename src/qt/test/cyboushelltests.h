@@ -91,8 +91,11 @@ private Q_SLOTS:
     void walletForecastAndTransferReview();
     void assuranceAndRestoreResponsiveness();
     void networkPageAndSchematicFranceMap();
+    void benchmarkReferenceRequiresAcceptedEvidence();
     void applicationLoadingWaitsForProjection();
+    void filesSelectionToolbarFollowsView();
     void networkRefreshCoalescesStatusBurst();
+    void networkReferenceAndAdvancedScopes();
     void authorityExplorerAndEvidenceWorkspace();
     void ownContentInspectorAndBoundedConsole();
     void consoleTranslationsPermissionsAndBounds();

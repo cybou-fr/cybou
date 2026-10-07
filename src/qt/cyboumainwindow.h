@@ -101,6 +101,8 @@ private:
     QSystemTrayIcon* m_tray_icon{nullptr};
     QMenu* m_tray_menu{nullptr};
     QDialog* m_application_loading{nullptr};
+    QFrame* m_recovery_banner{nullptr};
+    QLabel* m_recovery_text{nullptr};
     bool m_application_loading_dismissed{false};
     void refreshApplicationLoading();
     bool m_sidebar_compact{false};
