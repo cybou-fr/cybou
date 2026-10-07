@@ -246,9 +246,20 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
 
     const auto targets = GetPeerEndpointsForGossip();
     const auto connected_before_dial = m_network.peer_manager->Peers();
-    if (connected_before_dial.size() < p2p::MAX_OUTBOUND_PEERS) {
+    // A pinned rendezvous peer (the compiled bootstrap) is the way into the wider mesh. When
+    // every outbound slot is taken by other peers (e.g. local nodes) and no rendezvous peer is
+    // connected, it is still dialed: PeerManager evicts an ordinary peer to make room.
+    const auto is_rendezvous = [&](const Endpoint& endpoint) {
+        return std::any_of(m_network.configured_peers.begin(), m_network.configured_peers.end(),
+            [&](const ConfiguredPeer& peer) { return peer.endpoint == endpoint && peer.tls_spki_sha256; });
+    };
+    const bool rendezvous_connected = std::any_of(connected_before_dial.begin(), connected_before_dial.end(),
+        [&](const p2p::PeerInfo& peer) { return is_rendezvous({peer.address, peer.port}); });
+    const bool slots_full = connected_before_dial.size() >= p2p::MAX_OUTBOUND_PEERS;
+    if (!slots_full || !rendezvous_connected) {
         const auto now = std::chrono::steady_clock::now();
         const auto candidate = std::find_if(targets.begin(), targets.end(), [&](const auto& endpoint) {
+            if (slots_full && !is_rendezvous(endpoint)) return false;
             const bool connected = std::any_of(connected_before_dial.begin(), connected_before_dial.end(),
                 [&](const p2p::PeerInfo& peer) { return peer.address == endpoint.first && peer.port == endpoint.second; });
             const auto retry = m_network.peer_retry_after.find(endpoint);
