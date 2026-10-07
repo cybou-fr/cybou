@@ -324,8 +324,9 @@ ordinary DEVNET restarts retain the immutable history and durable signing rules.
 ## Storage implementation evidence boundary
 
 The Beta target remains two independent remote full replicas; the current
-placement algorithm deduplicates proven StorageIds, which does not establish
-independent hosts, operators or failure domains. The 1:3 reciprocal baseline
+placement algorithm deduplicates proven StorageIds and network addresses and
+never places on this machine (DEC-288); one address per replica still does not
+establish independent operators or failure domains. The 1:3 reciprocal baseline
 is a capacity/service objective, not measured proof of contribution: automatic
 local capacity is an explicit operator choice (`V >= 15 GiB`), not proof of service.
 Storage is paid by finalized leases; only PoA-signed settlements record service.

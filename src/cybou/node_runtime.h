@@ -277,6 +277,9 @@ public:
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
     std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
+    /// rief Replicas must sit at distinct network addresses, never on this machine (loopback).
+    /// Off for memory-only component fixtures, whose providers all share loopback.
+    bool RequiresReplicaAddressDiversity() const { return !m_config.memory_only; }
     /// \brief Возвращает сохранённые PoA safety evidence из local state store.
     /// \return Результат чтения evidence; содержимое зависит от локальной истории safety events.
     PoaEvidenceReadResult ReadPoaSafetyEvidence() const;

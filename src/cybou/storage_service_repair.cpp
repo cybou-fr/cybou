@@ -7,6 +7,7 @@
 #include <cybou/storage_service_internal.h>
 #include <cybou/node_runtime.h>
 #include <cybou/storage_io_scheduler.h>
+#include <boost/asio/ip/address.hpp>
 #include <algorithm>
 
 namespace cybou {
@@ -68,17 +69,30 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
             const auto known = identity_of.find(replica.storage_id);
             used_identities.insert(known == identity_of.end() ? replica.storage_id : known->second);
         }
+        // Distinct StorageIds can share one machine (several nodes behind one address): two
+        // replicas on one address, or one on this very machine, would be lost together.
+        const bool diverse = m_runtime.RequiresReplicaAddressDiversity();
+        std::set<std::string> used_addresses;
+        for (const auto& replica : replicas) used_addresses.insert(replica.address);
+        const auto same_machine = [](const std::string& address) {
+            boost::system::error_code ec;
+            const auto ip = boost::asio::ip::make_address(address, ec);
+            return !ec && ip.is_loopback();
+        };
         std::set<std::array<unsigned char, 32>> attempted;
         while (replicas.size() < m_target) {
             std::vector<StorageEndpoint> plan;
             auto reserved = used_identities;
+            auto reserved_addresses = used_addresses;
             for (const auto& provider : providers) {
                 if (plan.size() >= std::min<size_t>(4, m_target - replicas.size())) break;
                 if (attempted.contains(provider.storage_id) || HasProvider(replicas, provider) ||
                     reserved.contains(ProviderSelector::EconomicIdentity(provider))) continue;
+                if (diverse && (same_machine(provider.address) || reserved_addresses.contains(provider.address))) continue;
                 plan.push_back(provider);
                 attempted.insert(provider.storage_id);
                 reserved.insert(ProviderSelector::EconomicIdentity(provider));
+                reserved_addresses.insert(provider.address);
             }
             if (plan.empty()) break;
             const auto op_id = placement.operation_id;
@@ -133,6 +147,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                     }
                     replicas.push_back(provider);
                     used_identities.insert(ProviderSelector::EconomicIdentity(provider));
+                    used_addresses.insert(provider.address);
                     changed = true;
                 }
             }
