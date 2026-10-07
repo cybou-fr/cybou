@@ -9,6 +9,7 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <vector>
@@ -73,6 +74,22 @@ std::optional<IdentityHybridSignature> SignIdentityMessage(
     std::span<const unsigned char, 32> secret,
     IdentityKeyPurpose purpose,
     std::span<const unsigned char> message);
+/// Signing key of one role, derived once from the role secret and kept on its own: the
+/// secret it came from can be wiped while this key keeps signing (the PoA finalizer of a
+/// locked desktop). Holds private keys only for this role.
+class RetainedIdentityKey final {
+public:
+    ~RetainedIdentityKey();
+    /// Returns the key, or nullptr if the role or cryptography is not available.
+    static std::unique_ptr<RetainedIdentityKey> Derive(std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpose);
+    const IdentityHybridPublicKey& PublicKey() const;
+    std::optional<IdentityHybridSignature> Sign(std::span<const unsigned char> message) const;
+private:
+    struct Impl;
+    explicit RetainedIdentityKey(std::unique_ptr<Impl> impl);
+    std::unique_ptr<Impl> m_impl;
+};
+
 /// Проверяет гибридную подпись сообщения публичным ключом роли.
 /// \param key Публичный ключ с корректно выставленным `purpose`.
 /// \param signature Проверяемая гибридная подпись.

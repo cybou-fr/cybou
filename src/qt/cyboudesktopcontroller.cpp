@@ -547,8 +547,8 @@ void CybouDesktopController::publishNetworkAuthority()
 void CybouDesktopController::lockIdentity()
 {
     if (!m_model || !m_identity_service) return;
-    if (m_node_service) m_node_service->Runtime().DisablePoaSigner();
-    if (m_node_service) m_node_service->StopBlockProduction();
+    // Locking closes access to the desktop, not the node: the PoA finalizer keeps its own
+    // derived key and goes on finalizing in the background (tray) while the vault is locked.
     if (!m_model->beginVaultLock()) return;
     {
         std::lock_guard identity_access{m_identity_access_mutex};
@@ -586,6 +586,8 @@ void CybouDesktopController::updatePoaSigner()
         // The genesis Identity finalizes its own AccountCreate: the signer runs
         // while it is created or restored too, not only once it is Active.
         const auto state = m_model->status().identity_state;
+        // A locked desktop keeps the finalizer it had: the signer holds its own key.
+        if (state == CybouIdentityState::Locked) return;
         const bool holds_keys = state == CybouIdentityState::Active || state == CybouIdentityState::Syncing ||
             state == CybouIdentityState::Creating || state == CybouIdentityState::Restoring ||
             state == CybouIdentityState::NeedsAttention;
@@ -594,8 +596,9 @@ void CybouDesktopController::updatePoaSigner()
             m_node_service->StopBlockProduction();
             return;
         }
-        auto signer = std::make_shared<cybou::CybouKeyStorePoaSigner>(m_identity_service->GetKeyStore());
-        if (!m_node_service->Runtime().EnablePoaSigner(std::move(signer))) {
+        // Only the derived PoA key is retained, so locking the vault does not stop finalization.
+        auto signer = cybou::MakeRetainedPoaSigner(m_identity_service->GetKeyStore());
+        if (!signer || !m_node_service->Runtime().EnablePoaSigner(std::move(signer))) {
             m_node_service->StopBlockProduction();
             m_node_service->Runtime().DisablePoaSigner();
             qWarning() << "unlocked Identity does not match the genesis PoA key";

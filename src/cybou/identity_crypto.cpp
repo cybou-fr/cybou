@@ -312,6 +312,42 @@ std::optional<IdentityHybridSignature> SignIdentityMessage(
     return result;
 }
 
+struct RetainedIdentityKey::Impl {
+    Key ed{nullptr, EVP_PKEY_free};
+    Key pq{nullptr, EVP_PKEY_free};
+    IdentityHybridPublicKey public_key;
+};
+
+RetainedIdentityKey::RetainedIdentityKey(std::unique_ptr<Impl> impl) : m_impl{std::move(impl)} {}
+RetainedIdentityKey::~RetainedIdentityKey() = default;
+
+std::unique_ptr<RetainedIdentityKey> RetainedIdentityKey::Derive(
+    std::span<const unsigned char, 32> secret, IdentityKeyPurpose purpose)
+{
+    if (purpose == IdentityKeyPurpose::NETWORK_ROOT || !Algorithm(purpose)) return nullptr;
+    auto public_key = DeriveIdentityPublicKey(secret, purpose);
+    auto impl = std::make_unique<Impl>();
+    impl->ed = MakeKey(secret, purpose, "ED25519");
+    impl->pq = MakeKey(secret, purpose, "ML-DSA");
+    if (!public_key || !impl->ed || !impl->pq) return nullptr;
+    impl->public_key = std::move(*public_key);
+    return std::unique_ptr<RetainedIdentityKey>{new RetainedIdentityKey{std::move(impl)}};
+}
+
+const IdentityHybridPublicKey& RetainedIdentityKey::PublicKey() const { return m_impl->public_key; }
+
+std::optional<IdentityHybridSignature> RetainedIdentityKey::Sign(std::span<const unsigned char> message) const
+{
+    if (message.empty()) return std::nullopt;
+    auto ed_sig = cybou::Sign(m_impl->ed, message);
+    auto pq_sig = cybou::Sign(m_impl->pq, message);
+    if (!ed_sig || !pq_sig || ed_sig->size() != 64 || pq_sig->size() != SignatureSize(m_impl->public_key.purpose)) return std::nullopt;
+    IdentityHybridSignature result;
+    std::copy(ed_sig->begin(), ed_sig->end(), result.ed25519.begin());
+    result.ml_dsa = std::move(*pq_sig);
+    return result;
+}
+
 bool VerifyIdentityMessage(const IdentityHybridPublicKey& key,
     const IdentityHybridSignature& signature, std::span<const unsigned char> message)
 {

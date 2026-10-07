@@ -4,6 +4,7 @@
 #include <cybou/account_id.h>
 #include <cybou/identity_authorization.h>
 #include <cybou/keystore.h>
+#include <cybou/identity_crypto.h>
 
 #include <boost/test/unit_test.hpp>
 
@@ -85,6 +86,25 @@ BOOST_AUTO_TEST_CASE(keystore_uses_random_account_and_portable_vault)
     BOOST_CHECK(!ks2.LoadFromFile(raw_path, "correct horse battery staple"));
 
     std::filesystem::remove_all(test_dir);
+}
+
+BOOST_AUTO_TEST_CASE(retained_poa_signer_keeps_signing_after_the_keystore_is_cleared)
+{
+    // A locked desktop keeps finalizing: only the derived PoA key is retained.
+    cybou::CybouKeyStore keystore;
+    BOOST_REQUIRE(keystore.GenerateNew());
+    const auto expected = keystore.GetPoaFinalizerPublicKey();
+    BOOST_REQUIRE(expected);
+    const auto signer = cybou::MakeRetainedPoaSigner(keystore);
+    BOOST_REQUIRE(signer);
+    keystore.Clear();
+    BOOST_CHECK(!keystore.GetPoaFinalizerPublicKey());
+    const std::vector<unsigned char> message{1, 2, 3};
+    const auto signature = signer->Sign(message);
+    BOOST_REQUIRE(signature);
+    BOOST_CHECK(signer->PublicKey() == expected);
+    BOOST_CHECK(cybou::VerifyIdentityMessage(*expected, *signature, message));
+    BOOST_CHECK(!cybou::MakeRetainedPoaSigner(keystore));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

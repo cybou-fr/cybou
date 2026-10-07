@@ -75,6 +75,8 @@ public:
     /// Возвращает публичный PoA finalizer-ключ текущей Identity.
     /// \return Публичный ключ либо `std::nullopt`, если keystore пуст.
     std::optional<IdentityHybridPublicKey> GetPoaFinalizerPublicKey() const;
+    /// rief PoA signer holding only the derived PoA key (see MakeRetainedPoaSigner).
+    std::shared_ptr<PoaSigner> MakeRetainedPoaSigner() const;
     /// Подписывает сообщение локальным PoA finalizer-ключом.
     /// \return Подпись или `std::nullopt`, если keystore пуст либо сообщение недопустимо.
     /// \post Секретный ключ не покидает keystore.
@@ -139,6 +141,11 @@ private:
 };
 
 /// Представление PoA signer поверх разблокированного vault.
+/// PoA signer that keeps only the derived PoA finalizer key: the keystore (and its
+/// recovery secret) may be locked and cleared while finalization continues.
+/// Returns nullptr if the keystore is locked or the key cannot be derived.
+std::shared_ptr<PoaSigner> MakeRetainedPoaSigner(const CybouKeyStore& keystore);
+
 class CybouKeyStorePoaSigner final : public PoaSigner {
 public:
     /// \param keystore Разблокированный keystore, владеющий PoA секретом локально.

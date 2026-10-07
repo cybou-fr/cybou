@@ -121,11 +121,36 @@ std::optional<IdentityHybridPublicKey> CybouKeyStore::GetPoaFinalizerPublicKey()
     return DeriveIdentityPublicKey(m_impl->material->recovery_entropy, IdentityKeyPurpose::POA_FINALIZER);
 }
 
+namespace {
+class RetainedPoaSigner final : public PoaSigner {
+public:
+    explicit RetainedPoaSigner(std::unique_ptr<RetainedIdentityKey> key) : m_key{std::move(key)} {}
+    std::optional<IdentityHybridPublicKey> PublicKey() const override { return m_key->PublicKey(); }
+    std::optional<IdentityHybridSignature> Sign(std::span<const unsigned char> message) const override { return m_key->Sign(message); }
+private:
+    std::unique_ptr<RetainedIdentityKey> m_key;
+};
+} // namespace
+
+std::shared_ptr<PoaSigner> CybouKeyStore::MakeRetainedPoaSigner() const
+{
+    if (!m_impl->material) return nullptr;
+    auto key = RetainedIdentityKey::Derive(m_impl->material->recovery_entropy, IdentityKeyPurpose::POA_FINALIZER);
+    if (!key) return nullptr;
+    return std::make_shared<RetainedPoaSigner>(std::move(key));
+}
+
 std::optional<IdentityHybridSignature> CybouKeyStore::SignPoaFinalizerMessage(
     const std::span<const unsigned char> message) const
 {
     if (!m_impl->material || message.empty()) return std::nullopt;
     return SignIdentityMessage(m_impl->material->recovery_entropy, IdentityKeyPurpose::POA_FINALIZER, message);
+}
+
+
+std::shared_ptr<PoaSigner> MakeRetainedPoaSigner(const CybouKeyStore& keystore)
+{
+    return keystore.MakeRetainedPoaSigner();
 }
 
 std::optional<IdentityHybridPublicKey> CybouKeyStorePoaSigner::PublicKey() const
