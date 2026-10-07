@@ -106,6 +106,18 @@ std::vector<CybouNodeRuntime::StorageEndpoint> CybouNodeRuntime::StorageEndpoint
         if (!m_network.peer_manager) return {};
         peers = m_network.peer_manager->StorageEndpoints();
     }
+    {
+        // Providers proven outside the mesh slots (fresh for 30 min) count like connected ones.
+        const auto fresh_after = std::chrono::steady_clock::now() - std::chrono::minutes{30};
+        std::lock_guard probe_lock(m_network.storage_probe_mutex);
+        for (const auto& [endpoint, probed] : m_network.probed_storage) {
+            if (probed.proven_at < fresh_after) continue;
+            const bool known = std::any_of(peers.begin(), peers.end(), [&](const p2p::PeerInfo& peer) {
+                return (peer.address == endpoint.first && peer.port == endpoint.second) || peer.storage_id == probed.storage_id;
+            });
+            if (!known) peers.push_back(p2p::PeerInfo{endpoint.first, endpoint.second, {}, probed.storage_id, probed.payout_binding});
+        }
+    }
     std::shared_ptr<const CybouState> state;
     {
         std::lock_guard lock(m_chain.mutex);
@@ -163,6 +175,43 @@ std::optional<ChunkAuthorizationProof> CybouNodeRuntime::GetChunkAuthorizationPr
     return m_network.storage_sessions->Run(address, port, storage_id, [&](p2p::PeerSession& session) {
         return session.GetChunkAuthorizationProof(publication_operation_id, chunk_id);
     });
+}
+
+void CybouNodeRuntime::ProbeOneStorageEndpoint()
+{
+    const auto now = std::chrono::steady_clock::now();
+    std::set<Endpoint> connected;
+    for (const auto& peer : m_network.peer_manager->Peers()) connected.insert({peer.address, peer.port});
+    const auto known = GetPeerEndpointsForGossip();
+    const auto configured = GetConfiguredPeerEndpoints();
+    std::optional<Endpoint> target;
+    {
+        std::lock_guard probe_lock(m_network.storage_probe_mutex);
+        std::erase_if(m_network.probed_storage, [&](const auto& entry) {
+            return entry.second.proven_at < now - std::chrono::minutes{30};
+        });
+        for (const auto& endpoint : known) {
+            if (connected.contains(endpoint)) continue;
+            // Configured peers are dialed as mesh peers; probe only discovered ones.
+            if (std::any_of(configured.begin(), configured.end(), [&](const Endpoint& peer) { return peer == endpoint; })) continue;
+            if (const auto next = m_network.next_storage_probe.find(endpoint);
+                next != m_network.next_storage_probe.end() && now < next->second) continue;
+            target = endpoint;
+            break;
+        }
+        if (!target) return;
+        // One probe per endpoint every 10 min, whatever its outcome.
+        m_network.next_storage_probe[*target] = now + std::chrono::minutes{10};
+    }
+    if (!AdmitPeerAddress(target->first)) return;
+    boost::asio::io_context io;
+    p2p::PeerConnectStatus status{};
+    auto session = p2p::DialPeer(*this, io, target->first, target->second, status);
+    if (!session) return;
+    const auto proven = session->ProveStorageIdentity();
+    if (!proven || (m_provider.storage_id && *proven == *m_provider.storage_id)) return;
+    std::lock_guard probe_lock(m_network.storage_probe_mutex);
+    m_network.probed_storage[*target] = {*proven, session->PeerPayoutBinding(), now};
 }
 
 void CybouNodeRuntime::SchedulePeerRetry(
@@ -359,7 +408,10 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     // While catching up (a full batch arrived) fan blocks out to nobody: serving other
     // lagging peers would stretch every pass of our own initial sync.
     m_network.catching_up = result.blocks_applied >= max_blocks;
-    if (!m_network.catching_up) m_network.peer_manager->FanoutFinalizedBlocks();
+    if (!m_network.catching_up) {
+        m_network.peer_manager->FanoutFinalizedBlocks();
+        ProbeOneStorageEndpoint();
+    }
     return result;
 }
 

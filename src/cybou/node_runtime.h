@@ -612,6 +612,8 @@ private:
     OperationSubmitResult SubmitOperationInternal(ProtocolOperation op, uint64_t work_nonce,
         std::optional<std::string> source_peer);
     void SchedulePeerRetry(const std::pair<std::string, uint16_t>& endpoint, PeerFailureClass failure);
+    /// rief Proves the StorageId of one known, unconnected endpoint in a short session.
+    void ProbeOneStorageEndpoint();
     void RememberOperationStatus(const cybou::Hash256& id, OperationStatus status);
     void EmitFinalizedEvents(const FinalizedBlock& block, bool produced);
     /// \brief Переисполняет кандидаты на новом head и прекращает relay для ставших невалидными.
@@ -660,6 +662,16 @@ private:
         std::map<Endpoint, PeerRetryState> peer_retry_after;
         /** The previous sync pass applied a full batch: this node is still catching up. */
         bool catching_up{false};
+        /** Storage providers proven in short sessions, outside the outbound mesh slots: block
+            sync keeps few sessions, storage must still see every known provider. */
+        struct ProbedStorage {
+            std::array<unsigned char, 32> storage_id{};
+            std::optional<StoragePayoutBinding> payout_binding;
+            std::chrono::steady_clock::time_point proven_at{};
+        };
+        mutable std::mutex storage_probe_mutex;
+        std::map<Endpoint, ProbedStorage> probed_storage;
+        std::map<Endpoint, std::chrono::steady_clock::time_point> next_storage_probe;
         std::chrono::steady_clock::time_point next_peer_ping{};
         std::chrono::steady_clock::time_point next_peer_discovery{};
         // Peer callbacks can consult routes while session I/O owns mutex.
