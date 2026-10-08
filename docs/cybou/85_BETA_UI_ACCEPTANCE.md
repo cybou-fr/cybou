@@ -74,6 +74,11 @@ does not satisfy clean-machine restore or operator restart acceptance.
 
 ## 3. Mail attachment
 
+Prepared scenario: [MAIL-OFFLINE-01](BETA_MAIL_OFFLINE_ACCEPTANCE.md), NOT RUN.
+It requires evidence of offline delivery, actual attachment retrieval and durable
+Files retention after recipient Mail deletion; Trash/cached reads alone do not
+prove those outcomes.
+
 ```text
 [ ] drag/drop PDF or photo into Compose
 [ ] UI shows Preparing / Uploading / Securing / Protected

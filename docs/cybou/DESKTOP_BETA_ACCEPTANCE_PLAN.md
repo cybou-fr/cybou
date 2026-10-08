@@ -188,6 +188,9 @@ lock/unlock/restart acceptance. It is NOT RUN and does not restart a signer.
 [WALLET-RESTART-01](BETA_WALLET_RESTART_ACCEPTANCE.md) prepares one payment
 through demonstrated uncertainty, ordinary-client restart and exact-byte
 reconciliation. It is NOT RUN and authorizes no live payment.
+[MAIL-OFFLINE-01](BETA_MAIL_OFFLINE_ACCEPTANCE.md) prepares offline-recipient
+attachment delivery and saved-Files retention after recipient Mail deletion.
+It is NOT RUN; ordinary-client closure does not stop the separate signer.
 Preparation can proceed while P0 remote CI is pending; execution follows the
 applicable green-revision gate. Avoid broad refactors or repeated full builds
 for documentation-only preparation.
