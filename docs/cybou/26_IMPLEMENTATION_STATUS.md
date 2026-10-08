@@ -3,6 +3,43 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Optional idle-slot observation acquisition (2026-10-09)
+
+The ordinary network service owner can now acquire reports during its existing
+post-sync pause, gated by local `observation_polling` configuration (default false).
+Desktop/headless callers retain that default; no CLI/Console switch or live
+upgrade/activation is introduced. Full-batch catch-up has no optional work.
+Only same-cycle UP_TO_DATE, zero-block, completed known-peer passes qualify as
+an idle hint; they grant no freshness/consensus authority.
+
+Runtime uses try-locks for session owner/state, skips catching-up, candidates and
+busy/contended local storage I/O, and offers one round-robin outbound session per
+five seconds. Pending finalized fanout has priority. Existing group selection and
+exchange guards enforce address deduplication, cooldown and global budgets.
+RequestObservation now also accepts an earlier owner deadline, clamped by its
+existing two-second maximum. The service gives only its remaining normal pause
+(normally 250 ms), then sleeps any remainder. Expired budgets do no I/O or budget
+consumption. No new connection, reader/writer or storage/Identity/PoA proof.
+
+A failed optional transaction closes/removes that TLS session without adding an
+observation abuse penalty; normal mesh recovery remains responsible for reconnect.
+Other transactions remain intact after a successful/skipped request. Idle hints
+are not reservations: work arriving after admission may wait for the remaining
+bounded slot. Zero overhead/latency or worst-case workload fairness is not claimed.
+Acquisition covers existing outbound sessions only, not all inbound/storage peers.
+Coordinated deployed-software/governance acceptance and measured workload overhead
+remain pending; no VPS/desktop/signer service is restarted or deployed here.
+
+Validation: desktop `cybou` and `cybou-core-test` rebuild passed. Serial targeted
+suites passed: peer manager 43, node service 12, node runtime 26, observation
+groups 8 and exchange 7 (96 cases). Real TLS tests cover expired/short owner
+deadlines, timeout cleanup, pending fanout priority, cooldown and subsequent
+PING; service integration covers default-off versus opt-in acquisition after
+sync. A gated storage job verifies the conservative idle hint rejects active
+work and becomes available after completion. Evidence is under ignored
+`artifacts/observation-idle-poll-20261009/`. These are component/integration
+checks, not deployed busy-workload fairness or performance measurements.
+
 ## Bounded reporting cohort charts (2026-10-09)
 
 The existing background observation worker now samples accepted address-group

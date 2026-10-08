@@ -8,7 +8,8 @@ The runtime-owned bounded address-group store, session close/expiry wiring and
 immutable address-free consolidated snapshot are implemented.
 Network/Console partial-coverage summary cards are implemented.
 Runtime bounded remote history and Network cohort charts are implemented.
-Automatic polling remains unimplemented;
+An opt-in service idle-slot acquisition scheduler is implemented.
+Ordinary startup leaves acquisition disabled pending coordinated acceptance;
 no observation exchange is deployed. The source P2P baseline ends at message 28;
 older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
@@ -267,8 +268,38 @@ Network charts show declared capacity/stored copies, separate frame directions
 and reported process CPU means. Lines break on volatile cohort changes, unknown
 values and missed sampling spans; real elapsed times keep gaps visible. Point
 selection exposes counts and ages through keyboard/mouse and accessible text.
-No operation/memory/disk sums or potential ceiling. Scheduled acquisition remains
-unconnected; charts cannot manufacture reporting coverage.
+No operation/memory/disk sums or potential ceiling. Charts cannot manufacture
+reporting coverage.
+
+## Idle-slot acquisition implementation
+
+`CybouNetworkServiceConfig::observation_polling` is a local opt-in, default false;
+existing desktop/headless startup does not enable it. No wire announcement,
+capability negotiation, version probe, CLI/Console switch or new connection.
+The existing outbound service owner invokes acquisition only during the pause
+after normal sync/relay/fanout work and its update callback. A same-cycle
+UP_TO_DATE result with no applied blocks and completed known-peer pass is an
+idle scheduling hint, never a global freshness proof or consensus prerequisite.
+Full-batch catch-up continues immediately without optional work.
+
+Runtime tries the owner and chain mutexes without waiting, skips catching-up,
+nonempty candidate pool and busy/contended local storage scheduler, and offers
+at most one round-robin session every five seconds. A known pending finalized
+fanout frontier takes precedence. Only existing admitted outbound sessions are
+used; inbound and storage-session acquisition are not wired, so coverage stays
+partial. Existing selected-group/per-IP/global guards decide whether to send.
+A skipped request does no I/O and never opens a retry connection.
+
+The transaction deadline is the earlier of two seconds and the remaining normal
+service pause (normally 250 ms); the worker sleeps only its unused pause afterward.
+Expired budgets consume no challenge/cooldown or bytes. Timeout/mismatch still
+closes TLS to prevent late-body contamination; the manager removes that session
+without an observation abuse penalty and ordinary mesh recovery follows.
+There is no concurrent reader/writer and no interrupt of an in-flight transaction.
+Idle checks are conservative hints, not reservations: new work arriving after
+admission can wait for the remaining optional deadline. This is bounded owner
+occupancy, not proof of zero latency/cost or fair progress under every workload.
+Deploy/enable only after the coordinated software and governance acceptance below.
 
 ## Acceptance and release gates
 
@@ -295,8 +326,9 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Next bounded packages: low-priority idle-session polling with the two-second owner deadline. Codec,
-cache, guarded direct TLS and standalone address-group totals are implemented.
+Next bounded packages: local PUT/GET payload counters and remaining resource/
+register gauges. Idle-slot polling is implemented but default-off; deployment
+acceptance, measured collector/mesh overhead and busy-workload fairness remain.
 Auto polling waits for coordinated deployed-software acceptance. No extra wire
 fields or persistent observation history are part of this sequence.
 Measure collector cost and check protocol/traffic accounting overhead. Existing

@@ -137,7 +137,18 @@ void CybouNodeService::StartNetwork(
             // pausing, so a fresh node catches up in minutes, not an hour.
             if (result.blocks_applied >= config.sync_batch_size) continue;
 
-            SleepUntilStopped(m_stop_network, config.sync_interval);
+            if (!config.observation_polling) {
+                SleepUntilStopped(m_stop_network, config.sync_interval);
+                continue;
+            }
+            const auto idle_deadline = std::chrono::steady_clock::now() + config.sync_interval;
+            if (!m_stop_network.load()) {
+                try { (void)m_runtime->PollIdleObservation(result, idle_deadline); }
+                catch (...) {} // Optional monitoring failure must not stop normal mesh work.
+            }
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                idle_deadline - std::chrono::steady_clock::now());
+            if (remaining > std::chrono::milliseconds::zero()) SleepUntilStopped(m_stop_network, remaining);
         }
         }};
         StartBlockProduction(config.block_interval_ms);

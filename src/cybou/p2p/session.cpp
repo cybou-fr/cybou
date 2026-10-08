@@ -785,8 +785,12 @@ bool PeerSession::Handshake(const Hello& local)
     return true;
 }
 
-std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntime& runtime)
+std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntime& runtime,
+    std::chrono::steady_clock::time_point owner_deadline)
 {
+    const auto started = std::chrono::steady_clock::now();
+    const auto deadline = std::min(started + OBSERVATION_TRANSACTION_TIMEOUT, owner_deadline);
+    if (deadline <= started) return std::nullopt;
     if (!m_socket.is_open()) { ForgetObservation(); return std::nullopt; }
     if (!m_peer || !m_local || m_peer->network_binding != runtime.GetNetworkBinding()) return std::nullopt;
     boost::system::error_code ec;
@@ -801,7 +805,6 @@ std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntim
     if (!groups->Select(context, remote.address())) return std::nullopt;
     m_observation_guard = guard;
     m_observation_groups = groups;
-    const auto started = std::chrono::steady_clock::now();
     const auto request = guard->Begin(context, remote.address());
     if (!request) return std::nullopt;
     struct PendingCleanup {
@@ -812,7 +815,6 @@ std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntim
     const auto unavailable = [&]() -> std::optional<ObservationReport> {
         boost::system::error_code ignored; m_socket.close(ignored); ForgetObservation(); return std::nullopt;
     };
-    const auto deadline = started + OBSERVATION_TRANSACTION_TIMEOUT;
     if (!Write(Frame{MessageType::GET_OBSERVATION, EncodeObservationRequest(*request)}, deadline)) return unavailable();
     const auto response = Read(deadline);
     if (!response || response->type != MessageType::OBSERVATION) return unavailable();

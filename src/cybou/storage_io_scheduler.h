@@ -22,6 +22,8 @@ public:
     enum class Kind { READ, WRITE };
     StorageIoScheduler();
     ~StorageIoScheduler();
+    // Conservative nonblocking observation admission hint; not a reservation.
+    bool IsIdle();
     template <typename F>
     auto Submit(const std::array<unsigned char, 32>& provider, Kind kind, F&& function)
     {

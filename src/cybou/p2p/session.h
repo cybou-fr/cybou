@@ -267,7 +267,8 @@ public:
     // Existing transaction owner only; no automatic polling or report retention.
     // Skipped requests do no I/O. A failed wire transaction closes the socket
     // so a late reply cannot be mistaken for the next block/storage response.
-    std::optional<ObservationReport> RequestObservation(CybouNodeRuntime& runtime);
+    std::optional<ObservationReport> RequestObservation(CybouNodeRuntime& runtime,
+        std::chrono::steady_clock::time_point owner_deadline = std::chrono::steady_clock::time_point::max());
     /// \brief Отправляет пиру одну ещё не доставленную ему relay-операцию из pool этого узла.
     /// \details Pull (`OP_POLL`) работает только по сессиям, которые открыл сам опрашивающий;
     ///          узел за NAT никто не опрашивает, поэтому кандидаты дополнительно проталкиваются

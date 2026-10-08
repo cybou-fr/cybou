@@ -221,7 +221,8 @@ report target. Payload codec, local cache, runtime guard and direct TLS transact
 and runtime-owned bounded grouping/declared-resource totals, close/expiry hooks
 and immutable address-free snapshots and Network/Console partial summary cards
 and bounded remote gauge history/cohort charts are implemented; automatic
-polling remains a target.
+polling is wired as a default-off opt-in idle-slot service policy pending
+coordinated deployment acceptance. No extra reader, connection or wire capability.
 Source P2P ends at message 28; deployed upgrade and governing privacy/security
 review gates remain. Relayed
 reports, cross-address deduplication and global census remain open.

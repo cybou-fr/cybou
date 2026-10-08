@@ -14,6 +14,8 @@
 #include <cybou/identity_signer.h>
 #include <cybou/observation_report.h>
 #include <cybou/network_observation.h>
+#include <cybou/storage_io_scheduler.h>
+#include <future>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -57,6 +59,29 @@ BOOST_AUTO_TEST_CASE(observation_cache_refreshes_without_identity_gui_or_diagnos
     BOOST_CHECK_EQUAL(snapshot->remote.fresh_remote_groups, 0U);
     BOOST_CHECK(report.challenge == nonce);
     BOOST_CHECK(cybou::Hash256{report.network_binding} == runtime.GetNetworkBinding());
+}
+
+BOOST_AUTO_TEST_CASE(observation_storage_idle_hint_rejects_active_work)
+{
+    cybou::StorageIoScheduler scheduler;
+    const auto wait_for_idle = [&] {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+        do {
+            if (scheduler.IsIdle()) return true;
+            std::this_thread::yield();
+        } while (std::chrono::steady_clock::now() < deadline);
+        return false;
+    };
+    BOOST_CHECK(wait_for_idle()); // A contended mutex is conservatively reported as busy.
+    std::promise<void> entered, release; auto gate = release.get_future();
+    auto job = scheduler.Submit({}, cybou::StorageIoScheduler::Kind::READ, [&] {
+        entered.set_value(); gate.wait(); return true;
+    });
+    const auto ready = entered.get_future().wait_for(std::chrono::seconds{2});
+    const bool idle_during_job = scheduler.IsIdle();
+    release.set_value(); BOOST_CHECK(job.get());
+    BOOST_CHECK(ready == std::future_status::ready); BOOST_CHECK(!idle_during_job);
+    BOOST_CHECK(wait_for_idle());
 }
 
 BOOST_AUTO_TEST_CASE(remote_history_preserves_gaps_cohorts_and_bounded_retention)

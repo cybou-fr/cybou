@@ -82,32 +82,62 @@ BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
 
 BOOST_AUTO_TEST_CASE(observation_timeout_releases_the_owner_and_closes_the_stream)
 {
+    for (const bool short_budget : {false, true}) {
+        CybouServiceTestFixture fixture;
+        const auto identity = CreateTestTlsIdentity(fixture.directory); BOOST_REQUIRE(identity);
+        using namespace cybou::p2p; using boost::asio::ip::tcp;
+        boost::asio::io_context io; tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
+        std::promise<void> release; auto gate = release.get_future();
+        bool received{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io}; acceptor.accept(socket);
+            TlsSessionConfig tls; tls.certificate_chain_file = identity->certificate; tls.private_key_file = identity->private_key;
+            PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
+            if (!session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 1})) return;
+            const auto request = session.ReceiveFrame(); received = request && request->type == MessageType::GET_OBSERVATION;
+            gate.wait_for(std::chrono::seconds{10}); // Keep TLS alive without returning telemetry.
+        }};
+        tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+        TlsSessionConfig tls; tls.expected_server_spki_sha256 = identity->pin;
+        PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls)};
+        BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 2}));
+        const auto started = std::chrono::steady_clock::now();
+        const auto budget = short_budget ? std::chrono::milliseconds{100} : std::chrono::milliseconds{2000};
+        const auto result = client.RequestObservation(*fixture.runtime, started + budget);
+        const auto elapsed = std::chrono::steady_clock::now() - started;
+        release.set_value(); server.join();
+        BOOST_CHECK(received && !result && !client.Socket().is_open());
+        BOOST_CHECK_EQUAL(fixture.runtime->GetNetworkObservation()->remote.fresh_local_groups, 0U);
+        BOOST_CHECK(elapsed >= budget);
+        BOOST_CHECK(elapsed < (short_budget ? std::chrono::seconds{1} : std::chrono::seconds{4})); // Detect the former five-second owner stall.
+    }
+}
+
+BOOST_AUTO_TEST_CASE(observation_owner_poll_uses_one_existing_session_and_preserves_ping)
+{
     CybouServiceTestFixture fixture;
     const auto identity = CreateTestTlsIdentity(fixture.directory); BOOST_REQUIRE(identity);
     using namespace cybou::p2p; using boost::asio::ip::tcp;
     boost::asio::io_context io; tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
-    std::promise<void> release; auto gate = release.get_future();
-    bool received{false};
+    bool served{false};
     std::jthread server{[&] {
         tcp::socket socket{io}; acceptor.accept(socket);
         TlsSessionConfig tls; tls.certificate_chain_file = identity->certificate; tls.private_key_file = identity->private_key;
         PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
-        if (!session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 1})) return;
-        const auto request = session.ReceiveFrame(); received = request && request->type == MessageType::GET_OBSERVATION;
-        gate.wait_for(std::chrono::seconds{10}); // Keep TLS alive without returning telemetry.
+        served = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+            .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 91}) &&
+            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
     }};
-    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
-    TlsSessionConfig tls; tls.expected_server_spki_sha256 = identity->pin;
-    PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls)};
-    BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 2}));
-    const auto started = std::chrono::steady_clock::now();
-    const auto result = client.RequestObservation(*fixture.runtime);
-    const auto elapsed = std::chrono::steady_clock::now() - started;
-    release.set_value(); server.join();
-    BOOST_CHECK(received && !result && !client.Socket().is_open());
+    PeerManager manager{*fixture.runtime};
+    BOOST_REQUIRE(manager.Connect("127.0.0.1", acceptor.local_endpoint().port()));
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    BOOST_CHECK(!manager.PollObservation(1, deadline)); // unsent block frontier takes precedence
+    BOOST_REQUIRE(manager.PollObservation(0, deadline));
+    BOOST_CHECK_EQUAL(fixture.runtime->GetNetworkObservation()->remote.fresh_local_groups, 1U);
+    BOOST_CHECK(!manager.PollObservation(0, deadline)); // cooldown, no extra transaction
+    BOOST_CHECK_EQUAL(manager.PingSome(1), 1U);
+    server.join(); BOOST_CHECK(served); manager.DisconnectAll();
     BOOST_CHECK_EQUAL(fixture.runtime->GetNetworkObservation()->remote.fresh_local_groups, 0U);
-    BOOST_CHECK(elapsed >= OBSERVATION_TRANSACTION_TIMEOUT);
-    BOOST_CHECK(elapsed < std::chrono::seconds{4}); // Detect the former five-second owner stall.
 }
 
 BOOST_AUTO_TEST_CASE(observation_frames_have_exact_sizes)
@@ -154,6 +184,10 @@ BOOST_AUTO_TEST_CASE(observation_transaction_uses_cache_and_preserves_ping_after
             PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls), collector.GetTrafficMeter()};
             BOOST_CHECK(!client.RequestObservation(collector)); // pre-HELLO must not write
             BOOST_REQUIRE(client.Handshake({.network_binding = collector.GetNetworkBinding(), .finalized_tip = *collector.GetFinalizedTip(), .nonce = 2}));
+            const auto before_expired = collector.GetTrafficMeter()->Snapshot().sent_bytes;
+            BOOST_CHECK(!client.RequestObservation(collector, std::chrono::steady_clock::now() - std::chrono::milliseconds{1}));
+            BOOST_CHECK_EQUAL(collector.GetTrafficMeter()->Snapshot().sent_bytes, before_expired);
+            BOOST_CHECK(client.Socket().is_open());
             const auto report = client.RequestObservation(collector); BOOST_REQUIRE(report);
             BOOST_CHECK(cybou::Hash256{report->network_binding} == collector.GetNetworkBinding());
             retained = collector.GetNetworkObservation();

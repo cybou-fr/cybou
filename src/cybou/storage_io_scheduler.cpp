@@ -22,6 +22,11 @@ StorageIoScheduler::~StorageIoScheduler()
     m_cv.notify_all();
     for (auto& worker : m_workers) worker.join();
 }
+bool StorageIoScheduler::IsIdle()
+{
+    std::unique_lock lock{m_mutex, std::try_to_lock};
+    return lock.owns_lock() && !m_stopping && m_queue.empty() && m_active.empty();
+}
 void StorageIoScheduler::Enqueue(Job job)
 {
     std::unique_lock lock{m_mutex};

@@ -449,6 +449,9 @@ public:
     /// \return Итог verified sync-pass и число применённых блоков.
     /// \post Может обновить connected peer set, retry backoff и gossip/relay activity.
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
+    // Service owner's optional idle slot, after a completed same-cycle sync pass.
+    bool PollIdleObservation(const SyncPeerResult& completed,
+        std::chrono::steady_clock::time_point deadline);
     /// \brief Число currently connected peers.
     /// \return Число активных peer sessions.
     size_t ConnectedPeerCount() const;
@@ -696,6 +699,7 @@ private:
             timeout and must never hold back block sync or operation relay. */
         std::atomic_bool storage_probe_running{false};
         std::thread storage_prober;
+        std::chrono::steady_clock::time_point next_observation_poll{};
         std::chrono::steady_clock::time_point next_peer_ping{};
         std::chrono::steady_clock::time_point next_peer_discovery{};
         // Peer callbacks can consult routes while session I/O owns mutex.

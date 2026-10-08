@@ -92,13 +92,14 @@ and service-eligible network capacity estimates. Local gauges are not network to
    automatic polling. Runtime store lifecycle and immutable snapshots are connected;
    partial-coverage summary cards and Console are connected;
    runtime bounded gauge history and cohort charts are connected;
-   scheduled acquisition and privacy
-   acceptance remain; relayed/cross-address design is open. No new network,
+   idle-slot acquisition is implemented default-off; deployed-software/privacy
+   acceptance and measured busy-workload fairness remain; relayed/cross-address design is open. No new network,
    genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
    per-report/mean/cohort charts. The standalone group store and checked declared
    resource totals and runtime immutable snapshots are implemented; scheduled
-   acquisition remains; Network/Console summary cards and Network cohort charts are connected.
+   idle-slot acquisition is implemented default-off; Network/Console summary cards
+   and Network cohort charts are connected. Activation/deployment acceptance remains.
    Verify duplicates/replay, expiry, churn,
    inconsistent/dishonest reports and partial visibility.
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
@@ -115,9 +116,11 @@ and service-eligible network capacity estimates. Local gauges are not network to
    `Observed storage capacity · N reporting groups`, with per-metric contributor
    counts, age, missing/expired/limited coverage and explicit declarations.
    Whole-network coverage stays Unknown. Segment charts on cohort changes.
-3. Add a low-priority scheduler only on genuinely idle existing session owners,
-   after coordinated deployment acceptance. Skip busy sessions, preserve block,
-   relay and storage progress, and cap each optional transaction at two seconds.
+3. **Source delivered, activation pending:** opt-in idle-slot outbound scheduler,
+   default off until coordinated deployment acceptance. Try owner/state locks,
+   skip catch-up/candidate/storage work, one round-robin session per five seconds.
+   Consume at most the existing pause (normally 250 ms), capped at two seconds;
+   new work after admission can wait for that bound. Measure workload fairness.
 4. Add local PUT/GET payload byte/rate counters so useful storage transfers can
    be inspected separately from CYBOU frame traffic (service/retries/observation).
 5. Add storage I/O, oldest local queue age, bounded error counters and canonical
