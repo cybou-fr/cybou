@@ -234,7 +234,7 @@ public:
     QDateTime lastApplicationRefresh() const { return m_last_application_refresh; }
     QString applicationRefreshError() const { return m_application_refresh_error; }
     void requestMoveMail(const QString& id, CybouMailFolder folder, CommandDone done = {});
-    const QVector<CybouMailTask>& mailTasks() const { return m_mail_tasks; }
+    const QVector<CybouApplicationTask>& applicationTasks() const { return m_application_tasks; }
     QString resolvedMailId(const QString& id) const { return m_mail_ids.value(id, id); }
     /** Saves a draft in the Identity's private mailbox; returns its id. */
     QString requestSaveMailDraft(CybouMailItem draft, CommandDone done = {});
@@ -446,7 +446,7 @@ Q_SIGNALS:
     void mailIdReplaced(const QString& old_id, const QString& new_id);
     void filesChanged();
     void activityChanged();
-    void mailTasksChanged();
+    void applicationTasksChanged();
     void applicationRefreshChanged();
     void applicationLoadChanged();
     void walletChanged();
@@ -541,12 +541,14 @@ private:
     QDateTime m_last_application_refresh;
     QString m_application_refresh_error;
     CommandDone m_application_refresh_done;
-    QVector<CybouMailTask> m_mail_tasks;
+    QVector<CybouApplicationTask> m_application_tasks;
     QHash<QString, QString> m_mail_ids;
-    std::function<void(CybouCommandState, const QString&)> mailCommand(
+    std::function<void(CybouCommandState, const QString&)> applicationCommand(
         const QString& item_id, const QString& title, CommandDone done,
-        CybouMailTaskKind kind = CybouMailTaskKind::DraftSave, const QString& related_id = {});
-    std::function<void(CybouCommandState, const QString&)> fileCommand(CommandDone done);
+        CybouTaskKind kind = CybouTaskKind::DraftSave, const QString& related_id = {},
+        CybouTaskScope scope = CybouTaskScope::Mail);
+    std::function<void(CybouCommandState, const QString&)> fileCommand(CommandDone done, const QString& item_id = {},
+        const QString& title = {}, CybouTaskKind kind = CybouTaskKind::Move, const QString& related_id = {});
     /** Mail/Files featureAvailability never exceed what the backend can do. */
     CybouFeatureAvailability honest(CybouFeatureAvailability featureAvailability) const;
     CybouFeatureAvailability m_requested_availability;

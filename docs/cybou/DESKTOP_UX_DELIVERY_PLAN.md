@@ -579,3 +579,12 @@ reads do not renew freshness, restart makes time unknown, and old observations
 do not revoke verified local access. Remaining work includes a common Mail/Files
 task view and live outage/recovery acceptance; see the dated implementation
 status and scoped evidence in docs 83 and 85.
+
+Shared task view follow-up (2026-10-08): Mail and acknowledged Files mutations
+now share the existing header Activity panel and one correlated application task
+journal. Saved local intent, finalized publication progress and remote durability
+remain separate. The panel retains stable rows, focus and scroll, explicitly
+limits display to 100 tasks, and clears private cached labels on lock. The journal
+is volatile; durable application ownership remains unchanged. Next delivery work
+is large-Mail presentation profiling and the remaining physical/live acceptance
+gates, rather than another task API or a generic mutation replay mechanism.

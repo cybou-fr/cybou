@@ -200,10 +200,10 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     connect(m_subject, &QLineEdit::textChanged, this, [this] { updateGates(); edited(); });
     connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); edited(); });
     connect(m_send, &QPushButton::clicked, this, [this] { send(); });
-    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
+    connect(m_model, &CybouDesktopModel::applicationTasksChanged, this, [this] {
         if (m_following_delete && !m_draft_id.isEmpty()) {
-            for (const auto& task : m_model->mailTasks()) {
-                if (task.kind != CybouMailTaskKind::Delete || task.item_id != m_draft_id) continue;
+            for (const auto& task : m_model->applicationTasks()) {
+                if (task.scope != CybouTaskScope::Mail || task.kind != CybouTaskKind::Delete || task.item_id != m_draft_id) continue;
                 if (task.state == CybouCommandState::Committed) {
                     clearCompose();
                     if (onClosed) onClosed();
@@ -216,8 +216,8 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
             }
         }
         if (!m_following_send || m_draft_id.isEmpty()) return;
-        for (const auto& task : m_model->mailTasks()) {
-            if (task.kind != CybouMailTaskKind::Send || task.item_id != m_draft_id) continue;
+        for (const auto& task : m_model->applicationTasks()) {
+            if (task.scope != CybouTaskScope::Mail || task.kind != CybouTaskKind::Send || task.item_id != m_draft_id) continue;
             if (task.state == CybouCommandState::Committed) {
                 const auto id = m_model->resolvedMailId(task.related_id);
                 clearCompose();
@@ -273,13 +273,13 @@ void MailCompose::start(const CybouMailItem& draft)
     m_attachments = draft.attachments;
     m_loading = false;
     m_following_send = false;
-    for (const auto& task : m_model->mailTasks()) {
-        if (task.kind == CybouMailTaskKind::Delete && task.item_id == m_draft_id &&
+    for (const auto& task : m_model->applicationTasks()) {
+        if (task.scope == CybouTaskScope::Mail && task.kind == CybouTaskKind::Delete && task.item_id == m_draft_id &&
             (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running)) {
             m_following_delete = m_close_requested = true;
             m_save_hint->setText(tr("Discarding draft…"));
         }
-        if (task.kind == CybouMailTaskKind::Send && task.item_id == m_draft_id &&
+        if (task.scope == CybouTaskScope::Mail && task.kind == CybouTaskKind::Send && task.item_id == m_draft_id &&
             (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running)) {
             m_sending = m_following_send = true;
         }

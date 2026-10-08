@@ -18,6 +18,9 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
+#include <QSet>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -141,12 +144,13 @@ QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel&
         (operation.attention ? attention : running).append(std::move(operation));
     };
 
-    for (const auto& task : model.mailTasks()) {
+    for (const auto& task : model.applicationTasks()) {
         if (task.state == CybouCommandState::Committed) continue;
-        add({Kind::LocalMail, task.item_id, task.title,
+        add({task.scope == CybouTaskScope::Mail ? Kind::LocalMail : Kind::LocalFiles,
+            task.scope == CybouTaskScope::Files && !task.related_id.isEmpty() && model.fileItem(task.related_id) ? task.related_id : task.item_id, task.title,
             task.state == CybouCommandState::Failed ? task.error :
                 task.state == CybouCommandState::Running ? tr("Saving changes on this computer…") : tr("Waiting to save changes…"),
-            task.state == CybouCommandState::Failed});
+            task.state == CybouCommandState::Failed, task.id});
     }
     for (const auto& file : model.fileItems()) {
         if (file.folder || file.trashed) continue;
@@ -211,7 +215,7 @@ CybouActivityButton::CybouActivityButton(CybouDesktopModel* model, QWidget* pare
              &CybouDesktopModel::walletChanged, &CybouDesktopModel::statusChanged}) {
         connect(m_model, signal, this, [this] { refresh(); });
     }
-    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::applicationTasksChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::recoveryRotationFinished, this, [this] { refresh(); });
     refresh();
 }
@@ -229,7 +233,7 @@ void CybouActivityButton::refresh()
     setText(alert ? (failed == 1 ? tr("1 needs attention") : tr("%1 need attention").arg(failed))
                   : (running == 1 ? tr("1 in progress") : tr("%1 in progress").arg(running)));
     setAccessibleName(text());
-    if (m_popup && m_popup->isVisible()) rebuildRows();
+    if (m_popup && (m_popup->isVisible() || operations.isEmpty())) rebuildRows();
     if (m_popup && operations.isEmpty()) m_popup->hide();
 }
 
@@ -244,53 +248,96 @@ void CybouActivityButton::showPopup()
         layout->setContentsMargins(16, 14, 16, 14);
         layout->setSpacing(6);
         layout->addWidget(SectionTitle(tr("Activity"), m_popup));
-        layout->addWidget(MutedText(tr("Everything on its way to the network, and anything that needs you."), m_popup));
+        auto* description = MutedText(tr("Local saves, network progress, and anything that needs you."), m_popup);
+        description->setWordWrap(true);
+        layout->addWidget(description);
         auto* host = new QWidget{m_popup};
         m_rows = new QVBoxLayout{host};
         m_rows->setContentsMargins(0, 4, 0, 0);
         m_rows->setSpacing(4);
-        layout->addWidget(host);
-        m_popup->setFixedWidth(420);
+        m_scroll = new QScrollArea{m_popup};
+        m_scroll->setObjectName(QStringLiteral("activityTaskScroll"));
+        m_scroll->setWidgetResizable(true);
+        m_scroll->setFrameShape(QFrame::NoFrame);
+        m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        m_scroll->setWidget(host);
+        layout->addWidget(m_scroll);
+        m_popup->setFixedWidth(520);
     }
     rebuildRows();
     m_popup->adjustSize();
     QPoint at = mapToGlobal(QPoint{width() - m_popup->width(), height() + 6});
     if (const QScreen* screen = this->screen()) {
         const QRect area = screen->availableGeometry();
-        at.setX(std::clamp(at.x(), area.left() + 8, area.right() - m_popup->width() - 8));
+        at.setX(std::clamp(at.x(), area.left() + 8, std::max(area.left() + 8, area.right() - m_popup->width() - 8)));
+        at.setY(std::clamp(at.y(), area.top() + 8, std::max(area.top() + 8, area.bottom() - m_popup->height() - 8)));
     }
     m_popup->move(at);
     m_popup->show();
 }
 
-namespace {
-/// Empties a layout at every depth. Row labels live in a nested layout, so a one-level
-/// clear left stale titles painted under the new rows; widgets are hidden at once because
-/// deleteLater() only removes them on the next event loop pass.
-void ClearRows(QLayout* layout)
-{
-    while (QLayoutItem* item = layout->takeAt(0)) {
-        if (QLayout* inner = item->layout()) ClearRows(inner);
-        if (QWidget* widget = item->widget()) {
-            widget->hide();
-            widget->deleteLater();
-        }
-        delete item;
-    }
-}
-} // namespace
-
 void CybouActivityButton::rebuildRows()
 {
-    ClearRows(m_rows);
+    const int scroll = m_scroll->verticalScrollBar()->value();
     QWidget* parent = m_rows->parentWidget();
     const auto operations = CybouActivityOperations(*m_model);
-    for (qsizetype i = 0; i < operations.size() && i < 12; ++i) {
+    constexpr qsizetype limit{100};
+    QSet<QString> active;
+    m_shown_operations.clear();
+    for (qsizetype i = 0; i < operations.size() && i < limit; ++i) {
         const auto& operation = operations.at(i);
-        auto* row = new QHBoxLayout;
-        row->setSpacing(8);
+        const QString key = operation.key.isEmpty()
+            ? QStringLiteral("%1:%2").arg(static_cast<int>(operation.kind)).arg(operation.id) : operation.key;
+        active.insert(key);
+        m_shown_operations.insert(key, operation);
+        auto* widget = m_operation_rows.value(key, nullptr);
+        if (!widget) {
+            widget = new QWidget{parent};
+            widget->setObjectName(QStringLiteral("activityTaskRow"));
+            widget->setProperty("taskKey", key);
+            auto* row = new QHBoxLayout{widget};
+            row->setContentsMargins(0, 4, 0, 4);
+            row->setSpacing(8);
+            auto* icon = new QLabel{widget};
+            icon->setObjectName(QStringLiteral("taskIcon"));
+            icon->setFixedSize(28, 28);
+            row->addWidget(icon, 0, Qt::AlignTop);
+            auto* text = new QVBoxLayout;
+            auto* title = new QLabel{widget};
+            title->setObjectName(QStringLiteral("rowTitle"));
+            title->setTextFormat(Qt::PlainText);
+            title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+            auto* status = new QLabel{widget};
+            status->setObjectName(QStringLiteral("rowSub"));
+            status->setTextFormat(Qt::PlainText);
+            status->setWordWrap(true);
+            text->addWidget(title);
+            text->addWidget(status);
+            row->addLayout(text, 1);
+            auto* retry = new QPushButton{tr("Try again"), widget};
+            retry->setObjectName(QStringLiteral("taskRetry"));
+            connect(retry, &QPushButton::clicked, this, [this, key] {
+                const auto current = m_shown_operations.constFind(key);
+                if (current == m_shown_operations.cend()) return;
+                if (current->kind == CybouActivityOperation::Kind::File) m_model->requestRetryFile(current->id);
+                else if (current->kind == CybouActivityOperation::Kind::Mail) m_model->requestRetryMail(current->id);
+            });
+            row->addWidget(retry);
+            auto* show = new QPushButton{tr("Open"), widget};
+            show->setObjectName(QStringLiteral("taskOpen"));
+            connect(show, &QPushButton::clicked, this, [this, key] {
+                const auto current = m_shown_operations.constFind(key);
+                if (current == m_shown_operations.cend()) return;
+                const auto operation = *current;
+                m_popup->hide();
+                open(operation);
+            });
+            row->addWidget(show);
+            m_operation_rows.insert(key, widget);
+        }
         Glyph glyph{Glyph::CloudUp};
         switch (operation.kind) {
+        case CybouActivityOperation::Kind::LocalFiles:
         case CybouActivityOperation::Kind::File: glyph = Glyph::Upload; break;
         case CybouActivityOperation::Kind::Download: glyph = Glyph::Download; break;
         case CybouActivityOperation::Kind::LocalMail:
@@ -299,42 +346,46 @@ void CybouActivityButton::rebuildRows()
         case CybouActivityOperation::Kind::Name: glyph = Glyph::User; break;
         case CybouActivityOperation::Kind::Recovery: glyph = Glyph::Key; break;
         }
-        row->addWidget(Chip(glyph, operation.attention ? Tint::Rose : Tint::Mint, parent, 32, 16), 0, Qt::AlignTop);
-        auto* text = new QVBoxLayout;
-        text->setSpacing(0);
-        // One line: a long file name without spaces would wrap mid-word and overlap the status.
-        auto* title = new QLabel{parent};
-        title->setObjectName(QStringLiteral("rowTitle"));
-        title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-        title->setText(title->fontMetrics().elidedText(operation.title, Qt::ElideMiddle, 300));
+        widget->findChild<QLabel*>(QStringLiteral("taskIcon"))->setPixmap(glyphPixmap(glyph, {20, 20},
+            CybouTheme::color(operation.attention ? CybouTheme::ROSE : CybouTheme::BRAND_TEAL_DARK)));
+        auto* title = widget->findChild<QLabel*>(QStringLiteral("rowTitle"));
+        title->setText(title->fontMetrics().elidedText(operation.title, Qt::ElideMiddle, 280));
         title->setToolTip(operation.title);
-        auto* status = new QLabel{operation.status, parent};
-        status->setObjectName(QStringLiteral("rowSub"));
-        if (operation.attention) status->setStyleSheet(QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
-        text->addWidget(title);
-        text->addWidget(status);
-        row->addLayout(text, 1);
-        if (operation.attention && (operation.kind == CybouActivityOperation::Kind::File ||
-                                    operation.kind == CybouActivityOperation::Kind::Mail)) {
-            auto* retry = new QPushButton{tr("Try again"), parent};
-            retry->setObjectName(QStringLiteral("secondaryButton"));
-            connect(retry, &QPushButton::clicked, this, [this, operation] {
-                if (operation.kind == CybouActivityOperation::Kind::File) m_model->requestRetryFile(operation.id);
-                else m_model->requestRetryMail(operation.id);
-            });
-            row->addWidget(retry, 0, Qt::AlignVCenter);
-        }
-        auto* show = new QPushButton{tr("Open"), parent};
-        show->setObjectName(QStringLiteral("softButton"));
-        connect(show, &QPushButton::clicked, this, [this, operation] {
-            m_popup->hide();
-            open(operation);
-        });
-        row->addWidget(show, 0, Qt::AlignVCenter);
-        m_rows->addLayout(row);
+        auto* status = widget->findChild<QLabel*>(QStringLiteral("rowSub"));
+        status->setText(operation.status.left(512));
+        status->setToolTip(operation.status.left(4096));
+        status->setStyleSheet(operation.attention ? QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::ROSE).name()) : QString{});
+        widget->findChild<QPushButton*>(QStringLiteral("taskRetry"))->setVisible(operation.attention &&
+            (operation.kind == CybouActivityOperation::Kind::File || operation.kind == CybouActivityOperation::Kind::Mail));
+        auto* show = widget->findChild<QPushButton*>(QStringLiteral("taskOpen"));
+        show->setAccessibleName(tr("Open %1").arg(operation.title));
+        m_rows->removeWidget(widget);
+        m_rows->insertWidget(static_cast<int>(i), widget);
+        widget->show();
     }
-    if (operations.isEmpty()) m_rows->addWidget(MutedText(tr("Nothing in progress."), parent));
+    for (auto it = m_operation_rows.begin(); it != m_operation_rows.end();) {
+        if (active.contains(it.key())) { ++it; continue; }
+        m_rows->removeWidget(it.value());
+        for (auto* label : it.value()->findChildren<QLabel*>()) { label->clear(); label->setToolTip({}); }
+        for (auto* button : it.value()->findChildren<QPushButton*>()) button->setAccessibleName({});
+        it.value()->hide();
+        it.value()->deleteLater();
+        it = m_operation_rows.erase(it);
+    }
+    auto* overflow = parent->findChild<QLabel*>(QStringLiteral("taskOverflow"));
+    if (!overflow) {
+        overflow = MutedText({}, parent);
+        overflow->setObjectName(QStringLiteral("taskOverflow"));
+        overflow->setWordWrap(true);
+    }
+    overflow->setText(tr("Showing %1 of %2 tasks. More tasks remain in Mail and Files.").arg(limit).arg(operations.size()));
+    overflow->setVisible(operations.size() > limit);
+    m_rows->removeWidget(overflow);
+    m_rows->addWidget(overflow);
+    const int available = screen() ? screen()->availableGeometry().height() : 720;
+    m_scroll->setFixedHeight(std::clamp(static_cast<int>(std::min(operations.size(), limit)) * 72, 80, std::max(80, available / 2)));
     m_popup->adjustSize();
+    m_scroll->verticalScrollBar()->setValue(scroll);
 }
 
 void CybouActivityButton::open(const CybouActivityOperation& operation)
@@ -342,6 +393,7 @@ void CybouActivityButton::open(const CybouActivityOperation& operation)
     switch (operation.kind) {
     case CybouActivityOperation::Kind::File:
     case CybouActivityOperation::Kind::Download:
+    case CybouActivityOperation::Kind::LocalFiles:
         if (onOpenFile) onOpenFile(operation.id);
         break;
     case CybouActivityOperation::Kind::LocalMail:

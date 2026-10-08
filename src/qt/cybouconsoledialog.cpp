@@ -754,7 +754,7 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
         }
         if (d.peers.empty()) appendOutput(tr("  No peers currently connected."));
     } else if (cmd == QLatin1String{"jobs"}) {
-        const auto tasks = m_model->mailTasks();
+        const auto tasks = m_model->applicationTasks();
         const auto files = m_model->fileItems();
         appendOutput(tr("Active Background Jobs:"));
         int job_count = 0;
@@ -767,7 +767,7 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
         for (const auto& t : tasks) {
             if (t.state != CybouCommandState::Queued && t.state != CybouCommandState::Running) continue;
             if (job_count == kMaxRows) break;
-            appendOutput(QStringLiteral("  [Mail Task] %1").arg(t.title));
+            appendOutput(tr("  [%1 local task] %2").arg(t.scope == CybouTaskScope::Mail ? tr("Mail") : tr("Files"), t.title));
             ++job_count;
         }
         for (const auto& f : files) {

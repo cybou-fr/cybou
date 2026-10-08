@@ -591,6 +591,24 @@ selection at supported DPI. Invalid drops give feedback without changing state.
 Use the common task panel for slow operations rather than a blocking modal for
 every archive. Technical logs are optional, redacted Advanced details.
 
+The header Activity panel is shared by Mail and Files. Identity-local commands
+use correlated Queued/Running/Committed/Failed states and a Mail/Files scope.
+Completed local saves leave this in-flight view; outgoing publication and remote
+protection progress remain separate semantic rows. Command failures remain
+visible with their affected item; reopening it offers the relevant workflow,
+without automatic replay of a mutation whose intent may have changed. Retry is
+provided only for the existing publication retry commands. Terminal local task
+retention is bounded to 32 entries; active commands are never evicted for this
+limit. The task journal is volatile and lock clears it; durable draft and
+publication ownership remain the core application's responsibility.
+
+The panel scrolls, retains stable rows and button focus across status updates,
+and preserves its scroll position. It displays at most 100 tasks with an explicit
+truncation notice; additional item progress remains in Mail and Files. Task text
+is plain text, with bounded status/tooltip output. The popup clears cached private
+labels on lock even while hidden. Console jobs uses the same local task journal
+and identifies Mail/Files scope without changing command semantics.
+
 ## 16. Notifications
 
 Desktop notifications may show:

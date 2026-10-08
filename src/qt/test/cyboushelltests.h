@@ -41,6 +41,7 @@ private Q_SLOTS:
     void walletLocksBalanceIntoSystemBalance();
     void contactsComeFromMailAndPayments();
     void activityListsRunningAndFailedOperations();
+    void commonTasksTrackFilesAndPreservePopup();
     void filesGateActions();
     void filesNavigationAndViews();
     void networkPageReflectsModel();

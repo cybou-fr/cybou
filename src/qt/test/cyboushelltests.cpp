@@ -799,6 +799,103 @@ void CybouShellTests::activityListsRunningAndFailedOperations()
     QVERIFY(button.isHidden());
 }
 
+void CybouShellTests::commonTasksTrackFilesAndPreservePopup()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    const auto file = ProtectedFile(QStringLiteral("file"), QStringLiteral("Private.pdf"));
+    model.setFileItems({file});
+    CybouMailItem draft;
+    draft.id = QStringLiteral("draft-common");
+    model.requestSaveMailDraft(draft);
+    int completed{0};
+    model.requestRenameFile(file.id, QStringLiteral("Renamed.pdf"), [&](bool ok, const QString&) { QVERIFY(ok); ++completed; });
+    QCOMPARE(model.applicationTasks().size(), 2);
+    QCOMPARE(model.applicationTasks().last().scope, CybouTaskScope::Files);
+    const QString key = model.applicationTasks().last().id;
+    QCOMPARE(model.applicationTasks().last().state, CybouCommandState::Queued);
+    CybouActivityButton button{&model};
+    button.show();
+    button.click();
+    auto* popup = button.findChild<QFrame*>(QStringLiteral("activityPopup"));
+    QVERIFY(popup);
+    const auto findRow = [popup](const QString& key) -> QWidget* {
+        for (auto* row : popup->findChildren<QWidget*>(QStringLiteral("activityTaskRow")))
+            if (row->property("taskKey").toString() == key) return row;
+        return nullptr;
+    };
+    auto* retained = findRow(key);
+    QVERIFY(retained);
+    auto* open = retained->findChild<QPushButton*>(QStringLiteral("taskOpen"));
+    open->setFocus();
+    backend.file_results.first()(CybouCommandState::Running, {});
+    QTRY_COMPARE(model.applicationTasks().last().state, CybouCommandState::Running);
+    QCOMPARE(findRow(key), retained);
+    QVERIFY(open->hasFocus());
+    QVERIFY(retained->findChild<QLabel*>(QStringLiteral("rowSub"))->text().contains(QStringLiteral("Saving changes on this computer")));
+    backend.file_results.first()(CybouCommandState::Committed, {});
+    backend.file_results.first()(CybouCommandState::Failed, QStringLiteral("Late duplicate"));
+    QTRY_COMPARE(completed, 1);
+    QCOMPARE(model.fileItem(file.id)->name, file.name); // acknowledgment is not a finalized catalog projection
+    const auto after_save = CybouActivityOperations(model);
+    QVERIFY(std::none_of(after_save.begin(), after_save.end(), [&](const auto& op) { return op.key == key; }));
+    for (int i = 0; i < 104; ++i) model.requestMoveFile(file.id, {});
+    QCoreApplication::processEvents();
+    auto* scroll = popup->findChild<QScrollArea*>(QStringLiteral("activityTaskScroll"));
+    QVERIFY(scroll);
+    QCOMPARE(popup->findChildren<QWidget*>(QStringLiteral("activityTaskRow")).size(), 100);
+    QVERIFY(scroll->verticalScrollBar()->maximum() > 0);
+    auto* overflow = popup->findChild<QLabel*>(QStringLiteral("taskOverflow"));
+    QVERIFY(overflow && overflow->isVisible());
+    QVERIFY(overflow->text().contains(QStringLiteral("100 of 105")));
+    scroll->verticalScrollBar()->setValue(100);
+    const auto late = backend.file_results.last();
+    backend.file_results.last()(CybouCommandState::Running, {});
+    QCoreApplication::processEvents();
+    QCOMPARE(scroll->verticalScrollBar()->value(), 100);
+    const QString failed_key = model.applicationTasks().last().id;
+    backend.file_results.last()(CybouCommandState::Failed, QStringLiteral("<b>Local save failed</b>"));
+    QTRY_COMPARE(model.applicationTasks().last().state, CybouCommandState::Failed);
+    auto* failure = findRow(failed_key);
+    QVERIFY(failure);
+    auto* error_label = failure->findChild<QLabel*>(QStringLiteral("rowSub"));
+    QCOMPARE(error_label->textFormat(), Qt::PlainText);
+    QCOMPARE(error_label->text(), QStringLiteral("<b>Local save failed</b>"));
+    QVERIFY(failure->findChild<QPushButton*>(QStringLiteral("taskRetry"))->isHidden());
+    QString opened;
+    button.onOpenFile = [&](const QString& id) { opened = id; };
+    failure->findChild<QPushButton*>(QStringLiteral("taskOpen"))->click();
+    QCOMPARE(opened, file.id);
+    QVERIFY(!popup->isVisible());
+    model.requestLockVault();
+    QVERIFY(model.applicationTasks().isEmpty());
+    QVERIFY(!popup->isVisible());
+    for (auto* label : popup->findChildren<QLabel*>(QStringLiteral("rowTitle"))) QVERIFY(label->text().isEmpty());
+    late(CybouCommandState::Failed, QStringLiteral("Private stale error"));
+    QCoreApplication::processEvents();
+    QVERIFY(model.applicationTasks().isEmpty());
+
+    // Bound terminal history while retaining a queued command across other completions.
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    QVector<CybouFileItem> files;
+    for (int i = 0; i < 40; ++i) files.append(ProtectedFile(QString::number(i), QStringLiteral("File.pdf")));
+    model.setFileItems(files);
+    model.requestSaveMailDraft(draft);
+    for (const auto& item : files) {
+        model.requestRenameFile(item.id, QStringLiteral("Renamed.pdf"));
+        backend.file_results.last()(item.id == QStringLiteral("7") ? CybouCommandState::Failed : CybouCommandState::Committed,
+            item.id == QStringLiteral("7") ? QStringLiteral("Old failure") : QString{});
+    }
+    QCoreApplication::processEvents();
+    QCOMPARE(button.text(), QStringLiteral("1 in progress")); // evicting the last failure updates the panel too
+    QCOMPARE(model.applicationTasks().size(), 33); // 32 terminal plus one queued draft
+    QCOMPARE(model.applicationTasks().first().state, CybouCommandState::Queued);
+    model.requestLockVault();
+}
+
 void CybouShellTests::contactsComeFromMailAndPayments()
 {
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
@@ -2038,9 +2135,9 @@ void CybouShellTests::localMailCommandsWaitForCommit()
     int completed = 0;
     model.requestMoveMail(mail.id, CybouMailFolder::Archive, [&](bool ok, const QString&) { QVERIFY(!ok); ++completed; });
     QCOMPARE(completed, 0);
-    QCOMPARE(model.mailTasks().last().state, CybouCommandState::Queued);
+    QCOMPARE(model.applicationTasks().last().state, CybouCommandState::Queued);
     backend.move_results.last()(CybouCommandState::Running, {});
-    QTRY_COMPARE(model.mailTasks().last().state, CybouCommandState::Running);
+    QTRY_COMPARE(model.applicationTasks().last().state, CybouCommandState::Running);
     QCOMPARE(completed, 0);
     backend.move_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
     QTRY_COMPARE(completed, 1);
@@ -2071,15 +2168,15 @@ void CybouShellTests::localMailCommandsWaitForCommit()
     model.requestLockVault();
     late(CybouCommandState::Committed, {});
     QCoreApplication::processEvents();
-    QVERIFY(model.mailTasks().isEmpty());
+    QVERIFY(model.applicationTasks().isEmpty());
     QVERIFY(model.mailItems().isEmpty());
     // A result listener can lock synchronously while the task signal is emitted.
     model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
     model.setMailItems({mail});
     bool stale_done = false;
     model.requestMoveMail(mail.id, CybouMailFolder::Archive, [&](bool, const QString&) { stale_done = true; });
-    connect(&model, &CybouDesktopModel::mailTasksChanged, &model, [&] {
-        if (!model.mailTasks().isEmpty() && model.mailTasks().last().state == CybouCommandState::Committed)
+    connect(&model, &CybouDesktopModel::applicationTasksChanged, &model, [&] {
+        if (!model.applicationTasks().isEmpty() && model.applicationTasks().last().state == CybouCommandState::Committed)
             model.requestLockVault();
     });
     backend.move_results.last()(CybouCommandState::Committed, {});
@@ -2109,7 +2206,7 @@ void CybouShellTests::mailDeletionWaitsForDurableCommit()
     QVERIFY(model.mailItem(mail.id));
     QCOMPARE(completed, 0);
     backend.delete_results.last()(CybouCommandState::Running, {});
-    QTRY_COMPARE(model.mailTasks().last().state, CybouCommandState::Running);
+    QTRY_COMPARE(model.applicationTasks().last().state, CybouCommandState::Running);
     QVERIFY(model.mailItem(mail.id));
     backend.delete_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
     QTRY_COMPARE(completed, 1);
@@ -2297,7 +2394,7 @@ void CybouShellTests::composerKeepsTextOnSaveAndSendFailure()
     backend.send_result(CybouCommandState::Failed, QStringLiteral("Recipient unavailable"));
     QTRY_VERIFY(body->isEnabled());
     QCOMPARE(body->toPlainText(), QStringLiteral("Keep on send failure"));
-    QVERIFY(model.mailTasks().last().state == CybouCommandState::Failed);
+    QVERIFY(model.applicationTasks().last().state == CybouCommandState::Failed);
     // A rebuilt shell follows the model's pending handoff, not a dead widget callback.
     auto first = std::make_unique<MailCompose>(&model);
     first->start();

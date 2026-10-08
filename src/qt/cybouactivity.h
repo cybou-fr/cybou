@@ -6,6 +6,7 @@
 
 #include <QCoreApplication>
 #include <QString>
+#include <QHash>
 #include <QToolButton>
 #include <QVector>
 
@@ -16,14 +17,16 @@ struct CybouActivityItem;
 struct CybouContact;
 class QFrame;
 class QVBoxLayout;
+class QScrollArea;
 
 /** One operation still on its way, or one that needs the user. */
 struct CybouActivityOperation {
-    enum class Kind { File, Download, Mail, LocalMail, Payment, Name, Recovery } kind{Kind::File};
+    enum class Kind { File, Download, Mail, LocalMail, LocalFiles, Payment, Name, Recovery } kind{Kind::File};
     QString id;      ///< item id for File/Download/Mail; empty otherwise
     QString title;   ///< "Uploading report.pdf"
     QString status;  ///< "Waiting for confirmation", "Securing 42%"
     bool attention{false};
+    QString key; ///< stable local command key; other rows use kind/item
 };
 
 /** Everything in flight or failed, derived from the model's semantic state. */
@@ -59,6 +62,9 @@ private:
     CybouDesktopModel* const m_model;
     QFrame* m_popup{nullptr};
     QVBoxLayout* m_rows{nullptr};
+    QScrollArea* m_scroll{nullptr};
+    QHash<QString, QWidget*> m_operation_rows;
+    QHash<QString, CybouActivityOperation> m_shown_operations;
 
     void showPopup();
     void rebuildRows();

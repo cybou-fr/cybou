@@ -20,6 +20,13 @@ attempt timestamps and verify placement/full/partial audit scope. These checks
 are local fixtures and component tests; continuous remote availability, physical
 failure-domain independence and live outage/repair acceptance remain open.
 
+Shared task panel regression evidence (2026-10-08) covers concurrent Mail/Files
+commands, delayed acknowledgment, terminal duplicate/stale replies, stable popup
+rows/focus/scroll, explicit 100-of-105 truncation, plain-text errors, item routing,
+hidden-popup lock cleanup and terminal retention without dropping active work.
+These are local Qt/component checks, not physical input or restart acceptance
+for every live workflow; the task journal itself is intentionally volatile.
+
 ## 1. Clean-machine onboarding
 
 ```text

@@ -90,6 +90,13 @@ never rendered as Not stored on network yet. Show measurement freshness and
 whether the count is a local observation. Two distinct StorageIds/payout
 accounts do not establish separate hosts or failure domains.
 
+Folder creation, rename, move, copy, Trash and Restore contribute their actual
+worker command states to the shared header Activity panel described in doc 82.
+Queued or Running means local application work; Committed acknowledges saved
+publication intent and never means finalized catalog state or protected copies.
+Failed commands retain an item link, without a generic mutation retry button.
+These volatile task rows coexist with semantic publication/download progress.
+
 Current Files details expose the last local placement/audit attempt time, its
 scope (placement, partial audit or full-publication audit), and a bounded typed
 reason. These session observations are not canonical storage reliability or a

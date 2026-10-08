@@ -116,6 +116,18 @@
         <source>Nothing in progress.</source>
         <translation>Aucune opération en cours.</translation>
     </message>
+    <message>
+        <source>Local saves, network progress, and anything that needs you.</source>
+        <translation>Enregistrements locaux, progression réseau et éléments nécessitant votre attention.</translation>
+    </message>
+    <message>
+        <source>Open %1</source>
+        <translation>Ouvrir %1</translation>
+    </message>
+    <message>
+        <source>Showing %1 of %2 tasks. More tasks remain in Mail and Files.</source>
+        <translation>Affichage de %1 tâches sur %2. Les autres restent dans Mail et Fichiers.</translation>
+    </message>
 </context>
 <context>
     <name>CybouApplicationBackend</name>
@@ -632,6 +644,18 @@ Règlement du stockage : %7</translation>
     <message>
         <source>Locally executed candidates: %1 (volatile pool, queue age: %2 s)</source>
         <translation>Candidats exécutés localement : %1 (file volatile, ancienneté : %2 s)</translation>
+    </message>
+    <message>
+        <source>  [%1 local task] %2</source>
+        <translation>  [Tâche locale %1] %2</translation>
+    </message>
+    <message>
+        <source>Mail</source>
+        <translation>Mail</translation>
+    </message>
+    <message>
+        <source>Files</source>
+        <translation>Fichiers</translation>
     </message>
 </context>
 
@@ -1324,6 +1348,34 @@ Règlement du stockage : %7</translation>
     <message>
         <source>Files are unavailable.</source>
         <translation>Les fichiers sont indisponibles.</translation>
+    </message>
+    <message>
+        <source>Saving file changes</source>
+        <translation>Enregistrement des modifications du fichier</translation>
+    </message>
+    <message>
+        <source>Creating folder</source>
+        <translation>Création du dossier</translation>
+    </message>
+    <message>
+        <source>Renaming file</source>
+        <translation>Renommage du fichier</translation>
+    </message>
+    <message>
+        <source>Moving file</source>
+        <translation>Déplacement du fichier</translation>
+    </message>
+    <message>
+        <source>Copying file</source>
+        <translation>Copie du fichier</translation>
+    </message>
+    <message>
+        <source>Moving file to Trash</source>
+        <translation>Déplacement du fichier vers la corbeille</translation>
+    </message>
+    <message>
+        <source>Restoring file</source>
+        <translation>Restauration du fichier</translation>
     </message>
 </context>
 <context>

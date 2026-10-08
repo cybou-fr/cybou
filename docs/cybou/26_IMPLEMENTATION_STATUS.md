@@ -3,6 +3,39 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Shared Mail/Files task panel package (2026-10-08)
+
+The existing header Activity panel now receives correlated local Files command
+progress alongside Mail. Folder creation, rename, move, copy, Trash and Restore
+report actual Queued/Running/Committed/Failed worker states; local acknowledgment
+is distinct from finalized catalog/publication state and remote protection.
+The single application task journal replaces the Mail-only API throughout the
+model, compose/reader, Activity and Console jobs. Scope guards keep file commands
+from changing Mail handoff state. Existing publication retry remains available;
+failed mutations offer their item workflow without automatic intent replay.
+
+The popup scrolls instead of silently stopping at 12 entries. Up to 100 stable
+command/item rows are retained across refresh with button focus and scroll;
+excess tasks receive an explicit notice. Status and tooltip output are bounded
+and use plain text. Completed local saves leave the in-flight list. Terminal
+history retains 32 entries without evicting active work, and pruning the final
+old failure refreshes the indicator. Lock clears tasks and cached private popup
+labels even when hidden; old-session callbacks cannot restore them. File events
+no longer force unrelated Mail Reader refresh. FR copy covers new task actions,
+shared-panel scope and Console task domains.
+
+Validation: isolated GUI and Qt test builds passed. The final full Qt suite
+passed 85 results; six targeted native Windows scenarios passed (eight results
+including setup/cleanup), covering the common panel, local Mail/Files commit
+and Undo, actual core-adapter Mail/Files flows and layout bounds. The shared-task
+regression checks 105 queued tasks, explicit display limits, stable focus/scroll,
+plain-text failure labels and item opening, stale/duplicate replies, hidden popup
+lock cleanup and removal of the last retained failure. Evidence and binary/source
+provenance are in `artifacts/ux-common-tasks-20261008/`. These are local component
+and delivered Qt event checks, not physical input, live-network outage or
+clean-machine acceptance. No live desktop/signer or VPS was restarted/deployed.
+The build cache is restored to its normal output directory.
+
 ## Files local protection observations package (2026-10-08)
 
 Files details distinguish saved remote replica counts from the last local

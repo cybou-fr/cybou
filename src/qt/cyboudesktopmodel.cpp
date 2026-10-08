@@ -341,14 +341,14 @@ void CybouDesktopModel::syncIdentitySession()
     m_session_open = open;
     setApplicationLoad(open && m_backend ? CybouApplicationLoadState::Opening : CybouApplicationLoadState::Closed);
     ++m_mail_generation;
-    m_mail_tasks.clear();
+    m_application_tasks.clear();
     m_mail_ids.clear();
     m_application_refreshing = false;
     m_last_application_refresh = {};
     m_application_refresh_error.clear();
     m_application_refresh_done = {};
     Q_EMIT applicationRefreshChanged();
-    Q_EMIT mailTasksChanged();
+    Q_EMIT applicationTasksChanged();
     if (!open) {
         // Private semantic data never outlives the unlocked Identity.
         const bool had_mail = !m_mail.isEmpty();
@@ -414,7 +414,7 @@ void CybouDesktopModel::setApplicationBackend(CybouApplicationBackend* backend)
         connect(m_backend, &B::mailItemReplaced, this, [this](const QString& old_id, const QString& new_id) {
             if (!m_session_open || old_id == new_id) return;
             m_mail_ids.insert(old_id, new_id);
-            for (auto& task : m_mail_tasks) if (task.related_id == old_id) task.related_id = new_id;
+            for (auto& task : m_application_tasks) if (task.related_id == old_id) task.related_id = new_id;
             bool changed{false};
             for (auto it = m_mail.begin(); it != m_mail.end(); ++it) {
                 if (it->id != old_id) continue;
@@ -593,7 +593,7 @@ void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folde
     const QString title = folder == CybouMailFolder::Archive ? tr("Archiving message")
         : folder == CybouMailFolder::Trash ? tr("Moving message to Trash") : tr("Moving message");
     const QPointer<CybouDesktopModel> guard{this};
-    m_backend->moveMail(id, folder, mailCommand(id, title, [guard, id, folder, done](bool ok, const QString& error) {
+    m_backend->moveMail(id, folder, applicationCommand(id, title, [guard, id, folder, done](bool ok, const QString& error) {
         if (guard && ok) {
             if (const auto* current = guard->mailItem(id)) {
                 auto changed = *current;
@@ -603,7 +603,7 @@ void CybouDesktopModel::requestMoveMail(const QString& id, CybouMailFolder folde
         }
         if (done) done(ok, error);
         else if (!ok && guard) guard->notify(error);
-    }, CybouMailTaskKind::Move));
+    }, CybouTaskKind::Move));
 }
 
 namespace {
@@ -624,27 +624,40 @@ QString PreviewOf(const QString& body)
 }
 } // namespace
 
-std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::mailCommand(
-    const QString& item_id, const QString& title, CommandDone done, CybouMailTaskKind kind, const QString& related_id)
+std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::applicationCommand(
+    const QString& item_id, const QString& title, CommandDone done, CybouTaskKind kind, const QString& related_id, CybouTaskScope scope)
 {
+    if (!m_session_open) {
+        const QPointer<CybouDesktopModel> guard{this};
+        const auto generation = m_mail_generation;
+        const auto terminal = std::make_shared<bool>(false);
+        return [guard, generation, terminal, done = std::move(done)](CybouCommandState state, const QString& error) {
+            if (!guard || (state != CybouCommandState::Committed && state != CybouCommandState::Failed)) return;
+            QTimer::singleShot(0, guard, [guard, generation, terminal, state, error, done] {
+                if (!guard || guard->m_mail_generation != generation || *terminal) return;
+                *terminal = true;
+                if (done) done(state == CybouCommandState::Committed, error);
+            });
+        };
+    }
     const QString command_id = NewLocalId("command");
     const auto generation = m_mail_generation;
-    m_mail_tasks.removeIf([&](const auto& task) { return task.item_id == item_id && task.title == title &&
+    m_application_tasks.removeIf([&](const auto& task) { return task.scope == scope && task.item_id == item_id && task.title == title &&
         (task.state == CybouCommandState::Committed || task.state == CybouCommandState::Failed); });
-    m_mail_tasks.append({command_id, item_id, title, CybouCommandState::Queued, {}, QDateTime::currentDateTime(), kind, related_id});
-    Q_EMIT mailTasksChanged();
+    m_application_tasks.append({command_id, item_id, title, CybouCommandState::Queued, {}, QDateTime::currentDateTime(), kind, related_id, scope});
+    Q_EMIT applicationTasksChanged();
     const QPointer<CybouDesktopModel> guard{this};
     return [guard, generation, command_id, done = std::move(done)](CybouCommandState state, const QString& error) {
         if (!guard) return;
         // Queued delivery also makes synchronous fixtures behave like the worker.
         QTimer::singleShot(0, guard, [guard, generation, command_id, state, error, done] {
             if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
-            auto& tasks = guard->m_mail_tasks;
+            auto& tasks = guard->m_application_tasks;
             const auto it = std::find_if(tasks.begin(), tasks.end(), [&](const auto& task) { return task.id == command_id; });
             if (it == tasks.end() || it->state == CybouCommandState::Committed || it->state == CybouCommandState::Failed) return;
             it->state = state;
             it->error = error;
-            Q_EMIT guard->mailTasksChanged();
+            Q_EMIT guard->applicationTasksChanged();
             // A listener may lock the Identity or destroy the model reentrantly.
             if (!guard || guard->m_mail_generation != generation || !guard->m_session_open) return;
             if (state == CybouCommandState::Committed || state == CybouCommandState::Failed) {
@@ -652,11 +665,13 @@ std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::mailCo
                 else if (state == CybouCommandState::Failed) guard->notify(error);
                 if (!guard || guard->m_mail_generation != generation) return;
                 // Bound completed/failed task retention without dropping active work.
+                const auto retained = tasks.size();
                 int terminal = 0;
                 for (auto i = tasks.end(); i != tasks.begin();) {
                     --i;
                     if ((i->state == CybouCommandState::Committed || i->state == CybouCommandState::Failed) && ++terminal > 32) i = tasks.erase(i);
                 }
+                if (tasks.size() != retained) Q_EMIT guard->applicationTasksChanged();
             }
         });
     };
@@ -673,7 +688,7 @@ QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft, CommandDone
     draft.from_name = m_status.primary_name;
     draft.time = QDateTime::currentDateTime();
     draft.preview = PreviewOf(draft.body);
-    m_backend->saveMailDraft(draft, mailCommand(draft.id, tr("Saving draft"), std::move(done)));
+    m_backend->saveMailDraft(draft, applicationCommand(draft.id, tr("Saving draft"), std::move(done)));
     return draft.id;
 }
 
@@ -685,12 +700,12 @@ void CybouDesktopModel::requestDeleteMail(const QString& id, CommandDone done)
     }
     const QPointer<CybouDesktopModel> guard{this};
     const auto generation = m_mail_generation;
-    m_backend->deleteMail(id, mailCommand(id, id.startsWith(QStringLiteral("draft-")) ? tr("Discarding draft") : tr("Moving message to Trash"), [guard, generation, id, done](bool ok, const QString& error) {
+    m_backend->deleteMail(id, applicationCommand(id, id.startsWith(QStringLiteral("draft-")) ? tr("Discarding draft") : tr("Moving message to Trash"), [guard, generation, id, done](bool ok, const QString& error) {
         if (guard && ok && id.startsWith(QStringLiteral("draft-"))) guard->removeMailItem(id);
         if (!guard || guard->m_mail_generation != generation) return;
         if (done) done(ok, error);
         else if (guard && !ok) guard->notify(error);
-    }, CybouMailTaskKind::Delete));
+    }, CybouTaskKind::Delete));
 }
 
 QString CybouDesktopModel::requestSendMail(CybouMailItem message, CommandDone done)
@@ -714,7 +729,7 @@ QString CybouDesktopModel::requestSendMail(CybouMailItem message, CommandDone do
     // Optimistic Preparing; the backend is the authority from here on and
     // never reports Sent before the content is Protected.
     upsertMailItem(message);
-    m_backend->sendMail(message, draft_id, mailCommand(draft_id, tr("Preparing message"), std::move(done), CybouMailTaskKind::Send, message.id));
+    m_backend->sendMail(message, draft_id, applicationCommand(draft_id, tr("Preparing message"), std::move(done), CybouTaskKind::Send, message.id));
     return message.id;
 }
 
@@ -1679,20 +1694,11 @@ QString CybouDesktopModel::requestFileUpload(const QString& source_path, const Q
     return id;
 }
 
-std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::fileCommand(CommandDone done)
+std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::fileCommand(
+    CommandDone done, const QString& item_id, const QString& title, CybouTaskKind kind, const QString& related_id)
 {
-    const QPointer<CybouDesktopModel> guard{this};
-    const auto generation = m_mail_generation;
-    const auto terminal = std::make_shared<bool>(false);
-    return [guard, generation, terminal, done = std::move(done)](CybouCommandState state, const QString& error) {
-        if (!guard || (state != CybouCommandState::Committed && state != CybouCommandState::Failed)) return;
-        QTimer::singleShot(0, guard, [guard, generation, terminal, state, error, done] {
-            if (!guard || guard->m_mail_generation != generation || *terminal) return;
-            *terminal = true;
-            if (done) done(state == CybouCommandState::Committed, error);
-            else if (state == CybouCommandState::Failed) guard->notify(error);
-        });
-    };
+    return applicationCommand(item_id, title.isEmpty() ? tr("Saving file changes") : title,
+        std::move(done), kind, related_id, CybouTaskScope::Files);
 }
 
 void CybouDesktopModel::requestFileDownload(const QString& file_id, const QString& destination)
@@ -1721,7 +1727,7 @@ QString CybouDesktopModel::requestCreateFolder(const QString& name, const QStrin
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return {};
     }
-    m_backend->createFolder(id, name.trimmed(), parent_id, fileCommand(std::move(done)));
+    m_backend->createFolder(id, name.trimmed(), parent_id, fileCommand(std::move(done), id, tr("Creating folder"), CybouTaskKind::CreateFolder));
     return id;
 }
 
@@ -1731,7 +1737,7 @@ void CybouDesktopModel::requestRenameFile(const QString& id, const QString& name
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return;
     }
-    m_backend->renameFile(id, name.trimmed(), fileCommand(std::move(done)));
+    m_backend->renameFile(id, name.trimmed(), fileCommand(std::move(done), id, tr("Renaming file"), CybouTaskKind::Rename));
 }
 
 void CybouDesktopModel::requestMoveFile(const QString& id, const QString& parent_id, CommandDone done)
@@ -1740,7 +1746,7 @@ void CybouDesktopModel::requestMoveFile(const QString& id, const QString& parent
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return;
     }
-    m_backend->moveFile(id, parent_id, fileCommand(std::move(done)));
+    m_backend->moveFile(id, parent_id, fileCommand(std::move(done), id, tr("Moving file"), CybouTaskKind::Move));
 }
 
 QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& parent_id, CommandDone done)
@@ -1754,7 +1760,7 @@ QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& par
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return {};
     }
-    m_backend->copyFile(id, copy_id, parent_id, fileCommand(std::move(done)));
+    m_backend->copyFile(id, copy_id, parent_id, fileCommand(std::move(done), id, tr("Copying file"), CybouTaskKind::Copy, copy_id));
     return copy_id;
 }
 
@@ -1770,7 +1776,7 @@ void CybouDesktopModel::requestTrashFile(const QString& id, CommandDone done)
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return;
     }
-    m_backend->trashFile(id, fileCommand(std::move(done)));
+    m_backend->trashFile(id, fileCommand(std::move(done), id, tr("Moving file to Trash"), CybouTaskKind::Trash));
 }
 
 void CybouDesktopModel::requestRestoreFile(const QString& id, CommandDone done)
@@ -1779,7 +1785,7 @@ void CybouDesktopModel::requestRestoreFile(const QString& id, CommandDone done)
         fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
         return;
     }
-    m_backend->restoreFile(id, fileCommand(std::move(done)));
+    m_backend->restoreFile(id, fileCommand(std::move(done), id, tr("Restoring file"), CybouTaskKind::Restore));
 }
 
 void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids, CommandDone done)
@@ -1795,7 +1801,7 @@ void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids, Command
     }
     const QPointer<CybouDesktopModel> guard{this};
     const auto generation = m_mail_generation;
-    m_backend->deleteMailForever(trashed, mailCommand(trashed.first(), tr("Deleting messages"), [guard, generation, trashed, done](bool ok, const QString& error) {
+    m_backend->deleteMailForever(trashed, applicationCommand(trashed.first(), tr("Deleting messages"), [guard, generation, trashed, done](bool ok, const QString& error) {
         if (ok) for (const auto& id : trashed) {
             if (!guard || guard->m_mail_generation != generation) return;
             guard->removeMailItem(id);
@@ -1803,7 +1809,7 @@ void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids, Command
         if (!guard || guard->m_mail_generation != generation) return;
         if (done) done(ok, error);
         else if (guard && !ok) guard->notify(error);
-    }, CybouMailTaskKind::Delete));
+    }, CybouTaskKind::Delete));
 }
 
 void CybouDesktopModel::requestDeleteFile(const QString& id)

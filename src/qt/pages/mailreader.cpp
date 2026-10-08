@@ -257,12 +257,14 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
-    connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
-        const auto& tasks = m_model->mailTasks();
-        if (!std::any_of(tasks.begin(), tasks.end(), [this](const auto& task) {
-            return task.item_id == m_moving_id && task.kind == CybouMailTaskKind::Move &&
+    connect(m_model, &CybouDesktopModel::applicationTasksChanged, this, [this] {
+        if (m_moving_id.isEmpty()) return;
+        const auto& tasks = m_model->applicationTasks();
+        if (std::any_of(tasks.begin(), tasks.end(), [this](const auto& task) {
+            return task.scope == CybouTaskScope::Mail && task.item_id == m_moving_id && task.kind == CybouTaskKind::Move &&
                 (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running);
-        })) m_moving_id.clear();
+        })) return;
+        m_moving_id.clear();
         refresh();
     });
     connect(m_model, &CybouDesktopModel::mailIdReplaced, this, [this](const QString& old_id, const QString& new_id) {

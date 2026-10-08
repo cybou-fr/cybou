@@ -18,17 +18,19 @@
  */
 
 /** Local application commands never imply PoA finality. */
-enum class CybouMailTaskKind { DraftSave, Move, Send, Delete };
+enum class CybouTaskScope { Mail, Files };
+enum class CybouTaskKind { DraftSave, Move, Send, Delete, CreateFolder, Rename, Copy, Trash, Restore };
 enum class CybouCommandState { Queued, Running, Committed, Failed };
-struct CybouMailTask {
+struct CybouApplicationTask {
     QString id;
     QString item_id;
     QString title;
     CybouCommandState state{CybouCommandState::Queued};
     QString error;
     QDateTime started;
-    CybouMailTaskKind kind{CybouMailTaskKind::DraftSave};
+    CybouTaskKind kind{CybouTaskKind::DraftSave};
     QString related_id;
+    CybouTaskScope scope{CybouTaskScope::Mail};
 };
 
 /** Identity lifecycle as surfaced to the UI (one Identity per user). */
