@@ -26,6 +26,7 @@
 
 #include <QCryptographicHash>
 #include <QFileInfo>
+#include <QSet>
 #include <QHash>
 #include <QPointer>
 #include <QLocale>
@@ -1871,8 +1872,17 @@ bool MutateFile(QVector<CybouFileItem>& files, const QString& id, F mutate)
 
 std::optional<CybouAttachmentItem> CybouDesktopModel::attachmentFromFile(const QString& file_id) const
 {
+    if (!filesReady()) return std::nullopt;
     const auto* file = fileItem(file_id);
     if (!file || file->folder || file->trashed || file->state != CybouContentState::Protected) return std::nullopt;
+    QSet<QString> seen{file_id};
+    for (QString parent = file->parent_id; !parent.isEmpty();) {
+        if (seen.contains(parent)) return std::nullopt;
+        seen.insert(parent);
+        const auto* folder = fileItem(parent);
+        if (!folder || !folder->folder || folder->trashed) return std::nullopt;
+        parent = folder->parent_id;
+    }
     CybouAttachmentItem attachment;
     attachment.id = QStringLiteral("ref-") + file->id;
     attachment.name = file->name;

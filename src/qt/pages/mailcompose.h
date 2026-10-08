@@ -14,10 +14,12 @@
 class CybouDesktopModel;
 class QCompleter;
 class QDragEnterEvent;
+class QDragMoveEvent;
 class QDragLeaveEvent;
 class QDropEvent;
 class QLabel;
 class QLineEdit;
+class QMimeData;
 class QPushButton;
 class QTextEdit;
 class QToolButton;
@@ -54,7 +56,9 @@ public:
     bool hasContent() const;
 
 protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
     void dragLeaveEvent(QDragLeaveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
 
@@ -86,6 +90,9 @@ private:
     quint64 m_saved_revision{0};
     quint64 m_compose_generation{0};
     void edited();
+    bool canEditAttachments() const;
+    bool droppedAttachments(const QMimeData* data, QVector<CybouAttachmentItem>& attachments, QString& error) const;
+    void handleAttachmentDrop(QDropEvent* event, bool commit);
     void saveDraft(bool close);
     void clearCompose();
 

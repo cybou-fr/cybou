@@ -15,6 +15,8 @@
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QMimeData>
+#include <QDragMoveEvent>
+#include <QFileInfo>
 #include <QMenu>
 #include <QHeaderView>
 #include <QTreeWidget>
@@ -123,6 +125,8 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_body->setPlaceholderText(tr("Write your message"));
     m_body->setTabChangesFocus(true);
     root->addWidget(m_body, 1);
+    for (auto* target : {static_cast<QWidget*>(m_to), static_cast<QWidget*>(m_subject),
+             static_cast<QWidget*>(m_body), m_body->viewport()}) target->installEventFilter(this);
 
     // Attachments: local until Send, then one RootPublication with the text.
     m_attachment_area = new QWidget{this};
@@ -131,6 +135,7 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_attachment_rows->setSpacing(6);
     root->addWidget(m_attachment_area);
     m_drop_hint = MutedText(tr("Drop files to attach them"), this);
+    m_drop_hint->setObjectName(QStringLiteral("composeDropHint"));
     m_drop_hint->setAlignment(Qt::AlignCenter);
     m_drop_hint->setStyleSheet(QStringLiteral("border: 2px dashed %1; border-radius: 10px; padding: 18px; color: %2;")
         .arg(CybouTheme::color(CybouTheme::MINT).name(), CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
@@ -298,7 +303,7 @@ bool MailCompose::hasContent() const
 
 void MailCompose::addAttachments(const QStringList& paths)
 {
-    if (m_sending || m_close_requested) return;
+    if (!canEditAttachments()) return;
     for (const auto& path : paths) {
         if (path.isEmpty()) continue;
         m_attachments.append(m_model->localAttachment(path));
@@ -310,7 +315,8 @@ void MailCompose::addAttachments(const QStringList& paths)
 
 void MailCompose::addProtectedAttachment(const CybouAttachmentItem& attachment)
 {
-    if (m_sending || m_close_requested) return;
+    if (!canEditAttachments() || std::any_of(m_attachments.begin(), m_attachments.end(),
+            [&](const auto& current) { return current.id == attachment.id; })) return;
     m_attachments.append(attachment);
     rebuildAttachments();
     updateGates();
@@ -319,6 +325,7 @@ void MailCompose::addProtectedAttachment(const CybouAttachmentItem& attachment)
 
 void MailCompose::chooseCybouFiles()
 {
+    if (!canEditAttachments()) return;
     QDialog dialog{this};
     dialog.setObjectName(QStringLiteral("cybouFilePicker"));
     dialog.setWindowTitle(tr("Attach from CYBOU Files"));
@@ -422,30 +429,99 @@ void MailCompose::rebuildAttachments()
     }
 }
 
-void MailCompose::dragEnterEvent(QDragEnterEvent* event)
+bool MailCompose::canEditAttachments() const
 {
-    if (event->mimeData()->hasUrls()) {
-        m_drop_hint->setVisible(true);
-        event->acceptProposedAction();
-    }
+    return !m_sending && !m_close_requested && m_model->status().identity_state == CybouIdentityState::Active &&
+        m_model->featureAvailability().mail;
 }
 
-void MailCompose::dragLeaveEvent(QDragLeaveEvent* event)
+bool MailCompose::droppedAttachments(const QMimeData* data, QVector<CybouAttachmentItem>& attachments, QString& error) const
 {
-    m_drop_hint->setVisible(false);
-    QFrame::dragLeaveEvent(event);
+    if (!canEditAttachments()) {
+        error = tr("Attachments are unavailable while Mail is locked or busy.");
+        return false;
+    }
+    QSet<QString> seen;
+    if (data->hasFormat(fileIdsMime())) {
+        const auto ids = dragIds(data, fileIdsMime());
+        if (ids.isEmpty()) { error = tr("Choose protected files in Files before attaching them."); return false; }
+        for (const auto& id : ids) {
+            if (seen.contains(id)) continue;
+            seen.insert(id);
+            const auto attachment = m_model->attachmentFromFile(id);
+            if (!attachment) { error = tr("Some files are unavailable or not protected yet. Open Files to check them."); return false; }
+            if (std::none_of(m_attachments.begin(), m_attachments.end(),
+                    [&](const auto& current) { return current.id == attachment->id; })) attachments.append(*attachment);
+        }
+    } else {
+        for (const auto& url : data->urls()) {
+            if (!url.isLocalFile() || !QFileInfo{url.toLocalFile()}.isFile()) {
+                error = tr("Drop local files, or choose protected content from Files.");
+                return false;
+            }
+            const auto path = url.toLocalFile();
+            if (seen.contains(path)) continue;
+            seen.insert(path);
+            if (std::none_of(m_attachments.begin(), m_attachments.end(),
+                    [&](const auto& current) { return current.source_path == path; })) attachments.append(m_model->localAttachment(path));
+        }
+        if (data->urls().isEmpty()) return false;
+    }
+    // The current private Mail schema accepts at most 32 attachments.
+    if (m_attachments.size() + attachments.size() > 32) {
+        error = tr("A message can have up to 32 attachments. Choose fewer files.");
+        return false;
+    }
+    return true;
 }
 
-void MailCompose::dropEvent(QDropEvent* event)
+void MailCompose::handleAttachmentDrop(QDropEvent* event, bool commit)
 {
-    m_drop_hint->setVisible(false);
-    QStringList paths;
-    for (const auto& url : event->mimeData()->urls()) {
-        if (url.isLocalFile()) paths << url.toLocalFile();
+    QVector<CybouAttachmentItem> added;
+    QString error;
+    const bool accepted = droppedAttachments(event->mimeData(), added, error);
+    m_drop_hint->setText(accepted ? (event->mimeData()->hasFormat(fileIdsMime())
+        ? tr("Attach protected Files without uploading them again") : tr("Drop files to attach them")) : error);
+    m_drop_hint->setVisible(!commit && canEditAttachments() && (accepted || !error.isEmpty()));
+    if (!accepted) {
+        event->ignore();
+        if (commit && !error.isEmpty()) m_send_hint->setText(error);
+        return;
     }
-    addAttachments(paths);
+    if (commit && !added.isEmpty()) {
+        m_attachments += added;
+        rebuildAttachments();
+        updateGates();
+        edited();
+    }
     event->acceptProposedAction();
 }
+
+bool MailCompose::eventFilter(QObject* watched, QEvent* event)
+{
+    if (event->type() == QEvent::DragLeave) m_drop_hint->hide();
+    if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove || event->type() == QEvent::Drop) {
+        auto* drop = static_cast<QDropEvent*>(event);
+        // File payloads attach even over editors; ordinary text dragging keeps
+        // the editor's normal behavior.
+        const auto* data = drop->mimeData();
+        const auto urls = data->urls();
+        if (data->hasFormat(fileIdsMime()) || std::any_of(urls.begin(), urls.end(), [](const auto& url) { return url.isLocalFile(); })) {
+            handleAttachmentDrop(drop, event->type() == QEvent::Drop);
+            return true;
+        }
+    }
+    return QFrame::eventFilter(watched, event);
+}
+
+void MailCompose::dragEnterEvent(QDragEnterEvent* event) { handleAttachmentDrop(event, false); }
+void MailCompose::dragMoveEvent(QDragMoveEvent* event) { handleAttachmentDrop(event, false); }
+void MailCompose::dragLeaveEvent(QDragLeaveEvent* event)
+{
+    m_drop_hint->hide();
+    QFrame::dragLeaveEvent(event);
+}
+void MailCompose::dropEvent(QDropEvent* event) { handleAttachmentDrop(event, true); }
 
 const CybouContact* MailCompose::resolvedContact() const
 {

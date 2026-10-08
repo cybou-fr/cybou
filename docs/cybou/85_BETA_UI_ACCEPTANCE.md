@@ -198,6 +198,13 @@ trust and resilience without becoming mandatory UI concepts.
 
 ## 12. Durable local actions and draft loss prevention
 
+The 2026-10-08 Compose drop package exercises reusable protected Files over the
+editor, duplicate/mixed MIME batches, unavailable/pending/Trash sources, source
+changes during drag, lock and in-flight send gates. Core integration saves a
+reference draft across session closure and reopens it before sending exact
+attachment bytes; removing the source before preparation retains the draft on
+failure. Qt event routing is automated evidence, not physical mouse acceptance.
+
 The 2026-10-08 Files implementation includes delayed/failed acknowledgment,
 partial move and stale-session regressions. Core-adapter integration additionally
 queues a forward move and its inverse before finality, including Trash back to

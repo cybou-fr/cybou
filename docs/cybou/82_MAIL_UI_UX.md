@@ -65,6 +65,22 @@ local labels, reply/reply-all/forward, blocked senders, local search, and
 `.cybou` contact autocomplete. Keyboard shortcuts follow after the primary
 accessible mouse and keyboard flows are complete.
 
+Compose accepts protected Files drags by internal item ID, including drops over
+the message editor. It adds one reusable reference per file without a local
+source path; duplicate IDs do not add duplicate attachments. Internal IDs take
+precedence over downloaded URLs, so refused references never silently become
+new local uploads. All items in a dropped batch must be eligible: pending,
+missing, folders and content in Trash are refused with an explanation. Drop
+revalidates the source and active Mail session; handoff/close blocks attachment
+changes. Local file drops remain available. Dropped batches respect the current
+32-attachment Mail bound.
+
+An acknowledged draft persists the reference ID, not a new retention guarantee
+for its Files source. Sending must still resolve that source at preparation.
+If it was removed before durable outgoing handoff, preparation fails and keeps
+the draft; it does not substitute a downloaded copy. Finalization and remote
+durability retain their existing separate delivery states.
+
 See also:
 
 - `81_BETA_PRODUCT_SCOPE.md` — Beta product boundary;

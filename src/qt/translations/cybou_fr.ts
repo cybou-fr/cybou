@@ -3656,6 +3656,30 @@ Objet : %3
         <source>Discarding draft…</source>
         <translation>Suppression du brouillon…</translation>
     </message>
+    <message>
+        <source>Attachments are unavailable while Mail is locked or busy.</source>
+        <translation>Les pièces jointes sont indisponibles lorsque Mail est verrouillé ou occupé.</translation>
+    </message>
+    <message>
+        <source>Choose protected files in Files before attaching them.</source>
+        <translation>Choisissez des fichiers protégés dans les fichiers CYBOU avant de les joindre.</translation>
+    </message>
+    <message>
+        <source>Some files are unavailable or not protected yet. Open Files to check them.</source>
+        <translation>Certains fichiers sont indisponibles ou ne sont pas encore protégés. Ouvrez les fichiers CYBOU pour les vérifier.</translation>
+    </message>
+    <message>
+        <source>Drop local files, or choose protected content from Files.</source>
+        <translation>Déposez des fichiers locaux ou choisissez du contenu protégé dans les fichiers CYBOU.</translation>
+    </message>
+    <message>
+        <source>A message can have up to 32 attachments. Choose fewer files.</source>
+        <translation>Un message peut contenir jusqu’à 32 pièces jointes. Choisissez moins de fichiers.</translation>
+    </message>
+    <message>
+        <source>Attach protected Files without uploading them again</source>
+        <translation>Joindre des fichiers CYBOU protégés sans les téléverser à nouveau</translation>
+    </message>
 </context>
 <context>
     <name>MailReader</name>

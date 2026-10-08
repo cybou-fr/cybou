@@ -3,6 +3,29 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Protected Files into Compose package (2026-10-08)
+
+Compose now accepts internal Files drag IDs over its surface and text editors,
+adding reusable references without a local source path. Duplicate sources are
+deduplicated; all dropped references must currently be eligible. Pending,
+missing, folders, content inside Trash and closed sessions are refused. Source
+eligibility is rechecked on drop; send/close handoff blocks attachment changes.
+Internal MIME takes precedence over downloaded URLs, so refusal never becomes
+a local re-upload. Local file drops remain supported and dropped batches respect
+the current 32-attachment schema bound. FR copy explains reuse and refusal.
+
+Validation: isolated application/test build and the full Qt suite passed 83
+tests. Native Windows targeted scenarios passed at Qt scale factors 1.00, 1.25,
+1.50 and 2.00. UI regressions cover editor routing, duplicate/mixed payloads,
+source changes, pending/Trash/missing items, busy/lock and draft acknowledgment.
+The core adapter test persists a reference draft through session closure before
+successful delivery and exact-byte download. Source removal before preparation
+refuses sending while retaining the acknowledged draft. This is not a new draft
+retention guarantee or physical OS/mixed-monitor drag acceptance. The first UI
+test run exposed an incorrect test-double projection expectation; its original
+log is retained alongside the corrected runs in
+`artifacts/ux-compose-drops-20261008/`. No live desktop or signer was restarted.
+
 ## Files drop routing and Qt scale validation package (2026-10-08)
 
 Files list/grid, breadcrumbs and navigation now share target validation with

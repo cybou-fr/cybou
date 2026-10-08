@@ -35,6 +35,7 @@ private Q_SLOTS:
     void composeGatesAndSends();
     void replyUsesCompleteIdentityAddress();
     void composeSelectsProtectedCybouFiles();
+    void composeDropReusesProtectedFilesAndRejectsFallback();
     void mailFilesCrossProduct();
     void walletPageShowsBalances();
     void walletLocksBalanceIntoSystemBalance();

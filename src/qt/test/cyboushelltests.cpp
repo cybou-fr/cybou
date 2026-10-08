@@ -162,6 +162,7 @@ T* FindById(QWidget* parent, const QString& id)
 class RecordingBackend final : public CybouApplicationBackend
 {
 public:
+    CybouMailItem last_draft;
     CommandProgress refresh_result;
     void refreshProjection(CommandProgress progress) override { commands << QStringLiteral("refresh"); refresh_result = std::move(progress); }
     using CybouApplicationBackend::CybouApplicationBackend;
@@ -181,7 +182,7 @@ public:
     bool filesAvailable() const override { return available; }
     void openIdentity() override { open = true; commands << QStringLiteral("open"); if (!delay_load) Q_EMIT applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {}); }
     void closeIdentity() override { open = false; commands << QStringLiteral("close"); }
-    void saveMailDraft(const CybouMailItem& d, CommandProgress progress = {}) override { commands << QStringLiteral("draft:") + d.id; draft_results.insert(d.id, progress); }
+    void saveMailDraft(const CybouMailItem& d, CommandProgress progress = {}) override { last_draft = d; commands << QStringLiteral("draft:") + d.id; draft_results.insert(d.id, progress); }
     void sendMail(const CybouMailItem& m, const QString& draft_id = {}, CommandProgress progress = {}) override { commands << QStringLiteral("send:") + m.id; send_result = progress; send_draft_id = draft_id; }
     void retryMail(const QString& id) override { commands << QStringLiteral("retry:") + id; }
     void setMailRead(const QString& id, bool) override { commands << QStringLiteral("read:") + id; }
@@ -591,6 +592,124 @@ void CybouShellTests::composeSelectsProtectedCybouFiles()
     QVERIFY(!model->attachmentFromFile(trashed.id));
     model->setFileItems({});
     QCOMPARE(mail->composer()->snapshotForRebuild().attachments.first().id,selected.id);
+}
+
+void CybouShellTests::composeDropReusesProtectedFilesAndRejectsFallback()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    auto ready = ProtectedFile(QStringLiteral("ready"), QStringLiteral("Report.pdf"));
+    auto pending = ready;
+    pending.id = QStringLiteral("pending");
+    pending.state = CybouContentState::Securing;
+    auto folder = ready;
+    folder.id = QStringLiteral("folder");
+    folder.folder = true;
+    folder.trashed = true;
+    auto hidden = ready;
+    hidden.id = QStringLiteral("hidden");
+    hidden.parent_id = folder.id;
+    model.setFileItems({ready, pending, folder, hidden});
+    MailCompose composer{&model};
+    composer.resize(800, 650);
+    composer.show();
+    composer.start();
+    auto* body = composer.findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    auto* hint = composer.findChild<QLabel*>(QStringLiteral("composeDropHint"));
+    QVERIFY(body && hint);
+    body->setPlainText(QStringLiteral("Keep this body"));
+    QTemporaryFile downloaded;
+    QVERIFY(downloaded.open());
+    QMimeData data;
+    data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("ready\nready"));
+    data.setUrls({QUrl::fromLocalFile(downloaded.fileName())});
+    const auto enter = [](QWidget* target, QMimeData& mime) {
+        QDragEnterEvent event{QPoint{10, 10}, Qt::CopyAction | Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(target, &event);
+        return event.isAccepted();
+    };
+    const auto drop = [](QWidget* target, QMimeData& mime) {
+        QDropEvent event{QPointF{10, 10}, Qt::CopyAction | Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(target, &event);
+        return event.isAccepted();
+    };
+    // Drop directly over the editor: keep the body, attach one reusable reference.
+    QVERIFY(enter(body->viewport(), data));
+    QVERIFY(drop(body->viewport(), data));
+    QCOMPARE(body->toPlainText(), QStringLiteral("Keep this body"));
+    QCOMPARE(composer.attachments().size(), 1);
+    QCOMPARE(composer.attachments().first().id, QStringLiteral("ref-ready"));
+    QVERIFY(composer.attachments().first().source_path.isEmpty());
+    QVERIFY(enter(&composer, data));
+    QVERIFY(drop(&composer, data));
+    QCOMPARE(composer.attachments().size(), 1);
+    // All-or-nothing batches and internal MIME precedence: never use the URL fallback.
+    for (const auto& ids : {QByteArrayLiteral("ready\npending"), QByteArrayLiteral("hidden"),
+             QByteArrayLiteral("missing"), QByteArrayLiteral("folder"), QByteArray{}}) {
+        data.setData(CybouUi::fileIdsMime(), ids);
+        QVERIFY(!enter(&composer, data));
+        QCOMPARE(composer.attachments().size(), 1);
+        QVERIFY(!hint->text().isEmpty());
+    }
+    QVERIFY(!model.attachmentFromFile(hidden.id));
+    data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("ready"));
+    QVERIFY(enter(body->viewport(), data));
+    ready.trashed = true;
+    model.upsertFileItem(ready);
+    QVERIFY(!drop(body->viewport(), data)); // source changed during drag
+    QCOMPARE(composer.attachments().size(), 1);
+    QCOMPARE(body->toPlainText(), QStringLiteral("Keep this body"));
+    ready.trashed = false;
+    model.upsertFileItem(ready);
+    QTRY_VERIFY(!backend.draft_results.isEmpty());
+    const QString draft_id = backend.draft_results.constBegin().key();
+    backend.draft_results.value(draft_id)(CybouCommandState::Committed, {});
+    QTRY_COMPARE(composer.findChild<QLabel*>(QStringLiteral("draftSaveStatus"))->text(), QStringLiteral("Draft saved on this computer"));
+    QCOMPARE(backend.last_draft.attachments.first().id, QStringLiteral("ref-ready"));
+    QVERIFY(backend.last_draft.attachments.first().source_path.isEmpty());
+    // Local drops still attach paths; remote-only URLs and oversized batches refuse.
+    QMimeData local;
+    local.setUrls({QUrl::fromLocalFile(downloaded.fileName())});
+    QVERIFY(enter(body->viewport(), local));
+    QVERIFY(drop(body->viewport(), local));
+    QCOMPARE(composer.attachments().size(), 2);
+    QCOMPARE(composer.attachments().last().source_path, downloaded.fileName());
+    QMimeData remote;
+    remote.setUrls({QUrl{QStringLiteral("https://example.invalid/file.pdf")}});
+    QVERIFY(!enter(&composer, remote));
+    QVector<CybouFileItem> many{ready};
+    QStringList ids;
+    for (int i = 0; i < 32; ++i) {
+        auto next = ready;
+        next.id = QStringLiteral("file-%1").arg(i);
+        ids.append(next.id);
+        many.append(next);
+    }
+    model.setFileItems(many);
+    data.setData(CybouUi::fileIdsMime(), ids.join(QLatin1Char{'\n'}).toUtf8());
+    QVERIFY(!enter(&composer, data));
+    QCOMPARE(composer.attachments().size(), 2);
+    data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("ready"));
+    auto* to = composer.findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+    auto* send = composer.findChild<QPushButton*>(QStringLiteral("sendButton"));
+    QVERIFY(to && send);
+    to->setText(QString(64, QLatin1Char{'a'}));
+    QVERIFY(send->isEnabled());
+    send->click();
+    QVERIFY(static_cast<bool>(backend.send_result));
+    QVERIFY(!enter(&composer, data)); // durable handoff is in progress
+    QCOMPARE(composer.attachments().size(), 2);
+    backend.send_result(CybouCommandState::Failed, QStringLiteral("Preparation failed"));
+    QTRY_VERIFY(send->isEnabled());
+    QCOMPARE(body->toPlainText(), QStringLiteral("Keep this body"));
+    QVERIFY(enter(body->viewport(), data));
+    model.requestLockVault();
+    QVERIFY(!drop(body->viewport(), data));
+    QVERIFY(!model.attachmentFromFile(ready.id));
+    QCOMPARE(composer.attachments().size(), 2);
 }
 
 void CybouShellTests::mailFilesCrossProduct()
@@ -2971,7 +3090,20 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     reference.logical_size = quint64(contract.size());
     reference.state = CybouContentState::Protected;
     forward.attachments.append(reference);
-    QVERIFY(!bob_model->requestSendMail(forward).isEmpty());
+    bool forward_saved = false;
+    const QString forward_draft = bob_model->requestSaveMailDraft(forward, [&](bool ok, const QString& error) {
+        QVERIFY2(ok, qPrintable(error));
+        forward_saved = true;
+    });
+    QTRY_VERIFY(forward_saved);
+    bob_model->setIdentityState(CybouIdentityState::Locked, bob_id, 1);
+    bob_model->setIdentityState(CybouIdentityState::Active, bob_id, 1);
+    QTRY_VERIFY(bob_model->mailItem(forward_draft));
+    const auto restored_forward = *bob_model->mailItem(forward_draft);
+    QCOMPARE(restored_forward.attachments.size(), 1);
+    QCOMPARE(restored_forward.attachments.first().id, reference.id);
+    QVERIFY(restored_forward.attachments.first().source_path.isEmpty());
+    QVERIFY(!bob_model->requestSendMail(restored_forward).isEmpty());
     const auto alice_forward = [&]() -> const CybouMailItem* {
         for (const auto& item : alice_model->mailItems()) {
             if (item.subject == QStringLiteral("Fwd: Contract") && item.folder == CybouMailFolder::Inbox) {
@@ -3014,6 +3146,25 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
         QVERIFY(in.open(QIODevice::ReadOnly));
         QCOMPARE(in.readAll(), contract);
     }
+
+    // Removing the source before preparation refuses reuse and retains the
+    // acknowledged draft instead of silently substituting downloaded plaintext.
+    auto missing_source_draft = forward;
+    missing_source_draft.subject = QStringLiteral("Source removed");
+    bool missing_source_saved = false;
+    const QString missing_source_id = bob_model->requestSaveMailDraft(missing_source_draft,
+        [&](bool ok, const QString& error) { QVERIFY2(ok, qPrintable(error)); missing_source_saved = true; });
+    QTRY_VERIFY(missing_source_saved);
+    bob_model->requestDeleteFile(saved_id);
+    QTRY_VERIFY(!bob_model->fileItem(saved_id));
+    bool source_refused = false;
+    const QString failed_reuse = bob_model->requestSendMail(*bob_model->mailItem(missing_source_id),
+        [&](bool ok, const QString& error) { QVERIFY(!ok); QVERIFY(!error.isEmpty()); source_refused = true; });
+    QVERIFY(!failed_reuse.isEmpty());
+    QTRY_VERIFY(source_refused);
+    QVERIFY(bob_model->mailItem(missing_source_id));
+    QCOMPARE(bob_model->mailItem(missing_source_id)->body, forward.body);
+    QCOMPARE(bob_model->mailItem(missing_source_id)->attachments.first().id, reference.id);
 
     // Drafts persist in the encrypted Application DB across a lock/unlock and
     // are deleted locally; they are never published.
