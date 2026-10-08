@@ -1,286 +1,73 @@
-# Built-in Network observability
+# Built-in Network monitoring — Beta scope
 
-Status: active Level 4 delivery plan and Level 5 metric proposal, 2026-10-08.
-User priority: continuously collect and consolidate actual network data in
-CYBOU and present it on Network, with Console details. This is standard
-production functionality, without Grafana, Prometheus, an external collector
-or generated load. Collection continues while the page is hidden; presentation
-pauses. This plan does not claim that complete collectors or remote reporting are
-implemented and introduces no wire messages or canonical state fields.
+Status: active Level 4 delivery boundary and Level 5 metric contract, 2026-10-09.
+DEC-289 freezes Beta monitoring to passive local measurements and evidence
+naturally produced by the existing chain, P2P and storage protocols. No separate
+remote telemetry protocol, report cache, polling worker, address-group aggregation
+or cohort history is part of the active runtime. Git retains the former design.
 
-## Metrics on Network
+## Frozen metric set
 
-Navigation and page title are Network / Réseau. DEVNET remains the active
-compiled network label; France admission remains a scoped detail.
-A shared bounded observation model feeds summary cards, time-series charts,
-peer details, Monitor and read-only Console independently of Identity unlock.
+| Metric | Source and scope |
+|---|---|
+| Status / safety halt / sync | This Full Node's runtime and verified state; peer sync is only a liveness hint |
+| Finalized height | Locally independently verified PoA-finalized chain |
+| Connected peers | Current admitted local mesh sessions; not a network census |
+| Finalized operations/min | One verified stream, completed 1/5/15-minute local arrival windows; historical imports separate |
+| Local storage | Explicit V, accounted encrypted copies, admitted provider bytes/budget and available filesystem bytes |
+| PUT/GET payload | Completed encrypted transfers, receive/send totals and 60-complete-second rates; repeats included |
+| Content protection | Existing Identity-scoped Mail/Files durability model and storage-service evidence |
+| Candidate pool / uptime | Actual volatile local pool and runtime lifetime, in Technical/Console |
+| CPU / RAM / frame traffic | Local Technical/Console diagnostics; no remote values or network load score |
 
-| Metric | Source and meaning | Evidence boundary |
-|---|---|---|
-| Finalized operations/min | Unique operations in independently verified blocks, over declared 1/5/15-minute windows | One chain stream, never summed across peers; historical sync separate from live observation; declare completeness and verified height |
-| CYBOU frame traffic | Actual TLS application frame received/sent bytes/s, including service, retry and observation traffic; separate local completed PUT/GET encrypted payload counters | Local first, then reporting cohort; summed send+receive counts both ends, not unique useful delivery |
-| Stored encrypted copies | Accounted encrypted ChunkBlobStore lengths locally and declared by selected reporting address groups | Physical copies include replicas/cache; not unique logical content or verified remote durability |
-| Register and rented volume | Active finalized publications, authorized billing units and active lease units at a verified cursor | Units times 512 KiB are billed allocation, not measured plaintext or physical bytes; never sum identical registers from peers |
-| Storage capacity | V, physical use/headroom, provider budget floor(2V/3), admitted provider bytes/budget headroom and actual local disk free space | Policy and physical limits stay separate; cohort sums are declared capacity, not complete network totals |
-| Potential usable storage | Headroom constrained by provider budget, physical store, disk reserve and eligible remote replica pairs | Scoped estimate only after placement/deduplication evidence exists; sum V divided by two cannot establish usable Beta capacity |
-| Load | CYBOU process CPU/memory, storage I/O, queue depth/age and admission/transfer errors; host metrics separately | Normalize CPU by available processors; mean with sample count; capacity utilization = sum used / sum capacity; no synthetic universal load score |
-| Node health | Running/initialized, safety halt, admission readiness, session reachability and storage failures | Reasons and age; remote resources self-reported; silence or old block alone cannot establish a network outage |
-| Potential operation throughput | Accepted historical sustained workload ceiling with latency/failure gates, topology/build/date | Separate from present rate; idle observations or spare CPU cannot establish a maximum; unavailable ceiling stays Unknown |
+A complete quiet window may be zero. Startup, missing/failed samples and partial
+windows stay Unknown. Measurements reset with the runtime, carry its network
+binding/sample time, and retain no peer/user/content identifiers in metric history.
+The existing diagnostics sampler continues independently of Identity unlock and
+Network visibility. Reading the UI triggers no transfer, proof, audit or benchmark.
 
-Every value carries NetworkBinding, source, scope, window/time, sample count,
-completeness and stale/unknown state. A complete quiet window may be zero;
-gaps, restart and catch-up must not silently become zero. A network p95 requires
-real latency samples or mergeable distributions, not averaged per-node p95.
-Queues remain volatile local observations, not canonical pending state.
+PUT receive counts successful admission; PUT send requires a matching verified
+provider receipt. GET receive requires complete ChunkID verification; GET send
+means a complete local write, without proof of remote receipt. Completion-time
+windows include recovery/repair/full GET checks and repeat transfers. Endpoint
+totals can differ. Frame traffic includes service/retries and excludes TLS/TCP
+headers; it is separate from completed encrypted payload.
 
-## Collection and consolidation design
+Storage V and physical use are not unique logical content, verified durability,
+service-eligible remote capacity or consensus rights. Available shared disk space
+is not a promised allocation. Peer reachability/height are not PoA authority,
+independent failure domains or proof of global freshness. Storage evidence remains
+service-owned; GUI pages do not enumerate provider databases or the common store.
 
-Instrument existing commit, relay and storage-transfer paths with bounded
-passive counters. Use monotonic elapsed time for rates and UTC for display.
-Count accepted finalized operations once; duplicate delivery never increments.
-Conflict replacement invalidates/reconciles the affected window. Historical
-catch-up has its own series rather than a burst of current network production.
+## Presentation
 
-Proposed initial retention: five-second buckets for 30 minutes and one-minute
-buckets for 24 hours, bounded in memory; restart starts a new window. Measure
-sampler cost and cap cardinality. Persistence needs a separate privacy/storage
-design. Refresh reads the shared snapshot without scanning history, enumerating
-foreign objects, triggering storage proofs, audits, repair or benchmarks.
+Network / Réseau presents connection/chain progress, storage, transfers and
+existing content protection. Local CPU/RAM, uptime, candidate pool, frame traffic,
+peer table, StorageIds, state root and NetworkBinding belong in Advanced/Technical
+or Console. The illustrative France map is an observed-connection view only.
 
-Remote consolidation is required work. Before transport changes, freeze a
-Level 1/2 design for minimized reports. DEC-289 and
-[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md) now freeze the
-first direct-report target: fixed bounds, polling/rate limits, expiration,
-network/session binding and address grouping across session churn. Relayed
-reports and deduplication across different addresses remain open. No new protocol NodeID, capability bitmap,
-provider registry or PoA route. Distinguish direct and relayed provenance;
-authentication establishes a reporter, not truthful disk/CPU/service values
-or independent physical hosts. Bootstrap has no special aggregation authority.
+Keep at most two local bounded charts: finalized operations and completed PUT/GET
+payload receive/send. Both use completed five-second intervals, at most 180 points
+(15 minutes) in volatile RAM. No network CPU, frame-traffic or capacity chart.
+Console `health`, `metrics` and `capacity` remain read-only and match local sources.
 
-Remote totals remain unavailable until that design and implementation exist.
-Then show fresh reporting address groups and expired/missing/limited coverage;
-this is not a deduplicated process/host census. Fraction of the whole network
-stays unknown without a census source.
-Observations grant no placement weight, payouts or finality power. Avoid public
-endpoint histories, Identity links, filenames, recipients and content IDs in
-time series. Canonical streams/registers must never be added across reporters.
+## Addition gate
 
-## Small implementation batches
+The Beta metric set is frozen. Do not automatically continue the former queue of
+storage I/O, queue age, error counters, canonical register totals, resource history,
+remote consolidation or theoretical capacity estimates. A proposed addition must
+answer a concrete operator/product question (for example, why this publication
+cannot obtain a replica), identify an existing trustworthy source, define its
+scope/cost/privacy and receive an explicit scope decision before implementation.
 
-Current local delivery: timestamp/uptime, candidate-pool count/bytes, passive
-frame traffic, operation observation windows and bounded charts, process memory,
-normalized process CPU/completed means, storage-policy headroom and OS disk
-availability and completed local PUT/GET payload totals/rates. Console `health`,
-`metrics` and `capacity` expose these readings.
-Remaining: canonical register aggregates, storage I/O,
-queue age/errors, longer/resource history, direct-report activation/deployment,
-relayed/cross-address design,
-and service-eligible network capacity estimates. Local gauges are not network totals.
+Future storage views may summarize real receipt/audit/repair evidence, but proven
+StorageIds alone do not establish hosts or operators; a percentage needs a defined
+sample/window and denominator. No global capacity or throughput ceiling follows
+from local resource headroom. Do not invent provider, replica, audited-service or
+protected-byte totals absent a service-owned evidence definition.
 
-1. **O1 Local collector:** passive counters/windows, canonical register aggregates
-   at a declared cursor, local resource/storage measurements. Verify idle/gaps,
-   restart, catch-up, duplicate delivery, conflict replacement, concurrency and
-   collection overhead. Missing measurements remain Unknown.
-2. **O2 Network and Console:** cards/charts from O1 and matching proposed
-   `health`, `metrics`, `capacity` read-only commands; map/Advanced retained,
-   FR/EN, themes, stale/unknown states. `health` has its first bounded package
-   below; `metrics` and `capacity` have bounded local packages below.
-3. **O3 Remote report design:** DEC-289 freezes the first direct-report contract
-   in Level 1/2. The standalone strict payload codec is implemented and tested;
-   the narrow five-second background runtime cache and standalone challenge/
-   rate-limit guard are implemented. Direct TLS request/reply and runtime guard
-   wiring and the standalone bounded group store/totals are implemented without
-   automatic polling. Runtime store lifecycle and immutable snapshots are connected;
-   partial-coverage summary cards and Console are connected;
-   runtime bounded gauge history and cohort charts are connected;
-   idle-slot acquisition is implemented default-off; deployed-software/privacy
-   acceptance and measured busy-workload fairness remain; relayed/cross-address design is open. No new network,
-   genesis or signer needed; deployed software must upgrade before polling.
-4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
-   per-report/mean/cohort charts. The standalone group store and checked declared
-   resource totals and runtime immutable snapshots are implemented; scheduled
-   idle-slot acquisition is implemented default-off; Network/Console summary cards
-   and Network cohort charts are connected. Activation/deployment acceptance remains.
-   Verify duplicates/replay, expiry, churn,
-   inconsistent/dishonest reports and partial visibility.
-5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
-   optional accepted historical throughput ceiling beside actual current rate.
-   Benchmarks validate ceilings separately and are not needed for monitoring.
-
-### Next delivery order after review (2026-10-08)
-
-1. **Delivered:** runtime-owned bounded group store, session close/expiry hooks
-   and immutable address-free consolidated snapshot. Explicit owner requests
-   record accepted replies; no automatic polling. New/restarted runtimes start
-   empty and missing stays Unknown.
-2. **Delivered:** Network/Console summary cards and Network cohort charts use that snapshot. Label capacity
-   `Observed storage capacity · N reporting groups`, with per-metric contributor
-   counts, age, missing/expired/limited coverage and explicit declarations.
-   Whole-network coverage stays Unknown. Segment charts on cohort changes.
-3. **Source delivered, activation pending:** opt-in idle-slot outbound scheduler,
-   default off until coordinated deployment acceptance. Try owner/state locks,
-   skip catch-up/candidate/storage work, one round-robin session per five seconds.
-   Consume at most the existing pause (normally 250 ms), capped at two seconds;
-   new work after admission can wait for that bound. Measure workload fairness.
-4. **Delivered:** local completed PUT/GET encrypted payload totals and 60-second
-   rates, separate from CYBOU frame traffic. Network Advanced and Console metrics.
-   Repeated completed transfers count again; GET send does not prove remote receipt.
-5. Add storage I/O, oldest local queue age, bounded error counters and canonical
-   active-publication/lease-allocation aggregates at one verified cursor.
-
-`provider_used_mib` reports `FinalizedChunkStore::UsedBytes()`, admitted provider
-replica lengths; it is not a measure of active contractual lease obligations.
-The label correction does not change wire position, units, payload size or values.
-No additional wire fields or persistent observation history are required here.
-One locally verified stream supplies finalized op/min. Present rates and declared
-capacity do not establish a throughput ceiling or independent replica hosts.
-
-### O1 first bounded package (2026-10-08)
-
-Implemented: UTC observation timestamp, monotonic runtime uptime, actual local
-candidate-pool count and serialized bytes in the shared diagnostics snapshot.
-The existing background diagnostics refresh collects them independently of
-Network visibility. Network Advanced Overview displays uptime, sample time and
-queue load; read-only `health` exposes the same sample while locked or unlocked.
-Unknown sample/initialization remains explicit; no synthetic health score.
-The bounded pool is read under its existing lock without scanning history.
-
-Still open: rate windows/retention, transfer counters, CPU/memory/I/O, canonical
-register aggregates, charts, remote reports/consolidation and capacity estimates.
-`health` is implemented; the packages below add `metrics` and `capacity`.
-
-### O1 passive traffic package (2026-10-08)
-
-Production inbound, mesh-outbound and storage-pool sessions share one runtime
-meter. Successful TLS application reads/writes count actual bytes once per
-progress result, including partial transfers, invalid input, retries and service
-frames. TLS handshake/record and TCP/IP overhead are excluded. Frame-stream
-bytes are neither NIC traffic nor unique content delivered.
-
-A fixed 61-slot one-second ring provides the preceding 60 complete seconds;
-the current partial second is excluded. Rates are Unknown before 60 seconds.
-Continuous passive collection makes complete idle windows a measured zero.
-Reads cannot reset counters. Totals survive session closure/reconnect but reset
-with the runtime. Fixed memory, one short mutex, no per-peer identifiers.
-
-Network Advanced Overview and public read-only `metrics` show received/sent
-rates; Console also shows exact lifetime totals and observation time. Separate
-PUT/GET payload rates, charts, operation rates, resources and remote aggregation
-remain open. This ring is not the proposed 24-hour history collector.
-
-Existing CI and Beta acceptance gates remain. Work in bounded packages;
-collector preparation does not require a live load test or signer restart.
-
-### O1 finalized-operation windows (2026-10-08)
-
-Successful canonical commits now feed a fixed 901-slot one-second ring for
-1/5/15-minute windows. Counts are operations, not block-height deltas. Local
-production and direct accepted announcements form the observed series;
-historical batch sync/default imports form a separate history series. Only
-successful commits count, so repeated/rejected blocks do not increase totals.
-A replacement at an existing height resets all operation windows and totals;
-restart starts new measurements. Empty blocks add zero operations.
-
-Network Advanced displays one-minute observed finalized op/min; `metrics`
-exposes all three windows, local-production contribution, history import counts
-and totals since observation reset. Incomplete windows are Unknown. Complete
-idle local windows can be zero without claiming global network inactivity.
-Current partial seconds are excluded; collection uses the existing chain lock
-and does not scan stored blocks or depend on GUI visibility.
-
-Blocks contain no creation timestamp. Arrival-time announcements can be delayed
-old blocks; their classification is local provenance, not a freshness proof.
-These rates must not be relabeled network production speed or potential ceiling.
-The current retained ring supports rate windows; historical charts/export,
-network availability coverage and broader consolidation remain open.
-
-### O2 bounded observation charts (2026-10-08)
-
-The runtime now supplies up to 180 completed five-second intervals, covering
-15 minutes, independently of page visibility or diagnostic polling. Traffic
-points contain received/sent frame bytes; operation points contain observed
-and locally produced operations, excluding history imports. Missing startup
-intervals are absent, not padded with zeros. Complete idle intervals are zero.
-Both raw rings retain 905 seconds so the oldest completed interval survives
-while the newest five-second interval is still incomplete.
-
-Network Advanced Overview renders two native Qt plots. Traffic values are B/s
-over each five-second interval; operations are normalized to op/min over that
-interval. These differ from the one-minute summary windows; short burst peaks
-do not establish network production time or a performance ceiling. Legend
-lines use distinct colors and solid/dashed patterns. Mouse selection and
-Left/Right/Home/End expose exact interval values through tooltip and accessible
-description; a focus border supports keyboard navigation. Selection is retained
-by interval time while it remains in the bounded history.
-
-No external chart service, disk history, Identity metadata, endpoint labels,
-network census or new wire fields. Restart clears both histories; canonical
-replacement clears operation history. Unavailable observations clear the plots.
-This delivers the first 15-minute in-memory charts; the proposed 30-minute /
-24-hour retention, exporting, resource series and remote totals remain open.
-
-### O1 instantaneous process memory (2026-10-08)
-
-Runtime diagnostics read the local executable's resident bytes from the OS:
-Windows working set or Linux RSS via the fixed `/proc/self/statm` record.
-Failure and unsupported platforms return an absent value. This is a current
-gauge, not a peak, average, allocation total or host memory measurement. Shared
-resident pages and the desktop GUI are included. It is not unique physical RAM
-and must not be summed across nodes as a network memory total.
-
-Network Advanced Overview shows the sample in human-readable units; read-only
-`metrics` shows exact bytes and the same snapshot's UTC time. No Identity unlock,
-process enumeration, external service or retained per-process labels. The
-background snapshot collection remains independent of page visibility.
-The CPU package below adds interval normalization and completed means; resource
-history, host memory,
-storage I/O and remote resource reports remain open.
-
-### O1 process CPU intervals and completed means (2026-10-08)
-
-The OS continuously accounts cumulative CPU time for the whole CYBOU process.
-Runtime diagnostic reads sample that counter (Windows kernel+user process time;
-Linux process CPU clock). Percent is the counter delta divided by monotonic
-elapsed time and OS online logical processor count, times 100. This denominator
-is explicit: it does not represent affinity, container quotas or host load.
-The first reading has no interval. Read failures, counter/time regression or
-a changed processor count reset the baseline and mean, with Unknown output.
-
-A fixed-memory accumulator publishes elapsed-time-weighted means when a window
-reaches at least 60 seconds. Actual duration and interval count are exposed;
-the latest completed mean retains its age until the next window completes.
-Sparse diagnostic reads produce longer real windows, not invented five-second
-samples or an exact rolling-minute promise. Reads less than one millisecond
-apart add no interval and retain the baseline.
-The existing desktop background sampling remains independent of Network
-visibility. Runtime restart resets the accumulator. Sampling is serialized.
-
-Network Advanced and Console `metrics` display interval CPU, completed mean,
-denominator, measured durations, interval count and mean age in EN/FR. GUI CPU
-is included. Neither CPU percentage nor spare CPU estimates network capacity.
-CPU charts, affinity/quota-aware measurements, host load, storage I/O and remote
-consolidation remain open.
-
-### O1 local storage headroom and filesystem availability (2026-10-08)
-
-Runtime diagnostics query OS available bytes on the chunk filesystem without
-scanning directories. Before the first blob, the store's immediate existing
-parent is queried; no directories are created by observation. Memory-only stores,
-missing parents and OS errors have no disk measurement. The existing background
-snapshot supplies the sample UTC time independently of Network visibility.
-
-Network Advanced Storage shows accounted encrypted blob-byte lengths / V,
-utilization, saturated policy headroom `max(V - used, 0)`, admitted provider bytes /
-budget and a separate OS-available-disk tile. Read-only public Console `capacity`
-adds exact bytes, provider budget headroom and time in EN/FR, including while the
-Identity is locked. No provider DB or foreign-content enumeration is introduced.
-
-Stored lengths exclude filesystem allocation/metadata overhead; replicas and
-cache are physical copies, not unique logical content. Filesystem space is shared
-with other applications and is measured before the admission reserve (currently
-max(1 GiB, 5% of filesystem capacity) on provider admission). Policy headroom is
-not a reservation or admission promise: disk reserve, leases, placement and
-concurrent writes still constrain service. OS free bytes, V and provider budget
-remain separate; none establishes potential network capacity or remote durability.
-Reserved usable admission estimates, disk/history/I/O series and reporting-cohort
-aggregation remain open.
+Beta acceptance remains live restore/rotation, uncertain payments, retrieval,
+repair, independent remote failure domains and native desktop usability. Optional
+historical capacity benchmarks validate a separate ceiling and never replace
+monitoring. No network/genesis/key/history change or deployment is required by
+this source simplification.

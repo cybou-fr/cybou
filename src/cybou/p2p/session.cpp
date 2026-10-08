@@ -11,8 +11,6 @@
 #include <cybou/protocol_limits.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
-#include <cybou/p2p/observation_exchange.h>
-#include <cybou/p2p/observation_groups.h>
 
 #include <boost/asio/ip/address.hpp>
 
@@ -30,7 +28,6 @@
 #include <openssl/x509.h>
 
 #include <algorithm>
-#include <atomic>
 #include <array>
 #include <limits>
 #include <memory>
@@ -309,25 +306,20 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::OP_POLL:
     case MessageType::STORAGE_AUDIT_CHALLENGE:
     case MessageType::STORAGE_AUDIT_RESPONSE:
-    case MessageType::GET_OBSERVATION:
-    case MessageType::OBSERVATION:
         return true;
     default:
         return false;
     }
 }
-bool AllowedFrameSize(uint8_t type, size_t size)
+bool AllowedFrameSize(size_t size)
 {
-    if (size > MAX_FRAME_PAYLOAD) return false;
-    if (type == static_cast<uint8_t>(MessageType::GET_OBSERVATION)) return size == OBSERVATION_REQUEST_BYTES;
-    if (type == static_cast<uint8_t>(MessageType::OBSERVATION)) return size == OBSERVATION_REPORT_BYTES;
-    return true;
+    return size <= MAX_FRAME_PAYLOAD;
 }
 } // namespace
 
 std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
 {
-    if (!AllowedFrameSize(static_cast<uint8_t>(frame.type), frame.payload.size()) ||
+    if (!AllowedFrameSize(frame.payload.size()) ||
         !IsSupportedMessageType(static_cast<uint8_t>(frame.type))) return std::nullopt;
     std::vector<unsigned char> bytes;
     const auto payload_size = frame.payload.size();
@@ -351,7 +343,7 @@ std::optional<Frame> DecodeFrame(std::span<const unsigned char> bytes)
         !IsSupportedMessageType(bytes[4])) return std::nullopt;
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{bytes[5 + i]} << (8 * i);
-    if (!AllowedFrameSize(bytes[4], size) || bytes.size() != HEADER_SIZE + size) return std::nullopt;
+    if (!AllowedFrameSize(size) || bytes.size() != HEADER_SIZE + size) return std::nullopt;
     return Frame{static_cast<MessageType>(bytes[4]),
         std::vector<unsigned char>{bytes.begin() + HEADER_SIZE, bytes.end()}};
 }
@@ -471,31 +463,16 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 
 PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRole transport_role,
     TlsSessionConfig tls_config, std::shared_ptr<TrafficMeter> traffic)
-    : m_socket{std::move(socket)}, m_observation_handle{[] {
-        // Process-local connection handles, never recycled or sent on the wire.
-        static std::atomic<uint64_t> next{1};
-        auto value = next.load();
-        while (value != std::numeric_limits<uint64_t>::max()) {
-            if (next.compare_exchange_weak(value, value + 1)) return value;
-        }
-        return uint64_t{0};
-    }()}, m_transport_role{transport_role}, m_tls_config{std::move(tls_config)}
+    : m_socket{std::move(socket)}, m_transport_role{transport_role}, m_tls_config{std::move(tls_config)}
 {
     m_traffic = std::move(traffic);
     boost::system::error_code ec;
     m_socket.non_blocking(true, ec);
-    if (ec || !m_observation_handle) m_socket.close();
-}
-
-void PeerSession::ForgetObservation()
-{
-    if (auto guard = m_observation_guard.lock()) guard->Close(m_observation_handle);
-    if (auto groups = m_observation_groups.lock()) groups->Close(m_observation_handle);
+    if (ec) m_socket.close();
 }
 
 PeerSession::~PeerSession()
 {
-    ForgetObservation();
     SSL_free(m_ssl);
     SSL_CTX_free(m_owned_ssl_context);
 }
@@ -574,7 +551,7 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
     }
     SSL_free(std::exchange(m_ssl, nullptr));
     boost::system::error_code ignored;
-    m_socket.close(ignored); ForgetObservation();
+    m_socket.close(ignored);
     return false;
 }
 
@@ -607,13 +584,13 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
         if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
-            m_socket.close(close_ec); ForgetObservation();
+            m_socket.close(close_ec);
             return false;
         }
     }
     if (done != length) {
         boost::system::error_code ec;
-        if (done != 0) { m_socket.close(ec); ForgetObservation(); } // Idle sessions survive; truncated headers never do.
+        if (done != 0) { m_socket.close(ec); } // Idle sessions survive; truncated headers never do.
         return false;
     }
     return true;
@@ -638,13 +615,13 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
         if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
-            m_socket.close(close_ec); ForgetObservation();
+            m_socket.close(close_ec);
             return false;
         }
     }
     if (done != length) {
         boost::system::error_code ec;
-        m_socket.close(ec); ForgetObservation(); // Never reuse a stream containing a truncated frame.
+        m_socket.close(ec); // Never reuse a stream containing a truncated frame.
         return false;
     }
     return true;
@@ -674,9 +651,9 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     }
     uint32_t size{0};
     for (int i = 0; i < 4; ++i) size |= uint32_t{header[5 + i]} << (8 * i);
-    if (!AllowedFrameSize(header[4], size)) {
+    if (!AllowedFrameSize(size)) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
-        boost::system::error_code ignored; m_socket.close(ignored); ForgetObservation();
+        boost::system::error_code ignored; m_socket.close(ignored);
         return std::nullopt;
     }
     Frame frame{static_cast<MessageType>(header[4]), {}};
@@ -685,7 +662,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
         // После чтения заголовка границы фрейма уже сдвинуты: безопаснее
         // оборвать сокет, чем пытаться ресинхронизироваться по оставшемуся потоку.
         boost::system::error_code ignored;
-        m_socket.close(ignored); ForgetObservation(); // A consumed header cannot be reused after an incomplete body.
+        m_socket.close(ignored); // A consumed header cannot be reused after an incomplete body.
         return std::nullopt;
     }
     m_last_read_status = ReadStatus::OK;
@@ -783,47 +760,6 @@ bool PeerSession::Handshake(const Hello& local)
     m_local = local;
     m_handshake_status = HandshakeStatus::CONNECTED;
     return true;
-}
-
-std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntime& runtime,
-    std::chrono::steady_clock::time_point owner_deadline)
-{
-    const auto started = std::chrono::steady_clock::now();
-    const auto deadline = std::min(started + OBSERVATION_TRANSACTION_TIMEOUT, owner_deadline);
-    if (deadline <= started) return std::nullopt;
-    if (!m_socket.is_open()) { ForgetObservation(); return std::nullopt; }
-    if (!m_peer || !m_local || m_peer->network_binding != runtime.GetNetworkBinding()) return std::nullopt;
-    boost::system::error_code ec;
-    const auto remote = m_socket.remote_endpoint(ec);
-    if (ec) return std::nullopt;
-    auto guard = runtime.GetObservationExchange();
-    auto groups = runtime.GetObservationGroups();
-    // A live connection belongs to one collector runtime, even for the same network.
-    if (auto previous = m_observation_groups.lock(); previous && previous != groups) return std::nullopt;
-    ObservationSession context{m_observation_handle, {}, true};
-    std::copy(m_peer->network_binding.begin(), m_peer->network_binding.end(), context.network_binding.begin());
-    if (!groups->Select(context, remote.address())) return std::nullopt;
-    m_observation_guard = guard;
-    m_observation_groups = groups;
-    const auto request = guard->Begin(context, remote.address());
-    if (!request) return std::nullopt;
-    struct PendingCleanup {
-        std::shared_ptr<ObservationExchange> guard;
-        uint64_t handle;
-        ~PendingCleanup() { guard->Close(handle); }
-    } cleanup{guard, m_observation_handle};
-    const auto unavailable = [&]() -> std::optional<ObservationReport> {
-        boost::system::error_code ignored; m_socket.close(ignored); ForgetObservation(); return std::nullopt;
-    };
-    if (!Write(Frame{MessageType::GET_OBSERVATION, EncodeObservationRequest(*request)}, deadline)) return unavailable();
-    const auto response = Read(deadline);
-    if (!response || response->type != MessageType::OBSERVATION) return unavailable();
-    try {
-        auto report = guard->Accept(context, response->payload);
-        if (!report) return unavailable();
-        if (!groups->Record(context, remote.address(), *report)) return std::nullopt;
-        return report;
-    } catch (const std::invalid_argument&) { return unavailable(); }
 }
 
 std::optional<StorageId> PeerSession::ProveStorageIdentity()
@@ -1243,23 +1179,6 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
     const auto request = Read();
     if (!request) {
         return m_socket.is_open();
-    }
-    if (request->type == MessageType::GET_OBSERVATION) {
-        ObservationRequest observation;
-        try { observation = DecodeObservationRequest(request->payload); }
-        catch (const std::invalid_argument&) { return false; }
-        ObservationSession context{m_observation_handle, {}, true};
-        std::copy(m_peer->network_binding.begin(), m_peer->network_binding.end(), context.network_binding.begin());
-        if (cybou::Hash256{observation.network_binding} != m_peer->network_binding ||
-            m_peer->network_binding != runtime.GetNetworkBinding()) return false;
-        boost::system::error_code ec;
-        const auto remote = m_socket.remote_endpoint(ec);
-        if (ec) return false;
-        // A local budget refusal drops this request, without treating it as abuse.
-        if (!runtime.GetObservationExchange()->AdmitResponse(context, remote.address(), observation)) return true;
-        const auto bytes = runtime.ReadObservationReport(observation.challenge);
-        return Write(Frame{MessageType::OBSERVATION, {bytes.begin(), bytes.end()}},
-            std::chrono::steady_clock::now() + OBSERVATION_TRANSACTION_TIMEOUT);
     }
     std::shared_ptr<void> transfer;
     if (request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||

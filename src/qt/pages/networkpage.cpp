@@ -10,7 +10,6 @@
 #include <qt/benchmarkreference.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
-#include <qt/networkobservationtext.h>
 #include <qt/storagetransfertext.h>
 
 #include <QFrame>
@@ -428,6 +427,8 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     overview_layout->addWidget(m_scope_note);
 
     // Local mesh/finality observations are separate from storage observations.
+    auto* technical_grid = new QGridLayout;
+    technical_grid->setSpacing(14);
     auto* grid = new QGridLayout;
     grid->setSpacing(14);
     auto [h_val, h_sub] = MetricTile(grid, 0, 0, tr("Verified height"), overview);
@@ -436,74 +437,43 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [p_val, p_sub] = MetricTile(grid, 0, 1, tr("Connected peers"), overview);
     m_metric_peers = p_val; m_metric_peers_sub = p_sub;
 
-    auto [u_val, u_sub] = MetricTile(grid, 1, 0, tr("Node uptime"), overview);
+    auto [u_val, u_sub] = MetricTile(technical_grid, 1, 0, tr("Node uptime"), technical);
     m_metric_uptime = u_val; m_metric_uptime_sub = u_sub;
     m_metric_uptime->setObjectName(QStringLiteral("networkNodeUptime"));
-    auto [q_val, q_sub] = MetricTile(grid, 1, 1, tr("Local candidate pool"), overview);
+    auto [q_val, q_sub] = MetricTile(technical_grid, 1, 1, tr("Local candidate pool"), technical);
     m_metric_queue = q_val; m_metric_queue_sub = q_sub;
     m_metric_queue->setObjectName(QStringLiteral("networkCandidatePool"));
-    auto [t_val, t_sub] = MetricTile(grid, 2, 0, tr("Local traffic"), overview);
+    auto [t_val, t_sub] = MetricTile(technical_grid, 2, 0, tr("Local traffic"), technical);
     m_metric_traffic = t_val; m_metric_traffic_sub = t_sub;
     m_metric_traffic->setObjectName(QStringLiteral("networkTrafficRate"));
-    auto [f_val, f_sub] = MetricTile(grid, 2, 1, tr("Observed finalized op/min"), overview);
+    auto [f_val, f_sub] = MetricTile(grid, 1, 0, tr("Observed finalized op/min"), overview);
     m_metric_finalization = f_val; m_metric_finalization_sub = f_sub;
     m_metric_finalization->setObjectName(QStringLiteral("networkFinalizationRate"));
-    auto [memory_val, memory_sub] = MetricTile(grid, 3, 0, tr("CYBOU process memory"), overview);
+    auto [memory_val, memory_sub] = MetricTile(technical_grid, 0, 0, tr("CYBOU process memory"), technical);
     m_metric_memory = memory_val; m_metric_memory_sub = memory_sub;
     m_metric_memory->setObjectName(QStringLiteral("networkProcessMemory"));
-    auto [cpu_val, cpu_sub] = MetricTile(grid, 3, 1, tr("CYBOU process CPU"), overview);
+    auto [cpu_val, cpu_sub] = MetricTile(technical_grid, 0, 1, tr("CYBOU process CPU"), technical);
     m_metric_cpu = cpu_val; m_metric_cpu_sub = cpu_sub;
     m_metric_cpu->setObjectName(QStringLiteral("networkProcessCpu"));
 
     const auto transfer_text = cybouStorageTransferText({});
-    auto [put_val, put_sub] = MetricTile(grid, 4, 0, transfer_text.put_title, overview);
+    auto [put_val, put_sub] = MetricTile(grid, 2, 0, transfer_text.put_title, overview);
     m_metric_put = put_val; m_metric_put_sub = put_sub;
     m_metric_put->setObjectName(QStringLiteral("networkPutPayloadRate"));
-    auto [get_val, get_sub] = MetricTile(grid, 4, 1, transfer_text.get_title, overview);
+    auto [get_val, get_sub] = MetricTile(grid, 2, 1, transfer_text.get_title, overview);
     m_metric_get = get_val; m_metric_get_sub = get_sub;
     m_metric_get->setObjectName(QStringLiteral("networkGetPayloadRate"));
 
     overview_layout->addLayout(grid);
-    auto* observed = Card(overview);
-    auto* observed_layout = new QVBoxLayout{observed};
-    m_observed_capacity_title = SectionTitle(QString{}, observed);
-    m_observed_capacity_title->setWordWrap(true);
-    observed_layout->addWidget(m_observed_capacity_title);
-    auto* observed_grid = new QGridLayout;
-    auto [capacity_value, capacity_detail] = MetricTile(observed_grid, 0, 0, tr("Declared capacity"), observed);
-    m_observed_capacity = capacity_value; m_observed_storage_detail = capacity_detail;
-    m_observed_capacity->setObjectName(QStringLiteral("networkObservedCapacity"));
-    auto [traffic_value, traffic_detail] = MetricTile(observed_grid, 0, 1, tr("Observed CYBOU frame traffic"), observed);
-    m_observed_traffic = traffic_value; m_observed_traffic_detail = traffic_detail;
-    m_observed_traffic->setObjectName(QStringLiteral("networkObservedTraffic"));
-    auto [cpu_value, cpu_detail] = MetricTile(observed_grid, 1, 0, tr("Reported process CPU mean"), observed);
-    m_observed_cpu = cpu_value; m_observed_cpu_detail = cpu_detail;
-    m_observed_cpu->setObjectName(QStringLiteral("networkObservedCpu"));
-    observed_layout->addLayout(observed_grid);
-    m_observed_coverage = MutedText(QString{}, observed);
-    m_observed_coverage->setObjectName(QStringLiteral("networkObservedCoverage"));
-    observed_layout->addWidget(m_observed_coverage);
-    overview_layout->addWidget(observed);
-    auto* remote_history = Card(overview);
-    auto* remote_layout = new QVBoxLayout{remote_history};
-    remote_layout->addWidget(SectionTitle(tr("Reporting group history"), remote_history));
-    m_remote_storage_chart = new CybouObservationChart{tr("Declared storage history"), tr("Declared capacity"), tr("Stored copies"), tr("GiB"), 1.0 / (uint64_t{1} << 30), remote_history};
-    m_remote_storage_chart->setObjectName(QStringLiteral("networkRemoteStorageChart"));
-    m_remote_traffic_chart = new CybouObservationChart{tr("Reported frame traffic history"), tr("Received"), tr("Sent"), tr("B/s"), 1, remote_history};
-    m_remote_traffic_chart->setObjectName(QStringLiteral("networkRemoteTrafficChart"));
-    m_remote_cpu_chart = new CybouObservationChart{tr("Reported CPU history"), tr("Reported process CPU mean"), {}, QStringLiteral("%"), 1, remote_history};
-    m_remote_cpu_chart->setObjectName(QStringLiteral("networkRemoteCpuChart"));
-    for (auto* chart : {m_remote_storage_chart, m_remote_traffic_chart, m_remote_cpu_chart}) remote_layout->addWidget(chart);
-    remote_layout->addWidget(MutedText(tr("Partial declarations · snapshots about every 5 seconds · up to 15 minutes in RAM · gaps and cohort changes break lines. Traffic uses declared 60-second windows; CPU keeps its reported window. No network ceiling or host census."), remote_history));
-    overview_layout->addWidget(remote_history);
+    technical_layout->addLayout(technical_grid);
     auto* traffic_history = Card(overview);
     auto* traffic_history_layout = new QVBoxLayout{traffic_history};
-    traffic_history_layout->addWidget(SectionTitle(tr("Traffic history"), traffic_history));
-    m_traffic_chart = new CybouObservationChart{tr("Traffic history"), tr("Received"), tr("Sent"),
+    traffic_history_layout->addWidget(SectionTitle(tr("Storage transfer history"), traffic_history));
+    m_transfer_chart = new CybouObservationChart{tr("Storage transfer history"), tr("Received"), tr("Sent"),
         tr("B/s"), 0.2, traffic_history};
-    m_traffic_chart->setObjectName(QStringLiteral("networkTrafficChart"));
-    traffic_history_layout->addWidget(m_traffic_chart);
-    traffic_history_layout->addWidget(MutedText(tr("Local frames · 5-second intervals · up to 15 minutes · TLS/TCP overhead excluded"), traffic_history));
+    m_transfer_chart->setObjectName(QStringLiteral("networkTransferChart"));
+    traffic_history_layout->addWidget(m_transfer_chart);
+    traffic_history_layout->addWidget(MutedText(tr("Completed encrypted PUT/GET payload · 5-second intervals · up to 15 minutes · repeated transfers included"), traffic_history));
     overview_layout->addWidget(traffic_history);
     auto* finalization_history = Card(overview);
     auto* finalization_history_layout = new QVBoxLayout{finalization_history};
@@ -813,15 +783,6 @@ void NetworkPage::refresh()
     m_metric_peers->setText(QString::number(status.peer_count));
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
-    const auto observed = cybouNetworkObservationText(diag);
-    m_observed_capacity_title->setText(observed.capacity_title);
-    m_observed_capacity->setText(observed.capacity);
-    m_observed_storage_detail->setText(observed.storage_detail);
-    m_observed_traffic->setText(observed.traffic);
-    m_observed_traffic_detail->setText(observed.traffic_detail);
-    m_observed_cpu->setText(observed.cpu);
-    m_observed_cpu_detail->setText(observed.cpu_detail);
-    m_observed_coverage->setText(observed.coverage);
     const bool measured = diag.observed_unix_ms != 0;
     const auto& cpu = diag.process_cpu;
     m_metric_cpu->setText(measured && cpu.interval_percent ?
@@ -836,13 +797,7 @@ void NetworkPage::refresh()
     m_metric_memory->setText(measured && diag.process_resident_bytes ?
         CybouProduct::sizeText(*diag.process_resident_bytes) : tr("Unknown"));
     m_metric_memory_sub->setText(tr("Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages"));
-    const auto* remote = diag.network_observation.get();
-    const bool history_matches = remote && cybou::Hash256{remote->network_binding}.GetHex() == diag.network_binding;
-    const auto points = history_matches ? remote->remote_history : std::vector<cybou::NetworkObservationPoint>{};
-    m_remote_storage_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::STORAGE);
-    m_remote_traffic_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::TRAFFIC);
-    m_remote_cpu_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::CPU);
-    m_traffic_chart->setHistory(measured ? diag.traffic.history : std::vector<cybou::ObservationPoint>{});
+    m_transfer_chart->setHistory(measured ? diag.storage_transfers.history : std::vector<cybou::ObservationPoint>{});
     m_finalization_chart->setHistory(measured && diag.initialized ? diag.finalization.history : std::vector<cybou::ObservationPoint>{});
     const auto& finalization = diag.finalization.windows.front();
     m_metric_finalization->setText(measured && diag.initialized && finalization.complete && finalization.window_ms ?

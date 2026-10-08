@@ -3,6 +3,33 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Beta monitoring simplification (2026-10-09)
+
+Remote telemetry has been removed from production source and active documents:
+message codes 27/28, codecs, cache/collector worker, exchange guards, address groups,
+aggregation, immutable remote snapshots, cohort history, polling and remote UI.
+The ordinary P2P baseline ends at 26 and rejects all unsupported message codes.
+No experimental/disabled compatibility path remains. Superseded implementation
+and design are retained in Git, not in the runtime.
+
+Existing local metrics, transfer counters, finalization windows, process CPU/RAM,
+storage gauges and chain/P2P/storage behavior remain. CPU/RAM/frame traffic moved
+to Technical; two local charts show operations and completed PUT/GET payload.
+The diagnostics sampler is still independent of Identity unlock/page visibility.
+Uncommitted storage-job/queue instrumentation was withdrawn. Further metric
+additions require the concrete-question/source/scope gate in the frozen plan.
+No deployment, signer restart, genesis/key/history or storage-protocol change.
+
+Validation: desktop, core-test and native Qt targets rebuilt. Serial targeted
+core suites passed: runtime 23, P2P peer manager 37, node service 11 and storage
+service 23 (94 cases). The unsupported-message regression fixes the current
+maximum at 26 and checks rejection of every higher code. Completed-payload
+history is checked separately from frame bytes. Full native Windows Qt: 92
+passed, zero failed/skipped, including exactly two charts, absent remote UI,
+local values/Unknown, EN/FR Console and keyboard workflows. Active-source and
+document scans find no removed API or report-contract link; manifest/diff checks
+pass. Ignored evidence: `artifacts/local-monitoring-20261009/`.
+
 ## Local completed storage payload counters (2026-10-09)
 
 Every production TLS session shares its runtime traffic meter. Separate passive
@@ -23,7 +50,7 @@ Each direction has a volatile runtime-lifetime total and a rolling window of
 60 completed seconds, excluding the current partial second. Before a complete
 minute, rates are Unknown; a complete quiet window is zero. Bounded in-memory
 meters retain no peer/content/user identifiers and restart empty. Snapshot reads
-copy no payload history and trigger no transfers, scans, probes or audits.
+copy bounded completed-payload history and trigger no transfers, scans, probes or audits.
 Network Advanced adds local PUT/GET cards; Console `metrics` uses the same EN/FR
 formatter with byte totals, rates and completion semantics. Collection remains
 independent of Identity unlock and page visibility. Remote reports are unchanged.
@@ -37,350 +64,6 @@ expiry and restart. The full native Qt suite exited successfully; explicit Qt
 file-logger checks for Network and Console also passed, including EN/FR and
 Unknown rates. Ignored evidence: `artifacts/storage-payload-20261009/`.
 No deployed network, signer or service was restarted.
-
-## Optional idle-slot observation acquisition (2026-10-09)
-
-The ordinary network service owner can now acquire reports during its existing
-post-sync pause, gated by local `observation_polling` configuration (default false).
-Desktop/headless callers retain that default; no CLI/Console switch or live
-upgrade/activation is introduced. Full-batch catch-up has no optional work.
-Only same-cycle UP_TO_DATE, zero-block, completed known-peer passes qualify as
-an idle hint; they grant no freshness/consensus authority.
-
-Runtime uses try-locks for session owner/state, skips catching-up, candidates and
-busy/contended local storage I/O, and offers one round-robin outbound session per
-five seconds. Pending finalized fanout has priority. Existing group selection and
-exchange guards enforce address deduplication, cooldown and global budgets.
-RequestObservation now also accepts an earlier owner deadline, clamped by its
-existing two-second maximum. The service gives only its remaining normal pause
-(normally 250 ms), then sleeps any remainder. Expired budgets do no I/O or budget
-consumption. No new connection, reader/writer or storage/Identity/PoA proof.
-
-A failed optional transaction closes/removes that TLS session without adding an
-observation abuse penalty; normal mesh recovery remains responsible for reconnect.
-Other transactions remain intact after a successful/skipped request. Idle hints
-are not reservations: work arriving after admission may wait for the remaining
-bounded slot. Zero overhead/latency or worst-case workload fairness is not claimed.
-Acquisition covers existing outbound sessions only, not all inbound/storage peers.
-Coordinated deployed-software/governance acceptance and measured workload overhead
-remain pending; no VPS/desktop/signer service is restarted or deployed here.
-
-Validation: desktop `cybou` and `cybou-core-test` rebuild passed. Serial targeted
-suites passed: peer manager 43, node service 12, node runtime 26, observation
-groups 8 and exchange 7 (96 cases). Real TLS tests cover expired/short owner
-deadlines, timeout cleanup, pending fanout priority, cooldown and subsequent
-PING; service integration covers default-off versus opt-in acquisition after
-sync. A gated storage job verifies the conservative idle hint rejects active
-work and becomes available after completion. Evidence is under ignored
-`artifacts/observation-idle-poll-20261009/`. These are component/integration
-checks, not deployed busy-workload fairness or performance measurements.
-
-## Bounded reporting cohort charts (2026-10-09)
-
-The existing background observation worker now samples accepted address-group
-aggregates about every five seconds into a runtime-owned ring, at most 180
-points and 15 minutes. Points are gauges retaining checked storage bytes,
-separate declared frame rates, normalized process CPU mean/window/ages, metric
-contributor counts, fresh/selected/missing groups and volatile cohort revision.
-No addresses, handles, challenges, stable reporter IDs or per-user data are kept.
-Unknown stays absent; no zero fill, interpolation/backfill or synchronous GUI
-sampling. History expires on reads, resets on backwards clock and starts empty
-on runtime replacement. Its clocks are sampled inside the short mutex.
-
-Network Advanced renders declared capacity/stored copies (GiB), received/sent
-frames (B/s) and process CPU means (%). Native chart paths break at cohort
-changes, unknown values and missed sampling spans; actual elapsed time preserves
-gaps. Keyboard/mouse selection and accessible descriptions expose point scope,
-counts, receipt age and CPU windows/ages in EN/FR. All-unknown history remains
-Unknown rather than drawing a guessed numeric range. Existing local traffic
-and canonical operation charts retain their original interval semantics.
-
-Validation: desktop/core/Qt binaries rebuild; all 33 focused core cases pass
-(groups 8, runtime 25), and full Qt passes 94 cases. Tests cover known zero versus
-absence, sampling cadence without catch-up, cohort metadata, retention expiry,
-backwards-clock reset, immutable snapshots and collection before GUI reads.
-Native chart regression checks discontinuities, keyboard point selection,
-Unknown gaps and clearing. Its offscreen PNG was inspected for visible breaks
-and readable labels; this is one fixture render, not physical screen/live-network
-acceptance. Existing local chart and EN/FR regressions pass. Manifest and
-whitespace checks pass.
-
-These are snapshots of declarations, not five-second throughput/CPU averages,
-unique content, network census or capacity ceilings. Collection continues with
-the page hidden; restart clears RAM history. No persistence/export, additional
-wire fields, network I/O, PoA/signer change or deployment. Automatic polling is
-still pending, so no live remote coverage is claimed.
-
-## Network/Console partial reporting summary (2026-10-08)
-
-Diagnostics now carry the immutable NetworkObservationSnapshot through the existing
-background desktop sampler/model. Network Advanced Overview displays declared
-capacity, stored copies/utilization, provider budget/admitted bytes, separate
-receive/send frame rates and arithmetic normalized process CPU means. Each
-metric has its own contributor count. Shared EN/FR formatting also feeds public
-read-only Console `capacity` and `metrics`, available while Identity is locked.
-
-Coverage includes fresh/selected/missing transport-address groups, slot limit,
-receipt age range and declared cache age. Rounded MiB/KiB declarations, partial
-coverage and unknown independent hosts remain explicit. Missing, foreign-network,
-invalid-clock and overflowed measurements show Unknown, preserving known zero.
-Local data stays in the existing local cards; no memory/disk/chain sums or potential
-throughput claim. Monotonic presentation age advances receipt/CPU ages and clears
-stale aggregates if background delivery stalls; clock regression fails closed.
-This uses existing snapshots, with no network I/O from GUI.
-
-Validation: desktop/core/Qt binaries rebuild; 32 focused core cases pass
-(groups 8, runtime 24), and full Qt passes 93 cases. New UI regression covers
-partial counts, known zero, absent fields, foreign network, invalid/backwards
-clock, stale snapshot invalidation, model-to-card updates and French labels.
-Existing Console regressions pass with the shared formatter. Manifest and
-whitespace checks pass. Evidence is local fixture/offscreen regression, not
-live reporting coverage or physical screen acceptance.
-
-Remote cohort charts and automatic polling remain separate follow-up packages.
-No transport, key, genesis, signer, service restart or deployment is introduced.
-
-## Runtime network observation snapshot (2026-10-08)
-
-Each runtime now owns its bounded address-group store, initialized empty before
-starting the background collector. Explicit session-owner observation requests
-select their actual socket-address group before I/O and record only accepted
-challenge/session-bound replies. Other same-address sessions skip I/O. Cooldown
-skips preserve the selected report; failures that close TLS remove it immediately.
-Session destruction clears pending guard state and group selection using weak
-references, without dereferencing/extending runtime lifetime. A live session
-cannot switch to another collector runtime. Background collection expires groups.
-
-`GetNetworkObservation()` returns an immutable shared snapshot with local cache
-metric blocks, partial remote group totals/counts, network context and local UTC
-presentation time. Local cache/remote receipt ages remain separate; this is not
-a globally atomic measurement. No address, session handle, challenge or stable
-row identifier reaches the presentation snapshot. Local readings and loopback
-reports never inflate remote totals. Missing/overflow values remain Unknown.
-Previously delivered snapshots remain unchanged by close, replacement or expiry.
-
-Validation: desktop and core binaries rebuild. All 93 focused core cases pass
-(codec 6, groups 8, exchange 7, cache 6, P2P 42, runtime 24). Integration checks
-cover accepted TLS reply retention, cooldown preserving normal ping, loopback
-exclusion, EOF/destructor invalidation, snapshot immutability, local cached
-readings without GUI/Identity, and an empty replacement runtime. Existing group
-cases cover bounded/expiry/overflow/subset behavior. Manifest/diff checks pass.
-This is local fixture/component evidence, not a deployed multi-host observation.
-
-Automatic polling, remote cards/chart wiring and deployment remain open. No new
-wire fields, persistence, network/genesis, key or signing-history changes.
-
-## Observation review corrections (2026-10-08)
-
-The current report/store field is `provider_used_mib`, derived from
-`FinalizedChunkStore::UsedBytes()`: accounted admitted provider replica lengths,
-not active contractual lease/placement obligations. Local Network/Console labels
-and French translations now say admitted provider bytes. Payload order, units,
-size and numerical semantics are unchanged; no alias/legacy decoder is retained.
-
-The optional `PeerSession` observation transaction has one two-second owner
-budget; its server reply write is also bounded at two seconds. The shared
-exchange guard retains its five-second pending upper bound, with owner cleanup
-on every return. A silent TLS responder regression verifies timeout, socket
-closure and early owner release. Ordinary service deadlines are unchanged.
-
-The delivery plan now puts runtime group lifecycle and an immutable address-free
-snapshot before partial-coverage Network/Console cards and cohort charts, then
-idle-only polling after coordinated deployment acceptance. Local PUT/GET payload
-counters follow, then storage I/O, queue age/errors and canonical register/lease
-aggregates. Existing frame counters include service, retries and observation;
-they do not measure useful storage payload or unique content served.
-
-Validation: desktop/core/Qt binaries rebuild; 92 focused core cases pass
-(codec 6, groups 8, exchange 7, cache 6, P2P 42, runtime 23), and the full Qt
-suite passes 92 cases. Manifest validation and whitespace checks pass. These
-are local component/UI regression results, not live multi-host acceptance.
-
-No auto poller, remote display, persistent observation history or deployment is
-added by this correction. Network/genesis, keys and signing history are unchanged.
-
-## Bounded observation groups and declared-resource totals (2026-10-08)
-
-`p2p::ObservationGroups` implements a standalone volatile store of at most 32
-numeric transport-address groups. Caller session order selects one admitted
-same-network live handle per group, retained until close/inactivity expiry;
-capacity values never replace it. IPv4-mapped IPv6 normalizes to IPv4 and all
-loopback transports share one local group excluded from remote totals. A session
-cannot occupy two address groups. Replacement/close immediately discards its
-prior report; the next selected session starts without a sample.
-
-Reports expire at 90 seconds of local monotonic receipt even if selection or
-snapshot reads continue. Inactive group metadata expires after 90 seconds.
-CPU means advance their age and become unknown separately above 60 seconds.
-Selection, report/known-contributor changes, close and expiry advance a volatile
-cohort revision for future chart segmentation. Clock regression refuses work;
-close still removes the disconnected report. Default clocks are read under the
-mutex. A new store on restart/network change starts empty; nothing is persisted.
-
-Snapshots expose selected/fresh/missing remote group counts, slot-capacity status,
-separate local reports, per-field contributor counts and per-report metrics.
-They include no address, connection handle, challenge, network binding or stable
-row identifier. Storage sums use checked byte arithmetic and utilization uses
-the same known-storage subset. Receive/send sums and declared rates remain
-separate. CPU is an arithmetic mean of completed normalized process means with
-window/age range and count, never network CPU load. Overflowed totals/ratios are
-unknown; known zero and legitimate above-policy use remain distinct. Memory and
-unverified cursors stay per report, with no memory/disk/chain stream aggregate.
-
-Validation: shared/mapped IP selection, replacement/close, loopback exclusion,
-receipt/inactivity/CPU expiry, weighted utilization and different metric subsets,
-directional traffic, over-policy/zero/overflow boundaries, cohort segmentation,
-network/clock rejection, 32-slot cap and concurrent access. New group, guard,
-codec/cache and P2P regression tests pass; binaries rebuild. This is component
-evidence for untrusted partial declarations, not a host census or network ceiling.
-No runtime store/poller call site, remote UI, persistence/export or deployment is
-added yet. Scheduled acquisition/disconnect wiring and Network/Console remain.
-
-## Direct observation TLS transactions (2026-10-08)
-
-Source now accepts `GET_OBSERVATION` (27, exactly 64 bytes) and `OBSERVATION`
-(28, exactly 191 bytes); frame size is checked before body allocation in the TLS
-reader. Each runtime owns one exchange guard, shared across its sessions, with
-background cache refresh also expiring its pending/cooldown state. Default clock
-sampling occurs inside the guard mutex to avoid false backwards-time rejection
-when concurrent calls arrive out of order; explicit test clocks retain fail-closed
-regression behavior. No network/genesis/key/chain/signing history is changed.
-
-`PeerSession::RequestObservation` uses only an established same-network TLS
-session and its actual numeric socket address. Its process-local nonrecycled
-handle never goes on the wire. It sends a fresh challenge, reads within one
-two-second total transaction deadline, accepts through the guard and removes
-pending state on every return. Pre-HELLO/cooldown skips do no socket I/O. Missing,
-wrong-type, malformed or mismatched replies close the client socket so a late
-response cannot enter another transaction. Existing traffic accounting includes
-successful observation frame bytes normally.
-
-`ServeNext` checks exact payload binding/HELLO/runtime network, applies the shared
-response budget and copies only cached bytes. A rate refusal drops that request
-without closing the server session or recording abuse. Bad payload binding is a
-protocol rejection. No Identity/storage key/PoA signing is requested or exposed.
-
-Validation: exact frame sizes/headers, pinned-TLS round trip, pre-HELLO and
-cooldown no-I/O, subsequent ping, response-budget refusal preserving ping, and
-wrong challenge/network/known flag closing the client transaction. P2P, guard,
-codec/cache, runtime and Qt regression suites pass; binaries rebuild. Fixture TLS
-evidence is local component evidence, not public DEVNET deployment, independent
-host measurements, interoperability/soak or collector-cost acceptance.
-
-No production scheduler calls `RequestObservation` yet, no accepted-report store,
-grouping, consolidation or remote UI is added, and no VPS/desktop process is
-started/replaced. Existing deployed peers must undergo coordinated software
-upgrade before automatic polling; older binaries reject the new codes. Polling
-fairness, remote aggregation and governing privacy/security gates remain open.
-
-## Standalone observation exchange guard (2026-10-08)
-
-`p2p::ObservationExchange` implements DEC-289 pending-request and abuse controls
-without socket I/O or runtime call sites. Fresh challenges use OpenSSL's CSPRNG;
-acceptance requires the supplied admitted same-network local session context and
-its exact outstanding challenge. Accepted challenges are erased; wrong-session,
-foreign-network, wrong-challenge, duplicate and late replies produce no report.
-Malformed payloads throw codec errors for future protocol-abuse handling.
-
-Bounds: four pending requests, one per session, five-second deadline (expired
-at the deadline); per-IP send/serve cooldowns of 30 seconds; rolling global
-16-send/32-serve limits per 30 seconds; 128 shared IP entries with 90-second
-inactivity expiry, refusing new addresses rather than evicting live cooldowns.
-IPv4-mapped addresses normalize to IPv4. Closing a session removes its pending
-challenge while preserving IP cooldowns. Backwards time refuses work without
-refunding budgets. A mutex encapsulates concurrent guard access; CSPRNG and
-payload decoding occur outside it. No accepted-report cache, raw logs, persistent
-session/reporter identity, role, StorageId or PoA data is added.
-
-Tests cover HELLO/network/session/challenge mismatch, malformed/duplicate/late
-replies, fresh next challenges, exact deadlines, reconnect cooldown, mapped IP,
-pending/global/128-address bounds, rolling-window edges, expiry, backwards time
-and concurrent admission. New guard, codec/cache and existing P2P tests pass;
-desktop/core binaries rebuild. No live transport, collector wiring, polling,
-fairness/overhead/interop evidence, remote UI or deployment is claimed. The
-future transaction scheduler must own handles, disconnect/expiry and socket I/O.
-Current message codes still end at 26; upgrade/governance gates remain open.
-
-## Narrow background observation cache (2026-10-08)
-
-Every runtime now owns a five-second background collector and one fixed 191-byte
-DEC-289 cache, independent of Identity unlock, GUI visibility and diagnostics
-reads. Narrow collection reads the initialized finalized cursor, storage policy
-and accounted lengths, complete traffic window, process CPU mean and resident
-memory. The cursor reads only persisted head and matching network-binding keys,
-which initialization commits atomically; it does not certify state integrity.
-It does not enumerate peers/providers/objects, copy chart history, query
-disk availability or serialize canonical state. A contended chain mutex yields
-an unknown cursor. Other gauge reads use their existing counter/OS APIs.
-
-Cache publication is atomic after collection/validation outside its lock.
-Reads copy cached bytes under a short lock; collection/source work never runs
-under that lock. Startup, collection failure, clock regression and age strictly
-above five seconds return all unknown metrics with age 5001. Age starts before
-collection, so slow collection cannot rejuvenate old readings. CPU mean age
-advances on read and expires independently above 60 seconds. Rounded units and
-CPU ranges obey DEC-289; unknown values are zero, never fabricated measurements.
-Missed refreshes do not generate a catch-up burst. Shutdown interrupts the wait
-and joins the collector before captured runtime members are destroyed.
-
-Validation covers expiry boundaries, immutable bindings/challenges, CPU age,
-atomic concurrent snapshots, blocked/failing sources, prompt shutdown, narrow
-traffic equivalence and headless-style runtime refresh without Identity/UI/
-diagnostics. Codec, runtime, P2P and Qt regressions pass; binaries rebuild.
-OS sampling is verified on Windows only; collector cost, long soak, Linux and
-remote transport/governance acceptance remain open. No remote collection/UI,
-message code extension, VPS deployment or signer/chain/key changes are made.
-
-## Direct observation payload codec (2026-10-08)
-
-`observation_report.h/.cpp` implements the standalone DEC-289 request (64 bytes)
-and reply (191 bytes) payload codecs using the common binary reader/writer.
-Both reply encoding and decoding reject invalid ranges and nonzero unknown
-blocks; decoding also rejects non-boolean flags, every truncated size and tails.
-Stale age 5001 requires all five metric blocks unknown. Storage budget uses
-overflow-safe floor(2V/3); reported use above policy remains legal. Rounded units
-must fit after byte conversion. CPU and traffic windows obey the frozen bounds.
-
-These helpers validate structure only: network/challenge/session matching and
-measurement truth are not established. No runtime call site, cache, polling,
-message enum extension, remote UI, new session or deployment is introduced.
-The P2P frame baseline still ends at 26. Cache and bounded session scheduling
-are the next packages, with the existing privacy/security/upgrade gates retained.
-
-Validation: independent fixed-offset byte vector, all request/reply truncations,
-tails, invalid flags, every nonzero unknown byte, stale/known combinations,
-unit overflow, CPU/traffic bounds and storage policy/maximum-integer boundaries.
-Codec and existing P2P regression suites pass; desktop/core binaries rebuild.
-No live runtime or cross-platform/deployment acceptance is claimed.
-
-## Direct observation contract, documentation only (2026-10-08)
-
-DEC-289 and `NETWORK_OBSERVATION_REPORTS.md` freeze the first normative direct
-report target in Levels 1/2: existing admitted TLS mesh sessions, 64-byte requests,
-191-byte fixed replies, known/unknown metric blocks, rounded storage/traffic/memory
-and completed process CPU means. Fresh challenges/session binding, bounded
-polling/ingress/cooldowns, 90-second freshness, immediate disconnect invalidation
-and one selected report per socket-address group are specified. No report relay,
-NodeID/pseudonym, capability/role/StorageId proof, Identity/PoA field or signature.
-
-Address groups are not unique processes/machines; values remain declarations.
-Disk/memory and canonical chain/register streams are not summed as network
-resources. Membership changes split aggregate chart segments. The processing
-inventory and privacy/security/upgrade acceptance gates are recorded, without
-claiming assigned sign-off or completed governance review.
-
-No runtime code, message enum, cache, remote UI or deployed binary is changed.
-Current message codes still end at 26; proposed 27/28 require codec/cache/
-scheduling/consolidation implementation and coordinated software upgrade before
-polling. Relayed reports, cross-address deduplication and census remain open.
-This package closes the first direct engineering contract, not all O3 release
-gates or O4 implementation. No network/genesis/key/history/service change.
-
-Documentation checks: six fixed reply blocks sum to 191 bytes; request is 64
-bytes; normative links resolve; DEC-289 exists; source message enum/MAX remains
-at 26 with no observation code. Manifest/diff checks pass. These are contract
-consistency checks, not codec, security, interoperability or runtime evidence.
-No binary rebuild or repeated runtime tests are needed for this docs-only package.
 
 ## Local storage headroom and available disk (2026-10-08)
 
@@ -400,7 +83,7 @@ enumeration, directory creation, wire fields or admission policy changes.
 Stored lengths exclude filesystem allocation/metadata overhead; disk availability
 is shared and precedes provider admission reserve. Local policy headroom neither
 reserves disk nor guarantees admission, replicas or network capacity. Admission
-estimates, storage I/O/history and reporting-cohort consolidation remain open.
+estimates and storage I/O/history are outside the frozen Beta metric set.
 
 Ordinary MinGW desktop/core/Qt binaries rebuild successfully. Storage suite:
 6 cases / 61 assertions passed; runtime suite: 22 cases / 316 assertions passed.
@@ -438,7 +121,7 @@ Fixed memory, no thread/process enumeration or background worker is added.
 The desktop's existing diagnostic sampling works independently of Network
 visibility. Runtime restart resets observation.
 
-Network Advanced and read-only Console `metrics` expose interval CPU and the
+Network Technical and read-only Console `metrics` expose interval CPU and the
 completed mean's scope in EN/FR. OS online processors are not affinity or
 container quotas. Host load, resource charts, storage I/O, remote reports and
 network capacity remain outside this package.
@@ -486,38 +169,13 @@ tile handles a value and an absent measurement; read-only `metrics` covers
 missing samples and exact-byte EN/FR output. Manifest/diff checks pass. These
 are component tests, not a live network workload or physical UI acceptance.
 
-## Bounded Network observation charts (2026-10-08)
+## Bounded local charts (current Beta)
 
-Runtime snapshots now expose up to 180 completed five-second intervals retained
-independently of GUI reads. Both collectors use a fixed 905-second raw ring,
-preserving the oldest completed interval while the latest one is incomplete.
-Traffic retains received/sent frame bytes; finalization retains observed/local
-production counts, excluding historical imports. Startup intervals are absent;
-complete idle intervals are real zero. Restart and canonical replacement retain
-their respective reset behavior. No stored chain scan or disk persistence.
-
-Network Advanced Overview has native Qt traffic and operation-history plots,
-with five-second B/s and op/min, separate from minute-window headline rates.
-Mouse/keyboard interval selection, textual tooltip/accessibility descriptions,
-focus border, theme colors and solid/dashed series distinguish observations.
-UI history is bounded at 180 points and unknown samples clear it. This is local
-arrival/traffic evidence; peaks do not prove global production or capacity.
-Longer retention, exports, resources, cohort aggregation and physical assistive
-technology acceptance remain open.
-
-Ordinary MinGW desktop, core and Qt test binaries rebuild successfully.
-Runtime suite: 21 cases / 295 assertions passed; P2P suite: 37 cases / 1,178
-assertions passed. History tests cover the incomplete startup interval, idle
-zeroes, retention while the newest interval is partial, delayed ring writers,
-history-import exclusion and reset. Other core suites are filtered.
-Full offscreen Qt: 92 passed, 0 failed/skipped, including bounded chart data,
-keyboard selection, exact textual rates and clearing unavailable samples.
-Chart renders were additionally checked with `QT_QPA_FONTDIR=C:/Windows/Fonts`
-(offscreen defaults lack usable glyphs on this host); fixture images are
-synthetic UI evidence, not a live network measurement. Logs and renders:
-`artifacts/network-charts-20261008/`. Manifest/diff checks pass.
-Desktop SHA-256: `a67032e388e8aaf6da3e49b169a3ad5e20804926e061610cb6d1389feffd8f7e`.
-No desktop/signer or VPS service is restarted.
+Network retains two volatile local charts: finalized operations and completed
+PUT/GET encrypted payload receive/send. Five-second completed intervals are
+bounded to 180 points (15 minutes), with keyboard/mouse selection and accessible
+text. Frame traffic remains Technical/Console detail. No remote/cohort chart,
+reporting-group coverage model, resource history or capacity ceiling.
 
 ## Verified operation observation windows (2026-10-08)
 
@@ -569,7 +227,7 @@ per-peer labels, chain scan, new wire message or storage proof request.
 Network Advanced Overview displays the shared received/sent B/s observation;
 read-only `metrics` also exposes exact lifetime totals and UTC sample time.
 FR/EN translations are included. Resource measurements, operation rates,
-PUT/GET payload breakdown, charts and cohort consolidation remain open.
+PUT/GET payload and local charts were delivered separately; remote consolidation is outside Beta.
 
 Ordinary MinGW desktop/core/Qt binaries rebuild. The passive window case passes
 14 assertions (startup, complete-window boundaries, partial-second exclusion,
@@ -584,48 +242,12 @@ Full offscreen Qt: 92 passed, 0 failed/skipped; shared Network rates, missing
 observation reset and EN/FR `metrics` totals/rates are covered. Manifest/diff
 checks pass. No running desktop/signer or VPS service is restarted or deployed.
 
-## Network naming and observability scope correction (2026-10-08)
+## Network naming and monitoring scope
 
-### Local passive observation follow-up
-
-Runtime diagnostics now collect real UTC observation time, monotonic uptime and
-actual candidate-pool count/serialized bytes under the existing chain lock.
-This separates pending load from bounded recent finalized/rejected history.
-Existing background collection continues when Network is hidden. Advanced
-Overview presents the shared uptime/sample/queue values and read-only `health`
-reports them in Console without requiring an unlocked Identity or local signer.
-Absent sample/uninitialized pool stays Unknown; FR translations are supplied.
-No chain scan, new P2P report, network total, measured op/min, resource-use
-estimate or history/chart collector is introduced. O1 remains partially open.
-
-Ordinary MinGW/Qt desktop, Qt tests and core-test binaries rebuilt successfully
-in `build_cybou_qt_mingw/bin/`. Full offscreen Qt: 92 passed, 0 failed/skipped,
-including sample absence/uninitialized reset, real queue values, French `health`
-and locked-session access. Focused core: 3 cases / 35 assertions passed; the
-remaining cases were filtered. Coverage checks empty/queued/drained pool bytes,
-monotonic uptime and unchanged status-log suppression. Logs are retained under
-`artifacts/network-local-observation-20261008/`. Desktop SHA-256:
-`a369b2b72d33d7cd7a7a78898647cf1ca202f17137f309f4339729469b89f37b`.
-These are component/build results; no deployed network aggregate or physical
-acceptance is claimed. Existing desktop/signer processes were not restarted.
-
-### Earlier naming/contract package
-
-Navigation/header now use Network / Réseau; the map heading uses NETWORK /
-RÉSEAU. Active DEVNET and France admission remain scoped details. Built-in
-collection/consolidation of actual service bytes, finalized op/min, transfer
-rates, resource load and capacity is required by `NETWORK_OBSERVABILITY_PLAN.md`.
-The desktop plan no longer substitutes a benchmark-first sequence for passive
-monitoring. Existing diagnostics expose local storage/session/finality, not a
-remote resource feed. No passive collector, cohort totals, new Console command
-or capacity estimate is claimed implemented by this contract/naming package.
-
-Isolated MinGW desktop and Qt-test builds pass, including regenerated embedded
-French translations. Five existing navigation/language/Network scenarios pass
-offscreen (7 results including setup/cleanup, 0 failed/skipped). Manifest and
-diff checks pass. Logs and binaries: `artifacts/network-monitoring-contract-20261008/`.
-This is naming/component evidence, not a telemetry or live network acceptance
-result. The running desktop and signer are not restarted.
+Network / Réseau is the sole network observation page. DEVNET remains the compiled
+active profile. Local diagnostics and service-owned content protection use the
+existing sampler and product model. DEC-289 and NETWORK_OBSERVABILITY_PLAN.md now
+freeze the Beta metric set; wider telemetry is absent from the active architecture.
 
 ## Core CI signed-size build repair (2026-10-08)
 

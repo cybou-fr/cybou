@@ -13,7 +13,6 @@
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/storage_audit.h>
 #include <cybou/operation_relay.h>
-#include <cybou/observation_report.h>
 
 #include <boost/asio/ip/tcp.hpp>
 
@@ -33,8 +32,6 @@
 
 namespace cybou { class CybouNodeRuntime; class TrafficMeter; }
 namespace cybou::p2p {
-class ObservationExchange;
-class ObservationGroups;
 
 /// \brief Максимальная полезная нагрузка одного transport frame: `64 * 1024` байт = `64 KiB`.
 /// \details Предел ограничивает одно выделение памяти на сообщение и совпадает для отправки и приема.
@@ -42,8 +39,6 @@ inline constexpr uint32_t MAX_FRAME_PAYLOAD{64U * 1024U};
 /// \brief Максимум блоков в одном `GET_BLOCKS`: `32`.
 /// \details Соответствует ограничению P2P batch sync из `docs/cybou/08_P2P.md`.
 inline constexpr uint8_t MAX_BLOCK_BATCH{32};
-// Optional observation work has a shorter owner deadline than ordinary service.
-inline constexpr auto OBSERVATION_TRANSACTION_TIMEOUT = std::chrono::seconds{2};
 // Общая граница для discovery-списка: кодер и декодер должны проверять ее одинаково,
 // чтобы злонамеренный пир не мог переполнить PEERS кадр сверх того, что честный узел сам отправляет.
 /// \brief Максимум endpoint'ов в одном `PEERS`: `32`.
@@ -77,11 +72,9 @@ enum class MessageType : uint8_t {
     STORAGE_PROOF_REQUEST = 24,         ///< Challenge для on-demand доказательства `StorageId`.
     STORAGE_AUDIT_CHALLENGE = 25,       ///< Random-offset audit challenge по admitted chunk (DEC-276).
     STORAGE_AUDIT_RESPONSE = 26,        ///< Ответ на audit challenge по exact stored bytes.
-    GET_OBSERVATION = 27,               ///< Direct bounded non-canonical observation request.
-    OBSERVATION = 28,                   ///< Fixed observation reply bound to a request challenge.
 };
 /// \brief Наибольший допустимый wire-код сообщения в текущем baseline.
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::OBSERVATION)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_AUDIT_RESPONSE)};
 
 /// \brief Стабильная identity storage-провайдера: BLAKE3 от его STORAGE public key.
 using StorageId = std::array<unsigned char, 32>;
@@ -264,11 +257,6 @@ public:
     std::optional<OperationSubmitResult> SubmitOperation(const ProtocolOperation& operation, uint64_t work_nonce);
     /// \brief Забирает одну relay-операцию у удаленного пира и передает ее runtime.
     bool PollOperationRelay(CybouNodeRuntime& runtime);
-    // Existing transaction owner only; no automatic polling or report retention.
-    // Skipped requests do no I/O. A failed wire transaction closes the socket
-    // so a late reply cannot be mistaken for the next block/storage response.
-    std::optional<ObservationReport> RequestObservation(CybouNodeRuntime& runtime,
-        std::chrono::steady_clock::time_point owner_deadline = std::chrono::steady_clock::time_point::max());
     /// \brief Отправляет пиру одну ещё не доставленную ему relay-операцию из pool этого узла.
     /// \details Pull (`OP_POLL`) работает только по сессиям, которые открыл сам опрашивающий;
     ///          узел за NAT никто не опрашивает, поэтому кандидаты дополнительно проталкиваются
@@ -332,11 +320,6 @@ private:
     };
     ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
-    const uint64_t m_observation_handle;
-    // Weak references never extend a runtime lifetime or dereference it on teardown.
-    std::weak_ptr<ObservationExchange> m_observation_guard;
-    std::weak_ptr<ObservationGroups> m_observation_groups;
-    void ForgetObservation();
     TransportRole m_transport_role;
     TlsSessionConfig m_tls_config;
     SSL_CTX* m_owned_ssl_context{nullptr};

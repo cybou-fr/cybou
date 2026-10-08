@@ -79,6 +79,7 @@ private:
 };
 struct StorageTransferDiagnostics {
     TrafficDiagnostics put, get;
+    std::vector<ObservationPoint> history;
 };
 
 /// Local frame traffic plus completed encrypted chunk transfers, kept separate.
@@ -91,7 +92,17 @@ public:
     void RecordGet(uint64_t received, uint64_t sent, Clock::time_point now = Clock::now())
     { m_get.Record(received, sent, now); }
     StorageTransferDiagnostics StorageSnapshot(Clock::time_point now = Clock::now()) const
-    { return {m_put.WindowSnapshot(now), m_get.WindowSnapshot(now)}; }
+    {
+        auto put = m_put.Snapshot(now), get = m_get.Snapshot(now);
+        auto history = std::move(put.history);
+        // Both meters share the runtime start and the exact same sample time.
+        for (size_t i = 0; i < history.size(); ++i) {
+            history[i].primary += get.history[i].primary;
+            history[i].secondary += get.history[i].secondary;
+        }
+        get.history.clear();
+        return {std::move(put), std::move(get), std::move(history)};
+    }
 private:
     ByteRateMeter m_put, m_get;
 };

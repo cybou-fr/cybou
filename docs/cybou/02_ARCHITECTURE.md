@@ -203,29 +203,20 @@ verified foreign storage service, while protocol fees still go to the Central
 Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.
 See `18_ECONOMICS_FEES.md`.
 
-## Built-in direct observation target
+## Built-in local monitoring
 
-DEC-289 defines non-canonical, untrusted resource/traffic reports over existing
-admitted same-network TLS mesh sessions. A bounded local cache supplies minimized
-aggregates independently of the GUI/Identity. Fresh challenges bind replies to
-the requesting session; this proves neither measurement truth nor a stable
-node/machine identity. One selected report per transport-address group prevents
-ports/session churn from multiplying a reporting group, without claiming host
-independence or network coverage. Canonical operation/register streams stay local
-and independently verified. There is no telemetry NodeID, role, storage proof,
-Identity signature, PoA route or privileged bootstrap aggregator.
+DEC-289 limits Beta monitoring to passive local runtime metrics, one independently
+verified canonical chain stream, ordinary peer liveness and service-owned storage
+evidence. There is no remote telemetry report protocol, cache, exchange, address-
+group aggregation, cohort history or polling scheduler. The P2P baseline ends at
+STORAGE_AUDIT_RESPONSE (26); unsupported message codes fail closed. No compatibility
+parser or experimental runtime path is retained.
 
-[`NETWORK_OBSERVATION_REPORTS.md`](NETWORK_OBSERVATION_REPORTS.md) freezes bounds,
-rounding, replay/expiry, grouping, aggregation and acceptance for the first direct
-report target. Payload codec, local cache, runtime guard and direct TLS transaction
-and runtime-owned bounded grouping/declared-resource totals, close/expiry hooks
-and immutable address-free snapshots and Network/Console partial summary cards
-and bounded remote gauge history/cohort charts are implemented; automatic
-polling is wired as a default-off opt-in idle-slot service policy pending
-coordinated deployment acceptance. No extra reader, connection or wire capability.
-Source P2P ends at message 28; deployed upgrade and governing privacy/security
-review gates remain. Relayed
-reports, cross-address deduplication and global census remain open.
+Local CPU/RAM/frame traffic are Technical/Console diagnostics. Network retains
+finalized progress, peers, operations/min, local storage, completed PUT/GET payload
+and existing content protection. At most two bounded local charts show operations
+and completed payload. Local samples never imply network-wide totals or capacity.
+See NETWORK_OBSERVABILITY_PLAN.md for the frozen metric set and addition gate.
 
 ## Simplified implementation boundary
 

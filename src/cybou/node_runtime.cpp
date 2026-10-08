@@ -9,10 +9,6 @@
 #include <cybou/p2p/storage_session_pool.h>
 #include <cybou/storage_io_scheduler.h>
 #include <cybou/process_memory.h>
-#include <cybou/observation_cache.h>
-#include <cybou/p2p/observation_exchange.h>
-#include <cybou/p2p/observation_groups.h>
-#include <cybou/network_observation_history.h>
 #include <stdexcept>
 #include <algorithm>
 
@@ -56,12 +52,6 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     m_network.peer_manager = std::make_unique<p2p::PeerManager>(*this);
     m_network.storage_sessions = std::make_unique<p2p::StorageSessionPool>(*this);
     m_network.storage_io = std::make_unique<StorageIoScheduler>();
-    ObservationBytes32 binding{};
-    std::copy(m_network_binding.begin(), m_network_binding.end(), binding.begin());
-    m_observation_exchange = std::make_shared<p2p::ObservationExchange>(binding);
-    m_observation_groups = std::make_shared<p2p::ObservationGroups>(binding);
-    m_network_observation_history = std::make_unique<NetworkObservationHistory>();
-    m_observation_collector = std::make_unique<ObservationCollector>(binding, [this] { return CollectObservationReport(); });
 }
 
 CybouNodeRuntime::~CybouNodeRuntime() = default;
@@ -70,10 +60,9 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
-    snapshot.network_observation = GetNetworkObservation();
     snapshot.process_resident_bytes = ReadProcessResidentBytes();
     snapshot.process_cpu = m_cpu_observations.Sample();
-    snapshot.traffic = m_traffic->Snapshot();
+    snapshot.traffic = m_traffic->WindowSnapshot();
     snapshot.storage_transfers = m_traffic->StorageSnapshot();
     snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();

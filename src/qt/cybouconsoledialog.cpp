@@ -1,4 +1,3 @@
-#include <qt/networkobservationtext.h>
 #include <qt/storagetransfertext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
@@ -461,12 +460,8 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity) : tr("Unknown"))
             .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity - std::min(d.storage_used, d.storage_capacity)) : tr("Unknown"))
             .arg(measured && d.storage_disk_available ? QString::number(*d.storage_disk_available) : tr("Unknown")));
-        const auto observed = cybouNetworkObservationText(d);
-        appendOutput(observed.capacity_title + QStringLiteral("\n") + observed.capacity + QStringLiteral("\n") + observed.storage_detail + QStringLiteral("\n") + observed.coverage);
     } else if (cmd == QLatin1String{"metrics"}) {
         const auto& d = m_model->networkDiagnostics();
-        const auto observed = cybouNetworkObservationText(d);
-        appendOutput(observed.traffic + QStringLiteral("\n") + observed.traffic_detail + QStringLiteral("\n") + observed.cpu + QStringLiteral("\n") + observed.cpu_detail + QStringLiteral("\n") + observed.coverage);
         const auto& t = d.traffic;
         const auto transfers = cybouStorageTransferText(d);
         appendOutput(transfers.put_title + QStringLiteral("\n") + transfers.put_rate + QStringLiteral("\n") + transfers.put_detail);

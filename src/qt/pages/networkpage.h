@@ -121,14 +121,6 @@ private:
     QWidget* m_benchmark_card{nullptr};
     QLabel* m_benchmark_summary{nullptr};
     QLabel* m_benchmark_scope{nullptr};
-    QLabel* m_observed_capacity_title{nullptr};
-    QLabel* m_observed_capacity{nullptr};
-    QLabel* m_observed_storage_detail{nullptr};
-    QLabel* m_observed_traffic{nullptr};
-    QLabel* m_observed_traffic_detail{nullptr};
-    QLabel* m_observed_cpu{nullptr};
-    QLabel* m_observed_cpu_detail{nullptr};
-    QLabel* m_observed_coverage{nullptr};
     QLabel* m_metric_height{nullptr};
     QLabel* m_metric_height_sub{nullptr};
     QLabel* m_metric_peers{nullptr};
@@ -149,10 +141,7 @@ private:
     QLabel* m_metric_get_sub{nullptr};
     QLabel* m_metric_finalization{nullptr};
     QLabel* m_metric_finalization_sub{nullptr};
-    CybouObservationChart* m_remote_storage_chart{nullptr};
-    CybouObservationChart* m_remote_traffic_chart{nullptr};
-    CybouObservationChart* m_remote_cpu_chart{nullptr};
-    CybouObservationChart* m_traffic_chart{nullptr};
+    CybouObservationChart* m_transfer_chart{nullptr};
     CybouObservationChart* m_finalization_chart{nullptr};
     QLabel* m_metric_storage{nullptr};
     QLabel* m_metric_storage_sub{nullptr};

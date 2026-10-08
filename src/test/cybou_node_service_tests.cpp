@@ -6,7 +6,6 @@
 #include <cybou/p2p/ingress_budget.h>
 #include <cybou/p2p/session.h>
 #include <cybou/p2p/inbound_server.h>
-#include <cybou/network_observation.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -67,38 +66,6 @@ public:
         return cybou::SignIdentityMessage(m_seed, cybou::IdentityKeyPurpose::POA_FINALIZER, message);
     }
 };
-}
-
-BOOST_AUTO_TEST_CASE(optional_observation_polling_runs_after_sync_and_defaults_off)
-{
-    for (const bool enabled : {false, true}) {
-        CybouServiceTestFixture source;
-        boost::asio::io_context io;
-        cybou::p2p::InboundPeerServer server{*source.runtime, io,
-            {boost::asio::ip::address_v4::loopback(), 0}};
-        std::atomic_bool stop{false};
-        std::jthread serving{[&] { server.Run(stop); }};
-        auto service = std::make_unique<cybou::CybouNodeService>(cybou::CybouNodeServiceConfig{
-            .runtime = cybou::NodeRuntimeConfig{.network_genesis = source.definition, .memory_only = true,
-                .peer_admission_policy = TestPeerAdmissionPolicy()}, .genesis = source.genesis});
-        service->Start();
-        service->Runtime().SetConfiguredPeerEndpoints({{"127.0.0.1", server.Port()}});
-        cybou::CybouNetworkServiceConfig config; config.sync_interval = std::chrono::milliseconds{250};
-        BOOST_CHECK(!config.observation_polling);
-        config.observation_polling = enabled;
-        std::atomic<unsigned> passes{0};
-        service->StartNetwork(config, [&](const auto&, const auto&, size_t) { ++passes; return true; });
-        bool sampled{false};
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{5};
-        do {
-            sampled = service->Runtime().GetNetworkObservation()->remote.fresh_local_groups != 0;
-            if (passes.load() >= 2 && (sampled || !enabled)) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds{10});
-        } while (std::chrono::steady_clock::now() < deadline);
-        service->StopNetwork(); service.reset(); stop = true; serving.join();
-        BOOST_CHECK_GE(passes.load(), 2U);
-        BOOST_CHECK_EQUAL(sampled, enabled); // default ordinary service sends no optional request
-    }
 }
 
 BOOST_AUTO_TEST_CASE(worker_retries_signing_failure_and_resumes_after_unlock)

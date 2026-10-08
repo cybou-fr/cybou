@@ -67,14 +67,11 @@ Mail/Files and shared task architecture is retained. Current order:
    acceptance; live Mail/Files offline/retrieval/repair/shared-retention scenarios.
 4. P0: physical keyboard/mouse/drag/native dialogs, mixed DPI and real assistive
    technology acceptance in FR/EN and both themes.
-5. Current user priority: built-in passive Network monitoring under
-   [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md): local counters,
-   charts/Console, normative remote-report design, cohort consolidation and
-   scoped capacity estimates. Collection does not require generated load.
-   DEC-289/[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md)
-   freezes the first direct contract; codec/cache/scheduling/grouping, release
-   privacy/security review and coordinated software upgrade remain. Relayed
-   reports, cross-address deduplication and global census are not closed.
+5. Freeze Beta monitoring under DEC-289 and
+   [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md): local passive
+   metrics, one verified chain stream, ordinary peer liveness and storage-service
+   evidence. No remote telemetry or automatic expansion of the metric set. Any
+   addition needs a concrete operational question and explicit scope decision.
 6. P1: multi-host stepped/mixed capacity benchmark for historical throughput
    ceilings, then targeted polish. Retain op/min and simulation scope.
 

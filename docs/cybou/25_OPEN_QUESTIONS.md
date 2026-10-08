@@ -114,16 +114,10 @@ here is not an instruction to rebuild them.
 
 - pending Files-to-Mail references: source retention, durable ownership,
   restart and no duplicate staging before removing Protected-only gating;
-- wider network observability: trustworthy source, minimization/retention,
-  pseudonyms, session churn and sampled availability window; local peers are
-  not a global census and illustrative France positions are not geolocation;
-  [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md) now requires
-  built-in collection and consolidation. DEC-289 and Level 2
-  [NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md) freeze the first
-  direct report's layout, replay/stale bounds and one report per address group.
-  Codec/cache/transport/grouping, privacy acceptance, relayed reports and
-  cross-address deduplication remain open; reported resource values are not
-  verified service evidence or a unique-node census;
+- wider network observability is outside the frozen Beta scope (DEC-289).
+  Local peers are not a global census and illustrative France positions are not
+  geolocation. Future storage evidence summaries need service-owned definitions,
+  denominators/windows and privacy scope; no automatic remote telemetry work;
 - implemented per-object protection blockers/freshness: preserve safe service-owned evidence
   without exposing provider topology or interpreting missing data as failure;
 - per-object remote purge outcomes: actual available acknowledgements, privacy,

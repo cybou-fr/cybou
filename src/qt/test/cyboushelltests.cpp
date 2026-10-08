@@ -1,5 +1,4 @@
 #include <qt/cybouobservationchart.h>
-#include <qt/networkobservationtext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1136,81 +1135,6 @@ void CybouShellTests::filesNavigationAndViews()
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
 }
 
-void CybouShellTests::remoteObservationChartsBreakAtGapsAndCohorts()
-{
-    CybouObservationChart chart{QStringLiteral("Reported traffic"), QStringLiteral("Received"), QStringLiteral("Sent"), QStringLiteral("B/s"), 1, nullptr};
-    std::vector<cybou::NetworkObservationPoint> points(5);
-    for (size_t n = 0; n < points.size(); ++n) {
-        points[n].end_elapsed_ms = (n + 1) * 5000; points[n].cohort_revision = n < 2 ? 1 : 2;
-        points[n].traffic.received_bytes_per_second = 0; points[n].traffic.sent_bytes_per_second = 10;
-    }
-    points[3].traffic = {}; points[4].end_elapsed_ms = 40000;
-    chart.setRemoteHistory(points, CybouObservationChart::RemoteMetric::TRAFFIC);
-    QCOMPARE(chart.property("sampleCount").toInt(), 5);
-    QCOMPARE(chart.property("segmentCount").toInt(), 3);
-    chart.resize(780, 260); chart.show(); chart.setFocus(); QTest::keyClick(&chart, Qt::Key_Home);
-    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Received: ") + QLocale{}.toString(0.0, 'f', 1)));
-    QTest::keyClick(&chart, Qt::Key_Right); QTest::keyClick(&chart, Qt::Key_Right); QTest::keyClick(&chart, Qt::Key_Right);
-    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Unknown")));
-    QVERIFY(!chart.grab().isNull());
-    if (const auto path = qEnvironmentVariable("CYBOU_CHART_CAPTURE"); !path.isEmpty()) QVERIFY(chart.grab().save(path));
-    chart.setRemoteHistory({}, CybouObservationChart::RemoteMetric::TRAFFIC);
-    QCOMPARE(chart.property("sampleCount").toInt(), 0);
-    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Unknown")));
-}
-
-void CybouShellTests::networkObservationCardsKeepPartialScope()
-{
-    cybou::NodeDiagnosticsSnapshot d;
-    auto unknown = cybouNetworkObservationText(d);
-    QVERIFY(unknown.capacity.contains(QStringLiteral("Unknown")));
-    auto observation = std::make_shared<cybou::NetworkObservationSnapshot>();
-    observation->network_binding.fill(8);
-    d.network_binding = cybou::Hash256{observation->network_binding}.GetHex();
-    observation->remote.selected_remote_groups = 3;
-    observation->remote.fresh_remote_groups = 2;
-    observation->remote.missing_remote_groups = 1;
-    observation->remote.storage.contributors = 2;
-    observation->remote.storage.capacity_bytes = 100;
-    observation->remote.storage.stored_copy_bytes = 0;
-    observation->remote.storage.utilization_percent = 0;
-    observation->remote.traffic.contributors = 1;
-    observation->remote.traffic.received_bytes_per_second = 0;
-    observation->remote.traffic.sent_bytes_per_second = 12;
-    observation->remote.reports.push_back({false, 1200, 20});
-    d.network_observation = observation;
-    const auto text = cybouNetworkObservationText(d);
-    QVERIFY(cybouNetworkObservationText(d, observation->captured_at + std::chrono::seconds{89}).capacity.contains(QStringLiteral("Unknown")));
-    QVERIFY(cybouNetworkObservationText(d, observation->captured_at - std::chrono::seconds{1}).capacity.contains(QStringLiteral("Unknown")));
-    QVERIFY(text.capacity_title.contains(QStringLiteral("2 reporting groups")));
-    QVERIFY(text.storage_detail.contains(QStringLiteral("Stored copies: 0")));
-    QVERIFY(text.coverage.contains(QStringLiteral("2 / 3")));
-    QVERIFY(text.coverage.contains(QStringLiteral("missing: 1")));
-    QVERIFY(text.cpu.contains(QStringLiteral("Unknown")));
-    CybouDesktopModel model{QStringLiteral("DEVNET")};
-    model.setNetworkDiagnostics(d);
-    NetworkPage page{&model}; page.show(); page.showTechnicalDetails();
-    auto* capacity = page.findChild<QLabel*>(QStringLiteral("networkObservedCapacity"));
-    auto* coverage = page.findChild<QLabel*>(QStringLiteral("networkObservedCoverage"));
-    QVERIFY(capacity && coverage);
-    QTRY_COMPARE(capacity->text(), text.capacity);
-    QVERIFY(coverage->text().contains(QStringLiteral("2 / 3")));
-    d.network_observation.reset(); model.setNetworkDiagnostics(d);
-    QTRY_VERIFY(capacity->text().contains(QStringLiteral("Unknown")));
-    d.network_observation = observation; d.network_binding = "other-network";
-    QVERIFY(cybouNetworkObservationText(d).capacity.contains(QStringLiteral("Unknown")));
-    observation->remote.clock_valid = false; d.network_binding = cybou::Hash256{observation->network_binding}.GetHex();
-    QVERIFY(cybouNetworkObservationText(d).capacity.contains(QStringLiteral("Unknown")));
-    QTranslator translator;
-    QVERIFY(translator.load(QStringLiteral(":/i18n/cybou_fr.qm")));
-    const bool translated = qApp->installTranslator(&translator);
-    const auto french = cybouNetworkObservationText(d);
-    qApp->removeTranslator(&translator);
-    QVERIFY(translated);
-    QVERIFY(french.capacity.contains(QStringLiteral("Inconnu")));
-    QVERIFY(french.capacity_title.contains(QStringLiteral("Capacité de stockage observée")));
-}
-
 void CybouShellTests::networkMonitorUsesCoreSnapshot()
 {
     CybouDesktopModel model{QStringLiteral("DEVNET")};
@@ -1373,7 +1297,7 @@ void CybouShellTests::networkPageReflectsModel()
     observed.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
     observed.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
-    observed.traffic.history = {{5000, 50, 100}, {10000, 150, 200}};
+    observed.storage_transfers.history = {{5000, 50, 100}, {10000, 150, 200}};
     observed.storage_transfers.put = {.received_bytes = 60, .sent_bytes = 120,
         .window_received_bytes = 60, .window_sent_bytes = 120, .window_ms = 60000};
     observed.storage_transfers.get = {.received_bytes = 180, .sent_bytes = 240,
@@ -1411,9 +1335,15 @@ void CybouShellTests::networkPageReflectsModel()
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(put_payload->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(get_payload->text(), QStringLiteral("Unknown"));
-    auto* traffic_chart = network->findChild<QWidget*>(QStringLiteral("networkTrafficChart"));
+    auto* traffic_chart = network->findChild<QWidget*>(QStringLiteral("networkTransferChart"));
     auto* operation_chart = network->findChild<QWidget*>(QStringLiteral("networkFinalizationChart"));
     QVERIFY(traffic_chart && operation_chart);
+    int chart_count{0};
+    for (auto* child : network->findChildren<QWidget*>())
+        if (dynamic_cast<CybouObservationChart*>(child)) ++chart_count;
+    QCOMPARE(chart_count, 2);
+    QVERIFY(!network->findChild<QWidget*>(QStringLiteral("networkRemoteStorageChart")));
+    QVERIFY(!network->findChild<QLabel*>(QStringLiteral("networkObservedCpu")));
     QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 2);
     QTRY_COMPARE(operation_chart->property("sampleCount").toInt(), 2);
     static_cast<NetworkPage*>(network)->showBenchmarkDetails();
@@ -1423,8 +1353,8 @@ void CybouShellTests::networkPageReflectsModel()
     QVERIFY(traffic_chart->accessibleDescription().contains(QLocale{}.toString(10.0, 'f', 1)));
     QTest::keyClick(traffic_chart, Qt::Key_Right);
     QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 10000ULL);
-    observed.traffic.history.clear();
-    for (uint64_t i = 0; i < 200; ++i) observed.traffic.history.push_back({(i + 1) * 5000, i * 50, (i % 7) * 60});
+    observed.storage_transfers.history.clear();
+    for (uint64_t i = 0; i < 200; ++i) observed.storage_transfers.history.push_back({(i + 1) * 5000, i * 50, (i % 7) * 60});
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 180);
     QTest::keyClick(traffic_chart, Qt::Key_Home);

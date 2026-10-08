@@ -44,9 +44,7 @@ struct CybouNetworkServiceConfig {
     std::optional<std::pair<std::string, uint16_t>> listen_endpoint;
     /// \brief true: a busy listen port falls back to any free port; if none binds the node stays outbound-only.
     bool listen_optional{false};
-    // Deployment gate: false until coordinated current-baseline acceptance.
-    // Local acquisition policy only; never a wire capability or node role.
-    bool observation_polling{false};
+
 };
 
 /// \brief Управляет запуском runtime и сетевым жизненным циклом Full Node.

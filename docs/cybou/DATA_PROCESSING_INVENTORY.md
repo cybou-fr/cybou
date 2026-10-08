@@ -30,33 +30,22 @@ public, hashed or encrypted does not settle that assessment.
 
 Source paths in this table are relative to `src/cybou/` unless explicitly named.
 
-## Direct observation target inventory (2026-10-08)
+## Passive local monitoring inventory (2026-10-09)
 
-DEC-289 and [NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md)
-define a non-deployed minimized report target. No new wire/cache/logging path
-is implemented by this inventory update. Purpose: local operator monitoring of
-selected directly connected reports, without a census or verified-service claim.
+DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local runtime
+metrics and evidence from the existing chain/P2P/storage protocols. No remote
+resource report, address-group cache, request challenge store or cohort history
+is retained by production. Superseded remote processing designs are in Git.
 
-Planned data: same-network cursor, declared policy/rounded stored bytes,
-60-second frame traffic, completed normalized CPU means and rounded resident
-memory. The receiver associates them with its existing socket address and live
-session for challenge binding/address grouping, retaining at most 32 group slots;
-payloads expire after 90 seconds or immediately on disconnect/replacement.
-Cooldown metadata is separately bounded at 128 addresses / 90 seconds of
-inactivity. No report forwarding, durable cache, raw event logs, exporter,
-endpoint-labelled history, Identity/StorageId/content/PoA fields or lifetime
-totals are added by the target. Existing peer/session/log inventories remain.
+Local frame/payload byte windows, operation windows and process/disk diagnostics
+remain volatile, bounded and without endpoint/content/Identity labels in metric
+history. The existing peer/session, application storage-evidence, event-log and
+signing-journal inventories above retain their own scopes and obligations. This
+source change does not erase or change their records or retention.
 
-Activity and processor/memory patterns can still be identifying or linkable;
-rounding and TLS do not establish anonymity, truthful measurements or independent
-hosts. Roles, access/purpose review, accountable risk owner and governing
-privacy/security deployment acceptance remain open. Serialization, expiry,
-log minimization and abuse/scheduling tests are required before implementation
-acceptance; they do not substitute for governance review.
-Reviewed implementation evidence is deliberately narrower than deployment
-evidence. OS logs, VPS journald, external backups, browser/web analytics, support
-systems and recipient exports require separate inventories; none is assumed
-absent because it is outside these files.
+OS logs, VPS journald, external backups, browser/web analytics, support systems
+and recipient exports require separate inventories; none is assumed absent
+because it is outside these files.
 
 ## Deletion and retention boundaries
 

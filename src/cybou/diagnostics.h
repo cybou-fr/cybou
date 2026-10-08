@@ -13,7 +13,6 @@
 #include <string>
 #include <vector>
 namespace cybou {
-struct NetworkObservationSnapshot;
 
 /// \brief Диагностические сведения об одном подключенном пире.
 struct PeerDiagnostics {
@@ -39,7 +38,6 @@ struct OperationDiagnostics {
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
-    std::shared_ptr<const NetworkObservationSnapshot> network_observation;
     TrafficDiagnostics traffic;
     StorageTransferDiagnostics storage_transfers;
     FinalizationDiagnostics finalization;

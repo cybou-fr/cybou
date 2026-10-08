@@ -22,15 +22,11 @@ introduced by these product features.
 
 ## Network overview
 
-DEC-289's first remote feed target is specified in
-[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md), not implemented.
-Remote cards/charts must label fresh reporting address groups, declared values,
-field-specific contributor counts, rounding/window/age and missing/limited
-coverage. One chosen report per IP prevents ports/session churn from inflating
-groups; NAT/aliases mean it is not a node or host census. Never sum memory,
-available disk or peer chain/operation streams as network totals. Membership
-changes split aggregate chart segments. Existing Network/Console still show
-local measurements only until real reports are implemented.
+DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local passive
+metrics plus ordinary chain/P2P/storage evidence. Remote telemetry, resource
+aggregation and cohort charts are absent. Keep at most two local charts:
+finalized operations and completed PUT/GET payload. CPU/RAM/frame traffic are
+Technical/Console details, not prominent network metrics or global load.
 
 Advanced Storage shows encrypted stored lengths / V, utilization and policy
 headroom separately from OS available disk space. Provider obligations are shown
@@ -51,13 +47,13 @@ The local process-memory tile is an instantaneous OS working set / RSS gauge
 for the entire CYBOU executable, including GUI and shared resident pages.
 It uses the diagnostics sample time, displays Unknown when absent, and has
 matching exact-byte output in Console `metrics`. It is not host memory, average
-load or a network total. Resource history and remote resource reports remain planned.
+load or a network total. The Beta metric set is frozen; resource history and remote reports are outside scope.
 
 The page is named Network / Réseau in navigation and headers. Built-in passive
 monitoring is standard CYBOU functionality: actual data served, finalized op/min,
 transfer speed, resource load, storage capacity and scoped potential headroom,
 with time-series charts and matching Console detail. The observability plan
-defines sources, consolidation and remaining implementation. Historical load
+defines local sources, the frozen metric set and the addition gate. Historical load
 benchmarks are separate ceiling evidence and do not replace current telemetry.
 No external monitoring product or synthetic load is required for collection.
 

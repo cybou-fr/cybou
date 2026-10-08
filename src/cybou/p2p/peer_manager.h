@@ -100,8 +100,6 @@ public:
     /// \brief Пингует не более `max_peers`, с ротацией стартовой позиции между вызовами.
     /// \param max_peers Верхняя граница числа пиров в одном проходе.
     size_t PingSome(size_t max_peers);
-    // Existing owner only; at most one round-robin session, no dial or retry.
-    bool PollObservation(uint64_t local_height, std::chrono::steady_clock::time_point deadline);
     /// \brief Подтягивает до `max_blocks` финализованных блоков от выбранного пира.
     /// \param numeric_address Адрес уже подключенного пира.
     /// \param port Порт уже подключенного пира.
@@ -144,7 +142,6 @@ private:
     boost::asio::io_context m_io;
     std::map<Endpoint, std::unique_ptr<PeerSession>> m_peers;
     std::optional<Endpoint> m_ping_cursor;
-    std::optional<Endpoint> m_observation_cursor;
     std::optional<Endpoint> m_discovery_cursor;
     // Latest session HELLO/BLOCK_RESULT height; only a bounded fanout scheduling hint.
     std::map<Endpoint, uint64_t> m_peer_finalized_heights;

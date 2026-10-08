@@ -435,26 +435,6 @@ SyncPeerResult CybouNodeRuntime::SyncFromConfiguredPeer(const uint64_t max_block
     return result;
 }
 
-bool CybouNodeRuntime::PollIdleObservation(const SyncPeerResult& completed,
-    const std::chrono::steady_clock::time_point deadline)
-{
-    if (completed.status != SyncPeerStatus::UP_TO_DATE || completed.blocks_applied ||
-        !completed.caught_up_with_known_peers || deadline <= std::chrono::steady_clock::now()) return false;
-    std::unique_lock owner{m_network.mutex, std::try_to_lock};
-    if (!owner.owns_lock() || !m_network.peer_manager || m_network.catching_up) return false;
-    const auto now = std::chrono::steady_clock::now();
-    if (now < m_network.next_observation_poll || !m_network.storage_io->IsIdle()) return false;
-    std::optional<uint64_t> height;
-    {
-        std::unique_lock state{m_chain.mutex, std::try_to_lock};
-        if (!state.owns_lock() || m_chain.operation_pool.Size() != 0) return false;
-        height = m_chain.store.GetFinalizedHeight();
-    }
-    if (!height) return false;
-    m_network.next_observation_poll = now + std::chrono::seconds{5};
-    return m_network.peer_manager->PollObservation(*height, deadline);
-}
-
 size_t CybouNodeRuntime::ConnectedPeerCount() const
 {
     std::lock_guard p2p_lock(m_network.mutex);

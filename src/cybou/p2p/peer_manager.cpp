@@ -202,22 +202,6 @@ size_t PeerManager::PingSome(const size_t max_peers)
     return healthy;
 }
 
-bool PeerManager::PollObservation(const uint64_t local_height, const std::chrono::steady_clock::time_point deadline)
-{
-    if (m_peers.empty() || deadline <= std::chrono::steady_clock::now()) return false;
-    auto it = m_observation_cursor ? m_peers.upper_bound(*m_observation_cursor) : m_peers.begin();
-    if (it == m_peers.end()) it = m_peers.begin();
-    m_observation_cursor = it->first;
-    const auto frontier = m_peer_finalized_heights.find(it->first);
-    // A new locally finalized block takes precedence over optional observation.
-    if (frontier == m_peer_finalized_heights.end() || frontier->second < local_height) return false;
-    const auto report = it->second->RequestObservation(m_runtime, deadline);
-    if (!it->second->Socket().is_open()) {
-        m_peer_finalized_heights.erase(it->first); m_peers.erase(it);
-    }
-    return report.has_value();
-}
-
 SyncPeerResult PeerManager::SyncFromPeer(const std::string& numeric_address, uint16_t port, uint64_t max_blocks)
 {
     SyncPeerResult result;

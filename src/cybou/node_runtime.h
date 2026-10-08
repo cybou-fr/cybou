@@ -47,11 +47,7 @@
 #include <vector>
 
 namespace cybou {
-class ObservationCollector;
-struct ObservationReport;
-struct NetworkObservationSnapshot;
-class NetworkObservationHistory;
-namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; class ObservationExchange; class ObservationGroups; }
+namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; }
 class StorageIoScheduler;
 class CybouKeyStore;
 class IdentityOperationCoordinator;
@@ -278,12 +274,6 @@ public:
     /// \brief Возвращает диагностический snapshot runtime, peer set и storage usage.
     /// \return Данные для UI/CLI diagnostics; peer и state locks не удерживаются одновременно дольше нужного.
     NodeDiagnosticsSnapshot GetDiagnostics() const;
-    /// Fixed cached DEC-289 payload; does not collect or touch chain/provider locks.
-    std::array<unsigned char, 191> ReadObservationReport(const std::array<unsigned char, 32>& challenge) const;
-    std::shared_ptr<p2p::ObservationExchange> GetObservationExchange() const { return m_observation_exchange; }
-    // Trusted session-owner store; Record only exchange-accepted replies.
-    std::shared_ptr<p2p::ObservationGroups> GetObservationGroups() const { return m_observation_groups; }
-    std::shared_ptr<const NetworkObservationSnapshot> GetNetworkObservation() const;
     std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
@@ -449,9 +439,6 @@ public:
     /// \return Итог verified sync-pass и число применённых блоков.
     /// \post Может обновить connected peer set, retry backoff и gossip/relay activity.
     SyncPeerResult SyncFromConfiguredPeer(uint64_t max_blocks = 100);
-    // Service owner's optional idle slot, after a completed same-cycle sync pass.
-    bool PollIdleObservation(const SyncPeerResult& completed,
-        std::chrono::steady_clock::time_point deadline);
     /// \brief Число currently connected peers.
     /// \return Число активных peer sessions.
     size_t ConnectedPeerCount() const;
@@ -699,7 +686,6 @@ private:
             timeout and must never hold back block sync or operation relay. */
         std::atomic_bool storage_probe_running{false};
         std::thread storage_prober;
-        std::chrono::steady_clock::time_point next_observation_poll{};
         std::chrono::steady_clock::time_point next_peer_ping{};
         std::chrono::steady_clock::time_point next_peer_discovery{};
         // Peer callbacks can consult routes while session I/O owns mutex.
@@ -714,20 +700,14 @@ private:
         std::atomic<uint16_t> listen_port{0};
     };
     NodeRuntimeConfig m_config;
-    ObservationReport CollectObservationReport() const;
     std::shared_ptr<TrafficMeter> m_traffic{std::make_shared<TrafficMeter>()};
     const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
     mutable ProcessCpuMeter m_cpu_observations;
     cybou::Hash256 m_network_binding;
-    std::shared_ptr<p2p::ObservationExchange> m_observation_exchange;
-    std::shared_ptr<p2p::ObservationGroups> m_observation_groups;
-    std::unique_ptr<NetworkObservationHistory> m_network_observation_history;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;
     ProviderCore m_provider;
     NetworkCore m_network;
-    // Destroy/join collector before any captured runtime data is torn down.
-    std::unique_ptr<ObservationCollector> m_observation_collector;
 };
 
 } // namespace cybou
