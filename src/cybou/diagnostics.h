@@ -33,6 +33,11 @@ struct OperationDiagnostics {
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
+    /// Local passive observation time (UTC) and monotonic runtime lifetime.
+    /// A zero observation time means no real runtime sample is available.
+    std::uint64_t observed_unix_ms{0}, uptime_ms{0};
+    /// Actual volatile candidate pool, distinct from recent operation history.
+    std::uint64_t pending_operations{0}, pending_operation_bytes{0};
     /// \brief `NetworkBinding` активной официальной сети в hex.
     /// \brief Локальный тип узла для UI/CLI; в текущем базовом варианте это обычный `Full Node`.
     /// \brief `BlockID` текущей локально финализованной вершины в hex.

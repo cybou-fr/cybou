@@ -5,7 +5,7 @@ User priority: continuously collect and consolidate actual network data in
 CYBOU and present it on Network, with Console details. This is standard
 production functionality, without Grafana, Prometheus, an external collector
 or generated load. Collection continues while the page is hidden; presentation
-pauses. This plan does not claim that collectors or remote reporting are
+pauses. This plan does not claim that complete collectors or remote reporting are
 implemented and introduces no wire messages or canonical state fields.
 
 ## Metrics on Network
@@ -70,7 +70,8 @@ time series. Canonical streams/registers must never be added across reporters.
    collection overhead. Missing measurements remain Unknown.
 2. **O2 Network and Console:** cards/charts from O1 and matching proposed
    `health`, `metrics`, `capacity` read-only commands; map/Advanced retained,
-   FR/EN, themes, stale/unknown states. Commands are not implemented yet.
+   FR/EN, themes, stale/unknown states. `health` has its first bounded package
+   below; `metrics` and `capacity` remain planned.
 3. **O3 Remote report design:** close normative trust/privacy/deduplication and
    abuse gates before modifying P2P. No new network, genesis or signer needed.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
@@ -79,6 +80,20 @@ time series. Canonical streams/registers must never be added across reporters.
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
    optional accepted historical throughput ceiling beside actual current rate.
    Benchmarks validate ceilings separately and are not needed for monitoring.
+
+### O1 first bounded package (2026-10-08)
+
+Implemented: UTC observation timestamp, monotonic runtime uptime, actual local
+candidate-pool count and serialized bytes in the shared diagnostics snapshot.
+The existing background diagnostics refresh collects them independently of
+Network visibility. Network Advanced Overview displays uptime, sample time and
+queue load; read-only `health` exposes the same sample while locked or unlocked.
+Unknown sample/initialization remains explicit; no synthetic health score.
+The bounded pool is read under its existing lock without scanning history.
+
+Still open: rate windows/retention, transfer counters, CPU/memory/I/O, canonical
+register aggregates, charts, remote reports/consolidation and capacity estimates.
+`metrics` and `capacity` are planned commands; `health` is now implemented.
 
 Existing CI and Beta acceptance gates remain. Work in bounded packages;
 collector preparation does not require a live load test or signer restart.

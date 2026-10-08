@@ -5,6 +5,31 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Network naming and observability scope correction (2026-10-08)
 
+### Local passive observation follow-up
+
+Runtime diagnostics now collect real UTC observation time, monotonic uptime and
+actual candidate-pool count/serialized bytes under the existing chain lock.
+This separates pending load from bounded recent finalized/rejected history.
+Existing background collection continues when Network is hidden. Advanced
+Overview presents the shared uptime/sample/queue values and read-only `health`
+reports them in Console without requiring an unlocked Identity or local signer.
+Absent sample/uninitialized pool stays Unknown; FR translations are supplied.
+No chain scan, new P2P report, network total, measured op/min, resource-use
+estimate or history/chart collector is introduced. O1 remains partially open.
+
+Ordinary MinGW/Qt desktop, Qt tests and core-test binaries rebuilt successfully
+in `build_cybou_qt_mingw/bin/`. Full offscreen Qt: 92 passed, 0 failed/skipped,
+including sample absence/uninitialized reset, real queue values, French `health`
+and locked-session access. Focused core: 3 cases / 35 assertions passed; the
+remaining cases were filtered. Coverage checks empty/queued/drained pool bytes,
+monotonic uptime and unchanged status-log suppression. Logs are retained under
+`artifacts/network-local-observation-20261008/`. Desktop SHA-256:
+`a369b2b72d33d7cd7a7a78898647cf1ca202f17137f309f4339729469b89f37b`.
+These are component/build results; no deployed network aggregate or physical
+acceptance is claimed. Existing desktop/signer processes were not restarted.
+
+### Earlier naming/contract package
+
 Navigation/header now use Network / Réseau; the map heading uses NETWORK /
 RÉSEAU. Active DEVNET and France admission remain scoped details. Built-in
 collection/consolidation of actual service bytes, finalized op/min, transfer

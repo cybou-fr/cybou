@@ -9,6 +9,7 @@
 #include <qt/cybouui.h>
 
 #include <QHBoxLayout>
+#include <QDateTime>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -47,6 +48,7 @@ struct Command {
 const Command commands[] = {
     {"help", "help", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Show available commands"), false, false},
     {"status", "status", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local node and Identity status"), false, false},
+    {"health", "health", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local runtime observation and candidate pool"), false, false},
     {"network", "network", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Network binding, chain tip and state root"), false, false},
     {"storage", "storage", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Physical storage usage and capacity policy"), false, false},
     {"peers", "peers", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Observed sessions and unverified peer heights"), false, false},
@@ -441,6 +443,16 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(s.finality_known ? QString::number(s.finalized_height) : tr("Unknown"))
             .arg(id_state)
             .arg(s.primary_name.isEmpty() ? tr("None") : s.primary_name));
+    } else if (cmd == QLatin1String{"health"}) {
+        const auto& d = m_model->networkDiagnostics();
+        const bool measured = d.observed_unix_ms != 0;
+        appendOutput(tr("Source: Local node snapshot\nObserved: %1\nNode uptime: %2\nInitialized: %3\nSafety halt: %4\nLocal candidate pool: %5 operations / %6 bytes\nThis is local load, not network throughput or global health.")
+            .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown"))
+            .arg(measured ? tr("%1 s").arg(d.uptime_ms / 1000) : tr("Unknown"))
+            .arg(measured ? (d.initialized ? tr("Yes") : tr("No")) : tr("Unknown"))
+            .arg(measured ? (d.safety_halted ? tr("Yes") : tr("No")) : tr("Unknown"))
+            .arg(measured && d.initialized ? QString::number(d.pending_operations) : tr("Unknown"))
+            .arg(measured && d.initialized ? QString::number(d.pending_operation_bytes) : tr("Unknown")));
     } else if (cmd == QLatin1String{"network"}) {
         const auto& d = m_model->networkDiagnostics();
         appendOutput(tr("Network: %1\nNetwork binding: %2\nLocally verified height: %3\nTip: %4\nState root: %5\nSafety halt: %6")

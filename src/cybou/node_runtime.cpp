@@ -59,6 +59,10 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
+    snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    snapshot.uptime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - m_observation_started).count();
     snapshot.network_binding = status.network_binding.GetHex();
     snapshot.node_type = "Full Node";
     snapshot.poa_signer_active = status.poa_signer_active;
@@ -70,6 +74,8 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     // Never hold state and peer locks together (peer I/O can call state methods).
     {
         std::lock_guard lock{m_chain.mutex};
+        snapshot.pending_operations = m_chain.operation_pool.Size();
+        snapshot.pending_operation_bytes = m_chain.operation_pool.Bytes();
         snapshot.operations.reserve(m_chain.recent_operation_status_order.size());
         for (const auto& id : m_chain.recent_operation_status_order) {
             const auto& op = m_chain.recent_operation_status.at(id);

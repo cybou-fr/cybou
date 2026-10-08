@@ -11,6 +11,7 @@
 #include <qt/cybouui.h>
 
 #include <QFrame>
+#include <QTimeZone>
 #include <QFile>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -432,6 +433,13 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [p_val, p_sub] = MetricTile(grid, 0, 1, tr("Connected peers"), overview);
     m_metric_peers = p_val; m_metric_peers_sub = p_sub;
 
+    auto [u_val, u_sub] = MetricTile(grid, 1, 0, tr("Node uptime"), overview);
+    m_metric_uptime = u_val; m_metric_uptime_sub = u_sub;
+    m_metric_uptime->setObjectName(QStringLiteral("networkNodeUptime"));
+    auto [q_val, q_sub] = MetricTile(grid, 1, 1, tr("Local candidate pool"), overview);
+    m_metric_queue = q_val; m_metric_queue_sub = q_sub;
+    m_metric_queue->setObjectName(QStringLiteral("networkCandidatePool"));
+
     overview_layout->addLayout(grid);
     auto* storage_grid = new QGridLayout;
     storage_grid->setSpacing(14);
@@ -727,6 +735,13 @@ void NetworkPage::refresh()
     // 4. Peers tile
     m_metric_peers->setText(QString::number(status.peer_count));
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
+
+    const bool measured = diag.observed_unix_ms != 0;
+    m_metric_uptime->setText(measured ? tr("%1 s").arg(diag.uptime_ms / 1000) : tr("Unknown"));
+    m_metric_uptime_sub->setText(measured ? tr("Local observation: %1 UTC").arg(
+        QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(diag.observed_unix_ms), QTimeZone::UTC).toString(QStringLiteral("HH:mm:ss"))) : tr("Unknown"));
+    m_metric_queue->setText(measured && diag.initialized ? QString::number(diag.pending_operations) : tr("Unknown"));
+    m_metric_queue_sub->setText(measured && diag.initialized ? tr("%1 bytes · volatile, locally validated").arg(diag.pending_operation_bytes) : tr("Unknown"));
 
     // 5. Storage tile
     m_metric_storage->setText(diag.local_storage_capacity ? QStringLiteral("%1 / %2").arg(

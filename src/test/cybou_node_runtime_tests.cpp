@@ -126,6 +126,11 @@ BOOST_AUTO_TEST_CASE(public_event_writer_rejects_secret_fields)
     const auto snapshot=fixture.runtime->GetDiagnostics();
     BOOST_CHECK(snapshot.initialized);
     BOOST_CHECK_EQUAL(snapshot.node_type, "Full Node");
+    BOOST_CHECK_GT(snapshot.observed_unix_ms, 0U);
+    const auto next = fixture.runtime->GetDiagnostics();
+    BOOST_CHECK_GE(next.uptime_ms, snapshot.uptime_ms);
+    BOOST_CHECK_EQUAL(next.pending_operations, 0U);
+    BOOST_CHECK_EQUAL(next.pending_operation_bytes, 0U);
     BOOST_CHECK_EQUAL(snapshot.height,fixture.runtime->GetStatus().finalized_height);
 }
 
@@ -232,6 +237,9 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::QUEUED);
     BOOST_CHECK(ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK(ordinary.HasCandidateOperation(*commit_id));
+    const auto queued = ordinary.GetDiagnostics();
+    BOOST_CHECK_EQUAL(queued.pending_operations, 1U);
+    BOOST_CHECK_EQUAL(queued.pending_operation_bytes, commit_bytes->size());
     // An ordinary node's own pool is not finalizer acceptance.
     BOOST_CHECK(ordinary.GetOperationStatus(*commit_id).kind != cybou::OperationStatusKind::LOCAL_PENDING);
 
@@ -239,6 +247,9 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(!ordinary.HasCandidateOperation(*commit_id));
     BOOST_CHECK(!ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK_EQUAL(ordinary.CandidateOperationCount(), 0U);
+    const auto drained = ordinary.GetDiagnostics();
+    BOOST_CHECK_EQUAL(drained.pending_operations, 0U);
+    BOOST_CHECK_EQUAL(drained.pending_operation_bytes, 0U);
     BOOST_CHECK(ordinary.EnqueueRelayedOperation(*commit_bytes, 0) == cybou::OperationRelayEnqueueStatus::DUPLICATE);
 }
 

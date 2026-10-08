@@ -697,6 +697,7 @@ private:
         std::atomic<uint16_t> listen_port{0};
     };
     NodeRuntimeConfig m_config;
+    const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
     cybou::Hash256 m_network_binding;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;

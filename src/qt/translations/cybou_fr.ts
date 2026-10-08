@@ -139,6 +139,24 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>Local runtime observation and candidate pool</source><translation>Observation locale du fonctionnement et du pool de candidats</translation></message>
+    <message><source>%1 s</source><translation>%1 s</translation></message>
+    <message>
+        <source>Source: Local node snapshot
+Observed: %1
+Node uptime: %2
+Initialized: %3
+Safety halt: %4
+Local candidate pool: %5 operations / %6 bytes
+This is local load, not network throughput or global health.</source>
+        <translation>Source : instantané du nœud local
+Observation : %1
+Temps de fonctionnement : %2
+Initialisé : %3
+Arrêt de sécurité : %4
+Pool local de candidats : %5 opérations / %6 octets
+Il s'agit de la charge locale, pas du débit ni de la santé globale du réseau.</translation>
+    </message>
     <message>
         <source>This console is read-only. Pause, resume and finalize from the Central Authority page.</source>
         <translation>Cette console est en lecture seule. Mettez en pause, reprenez et finalisez depuis la page Autorité centrale.</translation>
@@ -4785,6 +4803,11 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Node uptime</source><translation>Temps de fonctionnement du nœud</translation></message>
+    <message><source>Local candidate pool</source><translation>Pool local de candidats</translation></message>
+    <message><source>%1 s</source><translation>%1 s</translation></message>
+    <message><source>Local observation: %1 UTC</source><translation>Observation locale : %1 UTC</translation></message>
+    <message><source>%1 bytes · volatile, locally validated</source><translation>%1 octets · volatils, validés localement</translation></message>
     <message>
         <location filename="../pages/networkpage.cpp" line="+342"/>
         <source>Network Overview</source>

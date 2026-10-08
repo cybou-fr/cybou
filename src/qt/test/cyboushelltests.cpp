@@ -1274,6 +1274,25 @@ void CybouShellTests::networkPageReflectsModel()
     QVERIFY(has_text(QStringLiteral("Waiting for a valid Geo database")));
     model->setGeoAdmissionStatus(CybouGeoAdmissionStatus::Ready);
     QTRY_VERIFY(has_text(QStringLiteral("Ready")));
+
+    auto* uptime = network->findChild<QLabel*>(QStringLiteral("networkNodeUptime"));
+    auto* pool = network->findChild<QLabel*>(QStringLiteral("networkCandidatePool"));
+    QVERIFY(uptime && pool);
+    QCOMPARE(pool->text(), QStringLiteral("Unknown"));
+    cybou::NodeDiagnosticsSnapshot observed;
+    observed.observed_unix_ms = 1791460800000ULL;
+    observed.uptime_ms = 120000;
+    observed.initialized = true;
+    observed.pending_operations = 3;
+    observed.pending_operation_bytes = 700;
+    model->setNetworkDiagnostics(observed);
+    QTRY_COMPARE(uptime->text(), QStringLiteral("120 s"));
+    QTRY_COMPARE(pool->text(), QStringLiteral("3"));
+    observed.initialized = false;
+    model->setNetworkDiagnostics(observed);
+    QTRY_COMPARE(pool->text(), QStringLiteral("Unknown"));
+    model->setNetworkDiagnostics({});
+    QTRY_COMPARE(uptime->text(), QStringLiteral("Unknown"));
 }
 
 void CybouShellTests::adapterSettersDrivePages()
@@ -5397,6 +5416,21 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.executeCommand(QStringLiteral("operations"));
     QVERIFY(console.outputText().contains(QStringLiteral("operation-1")));
 
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("health"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: Unknown")));
+    snapshot.observed_unix_ms = 1791460800000ULL;
+    snapshot.uptime_ms = 120000;
+    snapshot.pending_operations = 3;
+    snapshot.pending_operation_bytes = 700;
+    model->setNetworkDiagnostics(snapshot);
+    console.clearOutput();
+    console.executeCommand(QStringLiteral("health"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: 120 s")));
+    QVERIFY(console.outputText().contains(QStringLiteral("3 operations / 700 bytes")));
+    console.executeCommand(QStringLiteral("health extra"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Usage: health")));
+
     CybouNetworkAuthorityStatus authority;
     authority.proven = true; authority.finalizer = CybouFinalizerState::Finalizing;
     authority.candidates = 2; authority.candidate_ids = {QStringLiteral("candidate-1"), QStringLiteral("candidate-2")};
@@ -5461,6 +5495,9 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Commandes disponibles")));
     console.executeCommand(QStringLiteral("storage"));
     QVERIFY(console.outputText().contains(QStringLiteral("1234 / 16106127360")));
+    console.clearOutput(); console.executeCommand(QStringLiteral("health"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Temps de fonctionnement : 120 s")));
+    QVERIFY(console.outputText().contains(QStringLiteral("3 opérations / 700 octets")));
     qApp->removeTranslator(&translator);
 
     QVector<CybouFileItem> many;
@@ -5483,6 +5520,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(!console.outputText().contains(QStringLiteral("row-99")));
     console.clearOutput(); console.executeCommand(QStringLiteral("help"));
     QVERIFY(!console.outputText().contains(QStringLiteral("files [filter]")));
+    console.clearOutput(); console.executeCommand(QStringLiteral("health"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: 120 s")));
     console.executeCommand(QStringLiteral("status"));
     model->setPeerCount(7); // Routine ticks must not clear output while locked.
     QVERIFY(console.outputText().contains(QStringLiteral("> status")));

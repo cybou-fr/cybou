@@ -187,7 +187,7 @@ the same command registry used for dispatch and authorization.
 
 | Access | Implemented commands | Source and scope |
 | --- | --- | --- |
-| Any local session | `help`, `status`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
+| Any local session | `help`, `status`, `health`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
 | Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values, active application tasks, real own-content leaf manifests and BLAKE3-256 integrity verification |
 | Unlocked genesis-key-proven Authority | `authority [status|candidates|totals|settle]` | Local signer loop, candidate queue age and waiting times, safety journal status and settlement preview |
 
@@ -209,6 +209,12 @@ self-capsule/finality claim is displayed. Foreign provider chunks and common Chu
 objects are never enumerated.
 
 ### Implemented technical console capabilities
+
+`health` reports a real local UTC sample time, monotonic runtime uptime,
+initialization/safety observation and candidate-pool operations/bytes. Network
+Advanced Overview uses the same sample. Recent finalized/rejected operation
+history is not counted as candidate load. Missing sample or uninitialized pool
+shows Unknown. This is local load, not global health or operation throughput.
 
 The technical console supports:
 - Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.
