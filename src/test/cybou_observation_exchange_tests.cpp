@@ -124,5 +124,12 @@ BOOST_AUTO_TEST_CASE(concurrent_calls_obey_shared_limits)
         if (guard.AdmitResponse(Session(i), Ip(1), ObservationRequest{}, start + std::chrono::seconds{5})) ++admitted;
     });
     workers.clear(); BOOST_CHECK_EQUAL(admitted.load(), 1U);
+    // Real-clock callers must sample after acquiring the guard mutex. Sampling
+    // before it can turn ordinary thread scheduling into false clock regression.
+    ObservationExchange realtime{{}}; admitted = 0;
+    for (unsigned i = 1; i <= 32; ++i) workers.emplace_back([&, i] {
+        if (realtime.AdmitResponse(Session(i), Ip(i), ObservationRequest{})) ++admitted;
+    });
+    workers.clear(); BOOST_CHECK_EQUAL(admitted.load(), 32U);
 }
 BOOST_AUTO_TEST_SUITE_END()

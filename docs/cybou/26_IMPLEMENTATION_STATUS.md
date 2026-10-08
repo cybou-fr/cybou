@@ -3,6 +3,43 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Direct observation TLS transactions (2026-10-08)
+
+Source now accepts `GET_OBSERVATION` (27, exactly 64 bytes) and `OBSERVATION`
+(28, exactly 191 bytes); frame size is checked before body allocation in the TLS
+reader. Each runtime owns one exchange guard, shared across its sessions, with
+background cache refresh also expiring its pending/cooldown state. Default clock
+sampling occurs inside the guard mutex to avoid false backwards-time rejection
+when concurrent calls arrive out of order; explicit test clocks retain fail-closed
+regression behavior. No network/genesis/key/chain/signing history is changed.
+
+`PeerSession::RequestObservation` uses only an established same-network TLS
+session and its actual numeric socket address. Its process-local nonrecycled
+handle never goes on the wire. It sends a fresh challenge, reads within one
+five-second total transaction deadline, accepts through the guard and removes
+pending state on every return. Pre-HELLO/cooldown skips do no socket I/O. Missing,
+wrong-type, malformed or mismatched replies close the client socket so a late
+response cannot enter another transaction. Existing traffic accounting includes
+successful observation frame bytes normally.
+
+`ServeNext` checks exact payload binding/HELLO/runtime network, applies the shared
+response budget and copies only cached bytes. A rate refusal drops that request
+without closing the server session or recording abuse. Bad payload binding is a
+protocol rejection. No Identity/storage key/PoA signing is requested or exposed.
+
+Validation: exact frame sizes/headers, pinned-TLS round trip, pre-HELLO and
+cooldown no-I/O, subsequent ping, response-budget refusal preserving ping, and
+wrong challenge/network/known flag closing the client transaction. P2P, guard,
+codec/cache, runtime and Qt regression suites pass; binaries rebuild. Fixture TLS
+evidence is local component evidence, not public DEVNET deployment, independent
+host measurements, interoperability/soak or collector-cost acceptance.
+
+No production scheduler calls `RequestObservation` yet, no accepted-report store,
+grouping, consolidation or remote UI is added, and no VPS/desktop process is
+started/replaced. Existing deployed peers must undergo coordinated software
+upgrade before automatic polling; older binaries reject the new codes. Polling
+fairness, remote aggregation and governing privacy/security gates remain open.
+
 ## Standalone observation exchange guard (2026-10-08)
 
 `p2p::ObservationExchange` implements DEC-289 pending-request and abuse controls

@@ -50,7 +50,7 @@ bool ObservationExchange::Reserve(const std::string& address, bool collector, Cl
     return true;
 }
 std::optional<ObservationRequest> ObservationExchange::Begin(const ObservationSession& session,
-    const boost::asio::ip::address& address, Clock::time_point now)
+    const boost::asio::ip::address& address, std::optional<Clock::time_point> at)
 {
     if (!Eligible(session)) return std::nullopt;
     ObservationRequest request{m_binding, {}};
@@ -58,24 +58,27 @@ std::optional<ObservationRequest> ObservationExchange::Begin(const ObservationSe
     if (RAND_bytes(request.challenge.data(), static_cast<int>(request.challenge.size())) != 1) return std::nullopt;
     const auto key = AddressKey(address);
     std::lock_guard lock{m_mutex};
+    const auto now = at.value_or(Clock::now());
     if (!Advance(now) || m_pending.contains(session.handle) || m_pending.size() >= 4 || !Reserve(key, true, now)) return std::nullopt;
     m_pending.emplace(session.handle, Pending{request.challenge, now});
     return request;
 }
 bool ObservationExchange::AdmitResponse(const ObservationSession& session, const boost::asio::ip::address& address,
-    const ObservationRequest& request, Clock::time_point now)
+    const ObservationRequest& request, std::optional<Clock::time_point> at)
 {
     if (!Eligible(session) || request.network_binding != m_binding) return false;
     const auto key = AddressKey(address);
     std::lock_guard lock{m_mutex};
+    const auto now = at.value_or(Clock::now());
     return Advance(now) && Reserve(key, false, now);
 }
 std::optional<ObservationReport> ObservationExchange::Accept(const ObservationSession& session,
-    std::span<const unsigned char> payload, Clock::time_point now)
+    std::span<const unsigned char> payload, std::optional<Clock::time_point> at)
 {
     const auto report = DecodeObservationReport(payload);
     if (!Eligible(session) || report.network_binding != m_binding) return std::nullopt;
     std::lock_guard lock{m_mutex};
+    const auto now = at.value_or(Clock::now());
     if (!Advance(now)) return std::nullopt;
     const auto it = m_pending.find(session.handle);
     if (it == m_pending.end() || report.challenge != it->second.challenge) return std::nullopt;
@@ -87,9 +90,9 @@ void ObservationExchange::Close(uint64_t session)
     std::lock_guard lock{m_mutex};
     m_pending.erase(session); // Per-IP cooldown survives port/session churn.
 }
-void ObservationExchange::Expire(Clock::time_point now)
+void ObservationExchange::Expire(std::optional<Clock::time_point> at)
 {
     std::lock_guard lock{m_mutex};
-    Advance(now);
+    Advance(at.value_or(Clock::now()));
 }
 }

@@ -3,9 +3,10 @@
 Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
 Strict standalone request/reply payload codecs are implemented and tested.
 The narrow runtime-owned cache refreshes independently every five seconds.
-The standalone exchange guard implements pending challenges and rate limits.
-Live session wiring, transport and remote display remain unimplemented;
-no observation polling is deployed. The running P2P baseline ends at message 26.
+The runtime exchange guard and direct TLS request/reply transaction are implemented.
+Automatic polling, report grouping and remote display remain unimplemented;
+no observation exchange is deployed. The source P2P baseline ends at message 28;
+older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
 relayed telemetry design or a compliance claim. It follows
 [AGENTS.md](../../AGENTS.md), [security governance](SECURITY_GOVERNANCE.md)
@@ -76,10 +77,10 @@ still permit inference, so anonymity is not claimed.
 
 ## Request/reply layout
 
-Target message codes: `GET_OBSERVATION = 27`, `OBSERVATION = 28`. No version,
+Message codes: `GET_OBSERVATION = 27`, `OBSERVATION = 28`. No version,
 schema discriminator, capability bitmap, TLV, strings, arrays or fragmentation.
-The standalone payload codecs do not change the current P2P frame message set.
-Do not enable codes 27/28 until the transport implementation package.
+Frame encoders/decoders accept only the exact 64/191-byte observation sizes;
+the TLS reader rejects an invalid declared size before allocating the body.
 All integers are unsigned little-endian; payload consumption is exact.
 
 Request is exactly 64 bytes: `NetworkBinding[32] || challenge[32]`.
@@ -150,13 +151,20 @@ refunding the address cooldown; unused address metadata expires after 90 seconds
 Clock regression refuses work without resetting budgets. No accepted report,
 raw payload/address log or persistent identifier is retained by this helper.
 
-This is not a live P2P handler: callers must use the actual socket address, assign
-nonrecycled local live-session handles, close them on teardown, run expiry from
-the scheduler and invoke I/O only through the existing transaction owner. These
-local handles are not network identities and never enter the payload. The guard
-does not prove admission or truthful measurements independently of its caller.
-Codes 27/28 and polling remain disabled; busy-session fairness, callback wiring,
-mixed-software upgrade and transport acceptance remain implementation work.
+Runtime owns one shared guard. `PeerSession` uses the actual socket address and
+matching admitted HELLO, with a nonrecycled process-local connection handle that
+never enters the payload. `RequestObservation` is a synchronous transaction for
+the existing owner; skipped requests do no I/O. Pending cleanup runs on every
+return. A missing, malformed, wrong-type or mismatched response closes the client
+socket, preventing a late observation body from contaminating the next transaction.
+`ServeNext` answers valid admitted requests from the cache; a rate refusal drops
+the request without closing the server session or assigning an abuse penalty.
+Cache collection runs guard expiry; default clock reads occur under the guard
+mutex, so concurrent collection/transactions do not look like clock regression.
+The guard does not prove admission or truthful measurements independently of its
+caller. No automatic poller calls this transaction yet. Scheduled polling,
+busy-session fairness, report storage/grouping/consolidation, collector overhead
+and coordinated deployed-software acceptance remain implementation work.
 
 ## Grouping, expiry and consolidation
 

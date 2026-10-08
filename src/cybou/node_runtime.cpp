@@ -10,6 +10,7 @@
 #include <cybou/storage_io_scheduler.h>
 #include <cybou/process_memory.h>
 #include <cybou/observation_cache.h>
+#include <cybou/p2p/observation_exchange.h>
 #include <stdexcept>
 #include <algorithm>
 
@@ -55,6 +56,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     m_network.storage_io = std::make_unique<StorageIoScheduler>();
     ObservationBytes32 binding{};
     std::copy(m_network_binding.begin(), m_network_binding.end(), binding.begin());
+    m_observation_exchange = std::make_shared<p2p::ObservationExchange>(binding);
     m_observation_collector = std::make_unique<ObservationCollector>(binding, [this] { return CollectObservationReport(); });
 }
 

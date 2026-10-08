@@ -3,6 +3,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/observation_cache.h>
 #include <cybou/process_memory.h>
+#include <cybou/p2p/observation_exchange.h>
 #include <cmath>
 #include <limits>
 namespace cybou {
@@ -12,6 +13,7 @@ std::array<unsigned char, 191> CybouNodeRuntime::ReadObservationReport(const std
 }
 ObservationReport CybouNodeRuntime::CollectObservationReport() const
 {
+    m_observation_exchange->Expire();
     ObservationReport r;
     {
         // Contended chain work reduces coverage instead of delaying the sampler.

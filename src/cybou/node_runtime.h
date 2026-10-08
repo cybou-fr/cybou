@@ -49,7 +49,7 @@
 namespace cybou {
 class ObservationCollector;
 struct ObservationReport;
-namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; }
+namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; class ObservationExchange; }
 class StorageIoScheduler;
 class CybouKeyStore;
 class IdentityOperationCoordinator;
@@ -278,6 +278,7 @@ public:
     NodeDiagnosticsSnapshot GetDiagnostics() const;
     /// Fixed cached DEC-289 payload; does not collect or touch chain/provider locks.
     std::array<unsigned char, 191> ReadObservationReport(const std::array<unsigned char, 32>& challenge) const;
+    std::shared_ptr<p2p::ObservationExchange> GetObservationExchange() const { return m_observation_exchange; }
     std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
@@ -709,6 +710,7 @@ private:
     const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
     mutable ProcessCpuMeter m_cpu_observations;
     cybou::Hash256 m_network_binding;
+    std::shared_ptr<p2p::ObservationExchange> m_observation_exchange;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;
     ProviderCore m_provider;

@@ -217,9 +217,10 @@ Identity signature, PoA route or privileged bootstrap aggregator.
 
 [`NETWORK_OBSERVATION_REPORTS.md`](NETWORK_OBSERVATION_REPORTS.md) freezes bounds,
 rounding, replay/expiry, grouping, aggregation and acceptance for the first direct
-report target. The payload codec and narrow local runtime cache are implemented;
-remote transport/consolidation remain targets. Current P2P still ends at message
-26. Software-upgrade and governing privacy/security review gates remain. Relayed
+report target. Payload codec, local cache, runtime guard and direct TLS transaction
+are implemented; automatic polling/grouping/consolidation remain targets.
+Source P2P ends at message 28; deployed upgrade and governing privacy/security
+review gates remain. Relayed
 reports, cross-address deduplication and global census remain open.
 
 ## Simplified implementation boundary

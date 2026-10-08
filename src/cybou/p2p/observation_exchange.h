@@ -26,15 +26,15 @@ public:
     using Clock = std::chrono::steady_clock;
     explicit ObservationExchange(ObservationBytes32 binding) : m_binding{binding} {}
     std::optional<ObservationRequest> Begin(const ObservationSession& session,
-        const boost::asio::ip::address& address, Clock::time_point now = Clock::now());
+        const boost::asio::ip::address& address, std::optional<Clock::time_point> at = std::nullopt);
     bool AdmitResponse(const ObservationSession& session, const boost::asio::ip::address& address,
-        const ObservationRequest& request, Clock::time_point now = Clock::now());
+        const ObservationRequest& request, std::optional<Clock::time_point> at = std::nullopt);
     // Malformed payload throws (codec rules); mismatches/replay/expiry return empty
     // without consuming another session's pending challenge.
     std::optional<ObservationReport> Accept(const ObservationSession& session,
-        std::span<const unsigned char> payload, Clock::time_point now = Clock::now());
+        std::span<const unsigned char> payload, std::optional<Clock::time_point> at = std::nullopt);
     void Close(uint64_t session);
-    void Expire(Clock::time_point now = Clock::now());
+    void Expire(std::optional<Clock::time_point> at = std::nullopt);
 private:
     struct AddressBudget {
         std::optional<Clock::time_point> sent, served;
