@@ -115,6 +115,7 @@ add_library(cybou_node STATIC
   cybou/node_runtime_chain.cpp
   cybou/finalization_meter.cpp
   cybou/process_memory.cpp
+  cybou/process_cpu.cpp
   cybou/node_runtime_network.cpp
   cybou/node_runtime_provider.cpp
   cybou/node_service.h

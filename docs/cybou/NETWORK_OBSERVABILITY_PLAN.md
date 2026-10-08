@@ -179,5 +179,31 @@ Network Advanced Overview shows the sample in human-readable units; read-only
 `metrics` shows exact bytes and the same snapshot's UTC time. No Identity unlock,
 process enumeration, external service or retained per-process labels. The
 background snapshot collection remains independent of page visibility.
-CPU interval measurement/normalization, resource history/averages, host memory,
+The CPU package below adds interval normalization and completed means; resource
+history, host memory,
 storage I/O and remote resource reports remain open.
+
+### O1 process CPU intervals and completed means (2026-10-08)
+
+The OS continuously accounts cumulative CPU time for the whole CYBOU process.
+Runtime diagnostic reads sample that counter (Windows kernel+user process time;
+Linux process CPU clock). Percent is the counter delta divided by monotonic
+elapsed time and OS online logical processor count, times 100. This denominator
+is explicit: it does not represent affinity, container quotas or host load.
+The first reading has no interval. Read failures, counter/time regression or
+a changed processor count reset the baseline and mean, with Unknown output.
+
+A fixed-memory accumulator publishes elapsed-time-weighted means when a window
+reaches at least 60 seconds. Actual duration and interval count are exposed;
+the latest completed mean retains its age until the next window completes.
+Sparse diagnostic reads produce longer real windows, not invented five-second
+samples or an exact rolling-minute promise. Reads less than one millisecond
+apart add no interval and retain the baseline.
+The existing desktop background sampling remains independent of Network
+visibility. Runtime restart resets the accumulator. Sampling is serialized.
+
+Network Advanced and Console `metrics` display interval CPU, completed mean,
+denominator, measured durations, interval count and mean age in EN/FR. GUI CPU
+is included. Neither CPU percentage nor spare CPU estimates network capacity.
+CPU charts, affinity/quota-aware measurements, host load, storage I/O and remote
+consolidation remain open.

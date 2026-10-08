@@ -449,6 +449,9 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [memory_val, memory_sub] = MetricTile(grid, 3, 0, tr("CYBOU process memory"), overview);
     m_metric_memory = memory_val; m_metric_memory_sub = memory_sub;
     m_metric_memory->setObjectName(QStringLiteral("networkProcessMemory"));
+    auto [cpu_val, cpu_sub] = MetricTile(grid, 3, 1, tr("CYBOU process CPU"), overview);
+    m_metric_cpu = cpu_val; m_metric_cpu_sub = cpu_sub;
+    m_metric_cpu->setObjectName(QStringLiteral("networkProcessCpu"));
 
     overview_layout->addLayout(grid);
     auto* traffic_history = Card(overview);
@@ -765,6 +768,16 @@ void NetworkPage::refresh()
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
     const bool measured = diag.observed_unix_ms != 0;
+    const auto& cpu = diag.process_cpu;
+    m_metric_cpu->setText(measured && cpu.interval_percent ?
+        tr("%1 %").arg(QLocale{}.toString(*cpu.interval_percent, 'f', 1)) : tr("Unknown"));
+    m_metric_cpu_sub->setText(tr("OS online logical processors: %1 · interval: %2 ms · last completed mean: %3 · window: %4 ms / %5 intervals · age: %6 ms")
+        .arg(measured && cpu.processors ? QString::number(cpu.processors) : tr("Unknown"))
+        .arg(measured && cpu.interval_percent ? QString::number(cpu.interval_ms) : tr("Unknown"))
+        .arg(measured && cpu.mean_percent ? tr("%1 %").arg(QLocale{}.toString(*cpu.mean_percent, 'f', 1)) : tr("Unknown"))
+        .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_window_ms) : tr("Unknown"))
+        .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_intervals) : tr("Unknown"))
+        .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_age_ms) : tr("Unknown")));
     m_metric_memory->setText(measured && diag.process_resident_bytes ?
         CybouProduct::sizeText(*diag.process_resident_bytes) : tr("Unknown"));
     m_metric_memory_sub->setText(tr("Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages"));

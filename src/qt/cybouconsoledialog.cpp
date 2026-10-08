@@ -455,6 +455,15 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(measured && t.window_ms ? QLocale{}.toString(t.window_sent_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
             .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown")));
         const auto& f = d.finalization;
+        const auto& cpu = d.process_cpu;
+        appendOutput(tr("Local process CPU: %1 % over %2 ms\nOS online logical processors: %3\nLast completed CPU mean: %4 % over %5 ms / %6 intervals; age %7 ms\nNormalized process time, including GUI; not host load, quota utilization or network capacity.")
+            .arg(measured && cpu.interval_percent ? QLocale{}.toString(*cpu.interval_percent, 'f', 1) : tr("Unknown"))
+            .arg(measured && cpu.interval_percent ? QString::number(cpu.interval_ms) : tr("Unknown"))
+            .arg(measured && cpu.processors ? QString::number(cpu.processors) : tr("Unknown"))
+            .arg(measured && cpu.mean_percent ? QLocale{}.toString(*cpu.mean_percent, 'f', 1) : tr("Unknown"))
+            .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_window_ms) : tr("Unknown"))
+            .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_intervals) : tr("Unknown"))
+            .arg(measured && cpu.mean_percent ? QString::number(cpu.mean_age_ms) : tr("Unknown")));
         appendOutput(tr("Local CYBOU process resident memory: %1 bytes\nSource: OS working set / RSS, instantaneous; includes GUI and shared pages. Not host or network memory.")
             .arg(measured && d.process_resident_bytes ? QString::number(*d.process_resident_bytes) : tr("Unknown")));
         appendOutput(tr("Verified local observations: %1 operations (%2 locally produced); history imports: %3. Totals since observation reset.")

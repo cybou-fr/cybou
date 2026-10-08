@@ -146,6 +146,13 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>Local process CPU: %1 % over %2 ms
+OS online logical processors: %3
+Last completed CPU mean: %4 % over %5 ms / %6 intervals; age %7 ms
+Normalized process time, including GUI; not host load, quota utilization or network capacity.</source><translation>CPU du processus local : %1 % sur %2 ms
+Processeurs logiques actifs du système : %3
+Dernière moyenne CPU complète : %4 % sur %5 ms / %6 intervalles ; âge %7 ms
+Temps du processus normalisé, interface incluse ; ne mesure ni la charge de l'hôte, ni l'utilisation d'un quota, ni la capacité du réseau.</translation></message>
     <message><source>Local CYBOU process resident memory: %1 bytes
 Source: OS working set / RSS, instantaneous; includes GUI and shared pages. Not host or network memory.</source><translation>Mémoire résidente du processus CYBOU local : %1 octets
 Source : ensemble de travail / RSS du système, instantané ; inclut l'interface et les pages partagées. Ne mesure pas la mémoire de l'hôte ni du réseau.</translation></message>
@@ -4833,6 +4840,9 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>CYBOU process CPU</source><translation>CPU du processus CYBOU</translation></message>
+    <message><source>%1 %</source><translation>%1 %</translation></message>
+    <message><source>OS online logical processors: %1 · interval: %2 ms · last completed mean: %3 · window: %4 ms / %5 intervals · age: %6 ms</source><translation>Processeurs logiques actifs du système : %1 · intervalle : %2 ms · dernière moyenne complète : %3 · fenêtre : %4 ms / %5 intervalles · âge : %6 ms</translation></message>
     <message><source>CYBOU process memory</source><translation>Mémoire du processus CYBOU</translation></message>
     <message><source>Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages</source><translation>Ensemble de travail / RSS instantané · processus CYBOU entier, interface et pages partagées incluses</translation></message>
     <message><source>Traffic history</source><translation>Historique du trafic</translation></message>

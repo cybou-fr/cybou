@@ -3,6 +3,43 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Local process CPU observation (2026-10-08)
+
+Runtime diagnostics now sample cumulative whole-process CPU time under a local
+sampler mutex: Windows `GetProcessTimes` kernel+user time and Linux
+`CLOCK_PROCESS_CPUTIME_ID`. Interval percent uses monotonic elapsed time and
+OS online logical processor count. First/unavailable readings have no interval;
+failures, counter/time regression and processor-count changes reset the baseline
+and accumulated mean. Sub-millisecond reads retain the baseline without adding
+an interval. Idle intervals
+with unchanged cumulative CPU are measured zero. GUI work is included.
+
+Completed means use the CPU delta over actual elapsed windows of at least
+60 seconds, weighted by time, with duration, interval count and age. Sparse
+reads produce longer windows; no gap interpolation or rolling-minute guarantee.
+Fixed memory, no thread/process enumeration or background worker is added.
+The desktop's existing diagnostic sampling works independently of Network
+visibility. Runtime restart resets observation.
+
+Network Advanced and read-only Console `metrics` expose interval CPU and the
+completed mean's scope in EN/FR. OS online processors are not affinity or
+container quotas. Host load, resource charts, storage I/O, remote reports and
+network capacity remain outside this package.
+
+Full offscreen Qt with system fonts: 92 passed, 0 failed/skipped. Coverage
+includes interval display, clearing missing samples and exact duration/count/
+age in EN/FR `metrics`. Manifest/diff checks pass. No live workload ceiling,
+Linux acceptance or physical assistive-technology acceptance is claimed.
+
+Ordinary MinGW desktop/core/Qt binaries rebuild successfully. Runtime suite:
+22 cases / 316 assertions passed, including elapsed-time weighting, idle zero,
+short reads, completed-window duration/count/age, reset on missing readings,
+counter/time regression and changed processor count, plus the Windows OS
+counter. Other core suites are filtered. Linux code is not compiled/executed
+by these Windows checks. Logs: `artifacts/network-cpu-20261008/`.
+Desktop SHA-256: `5dfafa78ffd009ac45c21f2f39a0261c61c8420c4e822fe25a5d2af3826950c3`.
+No desktop/signer or VPS service is restarted.
+
 ## Local instantaneous process memory (2026-10-08)
 
 Shared runtime diagnostics expose an optional resident-byte gauge for the entire
@@ -16,7 +53,7 @@ enumeration, external collector or new wire message is added.
 Network Advanced Overview displays process memory in human-readable units;
 Console `metrics` exposes exact bytes in EN/FR. Shared pages and the GUI are
 included. This is neither host RAM nor unique physical RAM, mean load, peak
-memory or a network total. CPU normalization/intervals, resource history,
+memory or a network total. Resource history,
 storage I/O and remote resource reports remain open.
 
 Ordinary MinGW desktop/core/Qt test binaries rebuild. Runtime suite: 21 cases /

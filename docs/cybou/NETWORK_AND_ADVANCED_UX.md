@@ -22,11 +22,18 @@ introduced by these product features.
 
 ## Network overview
 
+The local CPU tile shows normalized process CPU over the latest sampled
+interval, with OS online logical processors, actual duration and last completed
+mean's duration/count/age. Console `metrics` shows the same data. Initial or
+failed samples remain Unknown. Means cover at least 60 seconds and weight by
+elapsed time; they are not exact rolling-minute windows. GUI work is included;
+host load, affinity/quota utilization and global capacity are not measured.
+
 The local process-memory tile is an instantaneous OS working set / RSS gauge
 for the entire CYBOU executable, including GUI and shared resident pages.
 It uses the diagnostics sample time, displays Unknown when absent, and has
 matching exact-byte output in Console `metrics`. It is not host memory, average
-load or a network total. CPU/history and remote resource reports remain planned.
+load or a network total. Resource history and remote resource reports remain planned.
 
 The page is named Network / Réseau in navigation and headers. Built-in passive
 monitoring is standard CYBOU functionality: actual data served, finalized op/min,

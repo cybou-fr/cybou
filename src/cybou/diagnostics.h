@@ -8,6 +8,7 @@
 #include <optional>
 #include <cybou/traffic_meter.h>
 #include <cybou/finalization_meter.h>
+#include <cybou/process_cpu.h>
 #include <string>
 #include <vector>
 namespace cybou {
@@ -38,6 +39,7 @@ struct OperationDiagnostics {
 struct NodeDiagnosticsSnapshot {
     TrafficDiagnostics traffic;
     FinalizationDiagnostics finalization;
+    ProcessCpuDiagnostics process_cpu;
     /// OS working set / RSS for the whole local executable, not host or network memory.
     std::optional<std::uint64_t> process_resident_bytes;
     /// Local passive observation time (UTC) and monotonic runtime lifetime.

@@ -131,6 +131,8 @@ private:
     QLabel* m_metric_queue_sub{nullptr};
     QLabel* m_metric_memory{nullptr};
     QLabel* m_metric_memory_sub{nullptr};
+    QLabel* m_metric_cpu{nullptr};
+    QLabel* m_metric_cpu_sub{nullptr};
     QLabel* m_metric_traffic{nullptr};
     QLabel* m_metric_traffic_sub{nullptr};
     QLabel* m_metric_finalization{nullptr};

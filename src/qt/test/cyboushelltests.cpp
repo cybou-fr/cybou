@@ -1284,6 +1284,8 @@ void CybouShellTests::networkPageReflectsModel()
     observed.observed_unix_ms = 1791460800000ULL;
     observed.uptime_ms = 120000;
     observed.process_resident_bytes = 1048576;
+    observed.process_cpu = {.interval_percent = 12.5, .mean_percent = 10.0, .processors = 4,
+        .interval_ms = 3000, .mean_window_ms = 60000, .mean_intervals = 20, .mean_age_ms = 2000};
     observed.initialized = true;
     observed.pending_operations = 3;
     observed.pending_operation_bytes = 700;
@@ -1297,6 +1299,9 @@ void CybouShellTests::networkPageReflectsModel()
     auto* memory = network->findChild<QLabel*>(QStringLiteral("networkProcessMemory"));
     QVERIFY(memory);
     QTRY_COMPARE(memory->text(), CybouProduct::sizeText(1048576));
+    auto* cpu = network->findChild<QLabel*>(QStringLiteral("networkProcessCpu"));
+    QVERIFY(cpu);
+    QTRY_VERIFY(cpu->text().contains(QLocale{}.toString(12.5, 'f', 1)));
     observed.process_resident_bytes.reset();
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(memory->text(), QStringLiteral("Unknown"));
@@ -1339,6 +1344,7 @@ void CybouShellTests::networkPageReflectsModel()
     QTRY_COMPARE(uptime->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(traffic->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 0);
+    QTRY_COMPARE(cpu->text(), QStringLiteral("Unknown"));
 }
 
 void CybouShellTests::adapterSettersDrivePages()
@@ -5467,9 +5473,12 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: Unknown")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("resident memory: Unknown bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Local process CPU: Unknown")));
     snapshot.observed_unix_ms = 1791460800000ULL;
     snapshot.uptime_ms = 120000;
     snapshot.process_resident_bytes = 1048576;
+    snapshot.process_cpu = {.interval_percent = 12.5, .mean_percent = 10.0, .processors = 4,
+        .interval_ms = 3000, .mean_window_ms = 60000, .mean_intervals = 20, .mean_age_ms = 2000};
     snapshot.pending_operations = 3;
     snapshot.pending_operation_bytes = 700;
     snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5,
@@ -5486,6 +5495,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Received since runtime start: 6000 bytes")));
     QVERIFY(console.outputText().contains(QStringLiteral("resident memory: 1048576 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Local process CPU: ") + QLocale{}.toString(12.5, 'f', 1)));
+    QVERIFY(console.outputText().contains(QStringLiteral("60000 ms / 20 intervals; age 2000 ms")));
     QVERIFY(console.outputText().contains(QStringLiteral("1 min: observed ") + QLocale{}.toString(5.0, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("history 1000 operations")));
     QVERIFY(console.outputText().contains(QStringLiteral("5 min: observed Unknown")));
@@ -5561,6 +5572,7 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Reçu depuis le démarrage : 6000 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("Mémoire résidente du processus CYBOU local : 1048576 octets")));
+    QVERIFY(console.outputText().contains(QStringLiteral("CPU du processus local : ") + QLocale{}.toString(12.5, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("historique 1000 opérations")));
     qApp->removeTranslator(&translator);
 

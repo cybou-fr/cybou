@@ -702,6 +702,7 @@ private:
     NodeRuntimeConfig m_config;
     std::shared_ptr<TrafficMeter> m_traffic{std::make_shared<TrafficMeter>()};
     const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
+    mutable ProcessCpuMeter m_cpu_observations;
     cybou::Hash256 m_network_binding;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;

@@ -26,6 +26,38 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(process_cpu_intervals_use_elapsed_time_and_reset_on_missing_data)
+{
+    cybou::ProcessCpuMeter meter;
+    const auto start = cybou::ProcessCpuMeter::Clock::time_point{};
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{0, 4}, start).interval_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{0, 4}, start + std::chrono::microseconds{500}).interval_percent);
+    const auto first = meter.Observe(cybou::ProcessCpuReading{4000000000ULL, 4}, start + std::chrono::seconds{2});
+    BOOST_REQUIRE(first.interval_percent);
+    BOOST_CHECK_CLOSE(*first.interval_percent, 50.0, 0.001);
+    BOOST_CHECK(!first.mean_percent);
+    const auto mean = meter.Observe(cybou::ProcessCpuReading{60000000000ULL, 4}, start + std::chrono::seconds{60});
+    BOOST_REQUIRE(mean.mean_percent);
+    BOOST_CHECK_CLOSE(*mean.mean_percent, 25.0, 0.001); // weighted elapsed time, not mean of interval percentages
+    BOOST_CHECK_EQUAL(mean.mean_window_ms, 60000U);
+    BOOST_CHECK_EQUAL(mean.mean_intervals, 2U);
+    const auto idle = meter.Observe(cybou::ProcessCpuReading{60000000000ULL, 4}, start + std::chrono::seconds{62});
+    BOOST_REQUIRE(idle.interval_percent);
+    BOOST_CHECK_EQUAL(*idle.interval_percent, 0.0);
+    BOOST_CHECK_EQUAL(idle.mean_age_ms, 2000U);
+    BOOST_CHECK(!meter.Observe(std::nullopt, start + std::chrono::seconds{63}).mean_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{60000000000ULL, 4}, start + std::chrono::seconds{65}).interval_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{60000000000ULL, 2}, start + std::chrono::seconds{67}).interval_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{1, 2}, start + std::chrono::seconds{68}).interval_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{2, 2}, start + std::chrono::seconds{66}).interval_percent);
+    BOOST_CHECK(!meter.Observe(cybou::ProcessCpuReading{2, 2}, start + std::chrono::seconds{66}).interval_percent);
+#if defined(_WIN32) || defined(__linux__)
+    const auto os = cybou::ReadProcessCpu();
+    BOOST_REQUIRE(os);
+    BOOST_CHECK_GT(os->processors, 0U);
+#endif
+}
+
 BOOST_AUTO_TEST_CASE(observation_history_retains_complete_intervals_independently_of_reads)
 {
     using Clock = cybou::TrafficMeter::Clock;

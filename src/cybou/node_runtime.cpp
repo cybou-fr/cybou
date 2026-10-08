@@ -61,6 +61,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
     snapshot.process_resident_bytes = ReadProcessResidentBytes();
+    snapshot.process_cpu = m_cpu_observations.Sample();
     snapshot.traffic = m_traffic->Snapshot();
     snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
