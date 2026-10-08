@@ -180,6 +180,15 @@ Only after a valid dataset consider bounded Advanced charts. Final screenshot/
 copy/quiet-state polish follows reproduced clipping or usability findings. Do not
 add lifecycle diagrams or redo the design system without evidence.
 
+## Small acceptance batches
+
+Work one bounded scenario at a time, preserving its result and limitations.
+[ID-SESSION-01](BETA_IDENTITY_SESSION_ACCEPTANCE.md) prepares ordinary-client
+lock/unlock/restart acceptance. It is NOT RUN and does not restart a signer.
+Preparation can proceed while P0 remote CI is pending; execution follows the
+applicable green-revision gate. Avoid broad refactors or repeated full builds
+for documentation-only preparation.
+
 ## Evidence ledger and release exit
 
 Use [Beta acceptance](85_BETA_UI_ACCEPTANCE.md) as the checklist. For each executed

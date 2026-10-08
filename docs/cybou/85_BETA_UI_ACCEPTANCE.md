@@ -42,6 +42,10 @@ at DPR 1.75 and visual fixture review are scoped in implementation status;
 physical mouse/mixed-monitor DPI, real screen-reader interaction and live index
 catch-up are not inferred from these component results.
 
+Prepared small scenario: [ID-SESSION-01](BETA_IDENTITY_SESSION_ACCEPTANCE.md)
+covers ordinary-client lock/unlock/restart. Its initial status is NOT RUN; it
+does not satisfy clean-machine restore or operator restart acceptance.
+
 ## 1. Clean-machine onboarding
 
 ```text
