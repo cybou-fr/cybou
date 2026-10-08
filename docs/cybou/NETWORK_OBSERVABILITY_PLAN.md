@@ -18,7 +18,7 @@ peer details, Monitor and read-only Console independently of Identity unlock.
 | Metric | Source and meaning | Evidence boundary |
 |---|---|---|
 | Finalized operations/min | Unique operations in independently verified blocks, over declared 1/5/15-minute windows | One chain stream, never summed across peers; historical sync separate from live observation; declare completeness and verified height |
-| CYBOU frame traffic | Actual TLS application frame received/sent bytes/s, including service, retry and observation traffic; storage PUT/GET payload counters remain separate work | Local first, then reporting cohort; summed send+receive counts both ends, not unique useful delivery |
+| CYBOU frame traffic | Actual TLS application frame received/sent bytes/s, including service, retry and observation traffic; separate local completed PUT/GET encrypted payload counters | Local first, then reporting cohort; summed send+receive counts both ends, not unique useful delivery |
 | Stored encrypted copies | Accounted encrypted ChunkBlobStore lengths locally and declared by selected reporting address groups | Physical copies include replicas/cache; not unique logical content or verified remote durability |
 | Register and rented volume | Active finalized publications, authorized billing units and active lease units at a verified cursor | Units times 512 KiB are billed allocation, not measured plaintext or physical bytes; never sum identical registers from peers |
 | Storage capacity | V, physical use/headroom, provider budget floor(2V/3), admitted provider bytes/budget headroom and actual local disk free space | Policy and physical limits stay separate; cohort sums are declared capacity, not complete network totals |
@@ -70,9 +70,10 @@ time series. Canonical streams/registers must never be added across reporters.
 Current local delivery: timestamp/uptime, candidate-pool count/bytes, passive
 frame traffic, operation observation windows and bounded charts, process memory,
 normalized process CPU/completed means, storage-policy headroom and OS disk
-availability. Console `health`, `metrics` and `capacity` expose these readings.
-Remaining: canonical register aggregates, PUT/GET payload breakdown, storage I/O,
-queue age/errors, longer/resource history, runtime direct-report acquisition/UI,
+availability and completed local PUT/GET payload totals/rates. Console `health`,
+`metrics` and `capacity` expose these readings.
+Remaining: canonical register aggregates, storage I/O,
+queue age/errors, longer/resource history, direct-report activation/deployment,
 relayed/cross-address design,
 and service-eligible network capacity estimates. Local gauges are not network totals.
 
@@ -121,8 +122,9 @@ and service-eligible network capacity estimates. Local gauges are not network to
    skip catch-up/candidate/storage work, one round-robin session per five seconds.
    Consume at most the existing pause (normally 250 ms), capped at two seconds;
    new work after admission can wait for that bound. Measure workload fairness.
-4. Add local PUT/GET payload byte/rate counters so useful storage transfers can
-   be inspected separately from CYBOU frame traffic (service/retries/observation).
+4. **Delivered:** local completed PUT/GET encrypted payload totals and 60-second
+   rates, separate from CYBOU frame traffic. Network Advanced and Console metrics.
+   Repeated completed transfers count again; GET send does not prove remote receipt.
 5. Add storage I/O, oldest local queue age, bounded error counters and canonical
    active-publication/lease-allocation aggregates at one verified cursor.
 

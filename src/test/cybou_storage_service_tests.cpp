@@ -77,54 +77,73 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
 
-BOOST_AUTO_TEST_CASE(zero_quota_rejects_storage_but_preserves_ping_and_block_sync)
+BOOST_AUTO_TEST_CASE(payload_counters_require_completed_transfers_and_preserve_other_transactions)
 {
-    CybouServiceTestFixture fixture;
-    auto identity = fixture.CreateIdentity("quota-owner.cybou");
-    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "quota-application"};
-    const auto content = Publish(fixture, *identity, application_db, true);
-    std::vector<cybou::AuthorizedChunk> leaves;
-    for (const auto& id : content.leaves) leaves.push_back({id});
-    const auto commitment = cybou::BuildChunkAuthorizationTree(leaves);
-    BOOST_REQUIRE(commitment);
-    const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
-    BOOST_REQUIRE(publication);
-    BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->Proof(0)));
-    cybou::CybouNodeRuntime node{{.network_genesis = fixture.definition,
-        .data_dir = fixture.directory / "quota-node", .memory_only = true,
-        .wipe_data = true, .storage_capacity_bytes = 0,
-        .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}};
-    BOOST_REQUIRE(node.InitializeGenesis(fixture.genesis));
-    for (uint64_t h = 1; h <= fixture.runtime->GetFinalizedHeight().value(); ++h)
-        BOOST_REQUIRE(node.CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
-    boost::asio::io_context io;
-    using boost::asio::ip::tcp;
-    const auto loopback = boost::asio::ip::address_v4::loopback();
-    cybou::p2p::InboundPeerServer server{node, io, tcp::endpoint{loopback, 0}};
-    std::atomic_bool stopping{false};
-    std::jthread listener{[&] { server.Run(stopping); }};
-    struct StopListener {
-        std::atomic_bool& stopping;
-        std::jthread& listener;
-        ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
-    } stop_listener{stopping, listener};
-    tcp::socket socket{io};
-    socket.connect({loopback, server.Port()});
-    cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT};
-    BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
-        .finalized_height = fixture.runtime->GetFinalizedHeight().value(),
-        .finalized_tip = fixture.runtime->GetFinalizedTip().value(), .nonce = 55001}));
-    BOOST_CHECK(!client.PeerStorageId());
-    BOOST_REQUIRE(client.ProveStorageIdentity());
-    const auto bytes = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
-    BOOST_REQUIRE(bytes);
-    const auto admission = client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->Proof(0));
-    BOOST_REQUIRE(admission);
-    BOOST_CHECK(admission->status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
-    BOOST_CHECK(client.Ping(55002));
-    const auto block = client.RequestBlock(1);
-    BOOST_CHECK(block.status == cybou::p2p::BlockRequestStatus::OK);
-    BOOST_CHECK_EQUAL(node.GetDiagnostics().storage_used, 0U);
+    for (const bool accepts : {false, true}) {
+        CybouServiceTestFixture fixture;
+        auto identity = fixture.CreateIdentity("quota-owner.cybou");
+        cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "quota-application"};
+        const auto content = Publish(fixture, *identity, application_db, true);
+        std::vector<cybou::AuthorizedChunk> leaves;
+        for (const auto& id : content.leaves) leaves.push_back({id});
+        const auto commitment = cybou::BuildChunkAuthorizationTree(leaves);
+        BOOST_REQUIRE(commitment);
+        const auto publication = fixture.runtime->FindFinalizedRootPublication(content.operation_id);
+        BOOST_REQUIRE(publication);
+        BOOST_REQUIRE(cybou::VerifyChunkAuthorizationProof(*publication, content.leaves.front(), commitment->Proof(0)));
+        cybou::CybouNodeRuntime node{{.network_genesis = fixture.definition,
+            .data_dir = fixture.directory / "quota-node", .memory_only = true,
+            .wipe_data = true, .storage_capacity_bytes = accepts ? uint64_t{15} << 30 : 0,
+            .peer_admission_policy = TestPeerAdmissionPolicy(), .operation_work_bits = 0}};
+        BOOST_REQUIRE(node.InitializeGenesis(fixture.genesis));
+        for (uint64_t h = 1; h <= fixture.runtime->GetFinalizedHeight().value(); ++h)
+            BOOST_REQUIRE(node.CommitBlock(*fixture.runtime->GetBlockAtHeight(h)));
+        boost::asio::io_context io;
+        using boost::asio::ip::tcp;
+        const auto loopback = boost::asio::ip::address_v4::loopback();
+        cybou::p2p::InboundPeerServer server{node, io, tcp::endpoint{loopback, 0}};
+        std::atomic_bool stopping{false};
+        std::jthread listener{[&] { server.Run(stopping); }};
+        struct StopListener {
+            std::atomic_bool& stopping;
+            std::jthread& listener;
+            ~StopListener() { stopping = true; if (listener.joinable()) listener.join(); }
+        } stop_listener{stopping, listener};
+        tcp::socket socket{io};
+        socket.connect({loopback, server.Port()});
+        cybou::p2p::PeerSession client{std::move(socket), cybou::p2p::TransportRole::CLIENT, {}, fixture.runtime->GetTrafficMeter()};
+        BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+            .finalized_height = fixture.runtime->GetFinalizedHeight().value(),
+            .finalized_tip = fixture.runtime->GetFinalizedTip().value(), .nonce = 55001}));
+        BOOST_CHECK(!client.PeerStorageId());
+        BOOST_REQUIRE(client.ProveStorageIdentity());
+        const auto bytes = fixture.runtime->GetChunkBlobStore().Get(content.leaves.front());
+        BOOST_REQUIRE(bytes);
+        const auto admission = client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->Proof(0));
+        BOOST_REQUIRE(admission);
+        if (accepts) {
+            BOOST_REQUIRE(*admission);
+            BOOST_CHECK(client.PutAuthorizedChunk(content.operation_id, content.leaves.front(), *bytes, commitment->Proof(0)).has_value());
+            const auto fetched = client.GetChunkById(content.leaves.front());
+            BOOST_REQUIRE(fetched); BOOST_CHECK(*fetched == *bytes);
+            cybou::ChunkId missing{}; missing.fill(251);
+            BOOST_CHECK(!client.GetChunkById(missing));
+        } else {
+            BOOST_CHECK(admission->status == cybou::ChunkAdmissionStatus::CAPACITY_EXCEEDED);
+        }
+        const auto sent = fixture.runtime->GetDiagnostics().storage_transfers;
+        const auto received = node.GetDiagnostics().storage_transfers;
+        BOOST_CHECK_EQUAL(sent.put.sent_bytes, accepts ? bytes->size() * 2 : 0U);
+        BOOST_CHECK_EQUAL(received.put.received_bytes, sent.put.sent_bytes);
+        BOOST_CHECK_EQUAL(sent.get.received_bytes, accepts ? bytes->size() : 0U);
+        BOOST_CHECK_EQUAL(received.get.sent_bytes, sent.get.received_bytes);
+        BOOST_CHECK_EQUAL(sent.put.received_bytes, 0U);
+        BOOST_CHECK_EQUAL(received.get.received_bytes, 0U);
+        BOOST_CHECK(client.Ping(55002));
+        const auto block = client.RequestBlock(1);
+        BOOST_CHECK(block.status == cybou::p2p::BlockRequestStatus::OK);
+        BOOST_CHECK_EQUAL(node.GetDiagnostics().storage_used, accepts ? bytes->size() : 0U);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(nothing_leaves_the_node_before_finality)

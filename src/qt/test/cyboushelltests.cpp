@@ -1374,6 +1374,10 @@ void CybouShellTests::networkPageReflectsModel()
     observed.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
     observed.traffic.history = {{5000, 50, 100}, {10000, 150, 200}};
+    observed.storage_transfers.put = {.received_bytes = 60, .sent_bytes = 120,
+        .window_received_bytes = 60, .window_sent_bytes = 120, .window_ms = 60000};
+    observed.storage_transfers.get = {.received_bytes = 180, .sent_bytes = 240,
+        .window_received_bytes = 180, .window_sent_bytes = 240, .window_ms = 60000};
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(uptime->text(), QStringLiteral("120 s"));
     auto* memory = network->findChild<QLabel*>(QStringLiteral("networkProcessMemory"));
@@ -1397,6 +1401,16 @@ void CybouShellTests::networkPageReflectsModel()
     auto* traffic = network->findChild<QLabel*>(QStringLiteral("networkTrafficRate"));
     QVERIFY(traffic);
     QTRY_VERIFY(traffic->text().contains(QLocale{}.toString(100.0, 'f', 1)));
+    auto* put_payload = network->findChild<QLabel*>(QStringLiteral("networkPutPayloadRate"));
+    auto* get_payload = network->findChild<QLabel*>(QStringLiteral("networkGetPayloadRate"));
+    QVERIFY(put_payload && get_payload);
+    QTRY_VERIFY(put_payload->text().contains(QLocale{}.toString(2.0, 'f', 1)));
+    QTRY_VERIFY(get_payload->text().contains(QLocale{}.toString(3.0, 'f', 1)));
+    observed.storage_transfers.put.window_ms = 0;
+    observed.storage_transfers.get.window_ms = 0;
+    model->setNetworkDiagnostics(observed);
+    QTRY_COMPARE(put_payload->text(), QStringLiteral("Unknown"));
+    QTRY_COMPARE(get_payload->text(), QStringLiteral("Unknown"));
     auto* traffic_chart = network->findChild<QWidget*>(QStringLiteral("networkTrafficChart"));
     auto* operation_chart = network->findChild<QWidget*>(QStringLiteral("networkFinalizationChart"));
     QVERIFY(traffic_chart && operation_chart);
@@ -5573,6 +5587,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
         .local_produced_operations = 3, .history_operations = 1000, .complete = true};
     snapshot.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
+    snapshot.storage_transfers.put = {.received_bytes = 60, .sent_bytes = 120,
+        .window_received_bytes = 60, .window_sent_bytes = 120, .window_ms = 60000};
     model->setNetworkDiagnostics(snapshot);
     console.clearOutput();
     console.executeCommand(QStringLiteral("health"));
@@ -5582,6 +5598,9 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Usage: health")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Received since runtime start: 6000 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Local PUT payload")));
+    QVERIFY(console.outputText().contains(QStringLiteral("provider receipt verified")));
+    QVERIFY(console.outputText().contains(QStringLiteral("↓ ") + QLocale{}.toString(1.0, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("resident memory: 1048576 bytes")));
     QVERIFY(console.outputText().contains(QStringLiteral("Local process CPU: ") + QLocale{}.toString(12.5, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("60000 ms / 20 intervals; age 2000 ms")));
@@ -5664,6 +5683,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("3 opérations / 700 octets")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Reçu depuis le démarrage : 6000 octets")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Données PUT locales")));
+    QVERIFY(console.outputText().contains(QStringLiteral("réception distante inconnue")));
     QVERIFY(console.outputText().contains(QStringLiteral("Mémoire résidente du processus CYBOU local : 1048576 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("CPU du processus local : ") + QLocale{}.toString(12.5, 'f', 1)));
     console.executeCommand(QStringLiteral("capacity"));

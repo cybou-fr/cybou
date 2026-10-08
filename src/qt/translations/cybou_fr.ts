@@ -7595,4 +7595,14 @@ Partial unverified declarations, rounded MiB/KiB. Whole-network coverage and ind
 Âges de réception : %5–%6 ms · âge déclaré du cache jusqu’à %7 ms
 Déclarations partielles non vérifiées, arrondies en Mio/Kio. Couverture du réseau entier et hôtes indépendants : inconnus.</translation></message>
 </context>
+<context>
+<name>StorageTransfers</name>
+<message><source>Unknown</source><translation>Inconnu</translation></message>
+<message><source>Local PUT payload</source><translation>Données PUT locales</translation></message>
+<message><source>Local GET payload</source><translation>Données GET locales</translation></message>
+<message><source>↓ %1 B/s · ↑ %2 B/s</source><translation>↓ %1 o/s · ↑ %2 o/s</translation></message>
+<message><source>Since runtime start: ↓ %1 bytes · ↑ %2 bytes. Encrypted payload, completed transfers; repeats included. Rates: 60 complete seconds. Local only.</source><translation>Depuis le démarrage : ↓ %1 octets · ↑ %2 octets. Données chiffrées, transferts terminés ; répétitions incluses. Débits : 60 secondes complètes. Nœud local uniquement.</translation></message>
+<message><source>Received: admitted. Sent: provider receipt verified.</source><translation>Reçues : admission réussie. Envoyées : reçu du fournisseur vérifié.</translation></message>
+<message><source>Received: ChunkID verified. Sent: complete write, remote receipt unknown. Recovery, repair and full-GET checks included.</source><translation>Reçues : ChunkID vérifié. Envoyées : écriture complète, réception distante inconnue. Récupération, réparation et contrôles GET complets inclus.</translation></message>
+</context>
 </TS>

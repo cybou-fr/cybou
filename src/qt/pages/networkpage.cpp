@@ -11,6 +11,7 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 #include <qt/networkobservationtext.h>
+#include <qt/storagetransfertext.h>
 
 #include <QFrame>
 #include <QTimeZone>
@@ -454,6 +455,14 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_metric_cpu = cpu_val; m_metric_cpu_sub = cpu_sub;
     m_metric_cpu->setObjectName(QStringLiteral("networkProcessCpu"));
 
+    const auto transfer_text = cybouStorageTransferText({});
+    auto [put_val, put_sub] = MetricTile(grid, 4, 0, transfer_text.put_title, overview);
+    m_metric_put = put_val; m_metric_put_sub = put_sub;
+    m_metric_put->setObjectName(QStringLiteral("networkPutPayloadRate"));
+    auto [get_val, get_sub] = MetricTile(grid, 4, 1, transfer_text.get_title, overview);
+    m_metric_get = get_val; m_metric_get_sub = get_sub;
+    m_metric_get->setObjectName(QStringLiteral("networkGetPayloadRate"));
+
     overview_layout->addLayout(grid);
     auto* observed = Card(overview);
     auto* observed_layout = new QVBoxLayout{observed};
@@ -844,6 +853,9 @@ void NetworkPage::refresh()
         .arg(QLocale{}.toString(traffic.window_received_bytes * 1000.0 / traffic.window_ms, 'f', 1),
              QLocale{}.toString(traffic.window_sent_bytes * 1000.0 / traffic.window_ms, 'f', 1)) : tr("Unknown"));
     m_metric_traffic_sub->setText(tr("Local CYBOU frames · 60 complete seconds · excludes TLS/TCP overhead"));
+    const auto transfer_text = cybouStorageTransferText(diag);
+    m_metric_put->setText(transfer_text.put_rate); m_metric_put_sub->setText(transfer_text.put_detail);
+    m_metric_get->setText(transfer_text.get_rate); m_metric_get_sub->setText(transfer_text.get_detail);
     m_metric_uptime->setText(measured ? tr("%1 s").arg(diag.uptime_ms / 1000) : tr("Unknown"));
     m_metric_uptime_sub->setText(measured ? tr("Local observation: %1 UTC").arg(
         QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(diag.observed_unix_ms), QTimeZone::UTC).toString(QStringLiteral("HH:mm:ss"))) : tr("Unknown"));

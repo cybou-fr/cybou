@@ -41,6 +41,7 @@ struct OperationDiagnostics {
 struct NodeDiagnosticsSnapshot {
     std::shared_ptr<const NetworkObservationSnapshot> network_observation;
     TrafficDiagnostics traffic;
+    StorageTransferDiagnostics storage_transfers;
     FinalizationDiagnostics finalization;
     ProcessCpuDiagnostics process_cpu;
     /// OS working set / RSS for the whole local executable, not host or network memory.

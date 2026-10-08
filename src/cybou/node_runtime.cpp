@@ -74,6 +74,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     snapshot.process_resident_bytes = ReadProcessResidentBytes();
     snapshot.process_cpu = m_cpu_observations.Sample();
     snapshot.traffic = m_traffic->Snapshot();
+    snapshot.storage_transfers = m_traffic->StorageSnapshot();
     snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     snapshot.uptime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

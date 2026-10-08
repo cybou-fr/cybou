@@ -326,8 +326,10 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Next bounded packages: local PUT/GET payload counters and remaining resource/
-register gauges. Idle-slot polling is implemented but default-off; deployment
+Local completed PUT/GET payload counters now feed diagnostics, Network Advanced
+and Console metrics separately from frame traffic. These are not remote report
+fields; the fixed request/reply layout is unchanged.
+Next bounded packages: remaining resource/register gauges. Idle-slot polling is implemented but default-off; deployment
 acceptance, measured collector/mesh overhead and busy-workload fairness remain.
 Auto polling waits for coordinated deployed-software acceptance. No extra wire
 fields or persistent observation history are part of this sequence.

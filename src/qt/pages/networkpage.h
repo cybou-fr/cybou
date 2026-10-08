@@ -143,6 +143,10 @@ private:
     QLabel* m_metric_cpu_sub{nullptr};
     QLabel* m_metric_traffic{nullptr};
     QLabel* m_metric_traffic_sub{nullptr};
+    QLabel* m_metric_put{nullptr};
+    QLabel* m_metric_put_sub{nullptr};
+    QLabel* m_metric_get{nullptr};
+    QLabel* m_metric_get_sub{nullptr};
     QLabel* m_metric_finalization{nullptr};
     QLabel* m_metric_finalization_sub{nullptr};
     CybouObservationChart* m_remote_storage_chart{nullptr};

@@ -1,4 +1,5 @@
 #include <qt/networkobservationtext.h>
+#include <qt/storagetransfertext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
@@ -467,6 +468,9 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
         const auto observed = cybouNetworkObservationText(d);
         appendOutput(observed.traffic + QStringLiteral("\n") + observed.traffic_detail + QStringLiteral("\n") + observed.cpu + QStringLiteral("\n") + observed.cpu_detail + QStringLiteral("\n") + observed.coverage);
         const auto& t = d.traffic;
+        const auto transfers = cybouStorageTransferText(d);
+        appendOutput(transfers.put_title + QStringLiteral("\n") + transfers.put_rate + QStringLiteral("\n") + transfers.put_detail);
+        appendOutput(transfers.get_title + QStringLiteral("\n") + transfers.get_rate + QStringLiteral("\n") + transfers.get_detail);
         const bool measured = d.observed_unix_ms != 0;
         appendOutput(tr("Source: Local CYBOU frames, excluding TLS/TCP overhead\nReceived since runtime start: %1 bytes\nSent since runtime start: %2 bytes\nReceived rate: %3 B/s\nSent rate: %4 B/s\nWindow: 60 complete seconds; retries and service frames included.\nObserved: %5\nThis is local traffic, not unique delivery or network transaction throughput.")
             .arg(measured ? QString::number(t.received_bytes) : tr("Unknown"))

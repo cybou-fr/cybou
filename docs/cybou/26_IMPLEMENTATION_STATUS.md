@@ -3,6 +3,41 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Local completed storage payload counters (2026-10-09)
+
+Every production TLS session shares its runtime traffic meter. Separate passive
+PUT/GET meters now count completed encrypted chunk bytes, independently of frame
+traffic. PUT receive counts successful provider admission (including duplicates),
+even if its receipt response subsequently fails; PUT send counts only after the
+matching proven provider's signed receipt verifies. GET send counts a completed
+local payload write, without proof of remote receipt; GET receive counts only
+after the whole chunk's ChunkID verifies. Locally partial/rejected PUTs, missing
+GETs and invalid received chunks add no completed payload bytes on those paths.
+Their frames still count normally; the other endpoint may have completed its
+local write/admission and counted it. Bytes enter windows at local completion.
+Recovery/repair/full-GET checks and repeated completed transfers count again.
+Endpoint totals can differ; these are neither unique logical content nor network
+throughput, storage durability, service settlement or canonical evidence.
+
+Each direction has a volatile runtime-lifetime total and a rolling window of
+60 completed seconds, excluding the current partial second. Before a complete
+minute, rates are Unknown; a complete quiet window is zero. Bounded in-memory
+meters retain no peer/content/user identifiers and restart empty. Snapshot reads
+copy no payload history and trigger no transfers, scans, probes or audits.
+Network Advanced adds local PUT/GET cards; Console `metrics` uses the same EN/FR
+formatter with byte totals, rates and completion semantics. Collection remains
+independent of Identity unlock and page visibility. Remote reports are unchanged.
+
+Validation: desktop, core-test and native Qt targets rebuilt. Serial core suites
+passed: storage service 23, node runtime 27, peer manager 43 and observation
+cache 6 (99 cases). Real TLS storage checks cover accepted/duplicate PUT,
+capacity rejection, complete GET, missing GET and subsequent PING/block sync.
+Deterministic windows cover startup Unknown, partial-second exclusion, quiet
+expiry and restart. The full native Qt suite exited successfully; explicit Qt
+file-logger checks for Network and Console also passed, including EN/FR and
+Unknown rates. Ignored evidence: `artifacts/storage-payload-20261009/`.
+No deployed network, signer or service was restarted.
+
 ## Optional idle-slot observation acquisition (2026-10-09)
 
 The ordinary network service owner can now acquire reports during its existing

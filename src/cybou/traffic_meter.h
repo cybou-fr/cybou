@@ -17,11 +17,11 @@ struct TrafficDiagnostics {
     uint64_t window_received_bytes{0}, window_sent_bytes{0}, window_ms{0};
 };
 
-/// Passive local CYBOU frame bytes, excluding TLS/TCP overhead. No peer identifiers.
-class TrafficMeter {
+/// Bounded passive byte windows. No peer identifiers.
+class ByteRateMeter {
 public:
     using Clock = std::chrono::steady_clock;
-    explicit TrafficMeter(Clock::time_point started = Clock::now()) : m_started{started} {}
+    explicit ByteRateMeter(Clock::time_point started = Clock::now()) : m_started{started} {}
     void Record(uint64_t received, uint64_t sent, Clock::time_point now = Clock::now())
     {
         std::lock_guard lock{m_mutex};
@@ -76,6 +76,24 @@ private:
     // Retain the completed 15-minute history plus the current partial five-second interval.
     std::array<Bucket, 905> m_buckets{};
     uint64_t m_received{0}, m_sent{0};
+};
+struct StorageTransferDiagnostics {
+    TrafficDiagnostics put, get;
+};
+
+/// Local frame traffic plus completed encrypted chunk transfers, kept separate.
+class TrafficMeter : public ByteRateMeter {
+public:
+    explicit TrafficMeter(Clock::time_point started = Clock::now())
+        : ByteRateMeter{started}, m_put{started}, m_get{started} {}
+    void RecordPut(uint64_t received, uint64_t sent, Clock::time_point now = Clock::now())
+    { m_put.Record(received, sent, now); }
+    void RecordGet(uint64_t received, uint64_t sent, Clock::time_point now = Clock::now())
+    { m_get.Record(received, sent, now); }
+    StorageTransferDiagnostics StorageSnapshot(Clock::time_point now = Clock::now()) const
+    { return {m_put.WindowSnapshot(now), m_get.WindowSnapshot(now)}; }
+private:
+    ByteRateMeter m_put, m_get;
 };
 } // namespace cybou
 #endif

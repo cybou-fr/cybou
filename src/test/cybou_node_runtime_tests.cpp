@@ -276,6 +276,34 @@ BOOST_AUTO_TEST_CASE(passive_traffic_windows_exclude_partial_seconds_and_expire)
     BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{124}).received_bytes, 5738U);
 }
 
+BOOST_AUTO_TEST_CASE(storage_payload_windows_are_separate_bounded_and_restart_empty)
+{
+    using Clock = cybou::TrafficMeter::Clock;
+    const auto start = Clock::time_point{};
+    cybou::TrafficMeter meter{start};
+    meter.Record(10000, 20000, start);
+    meter.RecordPut(120, 240, start);
+    meter.RecordGet(300, 600, start + std::chrono::seconds{59});
+    BOOST_CHECK_EQUAL(meter.StorageSnapshot(start + std::chrono::seconds{59}).put.window_ms, 0U);
+    const auto minute = meter.StorageSnapshot(start + std::chrono::seconds{60});
+    BOOST_CHECK_EQUAL(minute.put.window_received_bytes, 120U);
+    BOOST_CHECK_EQUAL(minute.put.window_sent_bytes, 240U);
+    BOOST_CHECK_EQUAL(minute.get.window_received_bytes, 300U);
+    BOOST_CHECK_EQUAL(minute.get.window_sent_bytes, 600U);
+    BOOST_CHECK_EQUAL(minute.get.window_ms, 60000U);
+    BOOST_CHECK(minute.put.history.empty() && minute.get.history.empty());
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{60}).received_bytes, 10000U);
+    meter.RecordPut(60, 0, start + std::chrono::seconds{60});
+    BOOST_CHECK_EQUAL(meter.StorageSnapshot(start + std::chrono::seconds{60}).put.window_received_bytes, 120U);
+    const auto idle = meter.StorageSnapshot(start + std::chrono::seconds{121});
+    BOOST_CHECK_EQUAL(idle.put.window_received_bytes, 0U);
+    BOOST_CHECK_EQUAL(idle.put.received_bytes, 180U);
+    BOOST_CHECK_EQUAL(idle.get.received_bytes, 300U);
+    cybou::TrafficMeter restarted{start + std::chrono::seconds{121}};
+    BOOST_CHECK_EQUAL(restarted.StorageSnapshot(start + std::chrono::seconds{121}).put.window_ms, 0U);
+    BOOST_CHECK_EQUAL(restarted.StorageSnapshot(start + std::chrono::seconds{121}).get.received_bytes, 0U);
+}
+
 BOOST_AUTO_TEST_CASE(finalized_snapshot_is_shared_immutable_and_reopens_from_disk)
 {
     CybouServiceTestFixture fixture;

@@ -1143,6 +1143,7 @@ std::optional<ChunkAdmissionResult> PeerSession::PutAuthorizedChunk(
     const auto signer = VerifyStorageReceipt(result.receipt, m_local->network_binding, publication_operation_id,
         chunk_id, static_cast<uint32_t>(stored_bytes.size()));
     if (!signer || *signer != *m_peer_storage_id) return std::nullopt;
+    if (m_traffic) m_traffic->RecordPut(0, stored_bytes.size());
     return result;
 }
 
@@ -1172,7 +1173,9 @@ std::optional<std::vector<unsigned char>> PeerSession::GetChunkById(const ChunkI
             data->payload.size() > size - bytes.size()) return unavailable();
         bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
     }
-    return ComputeChunkId(bytes) == chunk_id ? std::optional<std::vector<unsigned char>>{std::move(bytes)} : unavailable();
+    if (ComputeChunkId(bytes) != chunk_id) return unavailable();
+    if (m_traffic) m_traffic->RecordGet(bytes.size(), 0);
+    return bytes;
 }
 
 std::optional<ChunkAuthorizationProof> PeerSession::GetChunkAuthorizationProof(
@@ -1315,6 +1318,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             bytes.insert(bytes.end(), data->payload.begin(), data->payload.end());
         }
         const auto result = runtime.PutFinalizedChunk(publication_id, chunk_id, bytes, proof);
+        if (result && m_traffic) m_traffic->RecordPut(bytes.size(), 0);
         std::vector<unsigned char> response{static_cast<unsigned char>(result.status)};
         if (result) response.insert(response.end(), result.receipt.begin(), result.receipt.end());
         return Write(Frame{MessageType::CHUNK_ADMISSION_RESULT, response}, deadline);
@@ -1352,6 +1356,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
                 return false;
             }
         }
+        if (m_traffic) m_traffic->RecordGet(0, bytes->size());
         return true;
     }
     if (request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF) {
