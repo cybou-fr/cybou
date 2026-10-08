@@ -487,19 +487,22 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
         const auto ids = selectedIds();
         if (m_details->isVisible() && ids.size() == 1) showDetails(ids.first());
     });
-    auto* trash_key = new QShortcut{QKeySequence::Delete, this};
-    trash_key->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(trash_key, &QShortcut::activated, this, [this] {
-        const auto ids = selectedIds();
-        if (m_view == View::Trash || ids.isEmpty()) return;
-        moveFilesTo(ids, {}, true);
-    });
-    auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, this};
-    rename_key->setContext(Qt::WidgetWithChildrenShortcut);
-    connect(rename_key, &QShortcut::activated, this, [this] {
-        const auto ids = selectedIds();
-        if (ids.size() == 1) promptRename(ids.first());
-    });
+    // Selection shortcuts belong to the file views, not navigation or editors.
+    for (QWidget* view : {static_cast<QWidget*>(m_table), static_cast<QWidget*>(m_tiles)}) {
+        auto* trash_key = new QShortcut{QKeySequence::Delete, view};
+        trash_key->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(trash_key, &QShortcut::activated, this, [this] {
+            const auto ids = selectedIds();
+            if (m_view == View::Trash || ids.isEmpty()) return;
+            moveFilesTo(ids, {}, true);
+        });
+        auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, view};
+        rename_key->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(rename_key, &QShortcut::activated, this, [this] {
+            const auto ids = selectedIds();
+            if (m_view != View::Trash && ids.size() == 1) promptRename(ids.first());
+        });
+    }
     auto* close_key = new QShortcut{QKeySequence{Qt::Key_Escape}, this};
     close_key->setContext(Qt::WidgetWithChildrenShortcut);
     connect(close_key, &QShortcut::activated, this, [this] { showDetails({}); });

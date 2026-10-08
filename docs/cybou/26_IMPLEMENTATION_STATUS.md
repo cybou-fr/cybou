@@ -3,6 +3,32 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Mail/Files keyboard scope package (2026-10-08)
+
+Files selection shortcuts were attached to the whole page: retained selection
+could let F2/Delete act on files while navigation held keyboard focus. They now
+belong to the list/grid with WidgetWithChildrenShortcut scope. Trash rejects
+both shortcuts, consistent with its visible Restore/permanent-delete actions.
+The acknowledged command and review paths are unchanged.
+
+A new FR/EN regression covers retained selection with navigation focus, header
+text deletion, actual list/grid rename and Trash commands, failed-save catalog
+retention and the Trash guard. It also covers Mail search/compose shortcuts and
+literal compose text containing shortcut letters and Delete. The test dismisses
+search completion with Escape, explicitly reactivates the parent after a modal
+dialog (required by offscreen Qt), and distinguishes projection/session traffic
+from file mutations. Existing async unlock and language/theme compose-retention
+scenarios remain covered.
+
+Validation: isolated GUI/test builds succeeded; the full offscreen Qt suite
+passed 88 results and five focused native Windows scenarios passed seven
+results including setup/cleanup. Both final runs passed without failures.
+Evidence and final source/binary provenance are under
+`artifacts/ux-keyboard-20261008/`. The build cache is restored to its normal
+output directory. No live desktop/signer or VPS was restarted/deployed.
+These programmatic events do not close full tab-order/visible-focus, physical
+keyboard, screen-reader, mixed-monitor DPI or wider FR/EN/live acceptance gates.
+
 ## Mail viewport performance package (2026-10-08)
 
 Profiling confirmed that per-message widgets dominated initial presentation.

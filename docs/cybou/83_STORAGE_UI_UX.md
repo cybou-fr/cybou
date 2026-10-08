@@ -21,6 +21,12 @@ accessible names, tooltips and keyboard focus, and mutation actions require an
 active Identity and available Files backend. Permanent deletion keeps its
 explicit existing review. These actions do not imply finality or protection.
 
+F2 and Delete act on the selection only while the Files list or grid has
+keyboard focus. Retaining a selection while focusing navigation, search or
+another control does not make those controls file-mutation shortcut targets.
+Trash excludes both selection shortcuts; Restore and permanent deletion retain
+their visible actions and permanent-deletion review.
+
 Folder creation, rename, move, copy, Trash and Restore acknowledge the locally
 saved publication intent. They report a failed save rather than announcing a
 completed change. Move/Trash batches show pending feedback, count saved/failed

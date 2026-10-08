@@ -599,3 +599,13 @@ presentation profiling/delegate work is delivered at component scope. Remaining
 gates include physical input/mixed-monitor DPI, screen-reader use, broader
 FR/EN acceptance and clean-machine/live outage/recovery scenarios. Independent
 remote failure-domain evidence remains separate from UI rendering performance.
+
+Files keyboard scope follow-up (2026-10-08): F2 and Delete now belong to the
+list/grid instead of the whole page, protecting retained selections when
+navigation or another control has focus. Trash excludes these selection
+shortcuts. Native Windows FR/EN coverage verifies rename/Trash acknowledgment,
+failed-save retention, search text editing and Mail search/compose shortcuts.
+The test dismisses completion before returning focus to files and distinguishes
+background projection refresh from file mutation commands. This closes the
+scoped shortcut-routing defect; physical keyboard/tab order, focus visuals,
+screen readers and wider FR/EN/live acceptance remain separate gates.

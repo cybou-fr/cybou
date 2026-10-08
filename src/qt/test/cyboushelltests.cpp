@@ -32,6 +32,7 @@
 #include <qt/cybouconsoledialog.h>
 #include <qt/authorityreview.h>
 #include <QMessageBox>
+#include <QInputDialog>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QFile>
@@ -1503,6 +1504,143 @@ void CybouShellTests::keyboardAndAsyncUnlock()
     for (int i = 0; i < 50 && !done; ++i) QTest::qWait(10);
     QVERIFY(done);
     QCOMPARE(model->status().identity_state, CybouIdentityState::Active);
+    window->close();
+}
+
+void CybouShellTests::mailFilesKeyboardScopesInBothLanguages()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+    window->show();
+    window->activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(window.get()));
+    for (const auto& language : {QStringLiteral("en"), QStringLiteral("fr")}) {
+        window->setLanguage(language);
+        window->showPage(CybouPage::Files);
+        auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+        RecordingBackend backend;
+        const auto file_commands = [&backend] {
+            QStringList result;
+            for (const auto& command : backend.commands) {
+                if (command.startsWith(QStringLiteral("rename:")) || command.startsWith(QStringLiteral("trash:")) ||
+                    command.startsWith(QStringLiteral("delete:")) || command.startsWith(QStringLiteral("restore:"))) result.append(command);
+            }
+            return result; // Projection refresh and session lifecycle are independent.
+        };
+        model->setApplicationBackend(&backend);
+        model->setFeatureAvailability(AllFeatureAvailability());
+        model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+        auto file = ProtectedFile(QStringLiteral("keyboard-file"), QStringLiteral("keyboard.txt"));
+        model->setFileItems({file});
+        files->setView(StoragePage::View::MyFiles);
+        backend.commands.clear(); // Exclude session open/close from mutation assertions.
+        auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+        auto* grid = files->findChild<QListWidget*>(QStringLiteral("filesGrid"));
+        auto* nav = files->findChild<QListWidget*>(QStringLiteral("folderList"));
+        QVERIFY(table && grid && nav);
+        QCOMPARE(table->accessibleName(), language == QLatin1String("fr") ? QStringLiteral("Fichiers") : QStringLiteral("Files"));
+        for (bool tiles : {false, true}) {
+            files->setGridMode(tiles);
+            if (tiles) grid->setCurrentRow(0); else table->setCurrentItem(table->topLevelItem(0));
+            // Retained selection must not make navigation a destructive shortcut target.
+            nav->setFocus();
+            QTRY_VERIFY(nav->hasFocus());
+            bool unexpected_dialog = false;
+            QTimer::singleShot(0, window.get(), [&] {
+                if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) {
+                    unexpected_dialog = true;
+                    dialog->reject();
+                }
+            });
+            QTest::keyClick(nav, Qt::Key_F2);
+            QApplication::processEvents();
+            QVERIFY(!unexpected_dialog);
+            QTest::keyClick(nav, Qt::Key_Delete);
+            QVERIFY2(file_commands().isEmpty(), qPrintable(backend.commands.join(QLatin1Char(','))));
+            // Header text editing also leaves the selected file alone.
+            auto* search = window->globalSearch();
+            search->setFocus();
+            search->setText(QStringLiteral("keyboard"));
+            search->setCursorPosition(0);
+            QTest::keyClick(search, Qt::Key_Delete);
+            QCOMPARE(search->text(), QStringLiteral("eyboard"));
+            QVERIFY2(file_commands().isEmpty(), qPrintable(backend.commands.join(QLatin1Char(','))));
+            // Dismiss completion before returning to the catalog, as a user does.
+            QTest::keyClick(search, Qt::Key_Escape);
+            search->clear();
+            QApplication::processEvents();
+            QCOMPARE(files->visibleIds(), QStringList{file.id});
+            QWidget* view = tiles ? static_cast<QWidget*>(grid) : table;
+            QVERIFY(view->isVisible());
+            window->activateWindow();
+            view->setFocus();
+            QTRY_VERIFY(view->hasFocus());
+            bool renamed = false;
+            QTimer::singleShot(0, window.get(), [&] {
+                if (auto* dialog = qobject_cast<QInputDialog*>(QApplication::activeModalWidget())) {
+                    renamed = true;
+                    dialog->setTextValue(QStringLiteral("renamed.txt"));
+                    dialog->accept();
+                }
+            });
+            QTest::keyClick(view, Qt::Key_F2);
+            QApplication::processEvents();
+            QVERIFY(renamed);
+            QCOMPARE(file_commands(), QStringList{QStringLiteral("rename:keyboard-file")});
+            backend.file_results.last()(CybouCommandState::Committed, {});
+            backend.commands.clear();
+            window->activateWindow();
+            QVERIFY(QTest::qWaitForWindowActive(window.get()));
+            view->setFocus();
+            QTRY_VERIFY(view->hasFocus());
+            QTest::keyClick(view, Qt::Key_Delete);
+            QCOMPARE(file_commands(), QStringList{QStringLiteral("trash:keyboard-file")});
+            backend.file_results.last()(CybouCommandState::Failed, QStringLiteral("Save failed"));
+            QVERIFY(!model->fileItem(file.id)->trashed);
+            backend.commands.clear();
+        }
+        file.trashed = true;
+        model->setFileItems({file});
+        files->setView(StoragePage::View::Trash);
+        files->setGridMode(false);
+        table->setCurrentItem(table->topLevelItem(0));
+        table->setFocus();
+        QTRY_VERIFY(table->hasFocus());
+        bool trash_rename = false;
+        QTimer::singleShot(0, window.get(), [&] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) {
+                trash_rename = true;
+                dialog->reject();
+            }
+        });
+        QTest::keyClick(table, Qt::Key_F2);
+        QApplication::processEvents();
+        QVERIFY(!trash_rename);
+        QTest::keyClick(table, Qt::Key_Delete);
+        QVERIFY2(file_commands().isEmpty(), qPrintable(backend.commands.join(QLatin1Char(','))));
+        model->setApplicationBackend(nullptr);
+        QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+        window->showPage(CybouPage::Mail);
+        auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+        mail->setFocus();
+        QTest::keyClick(mail, Qt::Key_Slash);
+        QTRY_VERIFY(window->globalSearch()->hasFocus());
+        window->globalSearch()->clear();
+        mail->setFocus();
+        QTest::keyClick(mail, Qt::Key_N, Qt::ControlModifier);
+        QVERIFY(mail->isComposing());
+        auto* body = mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+        QVERIFY(body);
+        body->setFocus();
+        QTest::keyClicks(body, "crf/");
+        QCOMPARE(body->toPlainText(), QStringLiteral("crf/"));
+        QTest::keyClick(body, Qt::Key_Home);
+        QTest::keyClick(body, Qt::Key_Delete);
+        QCOMPARE(body->toPlainText(), QStringLiteral("rf/"));
+        QVERIFY(mail->isComposing());
+    }
+    window->setLanguage(QStringLiteral("en"));
     window->close();
 }
 

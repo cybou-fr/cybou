@@ -137,6 +137,16 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 keyboard scope regression passes in English and French on the
+native Windows Qt platform. Retained Files selection does not make navigation
+or header text editing a rename/Trash shortcut target; list/grid F2 and Delete
+still issue the acknowledged commands, failed Trash leaves the catalog intact,
+and Trash excludes both shortcuts. Mail `/`, Ctrl+N and literal compose-body
+`c/r/f/` and Delete are covered, alongside language/theme compose preservation.
+Completion is dismissed with Escape before returning to the catalog. These are
+programmatically delivered Qt events; full primary-action tab order, physical
+keyboard use, visible-focus review and screen-reader acceptance remain open.
+
 The 2026-10-08 Files drop-routing regression and existing Mail/drop/Undo/layout
 scenarios pass on the native Windows Qt platform at device pixel ratios 1.00,
 1.25, 1.50 and 2.00. Events are delivered programmatically. This does not mark
