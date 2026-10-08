@@ -176,10 +176,21 @@ void CybouFixtureApplicationBackend::moveMail(const QString& id, CybouMailFolder
     if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::deleteMail(const QString& id)
+void CybouFixtureApplicationBackend::deleteMail(const QString& id, CommandProgress progress)
 {
-    if (!m_open) return;
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
     if (m_mail.removeIf([&id](const CybouMailItem& item) { return item.id == id; }) > 0) Q_EMIT mailItemRemoved(id);
+    if (progress) progress(CybouCommandState::Committed, {});
+}
+
+void CybouFixtureApplicationBackend::deleteMailForever(const QStringList& ids, CommandProgress progress)
+{
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
+    for (const auto& id : ids) {
+        const auto* item = mail(id);
+        if (item && item->folder == CybouMailFolder::Trash && !item->draft) deleteMail(id);
+    }
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
 void CybouFixtureApplicationBackend::downloadAttachment(const QString& message_id, const QString& attachment_id,

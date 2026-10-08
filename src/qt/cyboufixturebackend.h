@@ -47,7 +47,8 @@ public:
     void setMailRead(const QString& id, bool read) override;
     void setMailStarred(const QString& id, bool starred) override;
     void moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress = {}) override;
-    void deleteMail(const QString& id) override;
+    void deleteMail(const QString& id, CommandProgress progress = {}) override;
+    void deleteMailForever(const QStringList& ids, CommandProgress progress = {}) override;
     void downloadAttachment(const QString& message_id, const QString& attachment_id,
         const QString& destination) override;
     void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,

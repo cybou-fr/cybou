@@ -3,6 +3,34 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Acknowledged Mail deletion package (2026-10-08)
+
+Draft discard and permanent mailbox deletion now reuse correlated Mail command
+progress and session generation. The adapter removes private projected rows only
+after the encrypted Application DB commits deletion. Exceptions or failed writes
+retain the failed item and report failure. Permanent batch deletion reports each
+committed/failed item; the reader stays open while deletion is pending. A durable
+pending send cannot be cancelled by deleting its projected row or backing draft.
+This concerns local mailbox state, not deletion of historical/recipient copies.
+
+Compose keeps text while discard is queued/running and re-enables it on failure.
+Discard is ordered after any queued autosave; its obsolete editor reply is ignored.
+Theme/language rebuild follows an in-flight discard by draft/task identity. Lock,
+session replacement and reentrant lock from a row-removal listener invalidate late
+completion callbacks. Context-menu draft discard no longer announces success
+before the local commit. FR strings cover the new progress/failure states.
+
+Validation: isolated MinGW app/test builds passed and the complete Qt suite passed
+80 tests. The added regression injects delayed/failed commits, partial deletion,
+autosave/discard ordering, rebuilt composer and stale callbacks. The existing core
+adapter integration waits for actual draft and permanent mailbox deletion and
+checks absence after lock/unlock. Final native Windows checks passed both the
+new regression and core adapter integration (4 results including setup/cleanup),
+including the additional reentrant-lock guard. Logs and isolated binaries are under ignored
+`artifacts/ux-mail-actions-20261008/`. Clean-machine Beta and physical accessibility
+acceptance remain open; Files mutation acknowledgement/Undo is separate remaining
+work. The running desktop binary and live PoA state are not replaced.
+
 ## Authority and desktop presentation QA package (2026-10-08)
 
 Authority now occupies a separate Administration navigation section visible only

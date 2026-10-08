@@ -18,7 +18,7 @@
  */
 
 /** Local application commands never imply PoA finality. */
-enum class CybouMailTaskKind { DraftSave, Move, Send };
+enum class CybouMailTaskKind { DraftSave, Move, Send, Delete };
 enum class CybouCommandState { Queued, Running, Committed, Failed };
 struct CybouMailTask {
     QString id;

@@ -5,6 +5,7 @@
 
 #include <cybou/support_mail.h>
 #include <QFile>
+#include <QPointer>
 
 using namespace cybou::qt_detail;
 
@@ -395,42 +396,74 @@ void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder fo
     });
 }
 
-void CybouCoreApplicationAdapter::deleteMailForever(const QStringList& ids)
+void CybouCoreApplicationAdapter::deleteMailForever(const QStringList& ids, CommandProgress progress)
 {
-    if (!m_session) return;
-    std::vector<cybou::PrivateItemId> messages;
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
+    std::vector<std::pair<QString, cybou::PrivateItemId>> messages;
     for (const auto& id : ids) {
         const auto message_id = FromHex(id);
-        if (!message_id) continue;
-        messages.push_back(*message_id);
-        m_deleted_mail.insert(id);
-        Q_EMIT mailItemRemoved(id);
+        if (!message_id) { if (progress) progress(CybouCommandState::Failed, tr("Some messages could not be deleted.")); return; }
+        messages.emplace_back(id, *message_id);
     }
-    m_session->Post([owner = this, messages = std::move(messages)](IdentitySession& s) {
-        bool all{true};
-        for (const auto& message : messages) all = s.application->MoveMail(message, cybou::MailFolder::DELETED) && all;
-        if (!all) s.ToGui([owner] { Q_EMIT owner->commandFailed(tr("Some messages could not be deleted.")); });
+    m_session->Post([messages = std::move(messages), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+        QStringList committed;
+        for (const auto& [id, message] : messages) {
+            try { if (s.application->MoveMail(message, cybou::MailFolder::DELETED)) committed << id; }
+            catch (const std::exception&) { }
+        }
+        const bool all = committed.size() == static_cast<qsizetype>(messages.size());
+        s.StateToGui([owner = s.owner, generation = s.generation, committed, all, progress] {
+            const QPointer<CybouCoreApplicationAdapter> guard{owner};
+            for (const auto& id : committed) {
+                owner->m_deleted_mail.insert(id);
+                Q_EMIT owner->mailItemRemoved(id);
+                if (!guard || !guard->m_session || guard->m_session_generation != generation) return;
+            }
+            const auto error = all ? QString{} : tr("Some messages could not be deleted.");
+            if (progress) progress(all ? CybouCommandState::Committed : CybouCommandState::Failed, error);
+            else if (!all) Q_EMIT owner->commandFailed(error);
+        });
         s.Refresh();
     });
 }
 
-void CybouCoreApplicationAdapter::deleteMail(const QString& id)
+void CybouCoreApplicationAdapter::deleteMail(const QString& id, CommandProgress progress)
 {
-    if (!m_session) return;
-    if (m_pending_sends.remove(id) > 0) {
-        Q_EMIT mailItemRemoved(id);
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Mail is unavailable.")); return; }
+    bool sending = m_pending_sends.contains(id);
+    for (auto it = m_send_drafts.constBegin(); it != m_send_drafts.constEnd(); ++it)
+        sending = sending || (it.value() == id && m_pending_sends.contains(it.key()));
+    if (sending) {
+        // Pending send ownership is durable; removing a row cannot cancel it safely.
+        const auto error = tr("This message is already being sent and cannot be discarded.");
+        if (progress) progress(CybouCommandState::Failed, error);
+        else Q_EMIT commandFailed(error);
         return;
     }
     if (id.startsWith(QStringLiteral("draft-"))) {
-        m_pending_drafts.remove(id);
-        m_known_drafts.remove(id);
-        m_deleted_drafts.insert(id);
-        Q_EMIT mailItemRemoved(id);
-        m_session->Post([draft_id = id.toStdString()](IdentitySession& s) { s.application->DeleteDraft(draft_id); });
+        m_session->Post([id, progress](IdentitySession& s) {
+            s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
+            bool ok{false};
+            try { ok = s.application->DeleteDraft(id.toStdString()); } catch (const std::exception&) { }
+            s.StateToGui([owner = s.owner, generation = s.generation, id, ok, progress] {
+                const QPointer<CybouCoreApplicationAdapter> guard{owner};
+                if (ok) {
+                    owner->m_pending_drafts.remove(id);
+                    owner->m_known_drafts.remove(id);
+                    owner->m_deleted_drafts.insert(id);
+                    Q_EMIT owner->mailItemRemoved(id);
+                    if (!guard || !guard->m_session || guard->m_session_generation != generation) return;
+                }
+                const auto error = ok ? QString{} : tr("The draft could not be discarded. Your text is kept; try again.");
+                if (progress) progress(ok ? CybouCommandState::Committed : CybouCommandState::Failed, error);
+                else if (!ok) Q_EMIT owner->commandFailed(error);
+            });
+        });
         return;
     }
     // Delivered mail is part of finalized history and rebuilds from it; it stays in Trash.
-    moveMail(id, CybouMailFolder::Trash);
+    moveMail(id, CybouMailFolder::Trash, std::move(progress));
 }
 
 void CybouCoreApplicationAdapter::downloadAttachment(const QString& message_id, const QString& attachment_id,

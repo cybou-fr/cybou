@@ -171,6 +171,7 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     actions->addWidget(m_send_hint, 1);
     auto* discard_button = new QPushButton{tr("Discard"), this};
     discard_button->setObjectName(QStringLiteral("secondaryButton"));
+    discard_button->setProperty("cybouId", QStringLiteral("composeDiscard"));
     discard_button->setToolTip(tr("Discard this draft"));
     connect(discard_button, &QPushButton::clicked, this, [this] { discard(); });
     actions->addWidget(discard_button);
@@ -195,6 +196,20 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     connect(m_body, &QTextEdit::textChanged, this, [this] { updateGates(); edited(); });
     connect(m_send, &QPushButton::clicked, this, [this] { send(); });
     connect(m_model, &CybouDesktopModel::mailTasksChanged, this, [this] {
+        if (m_following_delete && !m_draft_id.isEmpty()) {
+            for (const auto& task : m_model->mailTasks()) {
+                if (task.kind != CybouMailTaskKind::Delete || task.item_id != m_draft_id) continue;
+                if (task.state == CybouCommandState::Committed) {
+                    clearCompose();
+                    if (onClosed) onClosed();
+                } else if (task.state == CybouCommandState::Failed) {
+                    m_following_delete = m_close_requested = false;
+                    m_save_hint->setText(task.error);
+                    updateGates();
+                }
+                return;
+            }
+        }
         if (!m_following_send || m_draft_id.isEmpty()) return;
         for (const auto& task : m_model->mailTasks()) {
             if (task.kind != CybouMailTaskKind::Send || task.item_id != m_draft_id) continue;
@@ -239,7 +254,7 @@ void MailCompose::start(const CybouMailItem& draft)
     m_loading = true;
     ++m_compose_generation;
     m_autosave->stop();
-    m_saving = m_sending = m_close_requested = m_following_send = false;
+    m_saving = m_sending = m_close_requested = m_following_send = m_following_delete = false;
     m_revision = m_saved_revision = 0;
     m_save_hint->clear();
     rebuildCompleter();
@@ -254,6 +269,11 @@ void MailCompose::start(const CybouMailItem& draft)
     m_loading = false;
     m_following_send = false;
     for (const auto& task : m_model->mailTasks()) {
+        if (task.kind == CybouMailTaskKind::Delete && task.item_id == m_draft_id &&
+            (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running)) {
+            m_following_delete = m_close_requested = true;
+            m_save_hint->setText(tr("Discarding draft…"));
+        }
         if (task.kind == CybouMailTaskKind::Send && task.item_id == m_draft_id &&
             (task.state == CybouCommandState::Queued || task.state == CybouCommandState::Running)) {
             m_sending = m_following_send = true;
@@ -524,7 +544,7 @@ void MailCompose::clearCompose()
     m_subject->clear();
     m_body->clear();
     m_attachments.clear();
-    m_saving = m_sending = m_close_requested = m_following_send = false;
+    m_saving = m_sending = m_close_requested = m_following_send = m_following_delete = false;
     m_revision = m_saved_revision = 0;
     m_save_hint->clear();
     rebuildAttachments();
@@ -617,7 +637,25 @@ void MailCompose::saveDraftAndClose()
 void MailCompose::discard()
 {
     if (m_sending || m_close_requested) return;
-    if (!m_draft_id.isEmpty()) m_model->requestDeleteMail(m_draft_id);
-    clearCompose();
-    if (onClosed) onClosed();
+    m_autosave->stop();
+    if (m_draft_id.isEmpty()) { clearCompose(); if (onClosed) onClosed(); return; }
+    // The worker orders discard after any already queued autosave. Its old reply
+    // must not close or re-enable this composer while deletion is pending.
+    const auto generation = ++m_compose_generation;
+    m_saving = false;
+    m_close_requested = true;
+    m_save_hint->setText(tr("Discarding draft…"));
+    updateGates();
+    const QPointer<MailCompose> guard{this};
+    m_model->requestDeleteMail(m_draft_id, [guard, generation](bool ok, const QString& error) {
+        if (!guard || guard->m_compose_generation != generation) return;
+        if (ok) {
+            guard->clearCompose();
+            if (guard->onClosed) guard->onClosed();
+        } else {
+            guard->m_close_requested = false;
+            guard->m_save_hint->setText(error);
+            guard->updateGates();
+        }
+    });
 }

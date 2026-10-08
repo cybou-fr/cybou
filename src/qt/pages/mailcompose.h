@@ -80,6 +80,7 @@ private:
     bool m_saving{false};
     bool m_sending{false};
     bool m_following_send{false};
+    bool m_following_delete{false};
     bool m_close_requested{false};
     quint64 m_revision{0};
     quint64 m_saved_revision{0};

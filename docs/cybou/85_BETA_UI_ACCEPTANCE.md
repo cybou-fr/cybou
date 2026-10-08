@@ -196,6 +196,9 @@ trust and resilience without becoming mandatory UI concepts.
 [ ] slow archive/trash shows immediate pending feedback and stays responsive
 [ ] Archived/Saved appears only after the relevant local durable commit
 [ ] injected DB/save failure retains content and does not show success
+[ ] draft discard waits for durable deletion and keeps text on failure
+[ ] autosave/discard ordering and theme rebuild cannot resurrect a discarded draft
+[ ] permanent Mail deletion retains failed rows and counts only committed items
 [ ] multi-item failure identifies completed/failed items and retry is bounded
 [ ] Undo issued during a pending move produces the intended final folder
 [ ] autosave/close/lock/restart retain acknowledged drafts without duplicate send

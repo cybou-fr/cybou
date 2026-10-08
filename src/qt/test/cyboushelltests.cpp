@@ -169,6 +169,7 @@ public:
     bool delay_load{false};
     QHash<QString, CommandProgress> draft_results;
     QVector<CommandProgress> move_results;
+    QVector<CommandProgress> delete_results;
     CommandProgress send_result;
     QString send_draft_id;
 
@@ -182,7 +183,8 @@ public:
     void setMailRead(const QString& id, bool) override { commands << QStringLiteral("read:") + id; }
     void setMailStarred(const QString& id, bool) override { commands << QStringLiteral("starMail:") + id; }
     void moveMail(const QString& id, CybouMailFolder, CommandProgress progress = {}) override { commands << QStringLiteral("moveMail:") + id; move_results.append(progress); }
-    void deleteMail(const QString& id) override { commands << QStringLiteral("deleteMail:") + id; }
+    void deleteMail(const QString& id, CommandProgress progress = {}) override { commands << QStringLiteral("deleteMail:") + id; delete_results.append(progress); }
+    void deleteMailForever(const QStringList& ids, CommandProgress progress = {}) override { commands << QStringLiteral("deleteMailForever:") + ids.join(','); delete_results.append(progress); }
     void downloadAttachment(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("attachment:") + m; }
     void saveAttachmentToFiles(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("saveAttachment:") + m; }
     void uploadFile(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("upload:") + id; }
@@ -1851,6 +1853,116 @@ void CybouShellTests::localMailCommandsWaitForCommit()
     QVERIFY(!stale_done);
 }
 
+void CybouShellTests::mailDeletionWaitsForDurableCommit()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    CybouMailItem mail;
+    mail.id = QStringLiteral("mail-delete");
+    mail.folder = CybouMailFolder::Trash;
+    mail.body = QStringLiteral("Retain on database failure");
+    CybouMailItem draft;
+    draft.id = QStringLiteral("draft-delete");
+    draft.draft = true;
+    draft.folder = CybouMailFolder::Drafts;
+    draft.body = QStringLiteral("Keep this draft");
+    model.setMailItems({mail, draft});
+    int completed = 0;
+    model.requestDeleteMailForever({mail.id}, [&](bool ok, const QString&) { QVERIFY(!ok); ++completed; });
+    QVERIFY(model.mailItem(mail.id));
+    QCOMPARE(completed, 0);
+    backend.delete_results.last()(CybouCommandState::Running, {});
+    QTRY_COMPARE(model.mailTasks().last().state, CybouCommandState::Running);
+    QVERIFY(model.mailItem(mail.id));
+    backend.delete_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
+    QTRY_COMPARE(completed, 1);
+    QCOMPARE(model.mailItem(mail.id)->body, mail.body);
+    model.requestDeleteMailForever({mail.id});
+    backend.delete_results.last()(CybouCommandState::Committed, {});
+    QTRY_VERIFY(!model.mailItem(mail.id));
+
+    auto other = mail;
+    other.id = QStringLiteral("mail-retained");
+    model.setMailItems({mail, other, draft});
+    EmailPage page{&model, [] {}};
+    page.setView(EmailPage::View::Trash);
+    page.openMessage(mail.id);
+    QSignalSpy notices{&model, &CybouDesktopModel::notificationRequested};
+    QTimer::singleShot(0, &page, [&] {
+        auto* question = page.findChild<QMessageBox*>();
+        QVERIFY(question);
+        question->button(QMessageBox::Yes)->click();
+    });
+    page.deleteForever({mail.id, other.id});
+    QVERIFY(model.mailItem(mail.id) && model.mailItem(other.id));
+    QVERIFY(page.isDetailOpen());
+    QCOMPARE(notices.last().first().toString(), QStringLiteral("Deleting messages…"));
+    backend.delete_results.at(backend.delete_results.size()-2)(CybouCommandState::Committed, {});
+    backend.delete_results.last()(CybouCommandState::Failed, QStringLiteral("DB failed"));
+    QTRY_VERIFY(notices.last().first().toString().contains(QStringLiteral("1 messages deleted; 1 could not be deleted")));
+    QVERIFY(!model.mailItem(mail.id));
+    QVERIFY(model.mailItem(other.id));
+
+    MailCompose composer{&model};
+    composer.start(draft);
+    int closed = 0;
+    composer.onClosed = [&] { ++closed; };
+    auto* body = composer.findChild<QTextEdit*>(QStringLiteral("composeBody"));
+    auto* discard = FindById<QPushButton>(&composer, QStringLiteral("composeDiscard"));
+    QVERIFY(body && discard);
+    discard->click();
+    QCOMPARE(closed, 0);
+    QVERIFY(!body->isEnabled());
+    QVERIFY(model.mailItem(draft.id));
+    backend.delete_results.last()(CybouCommandState::Failed, QStringLiteral("Delete failed"));
+    QTRY_VERIFY(body->isEnabled());
+    QCOMPARE(closed, 0);
+    QCOMPARE(body->toPlainText(), draft.body);
+    // An in-flight autosave reply must not clear or re-enable a discard.
+    body->setPlainText(QStringLiteral("Newest unsaved text"));
+    QTRY_VERIFY_WITH_TIMEOUT(backend.draft_results.contains(draft.id), 2000);
+    discard->click();
+    backend.draft_results.value(draft.id)(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QCOMPARE(closed, 0);
+    QVERIFY(!body->isEnabled());
+    QCOMPARE(body->toPlainText(), QStringLiteral("Newest unsaved text"));
+    // A shell rebuild can follow the same pending deletion by task identity.
+    MailCompose rebuilt{&model};
+    rebuilt.start(composer.snapshotForRebuild());
+    int rebuilt_closed = 0;
+    rebuilt.onClosed = [&] { ++rebuilt_closed; };
+    QVERIFY(!rebuilt.findChild<QTextEdit*>(QStringLiteral("composeBody"))->isEnabled());
+    backend.delete_results.last()(CybouCommandState::Committed, {});
+    QTRY_COMPARE(closed, 1);
+    QTRY_COMPARE(rebuilt_closed, 1);
+    QVERIFY(body->toPlainText().isEmpty());
+    QVERIFY(!model.mailItem(draft.id));
+    model.setMailItems({mail});
+    bool stale = false;
+    model.requestDeleteMailForever({mail.id}, [&](bool, const QString&) { stale = true; });
+    const auto late = backend.delete_results.last();
+    model.requestLockVault();
+    late(CybouCommandState::Committed, {});
+    QCoreApplication::processEvents();
+    QVERIFY(!stale);
+    QVERIFY(model.mailItems().isEmpty());
+
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    model.setMailItems({mail});
+    bool reentrant_done = false;
+    model.requestDeleteMailForever({mail.id}, [&](bool, const QString&) { reentrant_done = true; });
+    connect(&model, &CybouDesktopModel::mailChanged, &model, [&] {
+        if (!model.mailItem(mail.id)) model.requestLockVault();
+    });
+    backend.delete_results.last()(CybouCommandState::Committed, {});
+    QTRY_VERIFY(model.mailItems().isEmpty());
+    QVERIFY(!reentrant_done);
+}
+
 void CybouShellTests::composerKeepsTextOnSaveAndSendFailure()
 {
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
@@ -2745,13 +2857,25 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QCOMPARE(bob_model->mailItem(draft_id)->body, QStringLiteral("Half a thought"));
     QCOMPARE(bob_model->mailItem(draft_id)->folder, CybouMailFolder::Drafts);
     bob_model->requestDeleteMail(draft_id);
-    QVERIFY(!bob_model->mailItem(draft_id));
+    QTRY_VERIFY(!bob_model->mailItem(draft_id));
     QTest::qWait(150); // later snapshots must not resurrect it
     QVERIFY(!bob_model->mailItem(draft_id));
+    bob_model->requestMoveMail(sent_id, CybouMailFolder::Trash);
+    QTRY_VERIFY(bob_model->mailItem(sent_id) && bob_model->mailItem(sent_id)->folder == CybouMailFolder::Trash);
+    bool deletion_committed = false;
+    bob_model->requestDeleteMailForever({sent_id}, [&](bool ok, const QString& error) {
+        QVERIFY2(ok, qPrintable(error));
+        deletion_committed = true;
+    });
+    QVERIFY(bob_model->mailItem(sent_id));
+    QTRY_VERIFY(deletion_committed);
+    QVERIFY(!bob_model->mailItem(sent_id));
     bob_model->setIdentityState(CybouIdentityState::Locked, bob_account, 1);
     bob_model->setIdentityState(CybouIdentityState::Active, bob_account, 1);
     QTRY_VERIFY(bob_model->featureAvailability().mail && !bob_model->mailItems().isEmpty());
     QVERIFY(!bob_model->mailItem(draft_id));
+
+    QVERIFY(!bob_model->mailItem(sent_id));
 
     // An unknown recipient needs attention instead of pretending to send.
     CybouMailItem nobody;

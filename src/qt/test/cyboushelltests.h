@@ -67,6 +67,7 @@ private Q_SLOTS:
     void runtimeRetiresStateFromAnotherNetwork();
     void backendCommandsDriveProjection();
     void localMailCommandsWaitForCommit();
+    void mailDeletionWaitsForDurableCommit();
     void composerKeepsTextOnSaveAndSendFailure();
     void fileAdvancedSurvivesRefresh();
     void fileRowsRetainInteractionAcrossUpdates();

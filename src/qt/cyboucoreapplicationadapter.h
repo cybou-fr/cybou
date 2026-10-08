@@ -58,7 +58,7 @@ public:
     void setMailRead(const QString& id, bool read) override;
     void setMailStarred(const QString& id, bool starred) override;
     void moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress = {}) override;
-    void deleteMail(const QString& id) override;
+    void deleteMail(const QString& id, CommandProgress progress = {}) override;
     void downloadAttachment(const QString& message_id, const QString& attachment_id,
         const QString& destination) override;
     void saveAttachmentToFiles(const QString& message_id, const QString& attachment_id,
@@ -85,7 +85,7 @@ public:
     void restoreFile(const QString& id) override;
     void deleteFile(const QString& id) override;
     void deleteFiles(const QStringList& ids) override;
-    void deleteMailForever(const QStringList& ids) override;
+    void deleteMailForever(const QStringList& ids, CommandProgress progress = {}) override;
     void retryFile(const QString& id) override;
     void discardFile(const QString& id) override;
     CybouFileChunkDiagnostics inspectFileChunks(const QString& file_id) const override;

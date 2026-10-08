@@ -864,6 +864,14 @@ Règlement du stockage : %7</translation>
     <message><source>Your data could not be prepared yet. CYBOU will retry automatically.</source><translation>Vos données n’ont pas encore pu être préparées. CYBOU réessaiera automatiquement.</translation></message>
     <message><source>Waiting for encrypted content from peers… You can open the local view while CYBOU retries.</source><translation>En attente du contenu chiffré des pairs… Vous pouvez ouvrir l’espace local pendant que CYBOU réessaie.</translation></message>
     <message><source>Your Identity is not available. Return to unlock and try again.</source><translation>Votre identité n’est pas disponible. Revenez au déverrouillage puis réessayez.</translation></message>
+    <message>
+        <source>This message is already being sent and cannot be discarded.</source>
+        <translation>Ce message est déjà en cours d’envoi et ne peut pas être supprimé.</translation>
+    </message>
+    <message>
+        <source>The draft could not be discarded. Your text is kept; try again.</source>
+        <translation>Le brouillon n’a pas pu être supprimé. Votre texte est conservé ; réessayez.</translation>
+    </message>
 </context>
 <context>
     <name>CybouCoreApplicationAdapter::IdentitySession</name>
@@ -1248,6 +1256,14 @@ Règlement du stockage : %7</translation>
     <message>
         <source>Signing policy: durable and fail-closed. Last observed loop status: %1. This is not a journal integrity audit.</source>
         <translation>Politique de signature : durable, arrêt en cas d’incertitude. Dernier état observé de la boucle : %1. Il ne s’agit pas d’un audit d’intégrité du journal.</translation>
+    </message>
+    <message>
+        <source>Discarding draft</source>
+        <translation>Suppression du brouillon</translation>
+    </message>
+    <message>
+        <source>Deleting messages</source>
+        <translation>Suppression des messages</translation>
     </message>
 </context>
 <context>
@@ -2581,6 +2597,14 @@ Objet : %3
         <source> · %1 could not be moved. Try again.</source>
         <translation> · %1 n’ont pas pu être déplacés. Réessayez.</translation>
     </message>
+    <message>
+        <source>Deleting messages…</source>
+        <translation>Suppression des messages…</translation>
+    </message>
+    <message>
+        <source>%1 messages deleted; %2 could not be deleted. Their content is kept. Try again.</source>
+        <translation>%1 messages supprimés ; %2 n’ont pas pu être supprimés. Leur contenu est conservé. Réessayez.</translation>
+    </message>
 </context>
 <context>
     <name>HomePage</name>
@@ -3603,6 +3627,10 @@ Objet : %3
         <location line="-95"/>
         <source>Unsaved changes</source>
         <translation>Modifications non enregistrées</translation>
+    </message>
+    <message>
+        <source>Discarding draft…</source>
+        <translation>Suppression du brouillon…</translation>
     </message>
 </context>
 <context>

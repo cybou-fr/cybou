@@ -238,7 +238,7 @@ public:
     QString resolvedMailId(const QString& id) const { return m_mail_ids.value(id, id); }
     /** Saves a draft in the Identity's private mailbox; returns its id. */
     QString requestSaveMailDraft(CybouMailItem draft, CommandDone done = {});
-    void requestDeleteMail(const QString& id);
+    void requestDeleteMail(const QString& id, CommandDone done = {});
     /**
      * Hands a composed message to the Mail backend. The message appears in
      * Sent as Preparing at once (optimistic); every later state comes from
@@ -256,7 +256,7 @@ public:
     /** Retries a message in Needs attention. */
     void requestRetryMail(const QString& id);
     /** Trash only: removes messages from this mailbox for good (local tombstone; history is not erased). */
-    void requestDeleteMailForever(const QStringList& ids);
+    void requestDeleteMailForever(const QStringList& ids, CommandDone done = {});
     void requestAttachmentDownload(const QString& message_id, const QString& attachment_id,
         const QString& destination);
     /** Local attachment for Compose: read metadata only; content is

@@ -683,6 +683,16 @@ widths and at common Windows DPI scaling values.
 
 ## Stable mailbox presentation
 
+Draft discard and permanent mailbox deletion follow the same correlated local
+command acknowledgement as moves. A queued/running delete keeps the row and
+editor content until the encrypted Application DB commits it. Failed deletion
+retains content and exposes retry; partial batches count only committed items.
+Discard queues after any in-flight autosave and ignores its obsolete editor
+reply. Theme/language rebuild follows the pending delete by draft/task identity.
+Lock or session replacement invalidates late UI acknowledgements. These are
+local mailbox actions, not proof of network erasure or PoA finality. A durable
+pending send cannot be cancelled merely by removing its projected row.
+
 Reconcile visible messages by semantic ID. Retain unaffected row widgets,
 selection, keyboard current item and scroll anchor; update only changed rows.
 Folder targets and count labels remain stable during refresh/drag. Temporary

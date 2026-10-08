@@ -514,9 +514,21 @@ void EmailPage::deleteForever(const QStringList& ids)
         question += QStringLiteral("\n\n") + tr("Eligible sent publications can be revoked after finalization, freeing publication quota and initiating managed purge. Recipients and other holders may retain copies.");
     }
     if (QMessageBox::question(this, tr("Delete forever"), question) != QMessageBox::Yes) return;
-    if (ids.contains(m_current_id)) closeDetail();
-    m_model->requestDeleteMailForever(ids);
-    m_model->notify(ids.size() == 1 ? tr("Message deleted") : tr("%1 messages deleted").arg(ids.size()));
+    m_model->notify(tr("Deleting messages…"));
+    struct Batch { int remaining; int committed{0}; int failed{0}; };
+    auto batch = std::make_shared<Batch>(Batch{static_cast<int>(ids.size())});
+    const QPointer<EmailPage> guard{this};
+    for (const auto& id : ids) m_model->requestDeleteMailForever({id}, [guard, batch, id](bool ok, const QString&) {
+        if (!guard) return;
+        if (ok) {
+            ++batch->committed;
+            if (guard->m_current_id == id) guard->closeDetail();
+        } else ++batch->failed;
+        if (--batch->remaining != 0) return;
+        if (batch->failed) guard->m_model->notify(tr("%1 messages deleted; %2 could not be deleted. Their content is kept. Try again.")
+            .arg(batch->committed).arg(batch->failed));
+        else guard->m_model->notify(batch->committed == 1 ? tr("Message deleted") : tr("%1 messages deleted").arg(batch->committed));
+    });
 }
 
 QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
@@ -572,7 +584,6 @@ QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
         menu->addSeparator();
         add(tr("Discard draft"), "mailDiscard", [this, ids] {
             for (const auto& id : ids) m_model->requestDeleteMail(id);
-            m_model->notify(tr("Draft discarded"));
         });
     }
     return menu;

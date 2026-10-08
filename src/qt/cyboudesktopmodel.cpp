@@ -669,9 +669,20 @@ QString CybouDesktopModel::requestSaveMailDraft(CybouMailItem draft, CommandDone
     return draft.id;
 }
 
-void CybouDesktopModel::requestDeleteMail(const QString& id)
+void CybouDesktopModel::requestDeleteMail(const QString& id, CommandDone done)
 {
-    if (mailReady() && mailItem(id)) m_backend->deleteMail(id);
+    if (!mailReady() || (!mailItem(id) && !id.startsWith(QStringLiteral("draft-")))) {
+        if (done) QTimer::singleShot(0, this, [done] { done(false, tr("Mail is unavailable.")); });
+        return;
+    }
+    const QPointer<CybouDesktopModel> guard{this};
+    const auto generation = m_mail_generation;
+    m_backend->deleteMail(id, mailCommand(id, id.startsWith(QStringLiteral("draft-")) ? tr("Discarding draft") : tr("Moving message to Trash"), [guard, generation, id, done](bool ok, const QString& error) {
+        if (guard && ok && id.startsWith(QStringLiteral("draft-"))) guard->removeMailItem(id);
+        if (!guard || guard->m_mail_generation != generation) return;
+        if (done) done(ok, error);
+        else if (guard && !ok) guard->notify(error);
+    }, CybouMailTaskKind::Delete));
 }
 
 QString CybouDesktopModel::requestSendMail(CybouMailItem message, CommandDone done)
@@ -1724,19 +1735,28 @@ void CybouDesktopModel::requestRestoreFile(const QString& id)
     if (filesReady() && fileItem(id)) m_backend->restoreFile(id);
 }
 
-void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids)
+void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids, CommandDone done)
 {
     QStringList trashed;
     for (const auto& id : ids) {
         const auto* item = mailItem(id);
         if (item && item->folder == CybouMailFolder::Trash && !item->draft) trashed << id;
     }
-    if (trashed.isEmpty()) return;
-    if (m_fixture_mode || !m_backend) {
-        for (const auto& id : trashed) removeMailItem(id);
+    if (trashed.isEmpty() || !mailReady()) {
+        if (done) QTimer::singleShot(0, this, [done] { done(false, tr("Mail is unavailable.")); });
         return;
     }
-    m_backend->deleteMailForever(trashed);
+    const QPointer<CybouDesktopModel> guard{this};
+    const auto generation = m_mail_generation;
+    m_backend->deleteMailForever(trashed, mailCommand(trashed.first(), tr("Deleting messages"), [guard, generation, trashed, done](bool ok, const QString& error) {
+        if (ok) for (const auto& id : trashed) {
+            if (!guard || guard->m_mail_generation != generation) return;
+            guard->removeMailItem(id);
+        }
+        if (!guard || guard->m_mail_generation != generation) return;
+        if (done) done(ok, error);
+        else if (guard && !ok) guard->notify(error);
+    }, CybouMailTaskKind::Delete));
 }
 
 void CybouDesktopModel::requestDeleteFile(const QString& id)
