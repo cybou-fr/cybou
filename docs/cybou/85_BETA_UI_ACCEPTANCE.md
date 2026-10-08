@@ -13,6 +13,13 @@ These do not mark the live scenarios below passed. Physical mixed-monitor DPI,
 screen-reader use, clean-machine flow and independent remote failure domains
 still require their own acceptance evidence.
 
+Files observation regression evidence (2026-10-08) covers unknown/zero/one/two
+remote copies, partial audit scope, old observation labels and verified local
+download access. Core tests distinguish persisted placement counts from volatile
+attempt timestamps and verify placement/full/partial audit scope. These checks
+are local fixtures and component tests; continuous remote availability, physical
+failure-domain independence and live outage/repair acceptance remain open.
+
 ## 1. Clean-machine onboarding
 
 ```text

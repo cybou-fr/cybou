@@ -31,7 +31,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
     for (const auto& leaf : placement.leaves) chunks.push_back({leaf});
     const auto commitment = BuildChunkAuthorizationTree(chunks);
     if (!commitment || commitment->chunk_count != placement.leaves.size()) {
-        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot rebuild chunk authorization proofs"};
+        return Observe(placement.operation_id, {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot rebuild chunk authorization proofs"}, StorageObservation::PLACEMENT, StorageCondition::INVALID_PROOFS);
     }
 
     lock.unlock();
@@ -42,7 +42,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
     std::map<std::array<unsigned char, 32>, std::array<unsigned char, 32>> identity_of;
     for (const auto& provider : providers) identity_of.emplace(provider.storage_id, ProviderSelector::EconomicIdentity(provider));
     lock.lock();
-    if (!shuffled) return {.state = DurabilityState::SECURING, .error = "System RNG failure"};
+    if (!shuffled) return Observe(placement.operation_id, {.state = DurabilityState::SECURING, .error = "System RNG failure"}, StorageObservation::PLACEMENT, StorageCondition::RANDOM_FAILURE);
 
     bool changed{false};
     bool content_missing{false};
@@ -152,7 +152,7 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                 }
             }
             if (changed && !m_placements->Save(placement)) {
-                return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
+                return Observe(placement.operation_id, {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"}, StorageObservation::PLACEMENT, StorageCondition::LOCAL_SAVE_FAILED);
             }
         }
     }
@@ -162,6 +162,10 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
             : providers.size() < m_target ? "Not enough storage providers are reachable"
             : admission_error.empty() ? "Storage providers did not accept every chunk yet" : admission_error;
     }
+    result = Observe(placement.operation_id, result, StorageObservation::PLACEMENT,
+        result.state == DurabilityState::PROTECTED ? StorageCondition::NONE
+        : content_missing ? StorageCondition::CONTENT_UNAVAILABLE
+        : !admission_error.empty() ? StorageCondition::ADMISSION_FAILED : StorageCondition::TARGET_UNMET);
     if (auto log = m_runtime.EventLog()) log->Write(result.state == DurabilityState::PROTECTED ? NodeEvent::content_protected : NodeEvent::content_securing,
         {{"operation_id",placement.operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
     return result;
@@ -232,10 +236,12 @@ std::optional<std::pair<cybou::Hash256, PublicationDurability>> StorageService::
         }
     }
     if (changed && !m_placements->Save(*placement)) {
-        return std::pair{operation_id, PublicationDurability{.state = DurabilityState::NEEDS_ATTENTION,
-            .error = "Cannot save placement state"}};
+        return std::pair{operation_id, Observe(operation_id, {.state = DurabilityState::NEEDS_ATTENTION,
+            .error = "Cannot save placement state"}, StorageObservation::PARTIAL_AUDIT, StorageCondition::LOCAL_SAVE_FAILED)};
     }
     auto result = Summarize(*placement);
+    result = Observe(operation_id, result, StorageObservation::PARTIAL_AUDIT,
+        result.state == DurabilityState::PROTECTED ? StorageCondition::NONE : StorageCondition::TARGET_UNMET);
     const bool degraded = result.state != DurabilityState::PROTECTED;
     if (degraded) if (auto log = m_runtime.EventLog()) log->Write(NodeEvent::placement_degraded,
         {{"operation_id",operation_id.GetHex()},{"replicas",std::uint64_t{result.min_replicas}},{"target",std::uint64_t{m_target}}});
@@ -272,8 +278,11 @@ PublicationDurability StorageService::Audit(const cybou::Hash256& operation_id)
         }
     }
     if (changed && !m_placements->Save(*placement)) {
-        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
+        return Observe(operation_id, {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"}, StorageObservation::FULL_AUDIT, StorageCondition::LOCAL_SAVE_FAILED);
     }
+    const auto audited = Summarize(*placement);
+    Observe(operation_id, audited, StorageObservation::FULL_AUDIT,
+        audited.state == DurabilityState::PROTECTED ? StorageCondition::NONE : StorageCondition::TARGET_UNMET);
     if (!m_runtime.FindFinalizedRootPublication(operation_id)) return Summarize(*placement);
     guard.Finish();
     return Place(lock, *placement);

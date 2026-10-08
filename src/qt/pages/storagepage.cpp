@@ -1549,9 +1549,22 @@ void StoragePage::rebuildDetails()
                 ? tr("Encrypted copies: %1 of %2").arg(item->min_remote_replicas).arg(item->remote_replica_target)
                 : tr("Encrypted copies: %1").arg(item->min_remote_replicas);
         if (item->min_remote_replicas >= 0 && item->remote_replica_target > 0 && item->min_remote_replicas < item->remote_replica_target) {
-            replica_info += QStringLiteral("  ·  ") + tr("Replicating to network");
+            replica_info += QStringLiteral("  ·  ") + tr("Remote copy target not reached");
         }
         DetailPair(layout, tr("On the network"), replica_info, m_details);
+        const auto observed = item->protection_observed_at;
+        QString observation_time = observed.isValid()
+            ? QLocale{}.toString(observed.toUTC(), QLocale::ShortFormat) + QStringLiteral(" UTC")
+            : tr("Unknown — reading saved records does not check copies");
+        if (observed.isValid() && observed.secsTo(QDateTime::currentDateTimeUtc()) > 24 * 60 * 60)
+            observation_time = tr("Older than 24 hours · %1").arg(observation_time);
+        DetailPair(layout, tr("Last local observation"), observation_time, m_details);
+        DetailPair(layout, tr("Observation scope"), item->protection_observation_scope.isEmpty()
+            ? tr("No local placement observation available") : item->protection_observation_scope, m_details);
+        if (!item->protection_reason.isEmpty()) DetailPair(layout, tr("Last observed reason"), item->protection_reason, m_details);
+        auto* observation_hint = MutedText(tr("Local observations do not prove continuous availability or independent remote machines."), m_details);
+        observation_hint->setWordWrap(true);
+        layout->addWidget(observation_hint);
     }
     DetailPair(layout, tr("Encryption"), tr("Encrypted before sending · Recoverable with your account recovery phrase"), m_details);
     const auto& status = m_model->status();
@@ -1627,9 +1640,18 @@ void StoragePage::rebuildDetails()
         const bool can_download = (item->state == CybouContentState::Protected || item->available_offline) &&
             (item->retrieval == CybouRetrievalState::Idle || item->retrieval == CybouRetrievalState::Ready);
         dl->setEnabled(can_download);
-        dl->setToolTip(!can_download ? tr("Download is available when network protection is complete.") : QString{});
+        const QString download_reason = can_download ? QString{}
+            : item->retrieval != CybouRetrievalState::Idle && item->retrieval != CybouRetrievalState::Ready
+                ? tr("Wait for the current download to finish.")
+                : tr("No verified local copy is available and remote protection is incomplete.");
+        dl->setToolTip(download_reason);
         connect(dl, &QPushButton::clicked, this, [this, id = item->id] { download(id); });
         layout->addWidget(dl);
+        if (!download_reason.isEmpty()) {
+            auto* reason = MutedText(download_reason, m_details);
+            reason->setWordWrap(true);
+            layout->addWidget(reason);
+        }
         auto* send = new QPushButton{tr("Send by Mail"), m_details};
         send->setObjectName(QStringLiteral("secondaryButton"));
         send->setProperty("cybouId", QStringLiteral("fileSendByMail"));
@@ -1661,7 +1683,9 @@ void StoragePage::rebuildDetails()
         DetailPair(box_layout, tr("Chunk count"), tr("%1 chunks (512 KiB unit)").arg(chunk_count), box);
         DetailPair(box_layout, tr("Confidentiality assurance"), tr("Hybrid post-quantum encryption before upload (ML-KEM-768 + X25519). Plaintext and filename never sent to network."), box);
         DetailPair(box_layout, tr("Integrity assurance"), tr("Content-addressed BLAKE3 Merkle tree. Each chunk verified on retrieval against authorized RootPublication commitment."), box);
-        DetailPair(box_layout, tr("Availability & durability scope"), tr("Measured copies: %1 of %2 target. Replica deduplication is by StorageId; does not prove independent physical host failure domains.").arg(item->min_remote_replicas).arg(item->remote_replica_target), box);
+        DetailPair(box_layout, tr("Availability & durability scope"), item->min_remote_replicas < 0 || item->remote_replica_target <= 0
+            ? tr("Remote copy count is unknown; independent remote machines have not been established.")
+            : tr("Measured copies: %1 of %2 target. Replica deduplication is by StorageId; does not prove independent physical host failure domains.").arg(item->min_remote_replicas).arg(item->remote_replica_target), box);
         DetailPair(box_layout, tr("Recovery assurance"), tr("Recoverable on any node using your account recovery phrase via owner self-capsule. Historical capsules preserved across rotation."), box);
 
         auto* inspect_chunks = new QPushButton{tr("Inspect chunk tree"), box};

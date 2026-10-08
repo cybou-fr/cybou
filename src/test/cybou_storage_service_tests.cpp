@@ -163,6 +163,12 @@ BOOST_AUTO_TEST_CASE(beta_target_places_two_distinct_remote_replicas)
     BOOST_CHECK(result.state == cybou::DurabilityState::PROTECTED);
     BOOST_CHECK_EQUAL(result.chunks_at_target, content.leaves.size());
     BOOST_CHECK_EQUAL(result.min_replicas, 2U);
+    BOOST_CHECK(result.observation == cybou::StorageObservation::PLACEMENT);
+    BOOST_CHECK(result.condition == cybou::StorageCondition::NONE);
+    BOOST_CHECK(result.observed_at_ms > 0);
+    const auto read_only = storage.GetDurability(content.operation_id);
+    BOOST_REQUIRE(read_only);
+    BOOST_CHECK_EQUAL(read_only->observed_at_ms, result.observed_at_ms);
     BOOST_CHECK_EQUAL(result.ProgressPercent(storage.RemoteReplicaTarget()), 100);
     // Exactly the remote target on distinct providers; the local copy is extra.
     for (const auto& leaf : content.leaves) {
@@ -176,6 +182,15 @@ BOOST_AUTO_TEST_CASE(beta_target_places_two_distinct_remote_replicas)
     cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
     const auto durability = reopened.GetDurability(content.operation_id);
     BOOST_REQUIRE(durability);
+    BOOST_CHECK_EQUAL(durability->observed_at_ms, 0);
+    BOOST_CHECK(durability->observation == cybou::StorageObservation::UNKNOWN);
+    BOOST_CHECK(durability->condition == cybou::StorageCondition::UNKNOWN);
+    const auto audited = reopened.Audit(content.operation_id);
+    BOOST_CHECK(audited.observation == cybou::StorageObservation::FULL_AUDIT);
+    BOOST_CHECK(audited.observed_at_ms > 0);
+    const auto partial = reopened.AuditNextPlacement(1);
+    BOOST_REQUIRE(partial);
+    BOOST_CHECK(partial->second.observation == cybou::StorageObservation::PARTIAL_AUDIT);
     BOOST_CHECK(durability->state == cybou::DurabilityState::PROTECTED);
 }
 
@@ -195,6 +210,8 @@ BOOST_AUTO_TEST_CASE(too_few_or_lagging_providers_keep_content_securing)
     auto result = storage.Secure(content.operation_id, content.leaves);
     BOOST_CHECK(result.state == cybou::DurabilityState::SECURING);
     BOOST_CHECK_EQUAL(result.min_replicas, 1U);
+    BOOST_CHECK(result.condition == cybou::StorageCondition::ADMISSION_FAILED);
+    BOOST_CHECK(result.observed_at_ms > 0);
     BOOST_CHECK(!result.error.empty());
     // When the network recovers, Resume completes placement.
     network.lagging.clear();

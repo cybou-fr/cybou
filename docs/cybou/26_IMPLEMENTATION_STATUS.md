@@ -3,6 +3,33 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Files local protection observations package (2026-10-08)
+
+Files details distinguish saved remote replica counts from the last local
+placement/audit attempt. Attempt time, partial/full audit scope and typed reasons
+come from StorageService; raw endpoint-bearing errors never enter the semantic
+projection. A bounded volatile cache retains up to 1,024 publications and drops
+observation time on reopen/eviction without discarding persisted placement counts.
+Reading those records does not refresh time or perform a network check.
+
+Old observations receive a descriptive 24-hour age label, not fabricated replica
+loss or a protection-state transition. Unknown counts remain unknown in Advanced.
+An unmet target no longer advertises active replication. Disabled downloads
+explain retrieval in progress or missing local/remote availability; verified local
+copies remain downloadable regardless of remote observation age. FR translations
+cover scope, reasons and the new details fields. These are local diagnostics, not
+canonical reliability, continuous uptime or independent failure-domain evidence.
+
+Validation: isolated GUI/core/Qt builds passed; all 259 core cases passed with
+98,013 assertions, all 84 Qt results passed, and four targeted native Windows
+scenarios passed (six results including setup/cleanup). Coverage checks read-only
+freshness, reopen with unknown time, placement/full/partial scopes, safe reasons,
+unknown/zero/one/two copies, age labels and local download eligibility. The first
+full Qt run retained an obsolete replication-label expectation; its failing log
+and the corrected full run are retained in
+`artifacts/ux-files-observations-20261008/`. The build cache is restored to its
+normal output directory. No live desktop/signer or VPS was restarted or deployed.
+
 ## Protected Files into Compose package (2026-10-08)
 
 Compose now accepts internal Files drag IDs over its surface and text editors,

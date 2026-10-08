@@ -83,6 +83,7 @@ private Q_SLOTS:
     void liveFeatureAvailabilityStayHonest();
     void fixtureLifecycleFollowsBackend();
     void filesShowLocalAvailability();
+    void filesExplainScopedProtectionObservations();
     void lockHidesPrivateContent();
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();

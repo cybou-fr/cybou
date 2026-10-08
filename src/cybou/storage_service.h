@@ -152,6 +152,11 @@ enum class DurabilityState : std::uint8_t {
     NEEDS_ATTENTION,
 };
 
+/// Local diagnostic evidence only; never consensus or a placement policy input.
+enum class StorageObservation { UNKNOWN, PLACEMENT, PARTIAL_AUDIT, FULL_AUDIT };
+enum class StorageCondition { UNKNOWN, NONE, TARGET_UNMET, CONTENT_UNAVAILABLE, ADMISSION_FAILED,
+    LOCAL_SAVE_FAILED, INVALID_PROOFS, RANDOM_FAILURE };
+
 /// \brief Сводка по удалённой durability конкретной finalized публикации.
 struct PublicationDurability {
     /// \brief Сводное логическое состояние placement.
@@ -164,6 +169,10 @@ struct PublicationDurability {
     std::uint32_t min_replicas{0};
     /// \brief Последняя диагностическая ошибка/объяснение, почему target ещё не достигнут.
     std::string error;
+    /// Volatile local attempt time; reading saved placement never refreshes it.
+    std::int64_t observed_at_ms{0};
+    StorageObservation observation{StorageObservation::UNKNOWN};
+    StorageCondition condition{StorageCondition::UNKNOWN};
     /// 0..100 по доле чанков, достигших target.
     /// \param target Текущее целевое число удалённых реплик.
     /// \return 0..100, а для PROTECTED всегда 100.
@@ -304,6 +313,8 @@ private:
         const ChunkId& chunk_id, const std::vector<StorageEndpoint>& replicas,
         const std::optional<std::vector<unsigned char>>& local, bool force_full);
     PublicationDurability Summarize(const Placement& placement) const;
+    PublicationDurability Observe(const cybou::Hash256& id, PublicationDurability result,
+        StorageObservation observation, StorageCondition condition);
     std::optional<std::vector<unsigned char>> FetchInternal(const ChunkId& chunk_id,
         std::span<const StorageEndpoint> preferred);
     CybouNodeRuntime& m_runtime;
@@ -317,6 +328,8 @@ private:
     std::condition_variable m_placement_cv;
     /// Следующий чанк для аудита по каждой публикации; перезапуск с нуля безопасен.
     std::map<cybou::Hash256, std::size_t> m_audit_cursor;
+    /// Bounded, session-local diagnostics. No persisted schema or network entity.
+    std::map<cybou::Hash256, PublicationDurability> m_observations;
     std::size_t m_audit_placement_cursor{0};
 
 };

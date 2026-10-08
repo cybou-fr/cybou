@@ -203,6 +203,10 @@ struct CybouFileItem {
     QString content_root_id;
     int min_remote_replicas{-1};
     int remote_replica_target{-1};
+    /** Volatile local placement/audit attempt, not continuous availability. */
+    QDateTime protection_observed_at;
+    QString protection_observation_scope;
+    QString protection_reason;
     quint64 finalized_height{0};
     /** Operation that produced this item's latest state; empty when unknown. */
     QString operation_id;

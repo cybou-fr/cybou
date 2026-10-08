@@ -90,6 +90,21 @@ never rendered as Not stored on network yet. Show measurement freshness and
 whether the count is a local observation. Two distinct StorageIds/payout
 accounts do not establish separate hosts or failure domains.
 
+Current Files details expose the last local placement/audit attempt time, its
+scope (placement, partial audit or full-publication audit), and a bounded typed
+reason. These session observations are not canonical storage reliability or a
+last-successful-full-copy verification timestamp. They retain at most 1,024
+publication observations, are not persisted, and become unknown on restart or
+eviction until another attempt occurs. Reading saved placement records never
+refreshes the observation time or checks remote availability. Raw transport
+errors and provider endpoints are not projected into these reasons.
+
+An observation older than 24 hours receives a descriptive age label; age alone
+never changes replica counts, protection state or verified local download access.
+An unmet target does not imply that repair is currently running. Unknown counts
+remain unknown, including Advanced assurance text. Details explain disabled
+downloads separately for active retrieval and missing local/remote availability.
+
 Download/Open/Send capabilities have explicit reasons, consistently across the
 toolbar, details and context menu. The existing Files-to-Mail reference path
 requires Protected; first make that path reliable and explain missing replicas.

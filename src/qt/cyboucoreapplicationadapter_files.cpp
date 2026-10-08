@@ -7,6 +7,7 @@
 #include <cybou/encrypted_chunk_tree.h>
 #include <QFile>
 #include <QFileInfo>
+#include <QTimeZone>
 #include <set>
 
 using namespace cybou::qt_detail;
@@ -134,6 +135,27 @@ QVector<CybouFileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjec
         }
         return false;
     };
+    const auto project_durability = [this](CybouFileItem& out, const cybou::PublicationDurability& durability) {
+        out.min_remote_replicas = static_cast<int>(durability.min_replicas);
+        out.remote_replica_target = session.storage->RemoteReplicaTarget();
+        if (durability.observed_at_ms > 0) out.protection_observed_at = QDateTime::fromMSecsSinceEpoch(durability.observed_at_ms, QTimeZone::UTC);
+        switch (durability.observation) {
+        case cybou::StorageObservation::UNKNOWN: out.protection_observation_scope = tr("Saved local placement record; observation time unknown"); break;
+        case cybou::StorageObservation::PLACEMENT: out.protection_observation_scope = tr("Local placement attempt"); break;
+        case cybou::StorageObservation::PARTIAL_AUDIT: out.protection_observation_scope = tr("Local audit of part of this publication"); break;
+        case cybou::StorageObservation::FULL_AUDIT: out.protection_observation_scope = tr("Local full-publication audit"); break;
+        }
+        switch (durability.condition) {
+        case cybou::StorageCondition::UNKNOWN: out.protection_reason = tr("No recent reason has been observed."); break;
+        case cybou::StorageCondition::NONE: break;
+        case cybou::StorageCondition::TARGET_UNMET: out.protection_reason = tr("The remote copy target has not been reached. A more specific cause is unavailable."); break;
+        case cybou::StorageCondition::CONTENT_UNAVAILABLE: out.protection_reason = tr("Some encrypted content was unavailable during the last placement attempt."); break;
+        case cybou::StorageCondition::ADMISSION_FAILED: out.protection_reason = tr("A remote copy was not acknowledged with a valid storage receipt."); break;
+        case cybou::StorageCondition::LOCAL_SAVE_FAILED: out.protection_reason = tr("Local storage progress could not be saved. Check local storage."); break;
+        case cybou::StorageCondition::INVALID_PROOFS: out.protection_reason = tr("Content authorization could not be prepared. Check publication details."); break;
+        case cybou::StorageCondition::RANDOM_FAILURE: out.protection_reason = tr("Secure placement preparation was unavailable. Try again later."); break;
+        }
+    };
     QVector<CybouFileItem> files;
     for (const auto& [hex, item] : catalog) {
         CybouFileItem out;
@@ -160,16 +182,14 @@ QVector<CybouFileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjec
             if (!status->second.operation_id.IsNull()) {
                 const auto durability = session.storage->GetDurability(status->second.operation_id);
                 if (durability) {
-                    out.min_remote_replicas = static_cast<int>(durability->min_replicas);
-                    out.remote_replica_target = session.storage->RemoteReplicaTarget();
+                    project_durability(out, *durability);
                 }
             }
         } else if (const auto op = operations.find(hex); op != operations.end()) {
             // Protected only when remote durability is known, never merely finalized.
             const auto durability = session.storage->GetDurability(op->second);
             if (durability) {
-                out.min_remote_replicas = static_cast<int>(durability->min_replicas);
-                out.remote_replica_target = session.storage->RemoteReplicaTarget();
+                project_durability(out, *durability);
             }
             out.state = durability && durability->state == cybou::DurabilityState::PROTECTED
                 ? CybouContentState::Protected : CybouContentState::Securing;

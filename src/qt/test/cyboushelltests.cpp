@@ -2855,6 +2855,55 @@ void CybouShellTests::fixtureLifecycleFollowsBackend()
         model.mailItem(waiting)->operation_state, false), QStringLiteral("Waiting for network"));
 }
 
+void CybouShellTests::filesExplainScopedProtectionObservations()
+{
+    auto window = makeWindow();
+    auto* model = window->desktopModel();
+    QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("files")));
+    window->show();
+    window->showPage(CybouPage::Files);
+    auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
+    QVERIFY(files);
+    auto item = *model->fileItem(QStringLiteral("f-report"));
+    item.state = CybouContentState::Securing;
+    item.available_offline = false;
+    item.min_remote_replicas = -1;
+    item.remote_replica_target = -1;
+    const auto texts = [files] {
+        QStringList rows;
+        for (const auto* label : files->findChildren<QLabel*>()) if (label->isVisibleTo(files)) rows.append(label->text());
+        return rows.join(QLatin1Char{'\n'});
+    };
+    model->upsertFileItem(item);
+    files->showDetails(item.id, true);
+    QTRY_VERIFY(texts().contains(QStringLiteral("Unknown — reading saved records does not check copies")));
+    QVERIFY(texts().contains(QStringLiteral("Remote copy count is unknown")));
+    QVERIFY(!texts().contains(QStringLiteral("Measured copies: -1")));
+    QVERIFY(texts().contains(QStringLiteral("No verified local copy is available and remote protection is incomplete.")));
+    for (const int copies : {0, 1, 2}) {
+        item.min_remote_replicas = copies;
+        item.remote_replica_target = 2;
+        item.protection_observed_at = QDateTime::currentDateTimeUtc();
+        item.protection_observation_scope = QStringLiteral("Local audit of part of this publication");
+        item.protection_reason = copies < 2 ? QStringLiteral("Observed storage refusal") : QString{};
+        model->upsertFileItem(item);
+        QTRY_VERIFY(texts().contains(QStringLiteral("Encrypted copies: %1 of 2").arg(copies)));
+        QVERIFY(texts().contains(item.protection_observation_scope));
+        QVERIFY(!texts().contains(QStringLiteral("Replicating to network")));
+        if (copies < 2) QVERIFY(texts().contains(item.protection_reason));
+    }
+    item.protection_observed_at = QDateTime::currentDateTimeUtc().addDays(-2);
+    item.protection_reason = QStringLiteral("Local storage progress could not be saved. Check local storage.");
+    item.available_offline = true;
+    model->upsertFileItem(item);
+    QTRY_VERIFY(texts().contains(QStringLiteral("Older than 24 hours")));
+    QVERIFY(texts().contains(item.protection_reason));
+    QVERIFY(!texts().contains(QStringLiteral("No verified local copy is available")));
+    auto* download = FindById<QPushButton>(files, QStringLiteral("fileDownload"));
+    QVERIFY(download && download->isEnabled());
+    QCOMPARE(item.min_remote_replicas, 2); // observation age does not invent replica loss
+}
+
 void CybouShellTests::filesShowLocalAvailability()
 {
     auto window = makeWindow();
@@ -3269,6 +3318,11 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     QTRY_VERIFY(file_named(QStringLiteral("report-final.bin")) != nullptr);
     QVERIFY(finalize_until(QStringLiteral("report-final.bin"), CybouContentState::Securing));
     QVERIFY(alice_model->fileItem(report_id));
+
+    QTRY_VERIFY(alice_model->fileItem(report_id)->protection_observed_at.isValid());
+    QCOMPARE(alice_model->fileItem(report_id)->min_remote_replicas, 0);
+    QCOMPARE(alice_model->fileItem(report_id)->protection_observation_scope, QStringLiteral("Local placement attempt"));
+    QVERIFY(!alice_model->fileItem(report_id)->protection_reason.isEmpty());
 
     const QString destination = files_dir.filePath(QStringLiteral("downloaded.bin"));
     alice_model->requestFileDownload(report_id, destination);
@@ -3737,16 +3791,13 @@ void CybouShellTests::filesProtectionAndOfflineDownload()
     QVERIFY(dl != nullptr);
     QVERIFY(dl->isEnabled());
 
-    // Details must explain replication progress honestly
-    bool found_replicating_text = false;
+    // Missing copies alone do not establish that replication is currently running.
+    bool found_unmet_target = false;
     for (const auto* label : files->findChildren<QLabel*>()) {
-        if (label->text().contains(QStringLiteral("Replicating to network"), Qt::CaseInsensitive) ||
-            label->text().contains(QStringLiteral("en cours"), Qt::CaseInsensitive)) {
-            found_replicating_text = true;
-            break;
-        }
+        QVERIFY(!label->text().contains(QStringLiteral("Replicating to network")));
+        if (label->text().contains(QStringLiteral("Remote copy target not reached"))) found_unmet_target = true;
     }
-    QVERIFY(found_replicating_text);
+    QVERIFY(found_unmet_target);
 
     // Responsive test: at 1040x720 window size with details panel open, Size column remains visible
     window->resize(1040, 720);

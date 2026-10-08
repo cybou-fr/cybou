@@ -884,6 +884,50 @@ Règlement du stockage : %7</translation>
         <source>A folder cannot be moved into itself.</source>
         <translation>Un dossier ne peut pas être déplacé dans lui-même.</translation>
     </message>
+    <message>
+        <source>Saved local placement record; observation time unknown</source>
+        <translation>Enregistrement local du placement ; heure d’observation inconnue</translation>
+    </message>
+    <message>
+        <source>Local placement attempt</source>
+        <translation>Tentative locale de placement</translation>
+    </message>
+    <message>
+        <source>Local audit of part of this publication</source>
+        <translation>Audit local d’une partie de cette publication</translation>
+    </message>
+    <message>
+        <source>Local full-publication audit</source>
+        <translation>Audit local de toute la publication</translation>
+    </message>
+    <message>
+        <source>No recent reason has been observed.</source>
+        <translation>Aucune cause récente n’a été observée.</translation>
+    </message>
+    <message>
+        <source>The remote copy target has not been reached. A more specific cause is unavailable.</source>
+        <translation>L’objectif de copies distantes n’a pas été atteint. La cause précise est indisponible.</translation>
+    </message>
+    <message>
+        <source>Some encrypted content was unavailable during the last placement attempt.</source>
+        <translation>Une partie du contenu chiffré était indisponible lors de la dernière tentative de placement.</translation>
+    </message>
+    <message>
+        <source>A remote copy was not acknowledged with a valid storage receipt.</source>
+        <translation>Une copie distante n’a pas été confirmée par un reçu de stockage valide.</translation>
+    </message>
+    <message>
+        <source>Local storage progress could not be saved. Check local storage.</source>
+        <translation>La progression du stockage local n’a pas pu être enregistrée. Vérifiez le stockage local.</translation>
+    </message>
+    <message>
+        <source>Content authorization could not be prepared. Check publication details.</source>
+        <translation>L’autorisation du contenu n’a pas pu être préparée. Vérifiez les détails de la publication.</translation>
+    </message>
+    <message>
+        <source>Secure placement preparation was unavailable. Try again later.</source>
+        <translation>La préparation sécurisée du placement était indisponible. Réessayez plus tard.</translation>
+    </message>
 </context>
 <context>
     <name>CybouCoreApplicationAdapter::IdentitySession</name>
@@ -6788,6 +6832,50 @@ Poursuivre la suppression définitive ?</translation>
     <message>
         <source>%1 changes saved locally; awaiting network confirmation.</source>
         <translation>%1 modifications enregistrées localement ; en attente de confirmation du réseau.</translation>
+    </message>
+    <message>
+        <source>Remote copy target not reached</source>
+        <translation>Objectif de copies distantes non atteint</translation>
+    </message>
+    <message>
+        <source>Unknown — reading saved records does not check copies</source>
+        <translation>Inconnue — lire les enregistrements ne vérifie pas les copies</translation>
+    </message>
+    <message>
+        <source>Older than 24 hours · %1</source>
+        <translation>Plus de 24 heures · %1</translation>
+    </message>
+    <message>
+        <source>Last local observation</source>
+        <translation>Dernière observation locale</translation>
+    </message>
+    <message>
+        <source>Observation scope</source>
+        <translation>Périmètre de l’observation</translation>
+    </message>
+    <message>
+        <source>No local placement observation available</source>
+        <translation>Aucune observation locale du placement disponible</translation>
+    </message>
+    <message>
+        <source>Last observed reason</source>
+        <translation>Dernière cause observée</translation>
+    </message>
+    <message>
+        <source>Local observations do not prove continuous availability or independent remote machines.</source>
+        <translation>Les observations locales ne prouvent ni la disponibilité continue ni l’indépendance des machines distantes.</translation>
+    </message>
+    <message>
+        <source>Wait for the current download to finish.</source>
+        <translation>Attendez la fin du téléchargement en cours.</translation>
+    </message>
+    <message>
+        <source>No verified local copy is available and remote protection is incomplete.</source>
+        <translation>Aucune copie locale vérifiée n’est disponible et la protection distante est incomplète.</translation>
+    </message>
+    <message>
+        <source>Remote copy count is unknown; independent remote machines have not been established.</source>
+        <translation>Le nombre de copies distantes est inconnu ; l’indépendance des machines distantes n’a pas été établie.</translation>
     </message>
 </context>
 <context>

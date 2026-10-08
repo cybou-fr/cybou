@@ -570,3 +570,12 @@ Batch 7 — R9 / W8 delivery slice (2026-10-06):
 
 
 
+
+Files observation follow-up (2026-10-08): the earlier Batch 4 wording
+"Replicating to network" is superseded by "Remote copy target not reached".
+Replica deficit alone does not establish active repair. Details now report
+session-local placement/full-audit/partial-audit attempt time and typed reasons;
+reads do not renew freshness, restart makes time unknown, and old observations
+do not revoke verified local access. Remaining work includes a common Mail/Files
+task view and live outage/recovery acceptance; see the dated implementation
+status and scoped evidence in docs 83 and 85.

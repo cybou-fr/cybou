@@ -103,6 +103,29 @@ PublicationDurability StorageService::Summarize(const Placement& placement) cons
     if (placement.leaves.empty()) result.min_replicas = 0;
     result.state = result.chunk_count > 0 && result.chunks_at_target == result.chunk_count
         ? DurabilityState::PROTECTED : DurabilityState::SECURING;
+    if (const auto seen = m_observations.find(placement.operation_id); seen != m_observations.end()) {
+        result.observed_at_ms = seen->second.observed_at_ms;
+        result.observation = seen->second.observation;
+        result.condition = seen->second.condition;
+    }
+    return result;
+}
+
+PublicationDurability StorageService::Observe(const cybou::Hash256& id, PublicationDurability result,
+    StorageObservation observation, StorageCondition condition)
+{
+    result.observed_at_ms = StorageEvidenceNowMs();
+    result.observation = observation;
+    result.condition = condition;
+    constexpr std::size_t limit{1024};
+    if (!m_observations.contains(id) && m_observations.size() >= limit) {
+        const auto oldest = std::min_element(m_observations.begin(), m_observations.end(),
+            [](const auto& a, const auto& b) { return a.second.observed_at_ms < b.second.observed_at_ms; });
+        m_observations.erase(oldest);
+    }
+    m_observations[id] = result;
+    // Raw transport errors can contain endpoints; they are not retained for GUI projection.
+    m_observations[id].error.clear();
     return result;
 }
 
