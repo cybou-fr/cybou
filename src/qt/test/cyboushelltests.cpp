@@ -1,3 +1,4 @@
+#include <qt/networkobservationtext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
@@ -1132,6 +1133,58 @@ void CybouShellTests::filesNavigationAndViews()
     QVERIFY(model->fileItem(uploaded)->available_offline); // the uploading device keeps its copy
     QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Local);
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
+}
+
+void CybouShellTests::networkObservationCardsKeepPartialScope()
+{
+    cybou::NodeDiagnosticsSnapshot d;
+    auto unknown = cybouNetworkObservationText(d);
+    QVERIFY(unknown.capacity.contains(QStringLiteral("Unknown")));
+    auto observation = std::make_shared<cybou::NetworkObservationSnapshot>();
+    observation->network_binding.fill(8);
+    d.network_binding = cybou::Hash256{observation->network_binding}.GetHex();
+    observation->remote.selected_remote_groups = 3;
+    observation->remote.fresh_remote_groups = 2;
+    observation->remote.missing_remote_groups = 1;
+    observation->remote.storage.contributors = 2;
+    observation->remote.storage.capacity_bytes = 100;
+    observation->remote.storage.stored_copy_bytes = 0;
+    observation->remote.storage.utilization_percent = 0;
+    observation->remote.traffic.contributors = 1;
+    observation->remote.traffic.received_bytes_per_second = 0;
+    observation->remote.traffic.sent_bytes_per_second = 12;
+    observation->remote.reports.push_back({false, 1200, 20});
+    d.network_observation = observation;
+    const auto text = cybouNetworkObservationText(d);
+    QVERIFY(cybouNetworkObservationText(d, observation->captured_at + std::chrono::seconds{89}).capacity.contains(QStringLiteral("Unknown")));
+    QVERIFY(cybouNetworkObservationText(d, observation->captured_at - std::chrono::seconds{1}).capacity.contains(QStringLiteral("Unknown")));
+    QVERIFY(text.capacity_title.contains(QStringLiteral("2 reporting groups")));
+    QVERIFY(text.storage_detail.contains(QStringLiteral("Stored copies: 0")));
+    QVERIFY(text.coverage.contains(QStringLiteral("2 / 3")));
+    QVERIFY(text.coverage.contains(QStringLiteral("missing: 1")));
+    QVERIFY(text.cpu.contains(QStringLiteral("Unknown")));
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    model.setNetworkDiagnostics(d);
+    NetworkPage page{&model}; page.show(); page.showTechnicalDetails();
+    auto* capacity = page.findChild<QLabel*>(QStringLiteral("networkObservedCapacity"));
+    auto* coverage = page.findChild<QLabel*>(QStringLiteral("networkObservedCoverage"));
+    QVERIFY(capacity && coverage);
+    QTRY_COMPARE(capacity->text(), text.capacity);
+    QVERIFY(coverage->text().contains(QStringLiteral("2 / 3")));
+    d.network_observation.reset(); model.setNetworkDiagnostics(d);
+    QTRY_VERIFY(capacity->text().contains(QStringLiteral("Unknown")));
+    d.network_observation = observation; d.network_binding = "other-network";
+    QVERIFY(cybouNetworkObservationText(d).capacity.contains(QStringLiteral("Unknown")));
+    observation->remote.clock_valid = false; d.network_binding = cybou::Hash256{observation->network_binding}.GetHex();
+    QVERIFY(cybouNetworkObservationText(d).capacity.contains(QStringLiteral("Unknown")));
+    QTranslator translator;
+    QVERIFY(translator.load(QStringLiteral(":/i18n/cybou_fr.qm")));
+    const bool translated = qApp->installTranslator(&translator);
+    const auto french = cybouNetworkObservationText(d);
+    qApp->removeTranslator(&translator);
+    QVERIFY(translated);
+    QVERIFY(french.capacity.contains(QStringLiteral("Inconnu")));
+    QVERIFY(french.capacity_title.contains(QStringLiteral("Capacité de stockage observée")));
 }
 
 void CybouShellTests::networkMonitorUsesCoreSnapshot()

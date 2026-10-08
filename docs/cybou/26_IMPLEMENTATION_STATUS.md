@@ -3,6 +3,35 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Network/Console partial reporting summary (2026-10-08)
+
+Diagnostics now carry the immutable NetworkObservationSnapshot through the existing
+background desktop sampler/model. Network Advanced Overview displays declared
+capacity, stored copies/utilization, provider budget/admitted bytes, separate
+receive/send frame rates and arithmetic normalized process CPU means. Each
+metric has its own contributor count. Shared EN/FR formatting also feeds public
+read-only Console `capacity` and `metrics`, available while Identity is locked.
+
+Coverage includes fresh/selected/missing transport-address groups, slot limit,
+receipt age range and declared cache age. Rounded MiB/KiB declarations, partial
+coverage and unknown independent hosts remain explicit. Missing, foreign-network,
+invalid-clock and overflowed measurements show Unknown, preserving known zero.
+Local data stays in the existing local cards; no memory/disk/chain sums or potential
+throughput claim. Monotonic presentation age advances receipt/CPU ages and clears
+stale aggregates if background delivery stalls; clock regression fails closed.
+This uses existing snapshots, with no network I/O from GUI.
+
+Validation: desktop/core/Qt binaries rebuild; 32 focused core cases pass
+(groups 8, runtime 24), and full Qt passes 93 cases. New UI regression covers
+partial counts, known zero, absent fields, foreign network, invalid/backwards
+clock, stale snapshot invalidation, model-to-card updates and French labels.
+Existing Console regressions pass with the shared formatter. Manifest and
+whitespace checks pass. Evidence is local fixture/offscreen regression, not
+live reporting coverage or physical screen acceptance.
+
+Remote cohort charts and automatic polling remain separate follow-up packages.
+No transport, key, genesis, signer, service restart or deployment is introduced.
+
 ## Runtime network observation snapshot (2026-10-08)
 
 Each runtime now owns its bounded address-group store, initialized empty before

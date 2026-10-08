@@ -6,7 +6,8 @@ The narrow runtime-owned cache refreshes independently every five seconds.
 The runtime exchange guard and direct TLS request/reply transaction are implemented.
 The runtime-owned bounded address-group store, session close/expiry wiring and
 immutable address-free consolidated snapshot are implemented.
-Automatic polling and remote display remain unimplemented;
+Network/Console partial-coverage summary cards are implemented.
+Automatic polling and remote cohort charts remain unimplemented;
 no observation exchange is deployed. The source P2P baseline ends at message 28;
 older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
@@ -243,7 +244,15 @@ Local cache age and remote receipt/CPU ages remain explicit; sequential reads
 are not a globally atomic measurement. Local data never enters remote sums.
 Reading copies bounded data and expires stale groups, with no I/O, history scan,
 Identity unlock or synchronous collection. Previously returned values are immutable.
-UI labels/chart segmentation and scheduled acquisition remain unconnected.
+Diagnostics carry the immutable snapshot through the existing background desktop
+model to Network Advanced summary cards and public read-only Console capacity/metrics.
+Both use matching EN/FR formatting with per-metric contributor counts, receipt/cache
+ages and missing/limited coverage. Foreign-network/invalid-clock snapshots display
+Unknown; absence and overflow never become zero. Snapshot monotonic capture age
+advances displayed receipt/CPU ages; if background delivery stalls past a report
+expiry, the stale aggregate becomes Unknown rather than retaining frozen values. No endpoint labels, memory/disk
+sums or throughput ceiling. Remote cohort chart segmentation and scheduled
+acquisition remain unconnected.
 
 ## Acceptance and release gates
 
@@ -270,8 +279,7 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Next bounded packages: Network/Console partial-coverage cards and cohort chart
-segments; then
+Next bounded packages: remote cohort chart segments; then
 low-priority idle-session polling with the two-second owner deadline. Codec,
 cache, guarded direct TLS and standalone address-group totals are implemented.
 Auto polling waits for coordinated deployed-software acceptance. No extra wire

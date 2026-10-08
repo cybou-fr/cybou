@@ -90,13 +90,14 @@ and service-eligible network capacity estimates. Local gauges are not network to
    rate-limit guard are implemented. Direct TLS request/reply and runtime guard
    wiring and the standalone bounded group store/totals are implemented without
    automatic polling. Runtime store lifecycle and immutable snapshots are connected;
-   scheduled acquisition/UI wiring and privacy
+   partial-coverage summary cards and Console are connected;
+   scheduled acquisition/cohort charts and privacy
    acceptance remain; relayed/cross-address design is open. No new network,
    genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
    per-report/mean/cohort charts. The standalone group store and checked declared
    resource totals and runtime immutable snapshots are implemented; scheduled
-   acquisition and UI/chart wiring remain.
+   acquisition and cohort charts remain; Network/Console summary cards are connected.
    Verify duplicates/replay, expiry, churn,
    inconsistent/dishonest reports and partial visibility.
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
@@ -109,7 +110,7 @@ and service-eligible network capacity estimates. Local gauges are not network to
    and immutable address-free consolidated snapshot. Explicit owner requests
    record accepted replies; no automatic polling. New/restarted runtimes start
    empty and missing stays Unknown.
-2. Feed Network/Console cards and charts from that snapshot. Label capacity
+2. **Cards delivered; cohort charts remain:** Network/Console use that snapshot. Label capacity
    `Observed storage capacity · N reporting groups`, with per-metric contributor
    counts, age, missing/expired/limited coverage and explicit declarations.
    Whole-network coverage stays Unknown. Segment charts on cohort changes.

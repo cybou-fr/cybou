@@ -10,6 +10,7 @@
 #include <qt/benchmarkreference.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
+#include <qt/networkobservationtext.h>
 
 #include <QFrame>
 #include <QTimeZone>
@@ -454,6 +455,26 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_metric_cpu->setObjectName(QStringLiteral("networkProcessCpu"));
 
     overview_layout->addLayout(grid);
+    auto* observed = Card(overview);
+    auto* observed_layout = new QVBoxLayout{observed};
+    m_observed_capacity_title = SectionTitle(QString{}, observed);
+    m_observed_capacity_title->setWordWrap(true);
+    observed_layout->addWidget(m_observed_capacity_title);
+    auto* observed_grid = new QGridLayout;
+    auto [capacity_value, capacity_detail] = MetricTile(observed_grid, 0, 0, tr("Declared capacity"), observed);
+    m_observed_capacity = capacity_value; m_observed_storage_detail = capacity_detail;
+    m_observed_capacity->setObjectName(QStringLiteral("networkObservedCapacity"));
+    auto [traffic_value, traffic_detail] = MetricTile(observed_grid, 0, 1, tr("Observed CYBOU frame traffic"), observed);
+    m_observed_traffic = traffic_value; m_observed_traffic_detail = traffic_detail;
+    m_observed_traffic->setObjectName(QStringLiteral("networkObservedTraffic"));
+    auto [cpu_value, cpu_detail] = MetricTile(observed_grid, 1, 0, tr("Reported process CPU mean"), observed);
+    m_observed_cpu = cpu_value; m_observed_cpu_detail = cpu_detail;
+    m_observed_cpu->setObjectName(QStringLiteral("networkObservedCpu"));
+    observed_layout->addLayout(observed_grid);
+    m_observed_coverage = MutedText(QString{}, observed);
+    m_observed_coverage->setObjectName(QStringLiteral("networkObservedCoverage"));
+    observed_layout->addWidget(m_observed_coverage);
+    overview_layout->addWidget(observed);
     auto* traffic_history = Card(overview);
     auto* traffic_history_layout = new QVBoxLayout{traffic_history};
     traffic_history_layout->addWidget(SectionTitle(tr("Traffic history"), traffic_history));
@@ -771,6 +792,15 @@ void NetworkPage::refresh()
     m_metric_peers->setText(QString::number(status.peer_count));
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
+    const auto observed = cybouNetworkObservationText(diag);
+    m_observed_capacity_title->setText(observed.capacity_title);
+    m_observed_capacity->setText(observed.capacity);
+    m_observed_storage_detail->setText(observed.storage_detail);
+    m_observed_traffic->setText(observed.traffic);
+    m_observed_traffic_detail->setText(observed.traffic_detail);
+    m_observed_cpu->setText(observed.cpu);
+    m_observed_cpu_detail->setText(observed.cpu_detail);
+    m_observed_coverage->setText(observed.coverage);
     const bool measured = diag.observed_unix_ms != 0;
     const auto& cpu = diag.process_cpu;
     m_metric_cpu->setText(measured && cpu.interval_percent ?

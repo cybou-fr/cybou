@@ -5246,6 +5246,9 @@ SHA-256 du générateur de charge : %10
         <source>Locally observed mesh sessions. Heights are unverified announcements; StorageId proof belongs only to an on-demand storage relationship.</source>
         <translation>Sessions du maillage observées localement. Les hauteurs annoncées ne sont pas vérifiées ; la preuve du StorageId concerne uniquement une relation de stockage établie à la demande.</translation>
     </message>
+<message><source>Declared capacity</source><translation>Capacité déclarée</translation></message>
+<message><source>Observed CYBOU frame traffic</source><translation>Trafic des trames CYBOU observé</translation></message>
+<message><source>Reported process CPU mean</source><translation>CPU moyen des processus déclaré</translation></message>
 </context>
 <context>
     <name>OnboardingView</name>
@@ -7557,5 +7560,25 @@ La confirmation soumet ces entrées exactes à l’exécution locale. Seul un bl
         <source>No eligible payouts were prepared. This may reflect missing local evidence. A finalized settlement closes this period; later evidence cannot amend it.</source>
         <translation>Aucun versement éligible n’a été préparé. Des preuves locales peuvent manquer. Un règlement finalisé clôt cette période ; des preuves ultérieures ne peuvent pas la modifier.</translation>
     </message>
+</context>
+<context>
+<name>NetworkObservation</name>
+<message><source>Unknown</source><translation>Inconnu</translation></message>
+<message><source>Yes</source><translation>Oui</translation></message>
+<message><source>No</source><translation>Non</translation></message>
+<message><source>Observed storage capacity · %1 reporting groups</source><translation>Capacité de stockage observée · %1 groupes déclarants</translation></message>
+<message><source>%1 bytes</source><translation>%1 octets</translation></message>
+<message><source>Stored copies: %1 bytes · utilization: %2 %
+Provider budget: %3 bytes · admitted provider bytes: %4</source><translation>Copies stockées : %1 octets · utilisation : %2 %
+Budget fournisseur : %3 octets · octets admis pour les répliques : %4</translation></message>
+<message><source>↓ %1 B/s · ↑ %2 B/s</source><translation>↓ %1 o/s · ↑ %2 o/s</translation></message>
+<message><source>%1 reporting groups · declared 60-second frame windows · service/retries/observation included · TLS/TCP overhead excluded</source><translation>%1 groupes déclarants · fenêtres déclarées de 60 secondes · service, réessais et observation inclus · surcoûts TLS/TCP exclus</translation></message>
+<message><source>%1 %</source><translation>%1 %</translation></message>
+<message><source>%1 reporting groups · arithmetic mean of normalized process CPU · windows %2–%3 ms · ages %4–%5 ms</source><translation>%1 groupes déclarants · moyenne arithmétique du CPU normalisé des processus · fenêtres %2–%3 ms · âges %4–%5 ms</translation></message>
+<message><source>Fresh reporting address groups: %1 / %2 · missing: %3 · slot limit reached: %4
+Receipt ages: %5–%6 ms · declared cache age up to %7 ms
+Partial unverified declarations, rounded MiB/KiB. Whole-network coverage and independent hosts: Unknown.</source><translation>Groupes d’adresses avec rapport récent : %1 / %2 · manquants : %3 · limite atteinte : %4
+Âges de réception : %5–%6 ms · âge déclaré du cache jusqu’à %7 ms
+Déclarations partielles non vérifiées, arrondies en Mio/Kio. Couverture du réseau entier et hôtes indépendants : inconnus.</translation></message>
 </context>
 </TS>

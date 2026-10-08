@@ -47,6 +47,7 @@ private Q_SLOTS:
     void networkPageReflectsModel();
     void headerSaysWhenTheNetworkStopsConfirming();
     void networkMonitorUsesCoreSnapshot();
+    void networkObservationCardsKeepPartialScope();
     void authorityDashboardUsesLocalHeightObservation();
     void adapterSettersDrivePages();
     void productCollectionsDriveModel();

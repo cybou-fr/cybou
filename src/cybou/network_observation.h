@@ -10,6 +10,7 @@ namespace cybou {
 struct NetworkObservationSnapshot {
     ObservationBytes32 network_binding{};
     int64_t observed_unix_ms{0};
+    std::chrono::steady_clock::time_point captured_at{std::chrono::steady_clock::now()};
     p2p::ObservationRow local;
     p2p::ObservationGroupSnapshot remote;
 };

@@ -1,3 +1,4 @@
+#include <qt/networkobservationtext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
@@ -459,8 +460,12 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity) : tr("Unknown"))
             .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity - std::min(d.storage_used, d.storage_capacity)) : tr("Unknown"))
             .arg(measured && d.storage_disk_available ? QString::number(*d.storage_disk_available) : tr("Unknown")));
+        const auto observed = cybouNetworkObservationText(d);
+        appendOutput(observed.capacity_title + QStringLiteral("\n") + observed.capacity + QStringLiteral("\n") + observed.storage_detail + QStringLiteral("\n") + observed.coverage);
     } else if (cmd == QLatin1String{"metrics"}) {
         const auto& d = m_model->networkDiagnostics();
+        const auto observed = cybouNetworkObservationText(d);
+        appendOutput(observed.traffic + QStringLiteral("\n") + observed.traffic_detail + QStringLiteral("\n") + observed.cpu + QStringLiteral("\n") + observed.cpu_detail + QStringLiteral("\n") + observed.coverage);
         const auto& t = d.traffic;
         const bool measured = d.observed_unix_ms != 0;
         appendOutput(tr("Source: Local CYBOU frames, excluding TLS/TCP overhead\nReceived since runtime start: %1 bytes\nSent since runtime start: %2 bytes\nReceived rate: %3 B/s\nSent rate: %4 B/s\nWindow: 60 complete seconds; retries and service frames included.\nObserved: %5\nThis is local traffic, not unique delivery or network transaction throughput.")

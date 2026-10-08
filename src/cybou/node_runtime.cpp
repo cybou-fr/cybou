@@ -68,6 +68,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
+    snapshot.network_observation = GetNetworkObservation();
     snapshot.process_resident_bytes = ReadProcessResidentBytes();
     snapshot.process_cpu = m_cpu_observations.Sample();
     snapshot.traffic = m_traffic->Snapshot();

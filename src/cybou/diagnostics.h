@@ -6,12 +6,14 @@
 #define CYBOU_DIAGNOSTICS_H
 #include <cstdint>
 #include <optional>
+#include <memory>
 #include <cybou/traffic_meter.h>
 #include <cybou/finalization_meter.h>
 #include <cybou/process_cpu.h>
 #include <string>
 #include <vector>
 namespace cybou {
+struct NetworkObservationSnapshot;
 
 /// \brief Диагностические сведения об одном подключенном пире.
 struct PeerDiagnostics {
@@ -37,6 +39,7 @@ struct OperationDiagnostics {
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
+    std::shared_ptr<const NetworkObservationSnapshot> network_observation;
     TrafficDiagnostics traffic;
     FinalizationDiagnostics finalization;
     ProcessCpuDiagnostics process_cpu;
