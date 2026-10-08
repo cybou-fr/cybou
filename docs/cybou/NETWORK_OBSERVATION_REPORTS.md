@@ -4,8 +4,9 @@ Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
 Strict standalone request/reply payload codecs are implemented and tested.
 The narrow runtime-owned cache refreshes independently every five seconds.
 The runtime exchange guard and direct TLS request/reply transaction are implemented.
-The standalone bounded address-group store and declared-resource totals are implemented.
-Automatic polling, store lifecycle wiring and remote display remain unimplemented;
+The runtime-owned bounded address-group store, session close/expiry wiring and
+immutable address-free consolidated snapshot are implemented.
+Automatic polling and remote display remain unimplemented;
 no observation exchange is deployed. The source P2P baseline ends at message 28;
 older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
@@ -169,8 +170,8 @@ Cache collection runs guard expiry; default clock reads occur under the guard
 mutex, so concurrent collection/transactions do not look like clock regression.
 The guard does not prove admission or truthful measurements independently of its
 caller. No automatic poller calls this transaction yet. Scheduled polling,
-busy-session fairness, runtime store lifecycle/consolidated snapshot wiring,
-collector overhead and coordinated deployed-software acceptance remain work.
+busy-session fairness, remote UI/chart wiring, collector overhead and
+coordinated deployed-software acceptance remain work.
 
 ## Grouping, expiry and consolidation
 
@@ -225,8 +226,24 @@ challenge/binding/row ID; a volatile cohort revision marks selection and known-
 contributor changes for future charts. Checked sums, matched storage denominators,
 separate traffic directions and counted arithmetic CPU means follow the rules
 above; zero, missing and overflow remain distinct. The component does not verify
-measurement truth or perform network I/O. Runtime acquisition, close/expiry
-scheduling, UI labels and chart segmentation wiring remain to be connected.
+measurement truth or perform network I/O.
+
+Runtime integration: each runtime creates its own empty store before starting the
+background collector. The collector also expires group payloads/metadata. Explicit
+owner calls to `RequestObservation` select the socket-address group before any
+request; same-address competing sessions skip I/O, as do cooldown refusals. Only
+exchange-accepted replies are recorded. Internal socket closure or session teardown
+invalidates the selected report immediately; weak session references do not keep
+runtime state alive. A live session cannot switch between collector runtimes.
+
+`GetNetworkObservation()` returns `shared_ptr<const NetworkObservationSnapshot>`:
+local cache metric blocks, separate remote group snapshot, local network binding
+and presentation UTC time. No address/handle/challenge or stable row ID appears.
+Local cache age and remote receipt/CPU ages remain explicit; sequential reads
+are not a globally atomic measurement. Local data never enters remote sums.
+Reading copies bounded data and expires stale groups, with no I/O, history scan,
+Identity unlock or synchronous collection. Previously returned values are immutable.
+UI labels/chart segmentation and scheduled acquisition remain unconnected.
 
 ## Acceptance and release gates
 
@@ -253,8 +270,8 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Next bounded packages: runtime-owned group lifecycle and immutable address-free
-snapshot; Network/Console partial-coverage cards and cohort chart segments; then
+Next bounded packages: Network/Console partial-coverage cards and cohort chart
+segments; then
 low-priority idle-session polling with the two-second owner deadline. Codec,
 cache, guarded direct TLS and standalone address-group totals are implemented.
 Auto polling waits for coordinated deployed-software acceptance. No extra wire

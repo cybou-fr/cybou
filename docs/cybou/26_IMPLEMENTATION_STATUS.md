@@ -3,6 +3,36 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Runtime network observation snapshot (2026-10-08)
+
+Each runtime now owns its bounded address-group store, initialized empty before
+starting the background collector. Explicit session-owner observation requests
+select their actual socket-address group before I/O and record only accepted
+challenge/session-bound replies. Other same-address sessions skip I/O. Cooldown
+skips preserve the selected report; failures that close TLS remove it immediately.
+Session destruction clears pending guard state and group selection using weak
+references, without dereferencing/extending runtime lifetime. A live session
+cannot switch to another collector runtime. Background collection expires groups.
+
+`GetNetworkObservation()` returns an immutable shared snapshot with local cache
+metric blocks, partial remote group totals/counts, network context and local UTC
+presentation time. Local cache/remote receipt ages remain separate; this is not
+a globally atomic measurement. No address, session handle, challenge or stable
+row identifier reaches the presentation snapshot. Local readings and loopback
+reports never inflate remote totals. Missing/overflow values remain Unknown.
+Previously delivered snapshots remain unchanged by close, replacement or expiry.
+
+Validation: desktop and core binaries rebuild. All 93 focused core cases pass
+(codec 6, groups 8, exchange 7, cache 6, P2P 42, runtime 24). Integration checks
+cover accepted TLS reply retention, cooldown preserving normal ping, loopback
+exclusion, EOF/destructor invalidation, snapshot immutability, local cached
+readings without GUI/Identity, and an empty replacement runtime. Existing group
+cases cover bounded/expiry/overflow/subset behavior. Manifest/diff checks pass.
+This is local fixture/component evidence, not a deployed multi-host observation.
+
+Automatic polling, remote cards/chart wiring and deployment remain open. No new
+wire fields, persistence, network/genesis, key or signing-history changes.
+
 ## Observation review corrections (2026-10-08)
 
 The current report/store field is `provider_used_mib`, derived from

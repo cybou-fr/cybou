@@ -49,7 +49,8 @@
 namespace cybou {
 class ObservationCollector;
 struct ObservationReport;
-namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; class ObservationExchange; }
+struct NetworkObservationSnapshot;
+namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; class ObservationExchange; class ObservationGroups; }
 class StorageIoScheduler;
 class CybouKeyStore;
 class IdentityOperationCoordinator;
@@ -279,6 +280,9 @@ public:
     /// Fixed cached DEC-289 payload; does not collect or touch chain/provider locks.
     std::array<unsigned char, 191> ReadObservationReport(const std::array<unsigned char, 32>& challenge) const;
     std::shared_ptr<p2p::ObservationExchange> GetObservationExchange() const { return m_observation_exchange; }
+    // Trusted session-owner store; Record only exchange-accepted replies.
+    std::shared_ptr<p2p::ObservationGroups> GetObservationGroups() const { return m_observation_groups; }
+    std::shared_ptr<const NetworkObservationSnapshot> GetNetworkObservation() const;
     std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
@@ -711,6 +715,7 @@ private:
     mutable ProcessCpuMeter m_cpu_observations;
     cybou::Hash256 m_network_binding;
     std::shared_ptr<p2p::ObservationExchange> m_observation_exchange;
+    std::shared_ptr<p2p::ObservationGroups> m_observation_groups;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;
     ProviderCore m_provider;

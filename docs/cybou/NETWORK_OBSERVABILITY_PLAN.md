@@ -89,12 +89,14 @@ and service-eligible network capacity estimates. Local gauges are not network to
    the narrow five-second background runtime cache and standalone challenge/
    rate-limit guard are implemented. Direct TLS request/reply and runtime guard
    wiring and the standalone bounded group store/totals are implemented without
-   automatic polling. Scheduled acquisition/store lifecycle/UI wiring and privacy
+   automatic polling. Runtime store lifecycle and immutable snapshots are connected;
+   scheduled acquisition/UI wiring and privacy
    acceptance remain; relayed/cross-address design is open. No new network,
    genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
    per-report/mean/cohort charts. The standalone group store and checked declared
-   resource totals are implemented; live acquisition and UI/chart wiring remain.
+   resource totals and runtime immutable snapshots are implemented; scheduled
+   acquisition and UI/chart wiring remain.
    Verify duplicates/replay, expiry, churn,
    inconsistent/dishonest reports and partial visibility.
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
@@ -103,9 +105,10 @@ and service-eligible network capacity estimates. Local gauges are not network to
 
 ### Next delivery order after review (2026-10-08)
 
-1. Connect the existing bounded group store to runtime session close/expiry and
-   expose one immutable address-free consolidated snapshot. No automatic polling
-   in this package; new/restarted runtimes start empty and missing stays Unknown.
+1. **Delivered:** runtime-owned bounded group store, session close/expiry hooks
+   and immutable address-free consolidated snapshot. Explicit owner requests
+   record accepted replies; no automatic polling. New/restarted runtimes start
+   empty and missing stays Unknown.
 2. Feed Network/Console cards and charts from that snapshot. Label capacity
    `Observed storage capacity · N reporting groups`, with per-metric contributor
    counts, age, missing/expired/limited coverage and explicit declarations.

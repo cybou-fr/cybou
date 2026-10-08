@@ -13,6 +13,7 @@
 #include <cybou/secret_file.h>
 #include <cybou/identity_signer.h>
 #include <cybou/observation_report.h>
+#include <cybou/network_observation.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -49,8 +50,43 @@ BOOST_AUTO_TEST_CASE(observation_cache_refreshes_without_identity_gui_or_diagnos
     BOOST_CHECK(report.storage.known); BOOST_CHECK_EQUAL(report.storage.capacity_bytes, uint64_t{15} << 30);
     BOOST_CHECK_EQUAL(report.storage.stored_mib, 0U); BOOST_CHECK_EQUAL(report.storage.provider_used_mib, 0U);
     BOOST_CHECK(!report.traffic.known && !report.cpu.known); // complete windows have not elapsed
+    const auto snapshot = runtime.GetNetworkObservation();
+    BOOST_CHECK(snapshot->local.cursor.known && snapshot->local.storage.known);
+    BOOST_CHECK_EQUAL(snapshot->local.storage.capacity_bytes, report.storage.capacity_bytes);
+    BOOST_CHECK_EQUAL(snapshot->remote.fresh_remote_groups, 0U);
     BOOST_CHECK(report.challenge == nonce);
     BOOST_CHECK(cybou::Hash256{report.network_binding} == runtime.GetNetworkBinding());
+}
+
+BOOST_AUTO_TEST_CASE(network_observation_snapshot_is_immutable_and_runtime_scoped)
+{
+    CybouServiceTestFixture fixture;
+    auto& runtime = *fixture.runtime;
+    const auto empty = runtime.GetNetworkObservation();
+    BOOST_CHECK(cybou::Hash256{empty->network_binding} == runtime.GetNetworkBinding());
+    BOOST_CHECK_EQUAL(empty->remote.selected_remote_groups, 0U);
+    BOOST_CHECK(!empty->remote.storage.capacity_bytes);
+    cybou::p2p::ObservationSession session{817, empty->network_binding, true};
+    const auto address = boost::asio::ip::make_address("192.168.1.9");
+    auto groups = runtime.GetObservationGroups();
+    BOOST_REQUIRE(groups->Select(session, address));
+    cybou::ObservationReport report; report.network_binding = empty->network_binding;
+    report.storage = {true, uint64_t{15} << 30, 17, uint64_t{10} << 30, 11};
+    BOOST_REQUIRE(groups->Record(session, address, report));
+    const auto populated = runtime.GetNetworkObservation();
+    BOOST_CHECK_EQUAL(populated->remote.fresh_remote_groups, 1U);
+    BOOST_REQUIRE(populated->remote.storage.provider_used_bytes);
+    BOOST_CHECK_EQUAL(*populated->remote.storage.provider_used_bytes, uint64_t{11} << 20);
+    BOOST_CHECK_EQUAL(empty->remote.fresh_remote_groups, 0U); // previous value never mutates
+    groups->Close(session.handle);
+    const auto closed = runtime.GetNetworkObservation();
+    BOOST_CHECK_EQUAL(closed->remote.fresh_remote_groups, 0U);
+    BOOST_CHECK(!closed->remote.storage.capacity_bytes);
+    BOOST_CHECK_EQUAL(populated->remote.fresh_remote_groups, 1U);
+    cybou::CybouNodeRuntime replacement{cybou::NodeRuntimeConfig{
+        .network_genesis = fixture.definition, .data_dir = fixture.directory / "replacement-observer",
+        .memory_only = true, .peer_admission_policy = TestPeerAdmissionPolicy()}};
+    BOOST_CHECK_EQUAL(replacement.GetNetworkObservation()->remote.selected_remote_groups, 0U);
 }
 
 BOOST_AUTO_TEST_CASE(process_cpu_intervals_use_elapsed_time_and_reset_on_missing_data)

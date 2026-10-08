@@ -12,6 +12,7 @@
 #include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
 #include <cybou/p2p/observation_exchange.h>
+#include <cybou/p2p/observation_groups.h>
 
 #include <boost/asio/ip/address.hpp>
 
@@ -486,8 +487,15 @@ PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRol
     if (ec || !m_observation_handle) m_socket.close();
 }
 
+void PeerSession::ForgetObservation()
+{
+    if (auto guard = m_observation_guard.lock()) guard->Close(m_observation_handle);
+    if (auto groups = m_observation_groups.lock()) groups->Close(m_observation_handle);
+}
+
 PeerSession::~PeerSession()
 {
+    ForgetObservation();
     SSL_free(m_ssl);
     SSL_CTX_free(m_owned_ssl_context);
 }
@@ -566,7 +574,7 @@ bool PeerSession::EstablishSecureTransport(const std::chrono::steady_clock::time
     }
     SSL_free(std::exchange(m_ssl, nullptr));
     boost::system::error_code ignored;
-    m_socket.close(ignored);
+    m_socket.close(ignored); ForgetObservation();
     return false;
 }
 
@@ -599,13 +607,13 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
         if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
-            m_socket.close(close_ec);
+            m_socket.close(close_ec); ForgetObservation();
             return false;
         }
     }
     if (done != length) {
         boost::system::error_code ec;
-        if (done != 0) m_socket.close(ec); // Idle sessions survive; truncated headers never do.
+        if (done != 0) { m_socket.close(ec); ForgetObservation(); } // Idle sessions survive; truncated headers never do.
         return false;
     }
     return true;
@@ -630,13 +638,13 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
         if (result != 1 && AdvanceTlsOperation(result, progress_deadline)) continue;
         {
             boost::system::error_code close_ec;
-            m_socket.close(close_ec);
+            m_socket.close(close_ec); ForgetObservation();
             return false;
         }
     }
     if (done != length) {
         boost::system::error_code ec;
-        m_socket.close(ec); // Never reuse a stream containing a truncated frame.
+        m_socket.close(ec); ForgetObservation(); // Never reuse a stream containing a truncated frame.
         return false;
     }
     return true;
@@ -668,7 +676,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
     for (int i = 0; i < 4; ++i) size |= uint32_t{header[5 + i]} << (8 * i);
     if (!AllowedFrameSize(header[4], size)) {
         m_last_read_status = ReadStatus::INVALID_FRAME;
-        boost::system::error_code ignored; m_socket.close(ignored);
+        boost::system::error_code ignored; m_socket.close(ignored); ForgetObservation();
         return std::nullopt;
     }
     Frame frame{static_cast<MessageType>(header[4]), {}};
@@ -677,7 +685,7 @@ std::optional<Frame> PeerSession::Read(std::chrono::steady_clock::time_point dea
         // После чтения заголовка границы фрейма уже сдвинуты: безопаснее
         // оборвать сокет, чем пытаться ресинхронизироваться по оставшемуся потоку.
         boost::system::error_code ignored;
-        m_socket.close(ignored); // A consumed header cannot be reused after an incomplete body.
+        m_socket.close(ignored); ForgetObservation(); // A consumed header cannot be reused after an incomplete body.
         return std::nullopt;
     }
     m_last_read_status = ReadStatus::OK;
@@ -779,13 +787,20 @@ bool PeerSession::Handshake(const Hello& local)
 
 std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntime& runtime)
 {
-    if (!m_peer || !m_local || !m_socket.is_open() || m_peer->network_binding != runtime.GetNetworkBinding()) return std::nullopt;
+    if (!m_socket.is_open()) { ForgetObservation(); return std::nullopt; }
+    if (!m_peer || !m_local || m_peer->network_binding != runtime.GetNetworkBinding()) return std::nullopt;
     boost::system::error_code ec;
     const auto remote = m_socket.remote_endpoint(ec);
     if (ec) return std::nullopt;
     auto guard = runtime.GetObservationExchange();
+    auto groups = runtime.GetObservationGroups();
+    // A live connection belongs to one collector runtime, even for the same network.
+    if (auto previous = m_observation_groups.lock(); previous && previous != groups) return std::nullopt;
     ObservationSession context{m_observation_handle, {}, true};
     std::copy(m_peer->network_binding.begin(), m_peer->network_binding.end(), context.network_binding.begin());
+    if (!groups->Select(context, remote.address())) return std::nullopt;
+    m_observation_guard = guard;
+    m_observation_groups = groups;
     const auto started = std::chrono::steady_clock::now();
     const auto request = guard->Begin(context, remote.address());
     if (!request) return std::nullopt;
@@ -795,7 +810,7 @@ std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntim
         ~PendingCleanup() { guard->Close(handle); }
     } cleanup{guard, m_observation_handle};
     const auto unavailable = [&]() -> std::optional<ObservationReport> {
-        boost::system::error_code ignored; m_socket.close(ignored); return std::nullopt;
+        boost::system::error_code ignored; m_socket.close(ignored); ForgetObservation(); return std::nullopt;
     };
     const auto deadline = started + OBSERVATION_TRANSACTION_TIMEOUT;
     if (!Write(Frame{MessageType::GET_OBSERVATION, EncodeObservationRequest(*request)}, deadline)) return unavailable();
@@ -803,7 +818,9 @@ std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntim
     if (!response || response->type != MessageType::OBSERVATION) return unavailable();
     try {
         auto report = guard->Accept(context, response->payload);
-        return report ? report : unavailable();
+        if (!report) return unavailable();
+        if (!groups->Record(context, remote.address(), *report)) return std::nullopt;
+        return report;
     } catch (const std::invalid_argument&) { return unavailable(); }
 }
 

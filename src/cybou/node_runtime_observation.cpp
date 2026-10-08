@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/node_runtime.h>
+#include <cybou/network_observation.h>
 #include <cybou/observation_cache.h>
 #include <cybou/process_memory.h>
 #include <cybou/p2p/observation_exchange.h>
@@ -11,9 +12,21 @@ std::array<unsigned char, 191> CybouNodeRuntime::ReadObservationReport(const std
 {
     return m_observation_collector->Read(challenge);
 }
+std::shared_ptr<const NetworkObservationSnapshot> CybouNodeRuntime::GetNetworkObservation() const
+{
+    auto snapshot = std::make_shared<NetworkObservationSnapshot>();
+    std::copy(m_network_binding.begin(), m_network_binding.end(), snapshot->network_binding.begin());
+    snapshot->observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto local = DecodeObservationReport(ReadObservationReport({}));
+    snapshot->local = {true, 0, local.cache_age_ms, local.cursor, local.storage, local.traffic, local.cpu, local.memory};
+    snapshot->remote = m_observation_groups->Snapshot();
+    return snapshot;
+}
 ObservationReport CybouNodeRuntime::CollectObservationReport() const
 {
     m_observation_exchange->Expire();
+    m_observation_groups->Expire();
     ObservationReport r;
     {
         // Contended chain work reduces coverage instead of delaying the sampler.

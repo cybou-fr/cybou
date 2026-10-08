@@ -5,6 +5,7 @@
 #include <cybou/hex.h>
 #include <cybou/keystore.h>
 #include <cybou/p2p/peer_manager.h>
+#include <cybou/network_observation.h>
 #include <cybou/p2p/peer_admission.h>
 #include <cybou/p2p/inbound_server.h>
 #include <test/cybou_service_test_fixture.h>
@@ -104,6 +105,7 @@ BOOST_AUTO_TEST_CASE(observation_timeout_releases_the_owner_and_closes_the_strea
     const auto elapsed = std::chrono::steady_clock::now() - started;
     release.set_value(); server.join();
     BOOST_CHECK(received && !result && !client.Socket().is_open());
+    BOOST_CHECK_EQUAL(fixture.runtime->GetNetworkObservation()->remote.fresh_local_groups, 0U);
     BOOST_CHECK(elapsed >= OBSERVATION_TRANSACTION_TIMEOUT);
     BOOST_CHECK(elapsed < std::chrono::seconds{4}); // Detect the former five-second owner stall.
 }
@@ -127,35 +129,52 @@ BOOST_AUTO_TEST_CASE(observation_frames_have_exact_sizes)
 
 BOOST_AUTO_TEST_CASE(observation_transaction_uses_cache_and_preserves_ping_after_skip)
 {
-    CybouServiceTestFixture fixture;
-    const auto identity = CreateTestTlsIdentity(fixture.directory); BOOST_REQUIRE(identity);
-    cybou::CybouNodeRuntime collector{cybou::NodeRuntimeConfig{
-        .network_genesis = fixture.definition, .data_dir = fixture.directory / "observation-client",
-        .memory_only = true, .peer_admission_policy = TestPeerAdmissionPolicy()}};
-    BOOST_REQUIRE(collector.InitializeGenesis(fixture.genesis));
-    using namespace cybou::p2p; using boost::asio::ip::tcp;
-    boost::asio::io_context io; tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
-    bool served{false};
-    std::jthread server{[&] {
-        tcp::socket socket{io}; acceptor.accept(socket);
-        TlsSessionConfig tls; tls.certificate_chain_file = identity->certificate; tls.private_key_file = identity->private_key;
-        PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls), fixture.runtime->GetTrafficMeter()};
-        served = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
-            .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 1}) &&
-            session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
-    }};
-    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
-    TlsSessionConfig tls; tls.expected_server_spki_sha256 = identity->pin;
-    PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls), collector.GetTrafficMeter()};
-    BOOST_CHECK(!client.RequestObservation(collector)); // pre-HELLO must not write
-    BOOST_REQUIRE(client.Handshake({.network_binding = collector.GetNetworkBinding(), .finalized_tip = *collector.GetFinalizedTip(), .nonce = 2}));
-    const auto report = client.RequestObservation(collector); BOOST_REQUIRE(report);
-    BOOST_CHECK(cybou::Hash256{report->network_binding} == collector.GetNetworkBinding());
-    const auto before = collector.GetTrafficMeter()->Snapshot().sent_bytes;
-    BOOST_CHECK(!client.RequestObservation(collector)); // IP cooldown: no second frame
-    BOOST_CHECK_EQUAL(collector.GetTrafficMeter()->Snapshot().sent_bytes, before);
-    BOOST_CHECK(client.Socket().is_open()); BOOST_CHECK(client.Ping(123));
-    server.join(); BOOST_CHECK(served);
+    for (const bool read_eof : {false, true}) {
+        CybouServiceTestFixture fixture;
+        const auto identity = CreateTestTlsIdentity(fixture.directory); BOOST_REQUIRE(identity);
+        cybou::CybouNodeRuntime collector{cybou::NodeRuntimeConfig{
+            .network_genesis = fixture.definition, .data_dir = fixture.directory / "observation-client",
+            .memory_only = true, .peer_admission_policy = TestPeerAdmissionPolicy()}};
+        BOOST_REQUIRE(collector.InitializeGenesis(fixture.genesis));
+        using namespace cybou::p2p; using boost::asio::ip::tcp;
+        boost::asio::io_context io; tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
+        bool served{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io}; acceptor.accept(socket);
+            TlsSessionConfig tls; tls.certificate_chain_file = identity->certificate; tls.private_key_file = identity->private_key;
+            PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls), fixture.runtime->GetTrafficMeter()};
+            served = session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+                .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 1}) &&
+                session.ServeNext(*fixture.runtime) && session.ServeNext(*fixture.runtime);
+        }};
+        tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+        TlsSessionConfig tls; tls.expected_server_spki_sha256 = identity->pin;
+        std::shared_ptr<const cybou::NetworkObservationSnapshot> retained;
+        {
+            PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls), collector.GetTrafficMeter()};
+            BOOST_CHECK(!client.RequestObservation(collector)); // pre-HELLO must not write
+            BOOST_REQUIRE(client.Handshake({.network_binding = collector.GetNetworkBinding(), .finalized_tip = *collector.GetFinalizedTip(), .nonce = 2}));
+            const auto report = client.RequestObservation(collector); BOOST_REQUIRE(report);
+            BOOST_CHECK(cybou::Hash256{report->network_binding} == collector.GetNetworkBinding());
+            retained = collector.GetNetworkObservation();
+            BOOST_CHECK_EQUAL(retained->remote.fresh_local_groups, 1U);
+            BOOST_CHECK_EQUAL(retained->remote.fresh_remote_groups, 0U); // loopback never remote capacity
+            BOOST_CHECK(!retained->remote.storage.capacity_bytes);
+            const auto before = collector.GetTrafficMeter()->Snapshot().sent_bytes;
+            BOOST_CHECK(!client.RequestObservation(collector)); // IP cooldown: no second frame
+            BOOST_CHECK_EQUAL(collector.GetTrafficMeter()->Snapshot().sent_bytes, before);
+            BOOST_CHECK(client.Socket().is_open()); BOOST_CHECK(client.Ping(123));
+            server.join(); BOOST_CHECK(served);
+            if (read_eof) {
+                BOOST_CHECK(!client.ReceiveFrame(std::chrono::steady_clock::now() + std::chrono::seconds{2}));
+                BOOST_CHECK(!client.Socket().is_open());
+                BOOST_CHECK_EQUAL(collector.GetNetworkObservation()->remote.fresh_local_groups, 0U);
+                BOOST_CHECK_EQUAL(retained->remote.fresh_local_groups, 1U);
+            }
+        }
+        BOOST_CHECK_EQUAL(collector.GetNetworkObservation()->remote.fresh_local_groups, 0U);
+        BOOST_CHECK_EQUAL(retained->remote.fresh_local_groups, 1U);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(observation_response_budget_refusal_preserves_other_transactions)

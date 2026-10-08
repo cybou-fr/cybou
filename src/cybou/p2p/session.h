@@ -33,6 +33,8 @@
 
 namespace cybou { class CybouNodeRuntime; class TrafficMeter; }
 namespace cybou::p2p {
+class ObservationExchange;
+class ObservationGroups;
 
 /// \brief Максимальная полезная нагрузка одного transport frame: `64 * 1024` байт = `64 KiB`.
 /// \details Предел ограничивает одно выделение памяти на сообщение и совпадает для отправки и приема.
@@ -330,6 +332,10 @@ private:
     ReadStatus m_last_read_status{ReadStatus::UNAVAILABLE};
     boost::asio::ip::tcp::socket m_socket;
     const uint64_t m_observation_handle;
+    // Weak references never extend a runtime lifetime or dereference it on teardown.
+    std::weak_ptr<ObservationExchange> m_observation_guard;
+    std::weak_ptr<ObservationGroups> m_observation_groups;
+    void ForgetObservation();
     TransportRole m_transport_role;
     TlsSessionConfig m_tls_config;
     SSL_CTX* m_owned_ssl_context{nullptr};
