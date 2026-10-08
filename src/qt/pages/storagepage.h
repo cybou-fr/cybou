@@ -125,6 +125,9 @@ private:
 
     QString itemIdAt(QWidget* viewport, const QPoint& pos) const;
     bool handleItemDrag(QWidget* viewport, QEvent* event);
+    bool canUseFolder(const QString& parent) const;
+    bool canChangeFiles(const QStringList& ids) const;
+    bool canMoveFilesTo(const QStringList& ids, const QString& parent, bool trash = false) const;
     bool m_sort_descending{false};
     QFrame* m_details{nullptr};
     /** Scrollable body of the details panel: a tall Advanced section never squeezes rows. */

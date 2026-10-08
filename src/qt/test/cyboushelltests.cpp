@@ -75,6 +75,8 @@
 #include <QToolButton>
 #include <QDialog>
 #include <QDragEnterEvent>
+#include <QTemporaryFile>
+#include <QUrl>
 #include <QDropEvent>
 #include <QDialogButtonBox>
 #include <QTreeWidget>
@@ -1510,6 +1512,114 @@ void CybouShellTests::filesDropIntoFolders()
     QCOMPARE(CybouUi::dragIds(&data, CybouUi::fileIdsMime()), (QStringList{QStringLiteral("a"), QStringLiteral("b")}));
 }
 
+void CybouShellTests::filesDropTargetsRespectIdentityAndCatalog()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    auto file = ProtectedFile(QStringLiteral("file"), QStringLiteral("Report.pdf"));
+    auto folder = ProtectedFile(QStringLiteral("folder"), QStringLiteral("Folder"));
+    folder.folder = true;
+    auto child = folder;
+    child.id = QStringLiteral("child");
+    child.name = QStringLiteral("Child");
+    child.parent_id = folder.id;
+    model.setFileItems({file, folder, child});
+    StoragePage page{&model};
+    page.resize(1200, 800);
+    page.show();
+    QCoreApplication::processEvents();
+    qInfo("Qt drop-event routing: device pixel ratio %.2f; synthetic events, not physical mouse acceptance", page.devicePixelRatioF());
+    auto* table = page.findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+    auto* grid = page.findChild<QListWidget*>(QStringLiteral("filesGrid"));
+    auto* nav = page.findChild<QListWidget*>(QStringLiteral("folderList"));
+    QVERIFY(table && grid && nav);
+    QTemporaryFile downloaded;
+    QVERIFY(downloaded.open());
+    QMimeData data;
+    data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("file\nfile"));
+    data.setUrls({QUrl::fromLocalFile(downloaded.fileName())});
+    // These are delivered Qt events, not physical OS mouse-drag acceptance.
+    const auto enter = [](QWidget* target, const QPoint& pos, QMimeData& mime) {
+        QDragEnterEvent event{pos, Qt::CopyAction | Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(target, &event);
+        return event.isAccepted();
+    };
+    const auto drop = [](QWidget* target, const QPoint& pos, QMimeData& mime) {
+        QDropEvent event{QPointF{pos}, Qt::CopyAction | Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier};
+        QApplication::sendEvent(target, &event);
+        return event.isAccepted();
+    };
+    const auto position = [&](bool tiles, const QString& id) -> QPoint {
+        if (tiles) {
+            for (int i = 0; i < grid->count(); ++i)
+                if (grid->item(i)->data(Qt::UserRole + 1).toString() == id) return grid->visualItemRect(grid->item(i)).center();
+        } else {
+            for (int i = 0; i < table->topLevelItemCount(); ++i)
+                if (table->topLevelItem(i)->data(0, Qt::UserRole + 1).toString() == id)
+                    return table->visualItemRect(table->topLevelItem(i)).center();
+        }
+        return {-1, -1};
+    };
+    for (const bool tiles : {false, true}) {
+        page.setGridMode(tiles);
+        page.openFolder({});
+        QCoreApplication::processEvents();
+        QWidget* viewport = tiles ? grid->viewport() : table->viewport();
+        const QPoint folder_pos = position(tiles, folder.id);
+        QVERIFY(folder_pos.x() >= 0);
+        backend.commands.clear();
+        const auto move_count = backend.file_moves.size();
+        QVERIFY(enter(viewport, folder_pos, data));
+        QVERIFY(drop(viewport, folder_pos, data));
+        QCOMPARE(backend.file_moves.size(), move_count + 1); // duplicate IDs are one command
+        QCOMPARE(backend.file_moves.last(), qMakePair(file.id, folder.id));
+        QVERIFY(backend.commands.filter(QStringLiteral("upload:")).isEmpty());
+        QMimeData external;
+        external.setUrls({QUrl::fromLocalFile(downloaded.fileName())});
+        QVERIFY(enter(viewport, folder_pos, external));
+        QVERIFY(drop(viewport, folder_pos, external));
+        QTRY_COMPARE(backend.commands.filter(QStringLiteral("upload:")).size(), 1);
+        page.openFolder(folder.id);
+        QCoreApplication::processEvents();
+        const QPoint child_pos = position(tiles, child.id);
+        QVERIFY(child_pos.x() >= 0);
+        data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("folder"));
+        backend.commands.clear();
+        QVERIFY(!enter(viewport, child_pos, data)); // cycle, despite a valid downloaded URL
+        QVERIFY(!drop(viewport, child_pos, data));
+        QVERIFY(backend.commands.isEmpty());
+        data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("missing"));
+        QVERIFY(!enter(viewport, child_pos, data));
+        data.setData(CybouUi::fileIdsMime(), QByteArray{});
+        QVERIFY(!enter(viewport, child_pos, data));
+        data.setData(CybouUi::fileIdsMime(), QByteArrayLiteral("file"));
+        QVERIFY(enter(&page, QPoint{5, 5}, data));
+        QVERIFY(drop(&page, QPoint{5, 5}, data)); // blank page uses current folder
+        QCOMPARE(backend.file_moves.last(), qMakePair(file.id, folder.id));
+    }
+    const QPoint trash_pos = nav->visualItemRect(nav->item(static_cast<int>(StoragePage::View::Trash))).center();
+    QVERIFY(enter(nav->viewport(), trash_pos, data));
+    QVERIFY(drop(nav->viewport(), trash_pos, data));
+    QCOMPARE(backend.commands.last(), QStringLiteral("trash:file"));
+    QVERIFY(!page.moveFilesTo({file.id}, QStringLiteral("missing")));
+    QVERIFY(!page.moveFilesTo({file.id}, file.id));
+    QMimeData remote;
+    remote.setUrls({QUrl{QStringLiteral("https://example.invalid/report.pdf")}});
+    QVERIFY(!enter(&page, QPoint{5, 5}, remote));
+    // An accepted drag must be revalidated when Identity locks before the drop.
+    QVERIFY(enter(nav->viewport(), trash_pos, data));
+    backend.commands.clear();
+    model.requestLockVault();
+    const auto after_lock = backend.commands;
+    QVERIFY(!drop(nav->viewport(), trash_pos, data));
+    QVERIFY(!enter(&page, QPoint{5, 5}, data));
+    QVERIFY(!page.moveFilesTo({file.id}, {}));
+    QCOMPARE(backend.commands, after_lock);
+}
+
 void CybouShellTests::themeResolvesAllTokens()
 {
     // Regression guard for the numbered-%N .arg() shift: every @token@ in the
@@ -1977,7 +2087,9 @@ void CybouShellTests::fileChangesAcknowledgeAndOrderUndo()
     model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
     auto first = ProtectedFile(QStringLiteral("first"), QStringLiteral("First.pdf"));
     auto second = ProtectedFile(QStringLiteral("second"), QStringLiteral("Second.pdf"));
-    model.setFileItems({first,second});
+    auto folder = ProtectedFile(QStringLiteral("folder"), QStringLiteral("Folder"));
+    folder.folder = true;
+    model.setFileItems({first, second, folder});
     StoragePage page{&model};
     std::function<void()> undo;
     QString notice;

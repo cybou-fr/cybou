@@ -115,6 +115,12 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 Files drop-routing regression and existing Mail/drop/Undo/layout
+scenarios pass on the native Windows Qt platform at device pixel ratios 1.00,
+1.25, 1.50 and 2.00. Events are delivered programmatically. This does not mark
+physical mouse dragging or movement between monitors passed; see the scoped
+evidence in `26_IMPLEMENTATION_STATUS.md`.
+
 ```text
 [ ] keyboard can reach all primary actions
 [ ] visible focus

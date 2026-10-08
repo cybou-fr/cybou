@@ -60,6 +60,7 @@ private Q_SLOTS:
     void appearanceAndLanguageSwitchPreserveMailCompose();
     void mailContextMenuAndMoves();
     void filesDropIntoFolders();
+    void filesDropTargetsRespectIdentityAndCatalog();
     void themeResolvesAllTokens();
     void navIconsRender();
     void closingWithoutNodeRequestsQuit();

@@ -3,6 +3,26 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Files drop routing and Qt scale validation package (2026-10-08)
+
+Files list/grid, breadcrumbs and navigation now share target validation with
+the move command. They refuse missing items, unusable destinations, folder cycles
+and closed Identity sessions, and revalidate at drop. Duplicate IDs issue one
+command per item. Internal Files MIME takes precedence over downloaded-copy URLs,
+so a refused move cannot become a duplicate import. Blank My files drops move
+into the current folder; ordinary external local-file import remains available.
+Non-local URLs alone do not count as an import.
+
+Validation: isolated app/test build and the full Qt suite passed 82 tests.
+Five targeted scenarios ran with the Windows Qt platform at measured device
+pixel ratios 1.00, 1.25, 1.50 and 2.00, seven results including setup/cleanup per
+profile. They cover Files list/grid targets, local import, mixed MIME refusal,
+duplicate/stale IDs, lock between enter/drop, acknowledged Undo, Mail folder
+event routing and layout bounds. These are delivered Qt events and configured
+Qt scale factors, not physical OS drag-and-drop or mixed-monitor DPI acceptance.
+Evidence and binary provenance are in `artifacts/ux-files-drops-20261008/`.
+No running desktop/signer, network constants or deployment was changed.
+
 ## Acknowledged Files changes and Undo package (2026-10-08)
 
 Folder creation, rename, move, copy, Trash and Restore report whether the

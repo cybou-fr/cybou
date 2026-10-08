@@ -30,6 +30,14 @@ Trash this way retains the original folder. Lock/session replacement invalidates
 late replies and retained Undo actions. Network finalization and confirmed remote
 durability remain separate from this local acknowledgment.
 
+List, grid, breadcrumbs and navigation drops validate the current Identity,
+known item IDs and a usable destination before accepting and again on drop.
+Folders cannot enter themselves or descendants; missing/trashed destinations
+are refused. Duplicate dragged IDs issue one mutation per item. Internal Files
+IDs take precedence over any downloaded-copy URL: a rejected internal move never
+silently becomes a new upload. Blank My files space targets the current folder.
+External local files still import; non-local URLs alone are not an import.
+
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file
 management patterns; CYBOU does not copy Google branding, provider account

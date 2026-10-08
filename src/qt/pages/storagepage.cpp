@@ -63,6 +63,13 @@
 using namespace CybouUi;
 
 namespace {
+QStringList LocalDropPaths(const QMimeData* data)
+{
+    QStringList paths;
+    if (!data || data->hasFormat(CybouUi::fileIdsMime())) return paths;
+    for (const auto& url : data->urls()) if (url.isLocalFile()) paths.append(url.toLocalFile());
+    return paths;
+}
 
 constexpr int kIdRole = Qt::UserRole + 1;
 constexpr int kOrderRole = Qt::UserRole + 2;
@@ -544,17 +551,43 @@ void StoragePage::setView(View view)
     rebuild();
 }
 
-bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id, bool trash)
+bool StoragePage::canUseFolder(const QString& parent) const
 {
+    if (m_model->status().identity_state != CybouIdentityState::Active || !m_model->featureAvailability().files) return false;
+    if (parent.isEmpty()) return true;
+    const auto* folder = m_model->fileItem(parent);
+    return folder && folder->folder && !folder->trashed;
+}
+
+bool StoragePage::canChangeFiles(const QStringList& ids) const
+{
+    return canUseFolder({}) && !ids.isEmpty() && std::all_of(ids.begin(), ids.end(),
+        [this](const QString& id) { return m_model->fileItem(id) != nullptr; });
+}
+
+bool StoragePage::canMoveFilesTo(const QStringList& ids, const QString& folder_id, bool trash) const
+{
+    if (!canChangeFiles(ids) || (!trash && !canUseFolder(folder_id))) return false;
     // A folder cannot move into itself or one of its descendants.
+    QSet<QString> visited;
     for (QString cursor = folder_id; !cursor.isEmpty();) {
-        if (ids.contains(cursor)) return false;
+        if (ids.contains(cursor) || visited.contains(cursor)) return false;
+        visited.insert(cursor);
         const auto* folder = m_model->fileItem(cursor);
-        if (!folder) break;
+        if (!folder || !folder->folder || folder->trashed) return false;
         cursor = folder->parent_id;
     }
+    return true;
+}
+
+bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id, bool trash)
+{
+    if (!canMoveFilesTo(ids, folder_id, trash)) return false;
     QVector<QPair<QString, QString>> before;
+    QSet<QString> seen;
     for (const auto& id : ids) {
+        if (seen.contains(id)) continue;
+        seen.insert(id);
         const auto* item = m_model->fileItem(id);
         if (!item) continue;
         before.append({id, item->parent_id});
@@ -621,40 +654,24 @@ bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
         return true;
     }
     case QEvent::DragEnter:
-    case QEvent::DragMove: {
-        auto* drag = static_cast<QDragMoveEvent*>(event);
-        const QString target = itemIdAt(viewport, drag->position().toPoint());
-        const auto* folder = m_model->fileItem(target);
-        const QStringList ids = dragIds(drag->mimeData(), fileIdsMime());
-        const bool internal_ok = folder && folder->folder && !ids.isEmpty() && !ids.contains(target);
-        const bool upload_ok = folder && folder->folder && drag->mimeData()->hasUrls() && m_new->isEnabled();
-        // Internal items need a folder target; external files may also go
-        // into the current folder.
-        const bool external_ok = drag->mimeData()->hasUrls() && m_new->isEnabled();
-        if (internal_ok || upload_ok || external_ok) {
-            drag->acceptProposedAction();
-        } else {
-            drag->ignore();
-        }
-        return true;
-    }
+    case QEvent::DragMove:
     case QEvent::Drop: {
         auto* drop = static_cast<QDropEvent*>(event);
-        const QString target = itemIdAt(viewport, drop->position().toPoint());
-        const auto* folder = m_model->fileItem(target);
+        const auto* item = m_model->fileItem(itemIdAt(viewport, drop->position().toPoint()));
+        const QString parent = item && item->folder ? item->id : (m_view == View::MyFiles ? m_folder : QString{});
+        const bool destination = (item && item->folder) || m_view == View::MyFiles;
+        // Internal identity is authoritative even when a downloaded URL is also
+        // present. Never turn a refused internal move into a duplicate upload.
+        const bool internal = drop->mimeData()->hasFormat(fileIdsMime());
         const QStringList ids = dragIds(drop->mimeData(), fileIdsMime());
-        if (!ids.isEmpty()) {
-            if (folder && folder->folder && !ids.contains(target)) moveFilesTo(ids, target);
-        } else if (drop->mimeData()->hasUrls()) {
-            QStringList paths;
-            for (const auto& url : drop->mimeData()->urls()) {
-                if (url.isLocalFile()) paths << url.toLocalFile();
-            }
-            // Files dropped on a folder go into it; elsewhere into the current folder.
-            const QString parent = folder && folder->folder ? target : (m_view == View::MyFiles ? m_folder : QString{});
-            uploadPaths(paths, parent);
+        const QStringList paths = LocalDropPaths(drop->mimeData());
+        bool accepted = internal ? destination && canMoveFilesTo(ids, parent)
+            : !paths.isEmpty() && canUseFolder(parent);
+        if (accepted && event->type() == QEvent::Drop) {
+            if (internal) accepted = moveFilesTo(ids, parent);
+            else uploadPaths(paths, parent);
         }
-        drop->acceptProposedAction();
+        if (accepted) drop->acceptProposedAction(); else drop->ignore();
         return true;
     }
     default:
@@ -683,9 +700,10 @@ bool StoragePage::eventFilter(QObject* watched, QEvent* event)
             const auto* item = m_nav->itemAt(drag->position().toPoint());
             row = item ? m_nav->row(item) : -1;
         }
-        const bool target_ok = !ids.isEmpty() &&
-            (crumb || row == static_cast<int>(View::MyFiles) || row == static_cast<int>(View::Starred) ||
-                row == static_cast<int>(View::Trash));
+        const bool target_ok = crumb
+            ? canMoveFilesTo(ids, watched->property("folderId").toString())
+            : row == static_cast<int>(View::MyFiles) ? canMoveFilesTo(ids, {})
+            : (row == static_cast<int>(View::Starred) || row == static_cast<int>(View::Trash)) && canChangeFiles(ids);
         if (!target_ok) {
             drag->ignore();
             return true;
@@ -694,16 +712,17 @@ bool StoragePage::eventFilter(QObject* watched, QEvent* event)
             drag->acceptProposedAction();
             return true;
         }
+        bool accepted = true;
         if (crumb) {
-            moveFilesTo(ids, watched->property("folderId").toString());
+            accepted = moveFilesTo(ids, watched->property("folderId").toString());
         } else if (row == static_cast<int>(View::MyFiles)) {
-            moveFilesTo(ids, {});
+            accepted = moveFilesTo(ids, {});
         } else if (row == static_cast<int>(View::Starred)) {
             for (const auto& id : ids) m_model->requestFileStarred(id, true);
         } else {
-            moveFilesTo(ids, {}, true);
+            accepted = moveFilesTo(ids, {}, true);
         }
-        drag->acceptProposedAction();
+        if (accepted) drag->acceptProposedAction(); else drag->ignore();
         return true;
     }
     return QWidget::eventFilter(watched, event);
@@ -1675,15 +1694,22 @@ void StoragePage::rebuildDetails()
 
 void StoragePage::dragEnterEvent(QDragEnterEvent* event)
 {
-    if (event->mimeData()->hasUrls() && m_new->isEnabled()) event->acceptProposedAction();
+    const bool internal = event->mimeData()->hasFormat(fileIdsMime());
+    const bool accepted = internal
+        ? m_view == View::MyFiles && canMoveFilesTo(dragIds(event->mimeData(), fileIdsMime()), m_folder)
+        : !LocalDropPaths(event->mimeData()).isEmpty() && canUseFolder(m_view == View::MyFiles ? m_folder : QString{});
+    if (accepted) event->acceptProposedAction(); else event->ignore();
 }
 
 void StoragePage::dropEvent(QDropEvent* event)
 {
-    QStringList paths;
-    for (const auto& url : event->mimeData()->urls()) {
-        if (url.isLocalFile()) paths << url.toLocalFile();
+    bool accepted = false;
+    if (event->mimeData()->hasFormat(fileIdsMime())) {
+        accepted = m_view == View::MyFiles && moveFilesTo(dragIds(event->mimeData(), fileIdsMime()), m_folder);
+    } else {
+        const QStringList paths = LocalDropPaths(event->mimeData());
+        accepted = !paths.isEmpty() && canUseFolder(m_view == View::MyFiles ? m_folder : QString{});
+        if (accepted) uploadFiles(paths);
     }
-    uploadFiles(paths);
-    event->acceptProposedAction();
+    if (accepted) event->acceptProposedAction(); else event->ignore();
 }
