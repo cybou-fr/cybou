@@ -1,5 +1,11 @@
 # Remaining desktop UI/UX work — 2026-10-06
 
+Superseded on 2026-10-08 by
+[DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md). Findings and
+R0–R9 priorities below describe the dated baseline, not the current backlog.
+Keep their evidence limits and unresolved acceptance scope; do not reimplement
+features since delivered simply because they appear as gaps here.
+
 Status: Level 4 delivery backlog, reviewed against source HEAD
 `9b04d768d4f594485f0fe3157366199c2b5f9ea2`. This is a remaining-work plan,
 not a release acceptance statement. It complements DESKTOP_UX_DELIVERY_PLAN.md;

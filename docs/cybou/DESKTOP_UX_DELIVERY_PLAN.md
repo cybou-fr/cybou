@@ -1,16 +1,16 @@
 # Desktop UI/UX delivery plan
 
-Remaining-work review (2026-10-06): the current prioritized backlog, fresh fixture
-audit scope and acceptance gaps are in
-[DESKTOP_UX_REMAINING_WORK_2026-10-06.md](DESKTOP_UX_REMAINING_WORK_2026-10-06.md).
-The dated delivery records below remain historical evidence, not a current-HEAD
-full acceptance statement.
+Current delivery order (2026-10-08):
+[Desktop Beta Acceptance & Performance Evidence](DESKTOP_BETA_ACCEPTANCE_PLAN.md)
+is the active Level 4 plan, reviewed at `1f5417fb`. It supersedes the initial
+W0–W8 and 2026-10-06 R0–R9 implementation order below. Console, Monitor,
+Authority and daily Mail/Files surfaces are implemented; CI integrity and
+live/physical acceptance now lead. Capacity measurement is P1.
 
-Status: Level 4 implementation plan, source review 2026-10-05 at HEAD `cc6c18e`;
-first implementation slice based on HEAD `77a29d2` is recorded below. This plan is
-not a claim that its acceptance gates have passed. Product requirements live
-in docs 72/73/78/81–85 and NETWORK_AND_ADVANCED_UX; architecture remains governed
-by AGENTS and higher-level documents.
+This document retains the initial 2026-10-05 source review and dated delivery
+records as historical evidence. They are not current unresolved-code findings
+or a current-HEAD release acceptance statement. Product/architecture authority
+remains in AGENTS and higher-level contracts.
 
 ## Outcome and release scope
 
@@ -31,7 +31,7 @@ and governance, not a visual redesign.
 This table records the inspected baseline; the delivery record below identifies
 which gaps have since been addressed in the working tree.
 
-| Area | Source evidence in current tree | Delivery decision |
+| Area | Source evidence at the initial review | Delivery decision at that baseline |
 |---|---|---|
 | Live Mail/Files | CybouCoreApplicationAdapter owns encrypted Application DB and three live core services; R6 history indexing and R7 projection/scheduler split are implemented | Reuse these boundaries; do not plan a second data plane or worker architecture |
 | Archive/trash | ApplicationService::MoveMail commits local mailbox state; adapter moveMail is void and reports generic commandFailed; EmailPage::moveMessagesTo shows success immediately | Correlated local durable acknowledgement before success; measure queue latency, no PoA wait |

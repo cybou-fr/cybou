@@ -3,6 +3,25 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Acceptance planning review (2026-10-08)
+
+Active remaining work is [DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md),
+reviewed against `1f5417fb6d6c4d418b474b856a23bdb21486c2d6`. Public GitHub Actions
+API confirms [core run 37774708866](https://github.com/cybou-fr/cybou/actions/runs/37774708866)
+failed at binary build; protocol/CLI steps were skipped. Compiler cause remains
+unverified. [Desktop run 37774708869](https://github.com/cybou-fr/cybou/actions/runs/37774708869)
+was in progress at review. Earlier local core passes and the current 92 Qt/6
+native Windows results retain their exact package scope; they do not establish
+green remote core CI. No CI fix or new live acceptance is claimed here.
+
+The implementation-first backlog is superseded by revision integrity, prepared
+independent topology, live recovery/outage/operator acceptance and physical/
+assistive-technology checks. Sustained capacity is P1. Files profiling does not
+close completed-frame/scroll/live acceptance; Mail's component optimization
+avoids an unsupported further architecture rewrite. Historical same-host
+benchmark remains a scoped op/min reference, never capacity. No network,
+provisioning, signer or deployment change is authorized by this planning update.
+
 ## Recovery/Console keyboard package (2026-10-08)
 
 Recovery phrase replacement explicitly defaults to No at its first confirmation.

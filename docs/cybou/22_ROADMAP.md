@@ -24,7 +24,7 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 ## Phase 4 — Product integration and end-to-end acceptance
 
-13. **Application data plane integration** (connected; product acceptance open): Mail/Files publication, finalized history indexing, retrieval and storage projections reach the live desktop. Close remaining command acknowledgement, draft safety, interaction and evidence gaps rather than reconnecting the data plane.
+13. **Application data plane integration** (connected; product acceptance open): Mail/Files publication, finalized history indexing, retrieval and storage projections reach the live desktop. Command acknowledgments, draft safety and shared interaction/evidence surfaces are implemented; verify live outage/restart and clean-client recovery rather than reconnecting the data plane.
 14. **Storage durability hardening**: verify Beta target of 2 independent remote full replicas plus local copy (3 physical copies total) with audit and repair.
 15. **Pre-MAINNET de-versioning clean-break**: eliminate all historical version markers across wire frames, state encoding, blocks, operations, schemas, and crypto domain separation strings (DEC-264).
 16. **MAINNET provisioning and launch**: create its own keys, genesis and bootstrap only after full DEVNET soak and formal acceptance.
@@ -52,26 +52,27 @@ provisioning tooling, enables automatic storage allocation, preserves PoA worker
 liveness and hardens storage transfers. Subsequent work develops CYBOU product
 features and durability rather than reopening architecture cleanup.
 
-## Desktop product delivery (2026-10-05)
+## Desktop Beta acceptance and performance evidence (2026-10-08)
 
-[`DESKTOP_UX_DELIVERY_PLAN.md`](DESKTOP_UX_DELIVERY_PLAN.md) is the active Level 4
-work plan. Product targets are docs 72/73/78/81–85 and
-[`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md). Order:
+[DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md) is the active
+Level 4 desktop plan reviewed at `1f5417fb`; historical implementation delivery
+remains in `DESKTOP_UX_DELIVERY_PLAN.md`. Existing Console, Monitor, Authority,
+Mail/Files and shared task architecture is retained. Current order:
 
-1. Measure/reproduce current defects; add durable local command results and
-   loss-safe draft/send handling.
-2. Stabilize item identity, activity/details updates and protection evidence.
-3. Repair existing drag/drop and complete Files/Mail reference workflows.
-4. Refine familiar shell, Wallet review, onboarding, accessibility and themes.
-5. Add scoped Network overview/schematic France map, then extend existing
-   Authority tools with verified explorer and evidence readiness.
-6. Add optional own-content inspector/read-only console, with privacy bounds.
-7. Close measured independent-replica/recovery/deletion acceptance; optional
-   DEVNET benchmark tooling remains behind test-build boundaries.
+1. P0: resolve/reproduce current core CI build failure and establish matching
+   green core/desktop/Qt/Python evidence for the repaired revision.
+2. P0: prepare clean clients and independently documented remote failure domains
+   before distributed durability acceptance; preserve one signer/history.
+3. P0: live Identity restore/rotation, Wallet uncertainty/restart and operator
+   acceptance; live Mail/Files offline/retrieval/repair/shared-retention scenarios.
+4. P0: physical keyboard/mouse/drag/native dialogs, mixed DPI and real assistive
+   technology acceptance in FR/EN and both themes.
+5. P1: multi-host stepped/mixed capacity benchmark, then dataset-backed Advanced
+   visualization and targeted final polish. Retain op/min and simulation scope.
 
-Wider node census/top-uptime feed, pending-file compose and stronger remote
-purge claims are explicit design gates. They do not change randomized paid
-placement, canonical finality, network roles, keys or immutable genesis.
+Implementation and component passes do not close live Beta gates. Wider census,
+pending-file Compose and stronger purge claims remain explicit design gates;
+none changes placement, canonical finality, network roles or immutable genesis.
 
 ## Storage economy (DEC-274–DEC-283)
 

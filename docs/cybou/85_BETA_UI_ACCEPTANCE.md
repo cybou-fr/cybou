@@ -6,6 +6,13 @@ This document converts the product contracts in docs 81–84 into end-to-end
 acceptance scenarios. It does not replace protocol/security tests; a Beta build
 must satisfy both.
 
+Execution order and evidence-record fields are now in
+[DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md), reviewed
+2026-10-08 at `1f5417fb`. CI integrity comes first; independent topology precedes
+distributed tests. Record each scenario's source/binaries, environment, scope,
+procedure, outcome and limitations. No checklist below is newly marked passed
+by a planning review or by adding synthetic keyboard tests.
+
 Presentation evidence from 2026-10-08 is recorded in
 `26_IMPLEMENTATION_STATUS.md`: 14 native Windows fixture profiles cover FR/EN,
 light/dark, three window sizes and Qt scaling at 125%, with 79 passing Qt tests.

@@ -106,20 +106,22 @@ change frozen protocol decisions. Gates before implementing stronger claims:
 - justify any canonical storage obligation register by concrete accounting
   transitions; commitments alone do not prove physical 1:3 contribution.
 
-## Desktop product extension gates (2026-10-05)
+## Desktop product extension gates (reviewed 2026-10-08)
 
-See `DESKTOP_UX_DELIVERY_PLAN.md` and `NETWORK_AND_ADVANCED_UX.md`.
+See `DESKTOP_BETA_ACCEPTANCE_PLAN.md` and `NETWORK_AND_ADVANCED_UX.md`.
+Implemented surfaces below retain evidence/design boundaries; their presence
+here is not an instruction to rebuild them.
 
 - pending Files-to-Mail references: source retention, durable ownership,
   restart and no duplicate staging before removing Protected-only gating;
 - wider network observability: trustworthy source, minimization/retention,
   pseudonyms, session churn and sampled availability window; local peers are
   not a global census and illustrative France positions are not geolocation;
-- per-object protection blockers/freshness: safe service-owned evidence
+- implemented per-object protection blockers/freshness: preserve safe service-owned evidence
   without exposing provider topology or interpreting missing data as failure;
 - per-object remote purge outcomes: actual available acknowledgements, privacy,
   shared references, retries and recovery interaction before stronger labels;
-- own-content inspector/console: semantic authorization, bounded traversal,
+- implemented own-content inspector/console: preserve semantic authorization, bounded traversal,
   lock-safe output/history and redacted exports; no foreign ChunkStore browsing;
 - active diagnostic/benchmark panel: bounded resources/cost and DEVNET test-build
   scope before connecting BUILD_TESTS tooling to any desktop surface.
