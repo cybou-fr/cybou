@@ -22,6 +22,16 @@ introduced by these product features.
 
 ## Network overview
 
+DEC-289's first remote feed target is specified in
+[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md), not implemented.
+Remote cards/charts must label fresh reporting address groups, declared values,
+field-specific contributor counts, rounding/window/age and missing/limited
+coverage. One chosen report per IP prevents ports/session churn from inflating
+groups; NAT/aliases mean it is not a node or host census. Never sum memory,
+available disk or peer chain/operation streams as network totals. Membership
+changes split aggregate chart segments. Existing Network/Console still show
+local measurements only until real reports are implemented.
+
 Advanced Storage shows encrypted stored lengths / V, utilization and policy
 headroom separately from OS available disk space. Provider obligations are shown
 against their budget. Console `capacity` supplies exact-byte detail and sample

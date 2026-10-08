@@ -118,9 +118,12 @@ here is not an instruction to rebuild them.
   pseudonyms, session churn and sampled availability window; local peers are
   not a global census and illustrative France positions are not geolocation;
   [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md) now requires
-  built-in collection and consolidation. Freeze bounded remote reports,
-  replay/stale handling and reporter deduplication in Level 1/2 before transport
-  implementation; reported resource values are not verified service evidence;
+  built-in collection and consolidation. DEC-289 and Level 2
+  [NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md) freeze the first
+  direct report's layout, replay/stale bounds and one report per address group.
+  Codec/cache/transport/grouping, privacy acceptance, relayed reports and
+  cross-address deduplication remain open; reported resource values are not
+  verified service evidence or a unique-node census;
 - implemented per-object protection blockers/freshness: preserve safe service-owned evidence
   without exposing provider topology or interpreting missing data as failure;
 - per-object remote purge outcomes: actual available acknowledgements, privacy,

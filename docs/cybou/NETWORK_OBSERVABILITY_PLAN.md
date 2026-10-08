@@ -48,16 +48,19 @@ design. Refresh reads the shared snapshot without scanning history, enumerating
 foreign objects, triggering storage proofs, audits, repair or benchmarks.
 
 Remote consolidation is required work. Before transport changes, freeze a
-Level 1/2 design for minimized reports: fixed bounds, polling/rate limits,
-expiration, network/session binding, replay handling and deduplication across
-session churn/relayed reports. No new protocol NodeID, capability bitmap,
+Level 1/2 design for minimized reports. DEC-289 and
+[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md) now freeze the
+first direct-report target: fixed bounds, polling/rate limits, expiration,
+network/session binding and address grouping across session churn. Relayed
+reports and deduplication across different addresses remain open. No new protocol NodeID, capability bitmap,
 provider registry or PoA route. Distinguish direct and relayed provenance;
 authentication establishes a reporter, not truthful disk/CPU/service values
 or independent physical hosts. Bootstrap has no special aggregation authority.
 
 Remote totals remain unavailable until that design and implementation exist.
-Then show fresh deduplicated reporting-cohort count and expired/missing report
-count; fraction of the whole network stays unknown without a census source.
+Then show fresh reporting address groups and expired/missing/limited coverage;
+this is not a deduplicated process/host census. Fraction of the whole network
+stays unknown without a census source.
 Observations grant no placement weight, payouts or finality power. Avoid public
 endpoint histories, Identity links, filenames, recipients and content IDs in
 time series. Canonical streams/registers must never be added across reporters.
@@ -69,7 +72,8 @@ frame traffic, operation observation windows and bounded charts, process memory,
 normalized process CPU/completed means, storage-policy headroom and OS disk
 availability. Console `health`, `metrics` and `capacity` expose these readings.
 Remaining: canonical register aggregates, PUT/GET payload breakdown, storage I/O,
-queue age/errors, longer/resource history, remote report design and consolidation,
+queue age/errors, longer/resource history, direct-report implementation,
+relayed/cross-address design and consolidation,
 and service-eligible network capacity estimates. Local gauges are not network totals.
 
 1. **O1 Local collector:** passive counters/windows, canonical register aggregates
@@ -80,8 +84,10 @@ and service-eligible network capacity estimates. Local gauges are not network to
    `health`, `metrics`, `capacity` read-only commands; map/Advanced retained,
    FR/EN, themes, stale/unknown states. `health` has its first bounded package
    below; `metrics` and `capacity` have bounded local packages below.
-3. **O3 Remote report design:** close normative trust/privacy/deduplication and
-   abuse gates before modifying P2P. No new network, genesis or signer needed.
+3. **O3 Remote report design:** DEC-289 freezes the first direct-report contract
+   in Level 1/2. Direct codec/cache/scheduling/grouping implementation and privacy
+   acceptance remain; relayed/cross-address design is open. No new network,
+   genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
    per-node/mean/cohort charts. Verify duplicates/replay, expiry, churn,
    inconsistent/dishonest reports and partial visibility.

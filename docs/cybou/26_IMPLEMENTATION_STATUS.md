@@ -3,6 +3,35 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Direct observation contract, documentation only (2026-10-08)
+
+DEC-289 and `NETWORK_OBSERVATION_REPORTS.md` freeze the first normative direct
+report target in Levels 1/2: existing admitted TLS mesh sessions, 64-byte requests,
+191-byte fixed replies, known/unknown metric blocks, rounded storage/traffic/memory
+and completed process CPU means. Fresh challenges/session binding, bounded
+polling/ingress/cooldowns, 90-second freshness, immediate disconnect invalidation
+and one selected report per socket-address group are specified. No report relay,
+NodeID/pseudonym, capability/role/StorageId proof, Identity/PoA field or signature.
+
+Address groups are not unique processes/machines; values remain declarations.
+Disk/memory and canonical chain/register streams are not summed as network
+resources. Membership changes split aggregate chart segments. The processing
+inventory and privacy/security/upgrade acceptance gates are recorded, without
+claiming assigned sign-off or completed governance review.
+
+No runtime code, message enum, cache, remote UI or deployed binary is changed.
+Current message codes still end at 26; proposed 27/28 require codec/cache/
+scheduling/consolidation implementation and coordinated software upgrade before
+polling. Relayed reports, cross-address deduplication and census remain open.
+This package closes the first direct engineering contract, not all O3 release
+gates or O4 implementation. No network/genesis/key/history/service change.
+
+Documentation checks: six fixed reply blocks sum to 191 bytes; request is 64
+bytes; normative links resolve; DEC-289 exists; source message enum/MAX remains
+at 26 with no observation code. Manifest/diff checks pass. These are contract
+consistency checks, not codec, security, interoperability or runtime evidence.
+No binary rebuild or repeated runtime tests are needed for this docs-only package.
+
 ## Local storage headroom and available disk (2026-10-08)
 
 Runtime snapshots now include optional OS available bytes on the blob filesystem.

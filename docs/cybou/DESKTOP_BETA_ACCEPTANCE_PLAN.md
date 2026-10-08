@@ -167,6 +167,12 @@ screen-reader usability. Record tested technology/version and uncovered scope.
 real-data collection and consolidation as standard Network functionality, with
 charts and Console details. Deliver bounded O1 local collection, O2 presentation,
 O3 normative remote-report design, O4 cohort aggregation and O5 scoped estimates.
+
+DEC-289 and [NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md)
+now freeze the first direct-report engineering contract. Codec/cache/session
+scheduling/address-group aggregation, governing privacy/security acceptance and
+coordinated software upgrade remain before deployed polling. Reporting address
+groups are not a unique-node/host census; relayed/cross-address design remains open.
 This supersedes benchmark-first ordering for monitoring. Passive charts do not
 wait for a load-test dataset or an active local signer. Wider peer reporting
 needs its trust/privacy/deduplication design before transport changes. Existing

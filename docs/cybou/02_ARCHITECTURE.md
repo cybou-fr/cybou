@@ -203,6 +203,24 @@ verified foreign storage service, while protocol fees still go to the Central
 Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.
 See `18_ECONOMICS_FEES.md`.
 
+## Built-in direct observation target
+
+DEC-289 defines non-canonical, untrusted resource/traffic reports over existing
+admitted same-network TLS mesh sessions. A bounded local cache supplies minimized
+aggregates independently of the GUI/Identity. Fresh challenges bind replies to
+the requesting session; this proves neither measurement truth nor a stable
+node/machine identity. One selected report per transport-address group prevents
+ports/session churn from multiplying a reporting group, without claiming host
+independence or network coverage. Canonical operation/register streams stay local
+and independently verified. There is no telemetry NodeID, role, storage proof,
+Identity signature, PoA route or privileged bootstrap aggregator.
+
+[`NETWORK_OBSERVATION_REPORTS.md`](NETWORK_OBSERVATION_REPORTS.md) freezes bounds,
+rounding, replay/expiry, grouping, aggregation and acceptance for the first direct
+report target. It is not implemented/deployed; current P2P still ends at message
+26. Software-upgrade and governing privacy/security review gates remain. Relayed
+reports, cross-address deduplication and global census remain open.
+
 ## Simplified implementation boundary
 
 The only node type is Full Node. Nodes announce no roles or capabilities.

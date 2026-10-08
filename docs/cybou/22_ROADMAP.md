@@ -71,6 +71,10 @@ Mail/Files and shared task architecture is retained. Current order:
    [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md): local counters,
    charts/Console, normative remote-report design, cohort consolidation and
    scoped capacity estimates. Collection does not require generated load.
+   DEC-289/[NETWORK_OBSERVATION_REPORTS.md](NETWORK_OBSERVATION_REPORTS.md)
+   freezes the first direct contract; codec/cache/scheduling/grouping, release
+   privacy/security review and coordinated software upgrade remain. Relayed
+   reports, cross-address deduplication and global census are not closed.
 6. P1: multi-host stepped/mixed capacity benchmark for historical throughput
    ceilings, then targeted polish. Retain op/min and simulation scope.
 
