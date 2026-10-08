@@ -476,6 +476,10 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     storage_grid->setSpacing(14);
     auto [s_val, s_sub] = MetricTile(storage_grid, 0, 0, tr("Storage capacity (V)"), storage);
     m_metric_storage = s_val; m_metric_storage_sub = s_sub;
+    m_metric_storage->setObjectName(QStringLiteral("networkStorageUsage"));
+    auto [disk_val, disk_sub] = MetricTile(storage_grid, 1, 0, tr("Available disk space"), storage);
+    m_metric_disk = disk_val; m_metric_disk_sub = disk_sub;
+    m_metric_disk->setObjectName(QStringLiteral("networkDiskAvailable"));
 
     auto [pr_val, pr_sub] = MetricTile(storage_grid, 0, 1, tr("Content protection"), storage);
     m_metric_protection = pr_val; m_metric_protection_sub = pr_sub;
@@ -799,10 +803,17 @@ void NetworkPage::refresh()
     m_metric_queue_sub->setText(measured && diag.initialized ? tr("%1 bytes · volatile, locally validated").arg(diag.pending_operation_bytes) : tr("Unknown"));
 
     // 5. Storage tile
-    m_metric_storage->setText(diag.local_storage_capacity ? QStringLiteral("%1 / %2").arg(
+    m_metric_disk->setText(measured && diag.storage_disk_available ?
+        CybouProduct::sizeText(*diag.storage_disk_available) : tr("Unknown"));
+    m_metric_disk_sub->setText(tr("OS available bytes on the chunk filesystem · shared with other applications · before admission reserve"));
+    m_metric_storage->setText(measured && diag.local_storage_capacity ? QStringLiteral("%1 / %2").arg(
         CybouProduct::sizeText(diag.local_storage_used),
         CybouProduct::sizeText(diag.local_storage_capacity)) : tr("Unknown"));
-    m_metric_storage_sub->setText(diag.storage_capacity ? tr("Held for others: %1").arg(CybouProduct::sizeText(diag.storage_used)) : tr("Unknown"));
+    m_metric_storage_sub->setText(measured && diag.local_storage_capacity ?
+        tr("Stored encrypted bytes: %1 % of V · policy headroom: %2 · provider obligations: %3 / %4")
+            .arg(QLocale{}.toString(diag.local_storage_used * 100.0 / diag.local_storage_capacity, 'f', 1))
+            .arg(CybouProduct::sizeText(diag.local_storage_capacity - std::min(diag.local_storage_used, diag.local_storage_capacity)))
+            .arg(CybouProduct::sizeText(diag.storage_used), CybouProduct::sizeText(diag.storage_capacity)) : tr("Unknown"));
 
     // 6. Content protection tile
     int total_count = 0;

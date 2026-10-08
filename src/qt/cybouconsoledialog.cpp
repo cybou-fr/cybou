@@ -50,6 +50,7 @@ const Command commands[] = {
     {"status", "status", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local node and Identity status"), false, false},
     {"health", "health", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local runtime observation and candidate pool"), false, false},
     {"metrics", "metrics", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local traffic counters and measured transfer rates"), false, false},
+    {"capacity", "capacity", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local storage limits, headroom and available disk"), false, false},
     {"network", "network", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Network binding, chain tip and state root"), false, false},
     {"storage", "storage", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Physical storage usage and capacity policy"), false, false},
     {"peers", "peers", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Observed sessions and unverified peer heights"), false, false},
@@ -444,6 +445,20 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(s.finality_known ? QString::number(s.finalized_height) : tr("Unknown"))
             .arg(id_state)
             .arg(s.primary_name.isEmpty() ? tr("None") : s.primary_name));
+    } else if (cmd == QLatin1String{"capacity"}) {
+        const auto& d = m_model->networkDiagnostics();
+        const bool measured = d.observed_unix_ms != 0;
+        const bool policy = measured && d.local_storage_capacity;
+        appendOutput(tr("Source: Local storage snapshot\nObserved: %1\nStored encrypted bytes: %2 / %3 bytes (%4 % of V)\nPolicy headroom: %5 bytes\nProvider obligations: %6 / %7 bytes; budget headroom: %8 bytes\nOS available disk: %9 bytes\nStored byte lengths exclude filesystem overhead. Disk space is shared and precedes admission reserve. Headroom is not promised admission or network capacity.")
+            .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown"))
+            .arg(policy ? QString::number(d.local_storage_used) : tr("Unknown"))
+            .arg(policy ? QString::number(d.local_storage_capacity) : tr("Unknown"))
+            .arg(policy ? QLocale{}.toString(d.local_storage_used * 100.0 / d.local_storage_capacity, 'f', 1) : tr("Unknown"))
+            .arg(policy ? QString::number(d.local_storage_capacity - std::min(d.local_storage_used, d.local_storage_capacity)) : tr("Unknown"))
+            .arg(measured && d.storage_capacity ? QString::number(d.storage_used) : tr("Unknown"))
+            .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity) : tr("Unknown"))
+            .arg(measured && d.storage_capacity ? QString::number(d.storage_capacity - std::min(d.storage_used, d.storage_capacity)) : tr("Unknown"))
+            .arg(measured && d.storage_disk_available ? QString::number(*d.storage_disk_available) : tr("Unknown")));
     } else if (cmd == QLatin1String{"metrics"}) {
         const auto& d = m_model->networkDiagnostics();
         const auto& t = d.traffic;

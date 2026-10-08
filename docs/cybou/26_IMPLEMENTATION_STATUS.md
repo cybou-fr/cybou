@@ -3,6 +3,44 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Local storage headroom and available disk (2026-10-08)
+
+Runtime snapshots now include optional OS available bytes on the blob filesystem.
+The query is read-only and does not enumerate content. Before the first blob,
+the immediate parent is used; memory-only stores, missing parents or OS errors
+have no disk reading. Sampling uses the existing desktop diagnostic refresh,
+independent of Network visibility, and the same snapshot's UTC observation time.
+
+Network Advanced Storage shows accounted encrypted lengths / V, percent used,
+saturated policy headroom, obligations / provider budget and separate available
+disk. Public read-only `capacity` shows exact bytes, provider budget headroom and
+time in EN/FR without Identity unlock. Missing observations remain Unknown;
+measured zero disk availability is retained. No foreign-content/provider DB
+enumeration, directory creation, wire fields or admission policy changes.
+
+Stored lengths exclude filesystem allocation/metadata overhead; disk availability
+is shared and precedes provider admission reserve. Local policy headroom neither
+reserves disk nor guarantees admission, replicas or network capacity. Admission
+estimates, storage I/O/history and reporting-cohort consolidation remain open.
+
+Ordinary MinGW desktop/core/Qt binaries rebuild successfully. Storage suite:
+6 cases / 61 assertions passed; runtime suite: 22 cases / 316 assertions passed.
+Disk tests cover memory-only absence, a parent before first blob, an existing
+chunk directory and a removed parent, while preserving policy/usage accounting.
+Windows filesystem-space queries can succeed for a missing directory; explicit
+directory checks prevent that from becoming a valid storage observation.
+Other core suites are filtered; no Linux execution or live network capacity
+claim. Final core logs: `artifacts/network-capacity-20261008/core-storage-final.txt`
+and `core-runtime.txt` in the same directory.
+Desktop SHA-256: `8b46e9292a8050dc75aa21c214d445d7c45b0ccae7b594cdc07b50805475d075`.
+No desktop/signer or VPS service is restarted.
+
+Full offscreen Qt with system fonts: 92 passed, 0 failed/skipped. Coverage
+includes available/missing disk in Network, read-only `capacity` in EN/FR,
+argument validation, locked access, measured zero available disk and saturated
+headroom when use exceeds policy. Manifest/diff checks pass. This is component
+evidence, not a live service/durability or network-capacity measurement.
+
 ## Local process CPU observation (2026-10-08)
 
 Runtime diagnostics now sample cumulative whole-process CPU time under a local

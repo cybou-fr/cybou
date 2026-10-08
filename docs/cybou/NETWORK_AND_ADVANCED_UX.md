@@ -22,6 +22,14 @@ introduced by these product features.
 
 ## Network overview
 
+Advanced Storage shows encrypted stored lengths / V, utilization and policy
+headroom separately from OS available disk space. Provider obligations are shown
+against their budget. Console `capacity` supplies exact-byte detail and sample
+UTC while locked or unlocked. Missing disk readings are Unknown; measured zero
+remains zero. Headroom saturates at zero when use exceeds the configured limit.
+Filesystem overhead is excluded from stored lengths. Shared disk availability
+precedes admission reserve and is not promised admission or network capacity.
+
 The local CPU tile shows normalized process CPU over the latest sampled
 interval, with OS online logical processors, actual duration and last completed
 mean's duration/count/age. Console `metrics` shows the same data. Initial or

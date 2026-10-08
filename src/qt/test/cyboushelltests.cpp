@@ -1284,6 +1284,9 @@ void CybouShellTests::networkPageReflectsModel()
     observed.observed_unix_ms = 1791460800000ULL;
     observed.uptime_ms = 120000;
     observed.process_resident_bytes = 1048576;
+    observed.local_storage_used = 1024;
+    observed.local_storage_capacity = 4096;
+    observed.storage_disk_available = 1048576;
     observed.process_cpu = {.interval_percent = 12.5, .mean_percent = 10.0, .processors = 4,
         .interval_ms = 3000, .mean_window_ms = 60000, .mean_intervals = 20, .mean_age_ms = 2000};
     observed.initialized = true;
@@ -1299,12 +1302,17 @@ void CybouShellTests::networkPageReflectsModel()
     auto* memory = network->findChild<QLabel*>(QStringLiteral("networkProcessMemory"));
     QVERIFY(memory);
     QTRY_COMPARE(memory->text(), CybouProduct::sizeText(1048576));
+    auto* disk = network->findChild<QLabel*>(QStringLiteral("networkDiskAvailable"));
+    QVERIFY(disk);
+    QTRY_COMPARE(disk->text(), CybouProduct::sizeText(1048576));
     auto* cpu = network->findChild<QLabel*>(QStringLiteral("networkProcessCpu"));
     QVERIFY(cpu);
     QTRY_VERIFY(cpu->text().contains(QLocale{}.toString(12.5, 'f', 1)));
     observed.process_resident_bytes.reset();
+    observed.storage_disk_available.reset();
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(memory->text(), QStringLiteral("Unknown"));
+    QTRY_COMPARE(disk->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(pool->text(), QStringLiteral("3"));
     auto* finalized_rate = network->findChild<QLabel*>(QStringLiteral("networkFinalizationRate"));
     QVERIFY(finalized_rate);
@@ -5474,9 +5482,12 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("resident memory: Unknown bytes")));
     QVERIFY(console.outputText().contains(QStringLiteral("Local process CPU: Unknown")));
+    console.clearOutput(); console.executeCommand(QStringLiteral("capacity"));
+    QVERIFY(console.outputText().contains(QStringLiteral("OS available disk: Unknown bytes")));
     snapshot.observed_unix_ms = 1791460800000ULL;
     snapshot.uptime_ms = 120000;
     snapshot.process_resident_bytes = 1048576;
+    snapshot.storage_disk_available = 1048576;
     snapshot.process_cpu = {.interval_percent = 12.5, .mean_percent = 10.0, .processors = 4,
         .interval_ms = 3000, .mean_window_ms = 60000, .mean_intervals = 20, .mean_age_ms = 2000};
     snapshot.pending_operations = 3;
@@ -5497,6 +5508,11 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("resident memory: 1048576 bytes")));
     QVERIFY(console.outputText().contains(QStringLiteral("Local process CPU: ") + QLocale{}.toString(12.5, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("60000 ms / 20 intervals; age 2000 ms")));
+    console.executeCommand(QStringLiteral("capacity"));
+    QVERIFY(console.outputText().contains(QStringLiteral("OS available disk: 1048576 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Policy headroom: 16106126126 bytes")));
+    console.executeCommand(QStringLiteral("capacity extra"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Usage: capacity")));
     QVERIFY(console.outputText().contains(QStringLiteral("1 min: observed ") + QLocale{}.toString(5.0, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("history 1000 operations")));
     QVERIFY(console.outputText().contains(QStringLiteral("5 min: observed Unknown")));
@@ -5573,6 +5589,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Reçu depuis le démarrage : 6000 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("Mémoire résidente du processus CYBOU local : 1048576 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("CPU du processus local : ") + QLocale{}.toString(12.5, 'f', 1)));
+    console.executeCommand(QStringLiteral("capacity"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Disque disponible selon le système : 1048576 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("historique 1000 opérations")));
     qApp->removeTranslator(&translator);
 
@@ -5598,6 +5616,14 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(!console.outputText().contains(QStringLiteral("files [filter]")));
     console.clearOutput(); console.executeCommand(QStringLiteral("health"));
     QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: 120 s")));
+    snapshot.local_storage_used = snapshot.local_storage_capacity + 1;
+    snapshot.storage_used = snapshot.storage_capacity + 1;
+    snapshot.storage_disk_available = 0;
+    model->setNetworkDiagnostics(snapshot);
+    console.clearOutput(); console.executeCommand(QStringLiteral("capacity"));
+    QVERIFY(console.outputText().contains(QStringLiteral("Policy headroom: 0 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("budget headroom: 0 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("OS available disk: 0 bytes")));
     console.executeCommand(QStringLiteral("status"));
     model->setPeerCount(7); // Routine ticks must not clear output while locked.
     QVERIFY(console.outputText().contains(QStringLiteral("> status")));

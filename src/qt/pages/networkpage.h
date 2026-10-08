@@ -141,6 +141,8 @@ private:
     CybouObservationChart* m_finalization_chart{nullptr};
     QLabel* m_metric_storage{nullptr};
     QLabel* m_metric_storage_sub{nullptr};
+    QLabel* m_metric_disk{nullptr};
+    QLabel* m_metric_disk_sub{nullptr};
     QLabel* m_metric_protection{nullptr};
     QLabel* m_metric_protection_sub{nullptr};
 

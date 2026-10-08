@@ -207,6 +207,20 @@ std::uint64_t ScanBlobs(const std::filesystem::path& root)
 
 } // namespace
 
+std::optional<std::uint64_t> ChunkBlobStore::AvailableDiskBytes() const
+{
+    if (m_memory_only) return std::nullopt;
+    std::error_code error;
+    const bool exists = std::filesystem::exists(m_root, error);
+    if (error) return std::nullopt;
+    // Before the first blob, its directory may not exist yet. The provider parent does.
+    const auto path = exists ? m_root : m_root.parent_path();
+    if (!std::filesystem::is_directory(path, error) || error) return std::nullopt;
+    const auto space = std::filesystem::space(path, error);
+    if (error || space.available == std::numeric_limits<std::uintmax_t>::max()) return std::nullopt;
+    return space.available;
+}
+
 ChunkBlobStore::ChunkBlobStore(std::filesystem::path root, const bool memory_only, const bool wipe_data,
     const std::uint64_t capacity_bytes)
     : m_root{memory_only ? std::filesystem::path{} : std::move(root)}, m_memory_only{memory_only},

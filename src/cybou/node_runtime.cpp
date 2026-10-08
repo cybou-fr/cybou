@@ -113,6 +113,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     }
     if (m_provider.chunk_blob_store) {
         snapshot.local_storage_used = m_provider.chunk_blob_store->UsedBytes();
+        snapshot.storage_disk_available = m_provider.chunk_blob_store->AvailableDiskBytes();
         snapshot.local_storage_capacity = m_config.storage_capacity_bytes.value_or(0);
     }
     return snapshot;

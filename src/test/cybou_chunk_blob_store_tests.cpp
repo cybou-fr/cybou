@@ -19,6 +19,23 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_chunk_blob_store_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(available_disk_is_an_os_measurement_not_storage_policy)
+{
+    cybou::ChunkBlobStore memory({}, true, false, 4096);
+    BOOST_CHECK(!memory.AvailableDiskBytes());
+    const auto parent = m_data_dir / "disk-observation";
+    std::filesystem::create_directories(parent);
+    cybou::ChunkBlobStore disk(parent / "chunks", false, false, 4096);
+    BOOST_CHECK(disk.AvailableDiskBytes().has_value()); // parent exists before first blob
+    std::filesystem::create_directories(parent / "chunks");
+    BOOST_CHECK(disk.AvailableDiskBytes().has_value());
+    BOOST_CHECK_EQUAL(disk.UsedBytes(), 0U);
+    BOOST_CHECK_EQUAL(disk.CapacityBytes(), 4096U);
+    std::filesystem::remove(parent / "chunks"); // empty fixture directories only
+    std::filesystem::remove(parent);
+    BOOST_CHECK(!disk.AvailableDiskBytes());
+}
+
 BOOST_AUTO_TEST_CASE(local_blob_survives_restart_and_storage_admission_without_duplicate_bytes)
 {
     const auto storage_path = m_data_dir / "storage";

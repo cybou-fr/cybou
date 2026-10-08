@@ -64,6 +64,14 @@ time series. Canonical streams/registers must never be added across reporters.
 
 ## Small implementation batches
 
+Current local delivery: timestamp/uptime, candidate-pool count/bytes, passive
+frame traffic, operation observation windows and bounded charts, process memory,
+normalized process CPU/completed means, storage-policy headroom and OS disk
+availability. Console `health`, `metrics` and `capacity` expose these readings.
+Remaining: canonical register aggregates, PUT/GET payload breakdown, storage I/O,
+queue age/errors, longer/resource history, remote report design and consolidation,
+and service-eligible network capacity estimates. Local gauges are not network totals.
+
 1. **O1 Local collector:** passive counters/windows, canonical register aggregates
    at a declared cursor, local resource/storage measurements. Verify idle/gaps,
    restart, catch-up, duplicate delivery, conflict replacement, concurrency and
@@ -71,7 +79,7 @@ time series. Canonical streams/registers must never be added across reporters.
 2. **O2 Network and Console:** cards/charts from O1 and matching proposed
    `health`, `metrics`, `capacity` read-only commands; map/Advanced retained,
    FR/EN, themes, stale/unknown states. `health` has its first bounded package
-   below; `metrics` has its traffic package below; `capacity` remains planned.
+   below; `metrics` and `capacity` have bounded local packages below.
 3. **O3 Remote report design:** close normative trust/privacy/deduplication and
    abuse gates before modifying P2P. No new network, genesis or signer needed.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
@@ -93,8 +101,7 @@ The bounded pool is read under its existing lock without scanning history.
 
 Still open: rate windows/retention, transfer counters, CPU/memory/I/O, canonical
 register aggregates, charts, remote reports/consolidation and capacity estimates.
-`health` is implemented; the traffic package below adds `metrics`. `capacity`
-remains planned.
+`health` is implemented; the packages below add `metrics` and `capacity`.
 
 ### O1 passive traffic package (2026-10-08)
 
@@ -207,3 +214,27 @@ denominator, measured durations, interval count and mean age in EN/FR. GUI CPU
 is included. Neither CPU percentage nor spare CPU estimates network capacity.
 CPU charts, affinity/quota-aware measurements, host load, storage I/O and remote
 consolidation remain open.
+
+### O1 local storage headroom and filesystem availability (2026-10-08)
+
+Runtime diagnostics query OS available bytes on the chunk filesystem without
+scanning directories. Before the first blob, the store's immediate existing
+parent is queried; no directories are created by observation. Memory-only stores,
+missing parents and OS errors have no disk measurement. The existing background
+snapshot supplies the sample UTC time independently of Network visibility.
+
+Network Advanced Storage shows accounted encrypted blob-byte lengths / V,
+utilization, saturated policy headroom `max(V - used, 0)`, provider obligations /
+budget and a separate OS-available-disk tile. Read-only public Console `capacity`
+adds exact bytes, provider budget headroom and time in EN/FR, including while the
+Identity is locked. No provider DB or foreign-content enumeration is introduced.
+
+Stored lengths exclude filesystem allocation/metadata overhead; replicas and
+cache are physical copies, not unique logical content. Filesystem space is shared
+with other applications and is measured before the admission reserve (currently
+max(1 GiB, 5% of filesystem capacity) on provider admission). Policy headroom is
+not a reservation or admission promise: disk reserve, leases, placement and
+concurrent writes still constrain service. OS free bytes, V and provider budget
+remain separate; none establishes potential network capacity or remote durability.
+Reserved usable admission estimates, disk/history/I/O series and reporting-cohort
+aggregation remain open.

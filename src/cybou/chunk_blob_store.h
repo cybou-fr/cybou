@@ -111,6 +111,9 @@ public:
     bool MemoryOnly() const { return m_memory_only; }
     /// \brief Локальная CYBOU capacity `V`, ограничивающая все blobs.
     std::uint64_t CapacityBytes() const { return m_capacity_bytes; }
+    /// OS space available to this process on the blob filesystem; no directory scan.
+    /// Memory-only stores and OS errors have no disk measurement.
+    std::optional<std::uint64_t> AvailableDiskBytes() const;
 
 private:
     const std::filesystem::path m_root;
