@@ -3,6 +3,28 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Direct observation payload codec (2026-10-08)
+
+`observation_report.h/.cpp` implements the standalone DEC-289 request (64 bytes)
+and reply (191 bytes) payload codecs using the common binary reader/writer.
+Both reply encoding and decoding reject invalid ranges and nonzero unknown
+blocks; decoding also rejects non-boolean flags, every truncated size and tails.
+Stale age 5001 requires all five metric blocks unknown. Storage budget uses
+overflow-safe floor(2V/3); reported use above policy remains legal. Rounded units
+must fit after byte conversion. CPU and traffic windows obey the frozen bounds.
+
+These helpers validate structure only: network/challenge/session matching and
+measurement truth are not established. No runtime call site, cache, polling,
+message enum extension, remote UI, new session or deployment is introduced.
+The P2P frame baseline still ends at 26. Cache and bounded session scheduling
+are the next packages, with the existing privacy/security/upgrade gates retained.
+
+Validation: independent fixed-offset byte vector, all request/reply truncations,
+tails, invalid flags, every nonzero unknown byte, stale/known combinations,
+unit overflow, CPU/traffic bounds and storage policy/maximum-integer boundaries.
+Codec and existing P2P regression suites pass; desktop/core binaries rebuild.
+No live runtime or cross-platform/deployment acceptance is claimed.
+
 ## Direct observation contract, documentation only (2026-10-08)
 
 DEC-289 and `NETWORK_OBSERVATION_REPORTS.md` freeze the first normative direct

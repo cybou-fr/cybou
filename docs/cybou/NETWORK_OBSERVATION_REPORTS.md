@@ -1,7 +1,9 @@
 # Direct network observation reports
 
 Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
-Not implemented or deployed. The running P2P baseline ends at message 26.
+Strict standalone request/reply payload codecs are implemented and tested.
+Cache, session acceptance, transport and remote display remain unimplemented;
+no observation polling is deployed. The running P2P baseline ends at message 26.
 This document freezes the first direct-report contract, not a global census,
 relayed telemetry design or a compliance claim. It follows
 [AGENTS.md](../../AGENTS.md), [security governance](SECURITY_GOVERNANCE.md)
@@ -64,7 +66,8 @@ still permit inference, so anonymity is not claimed.
 
 Target message codes: `GET_OBSERVATION = 27`, `OBSERVATION = 28`. No version,
 schema discriminator, capability bitmap, TLV, strings, arrays or fragmentation.
-Do not change current encoders/decoders until the implementation package.
+The standalone payload codecs do not change the current P2P frame message set.
+Do not enable codes 27/28 until the transport implementation package.
 All integers are unsigned little-endian; payload consumption is exact.
 
 Request is exactly 64 bytes: `NetworkBinding[32] || challenge[32]`.
