@@ -449,7 +449,7 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
         const auto& d = m_model->networkDiagnostics();
         const bool measured = d.observed_unix_ms != 0;
         const bool policy = measured && d.local_storage_capacity;
-        appendOutput(tr("Source: Local storage snapshot\nObserved: %1\nStored encrypted bytes: %2 / %3 bytes (%4 % of V)\nPolicy headroom: %5 bytes\nProvider obligations: %6 / %7 bytes; budget headroom: %8 bytes\nOS available disk: %9 bytes\nStored byte lengths exclude filesystem overhead. Disk space is shared and precedes admission reserve. Headroom is not promised admission or network capacity.")
+        appendOutput(tr("Source: Local storage snapshot\nObserved: %1\nStored encrypted bytes: %2 / %3 bytes (%4 % of V)\nPolicy headroom: %5 bytes\nAdmitted provider bytes: %6 / %7 bytes; budget headroom: %8 bytes\nOS available disk: %9 bytes\nStored byte lengths exclude filesystem overhead. Disk space is shared and precedes admission reserve. Headroom is not promised admission or network capacity.")
             .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown"))
             .arg(policy ? QString::number(d.local_storage_used) : tr("Unknown"))
             .arg(policy ? QString::number(d.local_storage_capacity) : tr("Unknown"))
@@ -512,7 +512,7 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(QString::fromStdString(d.tip), QString::fromStdString(d.state_root), d.safety_halted ? tr("Yes") : tr("No")));
     } else if (cmd == QLatin1String{"storage"}) {
         const auto& d = m_model->networkDiagnostics();
-        appendOutput(tr("Physical storage (encrypted bytes): %1 / %2\nProvider obligations: %3 / %4 bytes\nCapacity and obligations are local policy, not consensus rights.")
+        appendOutput(tr("Physical storage (encrypted bytes): %1 / %2\nAdmitted provider bytes: %3 / %4 bytes\nCapacity limits are local policy; admitted provider bytes are accounted storage, not lease obligations or consensus rights.")
             .arg(d.initialized ? QString::number(d.local_storage_used) : tr("Unknown"))
             .arg(d.initialized ? QString::number(d.local_storage_capacity) : tr("Unknown"))
             .arg(d.initialized ? QString::number(d.storage_used) : tr("Unknown"))

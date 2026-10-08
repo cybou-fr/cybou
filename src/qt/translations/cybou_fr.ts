@@ -151,13 +151,13 @@
 Observed: %1
 Stored encrypted bytes: %2 / %3 bytes (%4 % of V)
 Policy headroom: %5 bytes
-Provider obligations: %6 / %7 bytes; budget headroom: %8 bytes
+Admitted provider bytes: %6 / %7 bytes; budget headroom: %8 bytes
 OS available disk: %9 bytes
 Stored byte lengths exclude filesystem overhead. Disk space is shared and precedes admission reserve. Headroom is not promised admission or network capacity.</source><translation>Source : instantané du stockage local
 Observation : %1
 Octets chiffrés stockés : %2 / %3 octets (%4 % de V)
 Marge du plafond local : %5 octets
-Obligations de stockage : %6 / %7 octets ; marge du budget : %8 octets
+Octets admis pour les répliques : %6 / %7 octets ; marge du budget : %8 octets
 Disque disponible selon le système : %9 octets
 Les longueurs stockées excluent les surcoûts du système de fichiers. Le disque est partagé et précède la réserve d'admission. Cette marge ne garantit ni une admission ni une capacité réseau.</translation></message>
     <message><source>Local process CPU: %1 % over %2 ms
@@ -416,11 +416,11 @@ Arrêt de sécurité : %6</translation>
     </message>
     <message>
         <source>Physical storage (encrypted bytes): %1 / %2
-Provider obligations: %3 / %4 bytes
-Capacity and obligations are local policy, not consensus rights.</source>
+Admitted provider bytes: %3 / %4 bytes
+Capacity limits are local policy; admitted provider bytes are accounted storage, not lease obligations or consensus rights.</source>
         <translation>Stockage physique (octets chiffrés) : %1 / %2
-Obligations de stockage : %3 / %4 octets
-Capacité et obligations relèvent de la politique locale, sans droit de consensus.</translation>
+Octets admis pour les répliques : %3 / %4 octets
+Les plafonds relèvent de la politique locale ; les octets admis sont du stockage comptabilisé, sans obligation de bail ni droit de consensus.</translation>
     </message>
     <message>
         <source>Own Storage Summary: %1 items, %2 logical bytes (not physical storage usage).</source>
@@ -4856,7 +4856,7 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
     <name>NetworkPage</name>
     <message><source>Available disk space</source><translation>Espace disque disponible</translation></message>
     <message><source>OS available bytes on the chunk filesystem · shared with other applications · before admission reserve</source><translation>Octets disponibles sur le disque des chunks · partagé avec d'autres applications · avant la réserve d'admission</translation></message>
-    <message><source>Stored encrypted bytes: %1 % of V · policy headroom: %2 · provider obligations: %3 / %4</source><translation>Octets chiffrés stockés : %1 % de V · marge du plafond : %2 · obligations de stockage : %3 / %4</translation></message>
+    <message><source>Stored encrypted bytes: %1 % of V · policy headroom: %2 · admitted provider bytes: %3 / %4</source><translation>Octets chiffrés stockés : %1 % de V · marge du plafond : %2 · octets admis pour les répliques : %3 / %4</translation></message>
     <message><source>CYBOU process CPU</source><translation>CPU du processus CYBOU</translation></message>
     <message><source>%1 %</source><translation>%1 %</translation></message>
     <message><source>OS online logical processors: %1 · interval: %2 ms · last completed mean: %3 · window: %4 ms / %5 intervals · age: %6 ms</source><translation>Processeurs logiques actifs du système : %1 · intervalle : %2 ms · dernière moyenne complète : %3 · fenêtre : %4 ms / %5 intervalles · âge : %6 ms</translation></message>

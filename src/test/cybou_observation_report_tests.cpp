@@ -124,10 +124,10 @@ BOOST_AUTO_TEST_CASE(storage_and_units_accept_over_policy_and_reject_overflow)
         r.storage.provider_budget_bytes = r.storage.capacity_bytes / 3 * 2 + r.storage.capacity_bytes % 3 * 2 / 3;
         BOOST_CHECK_NO_THROW(DecodeObservationReport(EncodeObservationReport(r)));
     }
-    r.storage.stored_mib = max >> 20; r.storage.obligations_mib = max >> 20;
+    r.storage.stored_mib = max >> 20; r.storage.provider_used_mib = max >> 20;
     r.traffic.received_kib = max >> 10; r.traffic.sent_kib = max >> 10; r.memory.resident_mib = max >> 20;
     BOOST_CHECK_NO_THROW(DecodeObservationReport(EncodeObservationReport(r)));
-    r = Known(); r.storage.stored_mib = 50000; r.storage.obligations_mib = 50000;
+    r = Known(); r.storage.stored_mib = 50000; r.storage.provider_used_mib = 50000;
     BOOST_CHECK_NO_THROW(DecodeObservationReport(EncodeObservationReport(r)));
     const auto valid = EncodeObservationReport(Known());
     for (const auto& [offset, value] : std::array<std::pair<size_t, uint64_t>, 7>{{
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(storage_and_units_accept_over_policy_and_reject_overflow)
     r = Known(); r.storage.capacity_bytes--; RejectEncoding(r);
     r = Known(); r.storage.provider_budget_bytes++; RejectEncoding(r);
     r = Known(); r.storage.stored_mib = (max >> 20) + 1; RejectEncoding(r);
-    r = Known(); r.storage.obligations_mib = (max >> 20) + 1; RejectEncoding(r);
+    r = Known(); r.storage.provider_used_mib = (max >> 20) + 1; RejectEncoding(r);
     r = Known(); r.traffic.received_kib = (max >> 10) + 1; RejectEncoding(r);
     r = Known(); r.traffic.sent_kib = (max >> 10) + 1; RejectEncoding(r);
     r = Known(); r.memory.resident_mib = (max >> 20) + 1; RejectEncoding(r);

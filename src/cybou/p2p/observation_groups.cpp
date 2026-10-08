@@ -127,9 +127,9 @@ ObservationGroupSnapshot ObservationGroups::Snapshot(std::optional<Clock::time_p
         ++out.fresh_remote_groups;
         if (row.storage.known) {
             auto& s = out.storage;
-            if (!s.contributors++) { s.capacity_bytes = 0; s.stored_copy_bytes = 0; s.provider_budget_bytes = 0; s.obligations_bytes = 0; }
+            if (!s.contributors++) { s.capacity_bytes = 0; s.stored_copy_bytes = 0; s.provider_budget_bytes = 0; s.provider_used_bytes = 0; }
             Add(s.capacity_bytes, row.storage.capacity_bytes); Add(s.stored_copy_bytes, row.storage.stored_mib << 20);
-            Add(s.provider_budget_bytes, row.storage.provider_budget_bytes); Add(s.obligations_bytes, row.storage.obligations_mib << 20);
+            Add(s.provider_budget_bytes, row.storage.provider_budget_bytes); Add(s.provider_used_bytes, row.storage.provider_used_mib << 20);
         }
         if (row.traffic.known) {
             auto& t = out.traffic;

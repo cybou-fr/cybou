@@ -3,6 +3,35 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Observation review corrections (2026-10-08)
+
+The current report/store field is `provider_used_mib`, derived from
+`FinalizedChunkStore::UsedBytes()`: accounted admitted provider replica lengths,
+not active contractual lease/placement obligations. Local Network/Console labels
+and French translations now say admitted provider bytes. Payload order, units,
+size and numerical semantics are unchanged; no alias/legacy decoder is retained.
+
+The optional `PeerSession` observation transaction has one two-second owner
+budget; its server reply write is also bounded at two seconds. The shared
+exchange guard retains its five-second pending upper bound, with owner cleanup
+on every return. A silent TLS responder regression verifies timeout, socket
+closure and early owner release. Ordinary service deadlines are unchanged.
+
+The delivery plan now puts runtime group lifecycle and an immutable address-free
+snapshot before partial-coverage Network/Console cards and cohort charts, then
+idle-only polling after coordinated deployment acceptance. Local PUT/GET payload
+counters follow, then storage I/O, queue age/errors and canonical register/lease
+aggregates. Existing frame counters include service, retries and observation;
+they do not measure useful storage payload or unique content served.
+
+Validation: desktop/core/Qt binaries rebuild; 92 focused core cases pass
+(codec 6, groups 8, exchange 7, cache 6, P2P 42, runtime 23), and the full Qt
+suite passes 92 cases. Manifest validation and whitespace checks pass. These
+are local component/UI regression results, not live multi-host acceptance.
+
+No auto poller, remote display, persistent observation history or deployment is
+added by this correction. Network/genesis, keys and signing history are unchanged.
+
 ## Bounded observation groups and declared-resource totals (2026-10-08)
 
 `p2p::ObservationGroups` implements a standalone volatile store of at most 32
@@ -53,7 +82,7 @@ regression behavior. No network/genesis/key/chain/signing history is changed.
 `PeerSession::RequestObservation` uses only an established same-network TLS
 session and its actual numeric socket address. Its process-local nonrecycled
 handle never goes on the wire. It sends a fresh challenge, reads within one
-five-second total transaction deadline, accepts through the guard and removes
+two-second total transaction deadline, accepts through the guard and removes
 pending state on every return. Pre-HELLO/cooldown skips do no socket I/O. Missing,
 wrong-type, malformed or mismatched replies close the client socket so a late
 response cannot enter another transaction. Existing traffic accounting includes

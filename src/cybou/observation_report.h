@@ -20,8 +20,10 @@ struct ObservationCursor {
     ObservationBytes32 tip{};
 };
 struct ObservationStorage {
+    // provider_used_mib counts admitted provider replica lengths, not active
+    // contractual lease/placement obligations. Wire position/units are unchanged.
     bool known{false};
-    uint64_t capacity_bytes{0}, stored_mib{0}, provider_budget_bytes{0}, obligations_mib{0};
+    uint64_t capacity_bytes{0}, stored_mib{0}, provider_budget_bytes{0}, provider_used_mib{0};
 };
 struct ObservationTraffic {
     bool known{false};

@@ -810,7 +810,7 @@ void NetworkPage::refresh()
         CybouProduct::sizeText(diag.local_storage_used),
         CybouProduct::sizeText(diag.local_storage_capacity)) : tr("Unknown"));
     m_metric_storage_sub->setText(measured && diag.local_storage_capacity ?
-        tr("Stored encrypted bytes: %1 % of V · policy headroom: %2 · provider obligations: %3 / %4")
+        tr("Stored encrypted bytes: %1 % of V · policy headroom: %2 · admitted provider bytes: %3 / %4")
             .arg(QLocale{}.toString(diag.local_storage_used * 100.0 / diag.local_storage_capacity, 'f', 1))
             .arg(CybouProduct::sizeText(diag.local_storage_capacity - std::min(diag.local_storage_used, diag.local_storage_capacity)))
             .arg(CybouProduct::sizeText(diag.storage_used), CybouProduct::sizeText(diag.storage_capacity)) : tr("Unknown"));

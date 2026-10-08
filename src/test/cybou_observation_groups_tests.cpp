@@ -108,13 +108,13 @@ BOOST_AUTO_TEST_CASE(overflow_is_unknown_and_legitimate_over_policy_zero_or_miss
     ObservationGroups groups{{}}; const auto start = Clock::time_point{};
     auto huge = Report(); const auto max = std::numeric_limits<uint64_t>::max();
     huge.storage.capacity_bytes = max; huge.storage.provider_budget_bytes = max / 3 * 2 + max % 3 * 2 / 3;
-    huge.storage.stored_mib = max >> 20; huge.storage.obligations_mib = max >> 20;
+    huge.storage.stored_mib = max >> 20; huge.storage.provider_used_mib = max >> 20;
     huge.traffic.received_kib = max >> 10; huge.traffic.sent_kib = 0;
     Put(groups, 1, 1, huge, start); Put(groups, 2, 2, huge, start);
     auto snapshot = groups.Snapshot(start);
     BOOST_CHECK_EQUAL(snapshot.storage.contributors, 2U);
     BOOST_CHECK(!snapshot.storage.capacity_bytes && !snapshot.storage.stored_copy_bytes && !snapshot.storage.provider_budget_bytes &&
-        !snapshot.storage.obligations_bytes && !snapshot.storage.utilization_percent);
+        !snapshot.storage.provider_used_bytes && !snapshot.storage.utilization_percent);
     BOOST_CHECK(!snapshot.traffic.received_bytes && !snapshot.traffic.received_bytes_per_second);
     BOOST_REQUIRE(snapshot.traffic.sent_bytes); BOOST_CHECK_EQUAL(*snapshot.traffic.sent_bytes, 0U);
     Put(groups, 3, 3, Report(), start); // Overflow must remain sticky across later contributors.

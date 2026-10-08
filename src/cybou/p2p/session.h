@@ -40,6 +40,8 @@ inline constexpr uint32_t MAX_FRAME_PAYLOAD{64U * 1024U};
 /// \brief Максимум блоков в одном `GET_BLOCKS`: `32`.
 /// \details Соответствует ограничению P2P batch sync из `docs/cybou/08_P2P.md`.
 inline constexpr uint8_t MAX_BLOCK_BATCH{32};
+// Optional observation work has a shorter owner deadline than ordinary service.
+inline constexpr auto OBSERVATION_TRANSACTION_TIMEOUT = std::chrono::seconds{2};
 // Общая граница для discovery-списка: кодер и декодер должны проверять ее одинаково,
 // чтобы злонамеренный пир не мог переполнить PEERS кадр сверх того, что честный узел сам отправляет.
 /// \brief Максимум endpoint'ов в одном `PEERS`: `32`.

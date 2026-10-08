@@ -54,7 +54,7 @@ The report contains:
 
 - initialized finalized cursor: height and tip, an unverified peer claim;
 - policy V and provider budget in bytes; stored encrypted lengths and provider
-  obligation bytes rounded down to MiB, excluding filesystem overhead;
+  admitted replica byte lengths rounded down to MiB, excluding filesystem overhead;
 - received/sent CYBOU frame bytes over exactly 60 complete seconds, each rounded
   down to KiB; includes service/retry bytes and excludes TLS/TCP overhead;
 - most recent completed process CPU mean: online logical processors, actual
@@ -67,6 +67,9 @@ CPU means are known only for windows of 60–120 seconds and age at most 60 seco
 other windows remain unknown in the report even when locally available. CPU
 includes the entire process and is not host, affinity or quota utilization.
 Physical stored lengths must not be labelled unique content or verified service.
+`provider_used_MiB` comes from `FinalizedChunkStore::UsedBytes()`: accounted
+admitted provider replica lengths, not active contractual lease or placement
+obligations. It does not establish that those bytes were recently served.
 
 Exclude wall-clock sample time, runtime uptime/start identifier, lifetime byte
 totals, processor model, executable/build identifier, disk path/free space,
@@ -94,7 +97,7 @@ Reply is exactly 191 bytes:
 |---|---|---:|
 | Binding | NetworkBinding[32], echoed challenge[32], cache_age_ms:u32 | 68 |
 | Cursor | known:u8, height:u64, tip[32] | 41 |
-| Storage | known:u8, V_bytes:u64, stored_MiB:u64, provider_budget_bytes:u64, obligations_MiB:u64 | 33 |
+| Storage | known:u8, V_bytes:u64, stored_MiB:u64, provider_budget_bytes:u64, provider_used_MiB:u64 | 33 |
 | Traffic | known:u8, window_ms:u32, received_KiB:u64, sent_KiB:u64 | 21 |
 | CPU | known:u8, processors:u32, window_ms:u32, intervals:u32, age_ms:u32, mean_basis_points:u16 | 19 |
 | Memory | known:u8, resident_MiB:u64 | 9 |
@@ -124,8 +127,10 @@ unrepresentable aggregates are unknown, not wrapped or saturated totals.
   and sessions. Responder additionally serves at most 32 requests per 30 seconds
   per runtime; collector sends at most 16 per 30 seconds, with four outstanding
   observation requests globally. No retries before the per-IP interval expires.
-- Reply deadline is five seconds. A duplicate, late, unsolicited, foreign-session
-  or mismatched-challenge reply never replaces a sample. Malformed frames follow
+- The optional session-owner transaction has a two-second total deadline.
+  The exchange guard retains a five-second upper bound for pending challenges;
+  owner cleanup removes them earlier on completion/timeout. A duplicate, late,
+  unsolicited, foreign-session or mismatched-challenge reply never replaces a sample. Malformed frames follow
   existing local protocol-abuse handling; unavailable/rate-limited reports do not
   penalize consensus, payments, storage placement or Identity.
 - Bound the shared per-IP rate limiter at 128 entries, retaining cooldown state
@@ -164,8 +169,8 @@ Cache collection runs guard expiry; default clock reads occur under the guard
 mutex, so concurrent collection/transactions do not look like clock regression.
 The guard does not prove admission or truthful measurements independently of its
 caller. No automatic poller calls this transaction yet. Scheduled polling,
-busy-session fairness, report storage/grouping/consolidation, collector overhead
-and coordinated deployed-software acceptance remain implementation work.
+busy-session fairness, runtime store lifecycle/consolidated snapshot wiring,
+collector overhead and coordinated deployed-software acceptance remain work.
 
 ## Grouping, expiry and consolidation
 
@@ -193,7 +198,7 @@ Even address-group sums cannot prove unique processes, disks or failure domains.
 No address history is retained in charts, and generic diagnostics must not write
 challenges/report payloads/IP labels. Existing live peer UI has its own inventory.
 
-Permitted totals: sum selected reported V/budget/stored-copy units/obligations,
+Permitted totals: sum selected reported V/budget/stored-copy units/admitted provider bytes,
 clearly labelled declarations from this partial reporting set, with component
 counts and rounding. Keep receive and send rates separate: adding them double
 counts transfers across reporting endpoints. Storage utilization is sum reported
@@ -248,8 +253,12 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Implement in bounded packages: codec/validation; narrow cache; scheduled direct
-request/reply with ingress limits; address-group consolidation; Network/Console.
+Next bounded packages: runtime-owned group lifecycle and immutable address-free
+snapshot; Network/Console partial-coverage cards and cohort chart segments; then
+low-priority idle-session polling with the two-second owner deadline. Codec,
+cache, guarded direct TLS and standalone address-group totals are implemented.
+Auto polling waits for coordinated deployed-software acceptance. No extra wire
+fields or persistent observation history are part of this sequence.
 Measure collector cost and check protocol/traffic accounting overhead. Existing
 local telemetry remains available until real reports are implemented.
 

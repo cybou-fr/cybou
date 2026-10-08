@@ -31,10 +31,10 @@ ObservationReport CybouNodeRuntime::CollectObservationReport() const
     }
     const auto capacity = m_config.storage_capacity_bytes.value_or(0);
     if (capacity >= (uint64_t{15} << 30) && m_provider.chunk_blob_store && m_provider.finalized_chunk_store) {
-        const auto obligations = m_provider.finalized_chunk_store->UsedBytes();
+        const auto provider_used = m_provider.finalized_chunk_store->UsedBytes();
         // UsedBytes uses UINT64_MAX as the unreadable-counter sentinel.
-        if (obligations != std::numeric_limits<uint64_t>::max()) r.storage = {true, capacity,
-            m_provider.chunk_blob_store->UsedBytes() >> 20, m_provider.finalized_chunk_store->CapacityBytes(), obligations >> 20};
+        if (provider_used != std::numeric_limits<uint64_t>::max()) r.storage = {true, capacity,
+            m_provider.chunk_blob_store->UsedBytes() >> 20, m_provider.finalized_chunk_store->CapacityBytes(), provider_used >> 20};
     }
     const auto traffic = m_traffic->WindowSnapshot();
     if (traffic.window_ms == 60000) r.traffic = {true, 60000, traffic.window_received_bytes >> 10, traffic.window_sent_bytes >> 10};

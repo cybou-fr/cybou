@@ -797,7 +797,7 @@ std::optional<ObservationReport> PeerSession::RequestObservation(CybouNodeRuntim
     const auto unavailable = [&]() -> std::optional<ObservationReport> {
         boost::system::error_code ignored; m_socket.close(ignored); return std::nullopt;
     };
-    const auto deadline = started + std::chrono::seconds{5};
+    const auto deadline = started + OBSERVATION_TRANSACTION_TIMEOUT;
     if (!Write(Frame{MessageType::GET_OBSERVATION, EncodeObservationRequest(*request)}, deadline)) return unavailable();
     const auto response = Read(deadline);
     if (!response || response->type != MessageType::OBSERVATION) return unavailable();
@@ -1236,7 +1236,8 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         // A local budget refusal drops this request, without treating it as abuse.
         if (!runtime.GetObservationExchange()->AdmitResponse(context, remote.address(), observation)) return true;
         const auto bytes = runtime.ReadObservationReport(observation.challenge);
-        return Write(Frame{MessageType::OBSERVATION, {bytes.begin(), bytes.end()}});
+        return Write(Frame{MessageType::OBSERVATION, {bytes.begin(), bytes.end()}},
+            std::chrono::steady_clock::now() + OBSERVATION_TRANSACTION_TIMEOUT);
     }
     std::shared_ptr<void> transfer;
     if (request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||

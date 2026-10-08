@@ -21,8 +21,8 @@ void Validate(const ObservationReport& r)
         // DEC-289 minimum reporting policy; not a storage admission decision.
         Require(s.capacity_bytes >= (uint64_t{15} << 30));
         const auto budget = (s.capacity_bytes / 3) * 2 + (s.capacity_bytes % 3) * 2 / 3;
-        Require(s.provider_budget_bytes == budget && s.stored_mib <= max_mib && s.obligations_mib <= max_mib);
-    } else Require(s.capacity_bytes == 0 && s.stored_mib == 0 && s.provider_budget_bytes == 0 && s.obligations_mib == 0);
+        Require(s.provider_budget_bytes == budget && s.stored_mib <= max_mib && s.provider_used_mib <= max_mib);
+    } else Require(s.capacity_bytes == 0 && s.stored_mib == 0 && s.provider_budget_bytes == 0 && s.provider_used_mib == 0);
     const auto& t = r.traffic;
     if (t.known) Require(t.window_ms == 60000 && t.received_kib <= max_kib && t.sent_kib <= max_kib);
     else Require(t.window_ms == 0 && t.received_kib == 0 && t.sent_kib == 0);
@@ -55,7 +55,7 @@ std::vector<unsigned char> EncodeObservationReport(const ObservationReport& r)
     w.Fixed(r.network_binding); w.Fixed(r.challenge); w.U32(r.cache_age_ms);
     w.U8(r.cursor.known); w.U64(r.cursor.height); w.Fixed(r.cursor.tip);
     w.U8(r.storage.known); w.U64(r.storage.capacity_bytes); w.U64(r.storage.stored_mib);
-    w.U64(r.storage.provider_budget_bytes); w.U64(r.storage.obligations_mib);
+    w.U64(r.storage.provider_budget_bytes); w.U64(r.storage.provider_used_mib);
     w.U8(r.traffic.known); w.U32(r.traffic.window_ms); w.U64(r.traffic.received_kib); w.U64(r.traffic.sent_kib);
     w.U8(r.cpu.known); w.U32(r.cpu.processors); w.U32(r.cpu.window_ms); w.U32(r.cpu.intervals);
     w.U32(r.cpu.age_ms); w.U16(r.cpu.mean_basis_points);

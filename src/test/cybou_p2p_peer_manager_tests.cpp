@@ -13,6 +13,7 @@
 
 #include <boost/asio.hpp>
 #include <boost/test/unit_test.hpp>
+#include <future>
 
 #include <openssl/evp.h>
 #include <openssl/err.h>
@@ -77,6 +78,35 @@ std::optional<TestTlsIdentity> CreateTestTlsIdentity(const std::filesystem::path
 } // namespace
 
 BOOST_FIXTURE_TEST_SUITE(cybou_p2p_peer_manager_tests, CybouTestSetup)
+
+BOOST_AUTO_TEST_CASE(observation_timeout_releases_the_owner_and_closes_the_stream)
+{
+    CybouServiceTestFixture fixture;
+    const auto identity = CreateTestTlsIdentity(fixture.directory); BOOST_REQUIRE(identity);
+    using namespace cybou::p2p; using boost::asio::ip::tcp;
+    boost::asio::io_context io; tcp::acceptor acceptor{io, {boost::asio::ip::address_v4::loopback(), 0}};
+    std::promise<void> release; auto gate = release.get_future();
+    bool received{false};
+    std::jthread server{[&] {
+        tcp::socket socket{io}; acceptor.accept(socket);
+        TlsSessionConfig tls; tls.certificate_chain_file = identity->certificate; tls.private_key_file = identity->private_key;
+        PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
+        if (!session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 1})) return;
+        const auto request = session.ReceiveFrame(); received = request && request->type == MessageType::GET_OBSERVATION;
+        gate.wait_for(std::chrono::seconds{10}); // Keep TLS alive without returning telemetry.
+    }};
+    tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+    TlsSessionConfig tls; tls.expected_server_spki_sha256 = identity->pin;
+    PeerSession client{std::move(socket), TransportRole::CLIENT, std::move(tls)};
+    BOOST_REQUIRE(client.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(), .finalized_tip = *fixture.runtime->GetFinalizedTip(), .nonce = 2}));
+    const auto started = std::chrono::steady_clock::now();
+    const auto result = client.RequestObservation(*fixture.runtime);
+    const auto elapsed = std::chrono::steady_clock::now() - started;
+    release.set_value(); server.join();
+    BOOST_CHECK(received && !result && !client.Socket().is_open());
+    BOOST_CHECK(elapsed >= OBSERVATION_TRANSACTION_TIMEOUT);
+    BOOST_CHECK(elapsed < std::chrono::seconds{4}); // Detect the former five-second owner stall.
+}
 
 BOOST_AUTO_TEST_CASE(observation_frames_have_exact_sizes)
 {

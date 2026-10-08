@@ -16,7 +16,7 @@ struct ObservationRow {
 };
 struct ObservationStorageTotals {
     size_t contributors{0};
-    std::optional<uint64_t> capacity_bytes, stored_copy_bytes, provider_budget_bytes, obligations_bytes;
+    std::optional<uint64_t> capacity_bytes, stored_copy_bytes, provider_budget_bytes, provider_used_bytes;
     std::optional<double> utilization_percent;
 };
 struct ObservationTrafficTotals {

@@ -47,7 +47,7 @@ BOOST_AUTO_TEST_CASE(observation_cache_refreshes_without_identity_gui_or_diagnos
     } while (std::chrono::steady_clock::now() < deadline);
     BOOST_CHECK(report.cursor.known); BOOST_CHECK_EQUAL(report.cursor.height, 0U);
     BOOST_CHECK(report.storage.known); BOOST_CHECK_EQUAL(report.storage.capacity_bytes, uint64_t{15} << 30);
-    BOOST_CHECK_EQUAL(report.storage.stored_mib, 0U); BOOST_CHECK_EQUAL(report.storage.obligations_mib, 0U);
+    BOOST_CHECK_EQUAL(report.storage.stored_mib, 0U); BOOST_CHECK_EQUAL(report.storage.provider_used_mib, 0U);
     BOOST_CHECK(!report.traffic.known && !report.cpu.known); // complete windows have not elapsed
     BOOST_CHECK(report.challenge == nonce);
     BOOST_CHECK(cybou::Hash256{report.network_binding} == runtime.GetNetworkBinding());

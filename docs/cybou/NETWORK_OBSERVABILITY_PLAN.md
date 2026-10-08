@@ -18,10 +18,10 @@ peer details, Monitor and read-only Console independently of Identity unlock.
 | Metric | Source and meaning | Evidence boundary |
 |---|---|---|
 | Finalized operations/min | Unique operations in independently verified blocks, over declared 1/5/15-minute windows | One chain stream, never summed across peers; historical sync separate from live observation; declare completeness and verified height |
-| Transfers | Actual CYBOU transport received/sent bytes/s, with storage PUT/GET payload counters separately | Local first, then reporting cohort; summed send+receive counts both ends, not unique useful delivery |
-| Data served | Actual encrypted ChunkBlobStore bytes locally and across deduplicated reporting nodes | Physical copies include replicas/cache; not unique logical content or verified remote durability |
+| CYBOU frame traffic | Actual TLS application frame received/sent bytes/s, including service, retry and observation traffic; storage PUT/GET payload counters remain separate work | Local first, then reporting cohort; summed send+receive counts both ends, not unique useful delivery |
+| Stored encrypted copies | Accounted encrypted ChunkBlobStore lengths locally and declared by selected reporting address groups | Physical copies include replicas/cache; not unique logical content or verified remote durability |
 | Register and rented volume | Active finalized publications, authorized billing units and active lease units at a verified cursor | Units times 512 KiB are billed allocation, not measured plaintext or physical bytes; never sum identical registers from peers |
-| Storage capacity | V, physical use/headroom, provider budget floor(2V/3), obligations/headroom and actual disk free space | Policy and physical limits stay separate; cohort sums are declared capacity, not complete network totals |
+| Storage capacity | V, physical use/headroom, provider budget floor(2V/3), admitted provider bytes/budget headroom and actual local disk free space | Policy and physical limits stay separate; cohort sums are declared capacity, not complete network totals |
 | Potential usable storage | Headroom constrained by provider budget, physical store, disk reserve and eligible remote replica pairs | Scoped estimate only after placement/deduplication evidence exists; sum V divided by two cannot establish usable Beta capacity |
 | Load | CYBOU process CPU/memory, storage I/O, queue depth/age and admission/transfer errors; host metrics separately | Normalize CPU by available processors; mean with sample count; capacity utilization = sum used / sum capacity; no synthetic universal load score |
 | Node health | Running/initialized, safety halt, admission readiness, session reachability and storage failures | Reasons and age; remote resources self-reported; silence or old block alone cannot establish a network outage |
@@ -72,8 +72,8 @@ frame traffic, operation observation windows and bounded charts, process memory,
 normalized process CPU/completed means, storage-policy headroom and OS disk
 availability. Console `health`, `metrics` and `capacity` expose these readings.
 Remaining: canonical register aggregates, PUT/GET payload breakdown, storage I/O,
-queue age/errors, longer/resource history, direct-report implementation,
-relayed/cross-address design and consolidation,
+queue age/errors, longer/resource history, runtime direct-report acquisition/UI,
+relayed/cross-address design,
 and service-eligible network capacity estimates. Local gauges are not network totals.
 
 1. **O1 Local collector:** passive counters/windows, canonical register aggregates
@@ -100,6 +100,30 @@ and service-eligible network capacity estimates. Local gauges are not network to
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
    optional accepted historical throughput ceiling beside actual current rate.
    Benchmarks validate ceilings separately and are not needed for monitoring.
+
+### Next delivery order after review (2026-10-08)
+
+1. Connect the existing bounded group store to runtime session close/expiry and
+   expose one immutable address-free consolidated snapshot. No automatic polling
+   in this package; new/restarted runtimes start empty and missing stays Unknown.
+2. Feed Network/Console cards and charts from that snapshot. Label capacity
+   `Observed storage capacity · N reporting groups`, with per-metric contributor
+   counts, age, missing/expired/limited coverage and explicit declarations.
+   Whole-network coverage stays Unknown. Segment charts on cohort changes.
+3. Add a low-priority scheduler only on genuinely idle existing session owners,
+   after coordinated deployment acceptance. Skip busy sessions, preserve block,
+   relay and storage progress, and cap each optional transaction at two seconds.
+4. Add local PUT/GET payload byte/rate counters so useful storage transfers can
+   be inspected separately from CYBOU frame traffic (service/retries/observation).
+5. Add storage I/O, oldest local queue age, bounded error counters and canonical
+   active-publication/lease-allocation aggregates at one verified cursor.
+
+`provider_used_mib` reports `FinalizedChunkStore::UsedBytes()`, admitted provider
+replica lengths; it is not a measure of active contractual lease obligations.
+The label correction does not change wire position, units, payload size or values.
+No additional wire fields or persistent observation history are required here.
+One locally verified stream supplies finalized op/min. Present rates and declared
+capacity do not establish a throughput ceiling or independent replica hosts.
 
 ### O1 first bounded package (2026-10-08)
 
@@ -236,7 +260,7 @@ missing parents and OS errors have no disk measurement. The existing background
 snapshot supplies the sample UTC time independently of Network visibility.
 
 Network Advanced Storage shows accounted encrypted blob-byte lengths / V,
-utilization, saturated policy headroom `max(V - used, 0)`, provider obligations /
+utilization, saturated policy headroom `max(V - used, 0)`, admitted provider bytes /
 budget and a separate OS-available-disk tile. Read-only public Console `capacity`
 adds exact bytes, provider budget headroom and time in EN/FR, including while the
 Identity is locked. No provider DB or foreign-content enumeration is introduced.
