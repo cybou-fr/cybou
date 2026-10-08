@@ -159,6 +159,13 @@ CybouDesktopModel::~CybouDesktopModel()
 
 void CybouDesktopModel::notify(const QString& text, const QString& action_label, std::function<void()> action)
 {
+    if (action) {
+        const auto generation = m_mail_generation;
+        const QPointer<CybouDesktopModel> guard{this};
+        action = [guard, generation, original = std::move(action)] {
+            if (guard && guard->m_mail_generation == generation && guard->m_status.identity_state == CybouIdentityState::Active) original();
+        };
+    }
     Q_EMIT notificationRequested(text, action_label, std::move(action));
 }
 
@@ -1671,6 +1678,22 @@ QString CybouDesktopModel::requestFileUpload(const QString& source_path, const Q
     return id;
 }
 
+std::function<void(CybouCommandState, const QString&)> CybouDesktopModel::fileCommand(CommandDone done)
+{
+    const QPointer<CybouDesktopModel> guard{this};
+    const auto generation = m_mail_generation;
+    const auto terminal = std::make_shared<bool>(false);
+    return [guard, generation, terminal, done = std::move(done)](CybouCommandState state, const QString& error) {
+        if (!guard || (state != CybouCommandState::Committed && state != CybouCommandState::Failed)) return;
+        QTimer::singleShot(0, guard, [guard, generation, terminal, state, error, done] {
+            if (!guard || guard->m_mail_generation != generation || *terminal) return;
+            *terminal = true;
+            if (done) done(state == CybouCommandState::Committed, error);
+            else if (state == CybouCommandState::Failed) guard->notify(error);
+        });
+    };
+}
+
 void CybouDesktopModel::requestFileDownload(const QString& file_id, const QString& destination)
 {
     if (!m_backend || m_status.identity_state != CybouIdentityState::Active || !fileItem(file_id)) return;
@@ -1686,36 +1709,51 @@ const CybouFileItem* CybouDesktopModel::fileItem(const QString& id) const
     return nullptr;
 }
 
-QString CybouDesktopModel::requestCreateFolder(const QString& name, const QString& parent_id)
+QString CybouDesktopModel::requestCreateFolder(const QString& name, const QString& parent_id, CommandDone done)
 {
-    if (!filesReady() || name.trimmed().isEmpty()) return {};
+    if (!filesReady() || name.trimmed().isEmpty()) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return {};
+    }
     const QString id = NewFileId();
-    if (id.isEmpty()) return {};
-    m_backend->createFolder(id, name.trimmed(), parent_id);
+    if (id.isEmpty()) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return {};
+    }
+    m_backend->createFolder(id, name.trimmed(), parent_id, fileCommand(std::move(done)));
     return id;
 }
 
-void CybouDesktopModel::requestRenameFile(const QString& id, const QString& name)
+void CybouDesktopModel::requestRenameFile(const QString& id, const QString& name, CommandDone done)
 {
-    const auto* item = fileItem(id);
-    if (!filesReady() || !item || name.trimmed().isEmpty() || item->name == name.trimmed()) return;
-    m_backend->renameFile(id, name.trimmed());
+    if (!filesReady() || !fileItem(id) || name.trimmed().isEmpty()) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return;
+    }
+    m_backend->renameFile(id, name.trimmed(), fileCommand(std::move(done)));
 }
 
-void CybouDesktopModel::requestMoveFile(const QString& id, const QString& parent_id)
+void CybouDesktopModel::requestMoveFile(const QString& id, const QString& parent_id, CommandDone done)
 {
-    const auto* item = fileItem(id);
-    if (!filesReady() || !item || id == parent_id || item->parent_id == parent_id) return;
-    m_backend->moveFile(id, parent_id);
+    if (!filesReady() || !fileItem(id) || id == parent_id) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return;
+    }
+    m_backend->moveFile(id, parent_id, fileCommand(std::move(done)));
 }
 
-QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& parent_id)
+QString CybouDesktopModel::requestCopyFile(const QString& id, const QString& parent_id, CommandDone done)
 {
-    const auto* item = fileItem(id);
-    if (!filesReady() || !item || item->folder) return {};
+    if (!filesReady() || !fileItem(id) || fileItem(id)->folder) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return {};
+    }
     const QString copy_id = NewFileId();
-    if (copy_id.isEmpty()) return {};
-    m_backend->copyFile(id, copy_id, parent_id);
+    if (copy_id.isEmpty()) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return {};
+    }
+    m_backend->copyFile(id, copy_id, parent_id, fileCommand(std::move(done)));
     return copy_id;
 }
 
@@ -1725,14 +1763,22 @@ void CybouDesktopModel::requestFileStarred(const QString& id, bool starred)
     if (filesReady() && item && item->starred != starred) m_backend->setFileStarred(id, starred);
 }
 
-void CybouDesktopModel::requestTrashFile(const QString& id)
+void CybouDesktopModel::requestTrashFile(const QString& id, CommandDone done)
 {
-    if (filesReady() && fileItem(id)) m_backend->trashFile(id);
+    if (!filesReady() || !fileItem(id)) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return;
+    }
+    m_backend->trashFile(id, fileCommand(std::move(done)));
 }
 
-void CybouDesktopModel::requestRestoreFile(const QString& id)
+void CybouDesktopModel::requestRestoreFile(const QString& id, CommandDone done)
 {
-    if (filesReady() && fileItem(id)) m_backend->restoreFile(id);
+    if (!filesReady() || !fileItem(id)) {
+        fileCommand(std::move(done))(CybouCommandState::Failed, tr("Files are unavailable."));
+        return;
+    }
+    m_backend->restoreFile(id, fileCommand(std::move(done)));
 }
 
 void CybouDesktopModel::requestDeleteMailForever(const QStringList& ids, CommandDone done)

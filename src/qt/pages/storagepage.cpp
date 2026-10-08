@@ -343,9 +343,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     });
     m_selection_trash = selection_action(Glyph::Trash, tr("Move to Trash"), [this] {
         const auto ids = selectedIds();
-        for (const auto& id : ids) m_model->requestTrashFile(id);
-        m_model->notify(tr("%1 items moved to Trash").arg(ids.size()), tr("Undo"),
-            [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
+        moveFilesTo(ids, {}, true);
     });
     m_selection_restore = selection_action(Glyph::History, tr("Restore"), [this] {
         for (const auto& id : selectedIds()) m_model->requestRestoreFile(id);
@@ -487,9 +485,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     connect(trash_key, &QShortcut::activated, this, [this] {
         const auto ids = selectedIds();
         if (m_view == View::Trash || ids.isEmpty()) return;
-        for (const auto& id : ids) m_model->requestTrashFile(id);
-        m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
+        moveFilesTo(ids, {}, true);
     });
     auto* rename_key = new QShortcut{QKeySequence{Qt::Key_F2}, this};
     rename_key->setContext(Qt::WidgetWithChildrenShortcut);
@@ -548,7 +544,7 @@ void StoragePage::setView(View view)
     rebuild();
 }
 
-bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id)
+bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id, bool trash)
 {
     // A folder cannot move into itself or one of its descendants.
     for (QString cursor = folder_id; !cursor.isEmpty();) {
@@ -560,14 +556,30 @@ bool StoragePage::moveFilesTo(const QStringList& ids, const QString& folder_id)
     QVector<QPair<QString, QString>> before;
     for (const auto& id : ids) {
         const auto* item = m_model->fileItem(id);
-        if (!item || item->parent_id == folder_id) continue;
+        if (!item) continue;
         before.append({id, item->parent_id});
     }
     if (before.isEmpty()) return false;
-    for (const auto& [id, _] : before) m_model->requestMoveFile(id, folder_id);
-    const QString target = folder_id.isEmpty() ? ViewName(View::MyFiles) : folderName(folder_id);
-    m_model->notify(before.size() == 1 ? tr("Moved to “%1”").arg(target) : tr("%1 items moved to “%2”").arg(before.size()).arg(target),
-        tr("Undo"), [model = m_model, before] { for (const auto& [id, parent] : before) model->requestMoveFile(id, parent); });
+    struct Batch { int remaining; int failed{0}; QVector<QPair<QString, QString>> saved; };
+    auto batch = std::make_shared<Batch>(Batch{static_cast<int>(before.size())});
+    const QPointer<CybouDesktopModel> model{m_model};
+    m_model->notify(tr("Saving file changes…"));
+    for (const auto& entry : before) {
+        auto done = [model, batch, entry](bool ok, const QString&) {
+            if (!model) return;
+            if (ok) batch->saved.append(entry); else ++batch->failed;
+            if (--batch->remaining) return;
+            const auto text = batch->failed
+                ? tr("%1 changes saved; %2 failed. Try again.").arg(batch->saved.size()).arg(batch->failed)
+                : tr("%1 changes saved locally; awaiting network confirmation.").arg(batch->saved.size());
+            model->notify(text, batch->saved.isEmpty() ? QString{} : tr("Undo"), [model, saved = batch->saved] {
+                if (!model) return;
+                for (const auto& [id, parent] : saved) model->requestMoveFile(id, parent);
+            });
+        };
+        if (trash) m_model->requestTrashFile(entry.first, std::move(done));
+        else m_model->requestMoveFile(entry.first, folder_id, std::move(done));
+    }
     return true;
 }
 
@@ -688,11 +700,8 @@ bool StoragePage::eventFilter(QObject* watched, QEvent* event)
             moveFilesTo(ids, {});
         } else if (row == static_cast<int>(View::Starred)) {
             for (const auto& id : ids) m_model->requestFileStarred(id, true);
-            m_model->notify(ids.size() == 1 ? tr("Starred") : tr("%1 items starred").arg(ids.size()));
         } else {
-            for (const auto& id : ids) m_model->requestTrashFile(id);
-            m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-                tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
+            moveFilesTo(ids, {}, true);
         }
         drag->acceptProposedAction();
         return true;
@@ -1110,8 +1119,8 @@ void StoragePage::promptNewFolder()
     bool ok{false};
     const QString name = QInputDialog::getText(this, tr("New folder"), tr("Folder name"), QLineEdit::Normal,
         tr("Untitled folder"), &ok).trimmed();
-    if (ok && !name.isEmpty() && !m_model->requestCreateFolder(name, m_view == View::MyFiles ? m_folder : QString{}).isEmpty())
-        m_model->notify(tr("Folder “%1” created").arg(name));
+    if (ok && !name.isEmpty())
+        m_model->requestCreateFolder(name, m_view == View::MyFiles ? m_folder : QString{});
 }
 
 void StoragePage::promptUploadFolder()
@@ -1332,7 +1341,7 @@ void StoragePage::promptMove(const QString& id)
     connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     layout->addWidget(buttons);
-    if (dialog.exec() == QDialog::Accepted) m_model->requestMoveFile(id, folders->currentData().toString());
+    if (dialog.exec() == QDialog::Accepted) moveFilesTo({id}, folders->currentData().toString());
 }
 
 void StoragePage::download(const QString& id)
@@ -1369,7 +1378,6 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     if (m_view == View::Trash) {
         menu.addAction(tr("Restore"), this, [this, ids] {
             for (const auto& i : ids) m_model->requestRestoreFile(i);
-            m_model->notify(ids.size() == 1 ? tr("Restored") : tr("%1 items restored").arg(ids.size()));
         });
         menu.addAction(tr("Delete forever"), this, [this, ids] {
             if (QMessageBox::question(this, tr("Delete forever"),
@@ -1391,7 +1399,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     menu.addAction(tr("Move"), this, [this, id] { promptMove(id); });
     if (!item->folder) {
         menu.addAction(tr("Make a copy"), this, [this, id, parent = item->parent_id] {
-            if (!m_model->requestCopyFile(id, parent).isEmpty()) m_model->notify(tr("Copy created"));
+            m_model->requestCopyFile(id, parent);
         });
     }
     menu.addAction(item->starred ? tr("Remove star") : tr("Star"), this,
@@ -1404,9 +1412,7 @@ void StoragePage::showContextMenu(const QPoint& global_pos)
     }
     menu.addSeparator();
     menu.addAction(tr("Move to Trash"), this, [this, ids] {
-        for (const auto& i : ids) m_model->requestTrashFile(i);
-        m_model->notify(ids.size() == 1 ? tr("Moved to Trash") : tr("%1 items moved to Trash").arg(ids.size()),
-            tr("Undo"), [model = m_model, ids] { for (const auto& i : ids) model->requestRestoreFile(i); });
+        moveFilesTo(ids, {}, true);
     })
         ->setShortcut(QKeySequence::Delete);
     menu.addAction(tr("Details"), this, [this, id] { showDetails(id); });

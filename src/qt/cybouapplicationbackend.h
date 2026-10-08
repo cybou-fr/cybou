@@ -97,14 +97,14 @@ public:
      * Backends retain them unchanged in pending and indexed projections. */
     virtual void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) = 0;
     virtual void downloadFile(const QString& file_id, const QString& destination) = 0;
-    virtual void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) = 0;
-    virtual void renameFile(const QString& id, const QString& name) = 0;
-    virtual void moveFile(const QString& id, const QString& parent_id) = 0;
-    virtual void copyFile(const QString& id, const QString& copy_id, const QString& parent_id) = 0;
+    virtual void createFolder(const QString& folder_id, const QString& name, const QString& parent_id, CommandProgress progress = {}) = 0;
+    virtual void renameFile(const QString& id, const QString& name, CommandProgress progress = {}) = 0;
+    virtual void moveFile(const QString& id, const QString& parent_id, CommandProgress progress = {}) = 0;
+    virtual void copyFile(const QString& id, const QString& copy_id, const QString& parent_id, CommandProgress progress = {}) = 0;
     virtual void setFileStarred(const QString& id, bool starred) = 0;
     /** Trash, restore and delete apply to a folder's contents too. */
-    virtual void trashFile(const QString& id) = 0;
-    virtual void restoreFile(const QString& id) = 0;
+    virtual void trashFile(const QString& id, CommandProgress progress = {}) = 0;
+    virtual void restoreFile(const QString& id, CommandProgress progress = {}) = 0;
     virtual void deleteFile(const QString& id) = 0;
     /** Deletes several items permanently; a backend may publish them as one change (one fee). */
     virtual void deleteFiles(const QStringList& ids) { for (const auto& id : ids) deleteFile(id); }

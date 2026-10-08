@@ -409,13 +409,13 @@ public:
      * projection changes only when the backend reports the result. Commands
      * that create an item return its client id, or empty when unavailable.
      */
-    QString requestCreateFolder(const QString& name, const QString& parent_id = {});
-    void requestRenameFile(const QString& id, const QString& name);
-    void requestMoveFile(const QString& id, const QString& parent_id);
-    QString requestCopyFile(const QString& id, const QString& parent_id);
+    QString requestCreateFolder(const QString& name, const QString& parent_id = {}, CommandDone done = {});
+    void requestRenameFile(const QString& id, const QString& name, CommandDone done = {});
+    void requestMoveFile(const QString& id, const QString& parent_id, CommandDone done = {});
+    QString requestCopyFile(const QString& id, const QString& parent_id, CommandDone done = {});
     void requestFileStarred(const QString& id, bool starred);
-    void requestTrashFile(const QString& id);
-    void requestRestoreFile(const QString& id);
+    void requestTrashFile(const QString& id, CommandDone done = {});
+    void requestRestoreFile(const QString& id, CommandDone done = {});
     void requestDeleteFile(const QString& id);
     /** Permanently deletes everything in Trash as one change (one network fee). */
     void requestEmptyTrash();
@@ -546,6 +546,7 @@ private:
     std::function<void(CybouCommandState, const QString&)> mailCommand(
         const QString& item_id, const QString& title, CommandDone done,
         CybouMailTaskKind kind = CybouMailTaskKind::DraftSave, const QString& related_id = {});
+    std::function<void(CybouCommandState, const QString&)> fileCommand(CommandDone done);
     /** Mail/Files featureAvailability never exceed what the backend can do. */
     CybouFeatureAvailability honest(CybouFeatureAvailability featureAvailability) const;
     CybouFeatureAvailability m_requested_availability;

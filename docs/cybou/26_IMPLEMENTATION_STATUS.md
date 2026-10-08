@@ -3,6 +3,27 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Acknowledged Files changes and Undo package (2026-10-08)
+
+Folder creation, rename, move, copy, Trash and Restore report whether the
+publication intent was saved locally. Failed publication staging retains the
+existing item and reports failure; a failed new folder shows Needs attention.
+Move/Trash batches give pending feedback, count partial results and offer Undo
+only for saved changes. Undo queues an inverse move to the original folder,
+including from Trash, before or after the forward projection arrives. Apparent
+no-ops are checked against worker state, not a potentially older GUI snapshot.
+Session replacement/lock invalidates delayed replies and retained Undo actions.
+Acknowledgment does not imply network finalization or confirmed remote replicas.
+
+Validation: isolated MinGW application/test builds and the complete Qt suite
+passed 81 tests. Regression coverage exercises delayed/failed saves, partial
+results, early Undo, unavailable Files and stale session callbacks. The actual
+core adapter test queues a move and its inverse, and Trash and return to the
+original folder, before finalization; it verifies both final catalog outcomes.
+Native Windows focused tests also cover these two scenarios. FR strings cover
+pending/local acknowledgment and new failure states. No live DEVNET signer or
+node was restarted, and no network, genesis or deployment configuration changed.
+
 ## Acknowledged Mail deletion package (2026-10-08)
 
 Draft discard and permanent mailbox deletion now reuse correlated Mail command

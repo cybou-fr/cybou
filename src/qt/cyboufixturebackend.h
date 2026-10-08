@@ -61,13 +61,13 @@ public:
 
     void uploadFile(const QString& file_id, const QString& source_path, const QString& parent_id) override;
     void downloadFile(const QString& file_id, const QString& destination) override;
-    void createFolder(const QString& folder_id, const QString& name, const QString& parent_id) override;
-    void renameFile(const QString& id, const QString& name) override;
-    void moveFile(const QString& id, const QString& parent_id) override;
-    void copyFile(const QString& id, const QString& copy_id, const QString& parent_id) override;
+    void createFolder(const QString& folder_id, const QString& name, const QString& parent_id, CommandProgress progress = {}) override;
+    void renameFile(const QString& id, const QString& name, CommandProgress progress = {}) override;
+    void moveFile(const QString& id, const QString& parent_id, CommandProgress progress = {}) override;
+    void copyFile(const QString& id, const QString& copy_id, const QString& parent_id, CommandProgress progress = {}) override;
     void setFileStarred(const QString& id, bool starred) override;
-    void trashFile(const QString& id) override;
-    void restoreFile(const QString& id) override;
+    void trashFile(const QString& id, CommandProgress progress = {}) override;
+    void restoreFile(const QString& id, CommandProgress progress = {}) override;
     void deleteFile(const QString& id) override;
 
 private:

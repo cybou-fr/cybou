@@ -21,6 +21,15 @@ accessible names, tooltips and keyboard focus, and mutation actions require an
 active Identity and available Files backend. Permanent deletion keeps its
 explicit existing review. These actions do not imply finality or protection.
 
+Folder creation, rename, move, copy, Trash and Restore acknowledge the locally
+saved publication intent. They report a failed save rather than announcing a
+completed change. Move/Trash batches show pending feedback, count saved/failed
+items and offer Undo only for saved items. Undo queues the inverse move to each
+original folder even if the forward snapshot has not arrived; restoring from
+Trash this way retains the original folder. Lock/session replacement invalidates
+late replies and retained Undo actions. Network finalization and confirmed remote
+durability remain separate from this local acknowledgment.
+
 This document defines how CYBOU exposes encrypted file storage to ordinary
 users. Google Drive is the interaction reference for familiar file
 management patterns; CYBOU does not copy Google branding, provider account

@@ -68,6 +68,7 @@ private Q_SLOTS:
     void backendCommandsDriveProjection();
     void localMailCommandsWaitForCommit();
     void mailDeletionWaitsForDurableCommit();
+    void fileChangesAcknowledgeAndOrderUndo();
     void composerKeepsTextOnSaveAndSendFailure();
     void fileAdvancedSurvivesRefresh();
     void fileRowsRetainInteractionAcrossUpdates();

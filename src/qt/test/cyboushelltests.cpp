@@ -170,6 +170,8 @@ public:
     QHash<QString, CommandProgress> draft_results;
     QVector<CommandProgress> move_results;
     QVector<CommandProgress> delete_results;
+    QVector<CommandProgress> file_results;
+    QVector<QPair<QString, QString>> file_moves;
     CommandProgress send_result;
     QString send_draft_id;
 
@@ -189,13 +191,13 @@ public:
     void saveAttachmentToFiles(const QString& m, const QString&, const QString&) override { commands << QStringLiteral("saveAttachment:") + m; }
     void uploadFile(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("upload:") + id; }
     void downloadFile(const QString& id, const QString&) override { commands << QStringLiteral("download:") + id; }
-    void createFolder(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("folder:") + id; }
-    void renameFile(const QString& id, const QString&) override { commands << QStringLiteral("rename:") + id; }
-    void moveFile(const QString& id, const QString&) override { commands << QStringLiteral("move:") + id; }
-    void copyFile(const QString& id, const QString&, const QString&) override { commands << QStringLiteral("copy:") + id; }
+    void createFolder(const QString& id, const QString&, const QString&, CommandProgress progress = {}) override { commands << QStringLiteral("folder:") + id; file_results.append(progress); }
+    void renameFile(const QString& id, const QString&, CommandProgress progress = {}) override { commands << QStringLiteral("rename:") + id; file_results.append(progress); }
+    void moveFile(const QString& id, const QString& parent, CommandProgress progress = {}) override { commands << QStringLiteral("move:") + id; file_moves.append({id,parent}); file_results.append(progress); }
+    void copyFile(const QString& id, const QString&, const QString&, CommandProgress progress = {}) override { commands << QStringLiteral("copy:") + id; file_results.append(progress); }
     void setFileStarred(const QString& id, bool) override { commands << QStringLiteral("starFile:") + id; }
-    void trashFile(const QString& id) override { commands << QStringLiteral("trash:") + id; }
-    void restoreFile(const QString& id) override { commands << QStringLiteral("restore:") + id; }
+    void trashFile(const QString& id, CommandProgress progress = {}) override { commands << QStringLiteral("trash:") + id; file_results.append(progress); }
+    void restoreFile(const QString& id, CommandProgress progress = {}) override { commands << QStringLiteral("restore:") + id; file_results.append(progress); }
     void deleteFile(const QString& id) override { commands << QStringLiteral("delete:") + id; }
 
     void setAvailable(bool value)
@@ -1495,6 +1497,7 @@ void CybouShellTests::filesDropIntoFolders()
     auto* files = dynamic_cast<StoragePage*>(window->page(CybouPage::Files));
     QVERIFY(files->moveFilesTo({QStringLiteral("f-photo"), QStringLiteral("f-report")}, QStringLiteral("f-photos")));
     QCOMPARE(model->fileItem(QStringLiteral("f-report"))->parent_id, QStringLiteral("f-photos"));
+    QTRY_VERIFY(window->notifier()->findChild<QPushButton*>(QStringLiteral("notifierAction"))->isVisible());
     window->notifier()->trigger(); // Undo
     QVERIFY(model->fileItem(QStringLiteral("f-report"))->parent_id.isEmpty());
     // No folder cycles: Documents cannot move into itself or its child.
@@ -1654,11 +1657,13 @@ void CybouShellTests::backendCommandsDriveProjection()
     QCOMPARE(model.fileItem(QStringLiteral("f1"))->name, QStringLiteral("report.pdf"));
     QVERIFY(!model.fileItem(QStringLiteral("f1"))->trashed);
     QVERIFY(!model.fileItem(folder));
-    // Unknown items and no-op changes send nothing.
+    // Unknown items send nothing; apparent no-ops must reach the worker because
+    // an earlier queued change may not yet be reflected in this projection.
     backend.commands.clear();
     model.requestRenameFile(QStringLiteral("missing"), QStringLiteral("x"));
-    model.requestRenameFile(QStringLiteral("f1"), QStringLiteral("report.pdf"));
     QVERIFY(backend.commands.isEmpty());
+    model.requestRenameFile(QStringLiteral("f1"), QStringLiteral("report.pdf"));
+    QCOMPARE(backend.commands, QStringList{QStringLiteral("rename:f1")});
 
     // The backend's reply is what changes the projection.
     auto renamed = *model.fileItem(QStringLiteral("f1"));
@@ -1961,6 +1966,64 @@ void CybouShellTests::mailDeletionWaitsForDurableCommit()
     backend.delete_results.last()(CybouCommandState::Committed, {});
     QTRY_VERIFY(model.mailItems().isEmpty());
     QVERIFY(!reentrant_done);
+}
+
+void CybouShellTests::fileChangesAcknowledgeAndOrderUndo()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    auto first = ProtectedFile(QStringLiteral("first"), QStringLiteral("First.pdf"));
+    auto second = ProtectedFile(QStringLiteral("second"), QStringLiteral("Second.pdf"));
+    model.setFileItems({first,second});
+    StoragePage page{&model};
+    std::function<void()> undo;
+    QString notice;
+    connect(&model, &CybouDesktopModel::notificationRequested, &model,
+        [&](const QString& text, const QString&, std::function<void()> action) { notice = text; undo = std::move(action); });
+    QVERIFY(page.moveFilesTo({first.id,second.id},QStringLiteral("folder")));
+    QCOMPARE(notice,QStringLiteral("Saving file changes…"));
+    QVERIFY(!undo);
+    QCOMPARE(model.fileItem(first.id)->parent_id,QString{});
+    backend.file_results[0](CybouCommandState::Committed,{});
+    backend.file_results[1](CybouCommandState::Failed,QStringLiteral("DB failed"));
+    QTRY_VERIFY(static_cast<bool>(undo));
+    QCOMPARE(notice,QStringLiteral("1 changes saved; 1 failed. Try again."));
+    // The forward intent is saved, but its projection has not arrived yet.
+    undo();
+    QCOMPARE(backend.file_moves.size(),3);
+    QCOMPARE(backend.file_moves.last(),qMakePair(first.id,QString{}));
+    const auto retained_undo=undo;
+    int completed=0;
+    model.requestRenameFile(first.id,QStringLiteral("Renamed.pdf"),[&](bool ok,const QString&) { QVERIFY(!ok); ++completed; });
+    backend.file_results.last()(CybouCommandState::Running,{});
+    QCoreApplication::processEvents();
+    QCOMPARE(completed,0);
+    backend.file_results.last()(CybouCommandState::Failed,QStringLiteral("DB failed"));
+    QTRY_COMPARE(completed,1);
+    QCOMPARE(model.fileItem(first.id)->name,first.name);
+    bool stale=false;
+    model.requestRestoreFile(first.id,[&](bool,const QString&) { stale=true; });
+    const auto late=backend.file_results.last();
+    model.requestLockVault();
+    late(CybouCommandState::Committed,{});
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("acct"),1);
+    model.setFileItems({first,second});
+    QCoreApplication::processEvents();
+    QVERIFY(!stale);
+    const auto count=backend.file_moves.size();
+    retained_undo();
+    QCOMPARE(backend.file_moves.size(),count);
+    model.requestLockVault();
+    bool unavailable = false;
+    model.requestMoveFile(first.id, {}, [&](bool ok, const QString& error) {
+        QVERIFY(!ok);
+        QVERIFY(!error.isEmpty());
+        unavailable = true;
+    });
+    QTRY_VERIFY(unavailable);
 }
 
 void CybouShellTests::composerKeepsTextOnSaveAndSendFailure()
@@ -2970,6 +3033,31 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
     const auto stored = std::find_if(fresh.begin(), fresh.end(), [&](const CybouFileItem& f) { return f.id == report_id; });
     QVERIFY(stored != fresh.end() && stored->starred);
     QVERIFY(stored->available_offline);
+
+    // Undo must queue after an acknowledged forward intent even before finality.
+    const QString previous_operation = alice_model->fileItem(report_id)->operation_id;
+    int changes_saved = 0;
+    const auto saved_change = [&](bool ok, const QString& error) {
+        QVERIFY2(ok, qPrintable(error));
+        ++changes_saved;
+    };
+    alice_model->requestMoveFile(report_id, {}, saved_change);
+    alice_model->requestMoveFile(report_id, work_id, saved_change);
+    QTRY_COMPARE(changes_saved, 2);
+    QVERIFY(produce_until([&] {
+        const auto* item = alice_model->fileItem(report_id);
+        return item && item->parent_id == work_id && item->operation_id != previous_operation &&
+            item->operation_state == CybouOperationState::Finalized;
+    }));
+    const QString before_trash = alice_model->fileItem(report_id)->operation_id;
+    alice_model->requestTrashFile(report_id, saved_change);
+    alice_model->requestMoveFile(report_id, work_id, saved_change);
+    QTRY_COMPARE(changes_saved, 4);
+    QVERIFY(produce_until([&] {
+        const auto* item = alice_model->fileItem(report_id);
+        return item && !item->trashed && item->parent_id == work_id && item->operation_id != before_trash &&
+            item->operation_state == CybouOperationState::Finalized;
+    }));
 
     alice_model->requestTrashFile(work_id); // contents follow the folder
     QTRY_VERIFY(alice_model->fileItem(report_id) && alice_model->fileItem(report_id)->trashed);

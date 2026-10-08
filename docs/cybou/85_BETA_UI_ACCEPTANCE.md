@@ -192,6 +192,12 @@ trust and resilience without becoming mandatory UI concepts.
 
 ## 12. Durable local actions and draft loss prevention
 
+The 2026-10-08 Files implementation includes delayed/failed acknowledgment,
+partial move and stale-session regressions. Core-adapter integration additionally
+queues a forward move and its inverse before finality, including Trash back to
+the original folder, then verifies the resulting finalized catalog. These tests
+do not replace native drag/DPI or live DEVNET acceptance below.
+
 ```text
 [ ] slow archive/trash shows immediate pending feedback and stays responsive
 [ ] Archived/Saved appears only after the relevant local durable commit

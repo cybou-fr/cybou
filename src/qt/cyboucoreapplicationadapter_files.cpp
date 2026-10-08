@@ -11,6 +11,15 @@
 
 using namespace cybou::qt_detail;
 
+void CybouCoreApplicationAdapter::IdentitySession::FilesProjection::ReportChange(CommandProgress progress, bool saved, const QString& error)
+{
+    session.StateToGui([owner = session.owner, progress, saved, error] {
+        if (progress) progress(saved ? CybouCommandState::Committed : CybouCommandState::Failed, saved ? QString{} : error);
+        else if (!saved) Q_EMIT owner->commandFailed(error);
+    });
+    session.Refresh();
+}
+
 bool CybouCoreApplicationAdapter::IdentitySession::FilesProjection::AvailableOffline(const cybou::FileItem& item)
 {
     if (!item.root_chunk_id || !item.content_key) return false;
@@ -63,6 +72,7 @@ std::map<std::string, cybou::FileItem> CybouCoreApplicationAdapter::IdentitySess
 }
 
 bool CybouCoreApplicationAdapter::IdentitySession::FilesProjection::PublishFileChange(cybou::FilesMutationBatch batch, std::optional<std::pair<std::size_t, cybou::NewContent>> content)
+try
 {
     const auto job_id = RandomJobId("files-");
     if (job_id.empty()) return false;
@@ -84,6 +94,7 @@ bool CybouCoreApplicationAdapter::IdentitySession::FilesProjection::PublishFileC
     }
     return true;
 }
+catch (const std::exception&) { return false; }
 
 QVector<CybouFileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjection::FilesSnapshot()
 {
@@ -258,10 +269,10 @@ void CybouCoreApplicationAdapter::downloadFile(const QString& file_id, const QSt
     });
 }
 
-void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const QString& name, const QString& parent_id)
+void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const QString& name, const QString& parent_id, CommandProgress progress)
 {
     const auto item_id = FromHex(folder_id);
-    if (!m_session || !item_id) return;
+    if (!m_session || !item_id) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
     const QString hex = QString::fromStdString(ToHex(*item_id));
     CybouFileItem shown;
     shown.id = hex;
@@ -272,60 +283,68 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
     shown.state = CybouContentState::Local;
     shown.operation_state = CybouOperationState::Preparing;
     showPendingFile(shown);
-    m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id)](IdentitySession& s) {
+    m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item_id,
             cybou::FileItem{.item_id = item_id, .parent_id = parent, .kind = cybou::FileItemKind::FOLDER, .name = name}});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The folder could not be created.")); });
-        }
+        const bool saved = s.files.PublishFileChange(std::move(batch), std::nullopt);
+        if (!saved) s.StateToGui([owner = s.owner, id = QString::fromStdString(ToHex(item_id))] {
+            if (auto it = owner->m_pending_files.find(id); it != owner->m_pending_files.end()) {
+                it->state = CybouContentState::NeedsAttention;
+                it->operation_state = CybouOperationState::Failed;
+            }
+            Q_EMIT owner->fileStateChanged(id, CybouContentState::NeedsAttention, -1);
+        });
+        s.files.ReportChange(progress, saved, tr("The folder could not be created."));
     });
 }
 
-void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& name)
+void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& name, CommandProgress progress)
 {
-    if (!m_session) return;
-    m_session->Post([hex = id.toStdString(), name = name.toStdString()](IdentitySession& s) {
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
+    m_session->Post([hex = id.toStdString(), name = name.toStdString(), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
-        if (!item) return;
+        if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
+        if (item->name == name) { s.files.ReportChange(progress, true, {}); return; }
         item->name = name;
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be renamed.")); });
-        }
+        s.files.ReportChange(progress, s.files.PublishFileChange(std::move(batch), std::nullopt), tr("The item could not be renamed."));
     });
 }
 
-void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& parent_id)
+void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& parent_id, CommandProgress progress)
 {
-    if (!m_session) return;
-    m_session->Post([hex = id.toStdString(), parent = ParentId(parent_id)](IdentitySession& s) {
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
+    m_session->Post([hex = id.toStdString(), parent = ParentId(parent_id), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
-        if (!item) return;
+        if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
         // Never move a folder into itself or its own subtree.
         for (auto cursor = parent; cursor;) {
-            if (*cursor == item->item_id) return;
+            if (*cursor == item->item_id) { s.files.ReportChange(progress, false, tr("A folder cannot be moved into itself.")); return; }
             const auto above = s.files.CurrentFile(ToHex(*cursor));
             cursor = above ? above->parent_id : std::nullopt;
         }
+        if (item->parent_id == parent) { s.files.ReportChange(progress, true, {}); return; }
         item->parent_id = parent;
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be moved.")); });
-        }
+        s.files.ReportChange(progress, s.files.PublishFileChange(std::move(batch), std::nullopt), tr("The item could not be moved."));
     });
 }
 
-void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& copy_id, const QString& parent_id)
+void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& copy_id, const QString& parent_id, CommandProgress progress)
 {
     const auto new_id = FromHex(copy_id);
-    if (!m_session || !new_id) return;
+    if (!m_session || !new_id) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
     m_session->Post([hex = id.toStdString(), new_id = *new_id,
-                        parent = ParentId(parent_id)](IdentitySession& s) {
+                        parent = ParentId(parent_id), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
-        if (!item || item->kind != cybou::FileItemKind::FILE) return;
+        if (!item || item->kind != cybou::FileItemKind::FILE) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
         // A copy is a new catalog entry referencing the same protected content.
         item->item_id = new_id;
         item->parent_id = parent;
@@ -333,9 +352,7 @@ void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& cop
         item->name = tr("Copy of %1").arg(QString::fromStdString(item->name)).toStdString();
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, new_id, *item});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The copy could not be created.")); });
-        }
+        s.files.ReportChange(progress, s.files.PublishFileChange(std::move(batch), std::nullopt), tr("The copy could not be created."));
     });
 }
 
@@ -356,35 +373,34 @@ void CybouCoreApplicationAdapter::postFileStar(const QString& hex, bool starred)
     m_session->Post([item_id = *item_id, starred](IdentitySession& s) { (void)s.application->SetFileStarred(item_id, starred); });
 }
 
-void CybouCoreApplicationAdapter::trashFile(const QString& id)
+void CybouCoreApplicationAdapter::trashFile(const QString& id, CommandProgress progress)
 {
-    if (!m_session) return;
-    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
+    m_session->Post([hex = id.toStdString(), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
-        if (!item || item->parent_id == cybou::FilesTrashParent()) return;
+        if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
+        if (item->parent_id == cybou::FilesTrashParent()) { s.files.ReportChange(progress, true, {}); return; }
         // Contents follow their folder into Trash without separate changes.
         item->parent_id = cybou::FilesTrashParent();
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be moved to Trash.")); });
-        }
+        s.files.ReportChange(progress, s.files.PublishFileChange(std::move(batch), std::nullopt), tr("The item could not be moved to Trash."));
     });
 }
 
-void CybouCoreApplicationAdapter::restoreFile(const QString& id)
+void CybouCoreApplicationAdapter::restoreFile(const QString& id, CommandProgress progress)
 {
-    if (!m_session) return;
-    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
+    if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
+    m_session->Post([hex = id.toStdString(), progress](IdentitySession& s) {
+        s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
-        if (!item) return;
+        if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
         // Trash does not remember the old location; restored items return to My files.
         item->parent_id = std::nullopt;
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item->item_id, *item});
-        if (!s.files.PublishFileChange(std::move(batch), std::nullopt)) {
-            s.ToGui([owner = s.owner] { Q_EMIT owner->commandFailed(tr("The item could not be restored.")); });
-        }
+        s.files.ReportChange(progress, s.files.PublishFileChange(std::move(batch), std::nullopt), tr("The item could not be restored."));
     });
 }
 

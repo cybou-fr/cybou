@@ -55,7 +55,7 @@ public:
     void setSearchText(const QString& text);
     QString searchText() const;
     /** Moves items into a folder ("" = My files), refusing folder cycles. */
-    bool moveFilesTo(const QStringList& ids, const QString& folder_id);
+    bool moveFilesTo(const QStringList& ids, const QString& folder_id, bool trash = false);
     QString currentFolder() const { return m_folder; }
     bool gridMode() const { return m_grid; }
     void setGridMode(bool grid);

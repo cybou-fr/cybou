@@ -872,6 +872,18 @@ Règlement du stockage : %7</translation>
         <source>The draft could not be discarded. Your text is kept; try again.</source>
         <translation>Le brouillon n’a pas pu être supprimé. Votre texte est conservé ; réessayez.</translation>
     </message>
+    <message>
+        <source>Files are unavailable.</source>
+        <translation>Les fichiers sont indisponibles.</translation>
+    </message>
+    <message>
+        <source>This item is unavailable.</source>
+        <translation>Cet élément est indisponible.</translation>
+    </message>
+    <message>
+        <source>A folder cannot be moved into itself.</source>
+        <translation>Un dossier ne peut pas être déplacé dans lui-même.</translation>
+    </message>
 </context>
 <context>
     <name>CybouCoreApplicationAdapter::IdentitySession</name>
@@ -1265,6 +1277,10 @@ Règlement du stockage : %7</translation>
         <source>Deleting messages</source>
         <translation>Suppression des messages</translation>
     </message>
+    <message>
+        <source>Files are unavailable.</source>
+        <translation>Les fichiers sont indisponibles.</translation>
+    </message>
 </context>
 <context>
     <name>CybouFixtureApplicationBackend</name>
@@ -1287,6 +1303,14 @@ Règlement du stockage : %7</translation>
         <location line="+138"/>
         <source>Copy of %1</source>
         <translation>Copie de %1</translation>
+    </message>
+    <message>
+        <source>Files are unavailable.</source>
+        <translation>Les fichiers sont indisponibles.</translation>
+    </message>
+    <message>
+        <source>This change could not be saved.</source>
+        <translation>Cette modification n’a pas pu être enregistrée.</translation>
     </message>
 </context>
 <context>
@@ -6728,6 +6752,18 @@ Poursuivre la suppression définitive ?</translation>
         <location line="+17"/>
         <source>This import exceeds 10,000 items or 64 folder levels. Select smaller folders. No items were uploaded.</source>
         <translation>Cet import dépasse 10 000 éléments ou 64 niveaux de dossiers. Sélectionnez des dossiers plus petits. Aucun élément téléversé.</translation>
+    </message>
+    <message>
+        <source>Saving file changes…</source>
+        <translation>Enregistrement des modifications…</translation>
+    </message>
+    <message>
+        <source>%1 changes saved; %2 failed. Try again.</source>
+        <translation>%1 modifications enregistrées ; %2 échecs. Réessayez.</translation>
+    </message>
+    <message>
+        <source>%1 changes saved locally; awaiting network confirmation.</source>
+        <translation>%1 modifications enregistrées localement ; en attente de confirmation du réseau.</translation>
     </message>
 </context>
 <context>

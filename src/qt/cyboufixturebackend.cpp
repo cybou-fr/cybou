@@ -317,9 +317,9 @@ void CybouFixtureApplicationBackend::downloadFile(const QString& file_id, const 
 }
 
 void CybouFixtureApplicationBackend::createFolder(const QString& folder_id, const QString& name,
-    const QString& parent_id)
+    const QString& parent_id, CommandProgress progress)
 {
-    if (!m_open) return;
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
     CybouFileItem folder;
     folder.id = folder_id;
     folder.name = name;
@@ -329,29 +329,33 @@ void CybouFixtureApplicationBackend::createFolder(const QString& folder_id, cons
     folder.state = CybouContentState::Protected;
     m_files.append(folder);
     changed(folder);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::renameFile(const QString& id, const QString& name)
+void CybouFixtureApplicationBackend::renameFile(const QString& id, const QString& name, CommandProgress progress)
 {
     auto* item = file(id);
-    if (!m_open || !item) return;
+    if (!m_open || !item) { if (progress) progress(CybouCommandState::Failed, tr("This change could not be saved.")); return; }
     item->name = name;
     item->modified = QDateTime::currentDateTime();
     changed(*item);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::moveFile(const QString& id, const QString& parent_id)
+void CybouFixtureApplicationBackend::moveFile(const QString& id, const QString& parent_id, CommandProgress progress)
 {
     auto* item = file(id);
-    if (!m_open || !item || withDescendants(id).contains(parent_id)) return;
+    if (!m_open || !item || withDescendants(id).contains(parent_id)) { if (progress) progress(CybouCommandState::Failed, tr("This change could not be saved.")); return; }
     item->parent_id = parent_id;
+    for (const auto& child : withDescendants(id)) if (auto* moved = file(child)) moved->trashed = false;
     changed(*item);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::copyFile(const QString& id, const QString& copy_id, const QString& parent_id)
+void CybouFixtureApplicationBackend::copyFile(const QString& id, const QString& copy_id, const QString& parent_id, CommandProgress progress)
 {
     const auto* source = file(id);
-    if (!m_open || !source || source->folder) return;
+    if (!m_open || !source || source->folder) { if (progress) progress(CybouCommandState::Failed, tr("This change could not be saved.")); return; }
     // A copy references the same protected content under a new catalog entry.
     CybouFileItem copy = *source;
     copy.id = copy_id;
@@ -362,6 +366,7 @@ void CybouFixtureApplicationBackend::copyFile(const QString& id, const QString& 
     copy.modified = QDateTime::currentDateTime();
     m_files.append(copy);
     changed(copy);
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
 void CybouFixtureApplicationBackend::setFileStarred(const QString& id, bool starred)
@@ -372,9 +377,9 @@ void CybouFixtureApplicationBackend::setFileStarred(const QString& id, bool star
     changed(*item);
 }
 
-void CybouFixtureApplicationBackend::trashFile(const QString& id)
+void CybouFixtureApplicationBackend::trashFile(const QString& id, CommandProgress progress)
 {
-    if (!m_open) return;
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
     const QStringList ids = withDescendants(id);
     for (auto& item : m_files) {
         if (ids.contains(item.id) && !item.trashed) {
@@ -382,11 +387,12 @@ void CybouFixtureApplicationBackend::trashFile(const QString& id)
             changed(item);
         }
     }
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
-void CybouFixtureApplicationBackend::restoreFile(const QString& id)
+void CybouFixtureApplicationBackend::restoreFile(const QString& id, CommandProgress progress)
 {
-    if (!m_open) return;
+    if (!m_open) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
     const QStringList ids = withDescendants(id);
     for (auto& item : m_files) {
         if (ids.contains(item.id) && item.trashed) {
@@ -394,6 +400,7 @@ void CybouFixtureApplicationBackend::restoreFile(const QString& id)
             changed(item);
         }
     }
+    if (progress) progress(CybouCommandState::Committed, {});
 }
 
 void CybouFixtureApplicationBackend::deleteFile(const QString& id)

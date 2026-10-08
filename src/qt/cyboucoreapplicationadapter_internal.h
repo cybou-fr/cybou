@@ -165,6 +165,7 @@ struct CybouCoreApplicationAdapter::IdentitySession {
         std::map<std::string, cybou::FileItem> Catalog();
         bool PublishFileChange(cybou::FilesMutationBatch batch, std::optional<std::pair<std::size_t, cybou::NewContent>> content);
         QVector<CybouFileItem> FilesSnapshot();
+        void ReportChange(CommandProgress progress, bool saved, const QString& error);
     };
     /** Shared publication durability, maintenance and settlement preparation. */
     struct StorageProjection {
