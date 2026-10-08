@@ -3,6 +3,34 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Monitor and Console package (2026-10-08)
+
+Network Monitor now opens one reusable nonmodal window from Advanced, with
+Peers, Operations and Own content tabs capped at 256 rows each. Refreshes
+coalesce over 150 ms, retain selected object and scroll, and distinguish
+unverified peer-ahead announcements. Pause freezes the view only. Own-content
+rows clear synchronously on lock/account change even while paused.
+
+Console now has a compact live scope header, icon toolbar and run control,
+registry-derived grouped help and bounded command/argument completion. Own file
+arguments require an unlocked Identity; Authority suggestions require current
+key proof. Completion never executes. Ctrl+F searches output with wrapped
+previous/next and match counts; Ctrl+L clears output/history. Private session
+cleanup also clears search and completion. Both windows save geometry only;
+screenshot fixtures do not read/write those preferences. Console stays read-only:
+Authority signing controls and settlement submission remain on the Authority page.
+
+The concurrent refactor at `0dd16099` required build repairs: the publication job
+cache uses its actual nested `Job` type; the node builds its own PCH because core
+has different offline test definitions; extracted Activity declarations forward
+declare semantic types; the screenshot harness includes the actual network and
+backend headers. Activity retains its original translation context.
+
+Validation: 259 core cases / 97,796 assertions and 78 Qt tests passed. Native
+Windows captures at 1040×720 were inspected in light and dark, including ordinary
+and Authority console scopes. Evidence and isolated binaries are under ignored
+`artifacts/ux-r6-20261008/`; no live signer or network deployment is required.
+
 ## Network reference and Advanced sections package (2026-10-07)
 
 The main Network map now carries a compact accepted-reference card: finalized

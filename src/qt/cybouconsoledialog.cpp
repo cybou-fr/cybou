@@ -103,6 +103,7 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     m_find = new QLineEdit{m_find_bar};
     m_find->setObjectName(QStringLiteral("consoleSearch"));
     m_find->setPlaceholderText(tr("Search output…"));
+    m_find->setAccessibleName(tr("Search output…"));
     m_find->setMaxLength(256);
     m_find->installEventFilter(this);
     m_matches = MutedText({}, m_find_bar);
@@ -121,6 +122,7 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     m_output = new QPlainTextEdit{this};
     m_output->setObjectName(QStringLiteral("consoleOutput"));
     m_output->setReadOnly(true);
+    m_output->installEventFilter(this);
     m_output->setMaximumBlockCount(kMaxLines);
     m_output->setFont(QFont(QStringLiteral("Consolas"), 9));
     m_output->setStyleSheet(QStringLiteral(
@@ -141,11 +143,10 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     m_input->installEventFilter(this);
     input_bar->addWidget(m_input, 1);
 
-    m_run_btn = new QPushButton{tr("Run"), this};
-    m_run_btn->setObjectName(QStringLiteral("primaryButton"));
-    m_run_btn->setCursor(Qt::PointingHandCursor);
-    connect(m_run_btn, &QPushButton::clicked, this, [this] { handleRun(); });
-    input_bar->addWidget(m_run_btn);
+    auto* run = IconButton(Glyph::ArrowRight, this, tr("Run command (Enter)"), IconButtonSize::Toolbar);
+    run->setObjectName(QStringLiteral("consoleRun"));
+    connect(run, &QToolButton::clicked, this, [this] { handleRun(); });
+    input_bar->addWidget(run);
 
     layout->addLayout(input_bar);
     m_suggestions = new QStandardItemModel{this};
@@ -162,7 +163,7 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     connect(search, &QShortcut::activated, this, [this] { m_find_bar->show(); m_find->setFocus(); m_find->selectAll(); });
     auto* clear = new QShortcut{QKeySequence{Qt::CTRL | Qt::Key_L}, this};
     connect(clear, &QShortcut::activated, this, [this] { clearOutput(); m_input->setFocus(); });
-    restoreGeometry(QSettings{}.value(QStringLiteral("console/geometry")).toByteArray());
+    if (qEnvironmentVariableIsEmpty("CYBOU_SCREENSHOT_DIR")) restoreGeometry(QSettings{}.value(QStringLiteral("console/geometry")).toByteArray());
     appendOutput(tr("CYBOU · %1\nLocal read-only diagnostics. Peer announcements are unverified.\nQuick commands: status · peers · storage · history\nType help for all commands. Tab or Ctrl+Space opens suggestions.").arg(m_model->status().network_name));
 
     m_private_session = m_model->status().identity_state == CybouIdentityState::Active;
@@ -175,7 +176,7 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
 
 void CybouConsoleDialog::closeEvent(QCloseEvent* event)
 {
-    QSettings{}.setValue(QStringLiteral("console/geometry"), saveGeometry());
+    if (qEnvironmentVariableIsEmpty("CYBOU_SCREENSHOT_DIR")) QSettings{}.setValue(QStringLiteral("console/geometry"), saveGeometry());
     QDialog::closeEvent(event);
 }
 
@@ -186,6 +187,7 @@ void CybouConsoleDialog::completeInput()
     auto add = [this](const QString& value, const QString& description = {}) {
         if (m_suggestions->rowCount() >= kMaxRows || value.size() > 1024) return;
         auto* item = new QStandardItem{description.isEmpty() ? value : value + QStringLiteral(" — ") + description};
+        item->setToolTip(description);
         item->setData(value, Qt::UserRole);
         m_suggestions->appendRow(item);
     };
@@ -200,11 +202,15 @@ void CybouConsoleDialog::completeInput()
         const auto command = text.section(QLatin1Char{' '}, 0, 0).toLower();
         if ((command == QLatin1String{"file"} || command == QLatin1String{"chunks"}) && unlocked) {
             for (const auto& file : m_model->fileItems()) if (!file.folder) {
+                if (m_suggestions->rowCount() >= kMaxRows) break;
                 add(command + QLatin1Char{' '} + file.id, file.name);
                 if (file.name != file.id) add(command + QLatin1Char{' '} + file.name);
             }
         } else if (command == QLatin1String{"op"}) {
-            for (const auto& op : m_model->networkDiagnostics().operations) add(command + QLatin1Char{' '} + QString::fromStdString(op.operation_id));
+            for (const auto& op : m_model->networkDiagnostics().operations) {
+                if (m_suggestions->rowCount() >= kMaxRows) break;
+                add(command + QLatin1Char{' '} + QString::fromStdString(op.operation_id));
+            }
         } else if (command == QLatin1String{"block"}) {
             const auto& d = m_model->networkDiagnostics();
             if (d.initialized) add(command + QLatin1Char{' '} + QString::number(d.height), tr("Locally verified tip"));
@@ -229,8 +235,14 @@ void CybouConsoleDialog::findOutput(bool backward)
         m_output->find(query, flags);
     }
     const auto text = m_output->toPlainText();
-    const int count = text.count(query, Qt::CaseInsensitive);
-    const int position = text.left(m_output->textCursor().selectionEnd()).count(query, Qt::CaseInsensitive);
+    int count = 0;
+    int position = 0;
+    int offset = 0;
+    while ((offset = text.indexOf(query, offset, Qt::CaseInsensitive)) >= 0) {
+        ++count;
+        offset += query.size();
+        if (offset <= m_output->textCursor().selectionEnd()) position = count;
+    }
     m_matches->setText(tr("%1 / %2").arg(count ? position : 0).arg(count));
 }
 
@@ -238,6 +250,10 @@ bool CybouConsoleDialog::eventFilter(QObject* watched, QEvent* event)
 {
     if (event->type() == QEvent::KeyPress) {
         auto* key = static_cast<QKeyEvent*>(event);
+        if (key->modifiers() & Qt::ControlModifier) {
+            if (key->key() == Qt::Key_F) { m_find_bar->show(); m_find->setFocus(); m_find->selectAll(); return true; }
+            if (key->key() == Qt::Key_L) { clearOutput(); m_input->setFocus(); return true; }
+        }
         if (key->key() == Qt::Key_Escape && (m_find_bar->isVisible() || m_completer->popup()->isVisible())) {
             m_completer->popup()->hide(); m_find_bar->hide(); m_input->setFocus(); return true;
         }
@@ -333,7 +349,7 @@ void CybouConsoleDialog::checkVaultLock()
     m_scope->setText(tr("%1 · %2 · Height %3 · %4 peers · %5 · Read only")
         .arg(status.network_name, status.online ? tr("Online") : tr("Offline"))
         .arg(status.finality_known ? QString::number(status.finalized_height) : tr("Unknown"))
-        .arg(status.peer_count).arg(active ? tr("Own Identity") : tr("Public")));
+        .arg(status.peer_count).arg(active && authority ? tr("Authority diagnostics") : active ? tr("Own Identity") : tr("Public")));
     if (m_completer->popup()->isVisible()) completeInput();
 }
 

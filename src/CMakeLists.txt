@@ -145,7 +145,14 @@ target_link_libraries(cybou_node
     ZLIB::ZLIB
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
-target_precompile_headers(cybou_node REUSE_FROM cybou_core)
+target_precompile_headers(cybou_node PRIVATE
+  <openssl/evp.h>
+  <openssl/sha.h>
+  <vector>
+  <string>
+  <memory>
+  <cstdint>
+)
 
 # One production executable `cybou`: desktop and ordinary Full Node commands.
 add_library(cybou_cli STATIC cybou/cli/cybou_cli.cpp)

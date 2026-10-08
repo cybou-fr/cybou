@@ -47,7 +47,7 @@ QVector<CybouActivityItem> CybouBuildActivityItems(const CybouDesktopModel& mode
     const QVector<CybouActivityItem>& extra_activity)
 {
     if (model.fixtureMode()) return {};
-    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouActivity", text); };
+    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouDesktopModel", text); };
     const auto timed = [](const QDateTime& time) { return time.isValid() && time.toSecsSinceEpoch() > 0; };
     QVector<CybouActivityItem> items = extra_activity;
     for (const auto& mail : model.mailItems()) {
@@ -85,7 +85,7 @@ QVector<CybouActivityItem> CybouBuildActivityItems(const CybouDesktopModel& mode
 QVector<CybouContact> CybouBuildContacts(const CybouDesktopModel& model)
 {
     if (model.fixtureMode()) return {};
-    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouActivity", text); };
+    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouDesktopModel", text); };
     QHash<QString, QDateTime> last_seen;
     const auto seen = [&](const QString& raw, const QDateTime& when, const QString& address = QString{}) {
         QString name = raw.trimmed().toLower();

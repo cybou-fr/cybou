@@ -704,7 +704,7 @@ void CybouShellTests::contactsComeFromMailAndPayments()
     model.setWalletEntries({paid});
 
     // Most recent first; never yourself, never an unsent draft's recipient.
-    QVERIFY(changed.count() > 0);
+    QTRY_VERIFY(changed.count() > 0);
     QStringList names;
     for (const auto& contact : model.contacts()) names << contact.name;
     QCOMPARE(names, (QStringList{QStringLiteral("carol.cybou"), QStringLiteral("bobby.cybou"),
@@ -721,7 +721,7 @@ void CybouShellTests::contactsComeFromMailAndPayments()
     unnamed.to_name = CybouProduct::shortId(own);
     unnamed.time = now.addSecs(1);
     model.setMailItems({received, sent, draft, unnamed});
-    QCOMPARE(model.contacts().first().name, peer);
+    QTRY_COMPARE(model.contacts().first().name, peer);
     QCOMPARE(model.contacts().first().display_name, CybouProduct::shortId(peer));
     for (const auto& contact : model.contacts()) QVERIFY(contact.name != own);
     MailCompose composer{&model};
@@ -907,12 +907,12 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     CybouDesktopModel model{QStringLiteral("DEVNET")};
     cybou::NodeDiagnosticsSnapshot snapshot;
     snapshot.network_binding="devnet-fixture"; snapshot.height=12; snapshot.tip="tip"; snapshot.state_root="root";
+    snapshot.initialized=true;
     snapshot.peers.push_back({"127.0.0.1:30471",9,"provider"});
     snapshot.operations.push_back({"operation",3,12});
     model.setNetworkDiagnostics(snapshot);
     DiagnosticsPage page{&model};
-    QPushButton* monitor=nullptr;
-    for (auto* button : page.findChildren<QPushButton*>()) if (button->text().contains(QStringLiteral("Network Monitor"))) monitor=button;
+    auto* monitor=page.findChild<QToolButton*>(QStringLiteral("networkMonitorButton"));
     QVERIFY(monitor);
     monitor->click();
     auto* peers=page.findChild<QTableWidget*>(QStringLiteral("networkMonitorPeers"));
@@ -3711,7 +3711,7 @@ void CybouShellTests::ownContentInspectorAndBoundedConsole()
     window->showNetworkDiagnostics();
     auto* diag_page = window->page(CybouPage::Network);
     QVERIFY(diag_page);
-    auto* console_open_btn = diag_page->findChild<QPushButton*>(QStringLiteral("readOnlyConsoleButton"));
+    auto* console_open_btn = diag_page->findChild<QToolButton*>(QStringLiteral("readOnlyConsoleButton"));
     QVERIFY(console_open_btn);
 
     // 4. Bounded read-only console command execution
@@ -4371,6 +4371,10 @@ void CybouShellTests::consoleCompletionAndSearchClearOnLock()
     QTest::keyClick(input,Qt::Key_Space,Qt::ControlModifier);
     QCOMPARE(completion->completionCount(),2);
     QCOMPARE(console.historyCount(),0); // Suggestions never dispatch a command.
+    completion->popup()->setCurrentIndex(completion->completionModel()->index(0,0));
+    QTest::keyClick(completion->popup(),Qt::Key_Return);
+    QCOMPARE(input->text(),QStringLiteral("file private-id"));
+    QCOMPARE(console.historyCount(),0);
     completion->popup()->hide();
     console.executeCommand(QStringLiteral("file private-id"));
     console.executeCommand(QStringLiteral("file private-id"));
@@ -4390,4 +4394,11 @@ void CybouShellTests::consoleCompletionAndSearchClearOnLock()
     console.executeCommand(QStringLiteral("status"));
     input->setFocus(); QTest::keyClick(input,Qt::Key_L,Qt::ControlModifier);
     QVERIFY(console.outputText().isEmpty()); QCOMPARE(console.historyCount(),0);
+    const auto saved_geometry = QSettings{}.value(QStringLiteral("console/geometry"));
+    console.resize(740,600);
+    console.close();
+    QVERIFY(!QSettings{}.value(QStringLiteral("console/geometry")).toByteArray().isEmpty());
+    CybouConsoleDialog reopened{&model};
+    QCOMPARE(reopened.size(),QSize(740,600));
+    QSettings{}.setValue(QStringLiteral("console/geometry"),saved_geometry);
 }

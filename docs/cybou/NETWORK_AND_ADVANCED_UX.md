@@ -151,19 +151,17 @@ the same command registry used for dispatch and authorization.
 | --- | --- | --- |
 | Any local session | `help`, `status`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
 | Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values, active application tasks, real own-content leaf manifests and BLAKE3-256 integrity verification |
-| Unlocked genesis-key-proven Authority | `authority [status|candidates|totals|pause|resume|finalize|settle]` | Local signer loop, candidate queue age and waiting times, safety journal status, settlement preview, pause/resume/finalize controls and settlement submission (`confirm`) |
+| Unlocked genesis-key-proven Authority | `authority [status|candidates|totals|settle]` | Local signer loop, candidate queue age and waiting times, safety journal status and settlement preview |
 
 Authority commands are hidden from ordinary help and denied by dispatch. A name,
 peer endpoint or displayed role does not authorize them. Every invocation checks
 current model proof; loss of proof, account change or locking clears console
 output, input and history. Ordinary commands do not activate signing, networking proofs,
-repair or retrieval. Central Authority control commands (`pause`, `resume`, `finalize`, `settle`)
-operate directly under the verified active PoA key session without re-prompting for a password,
-with `authority settle confirm` requiring explicit keyword confirmation to prevent accidental submission.
+repair or retrieval. Signing and settlement submission remain on the Central Authority page; console `settle` is a preview only.
 Shell execution, SQL, scripts and arbitrary mutations remain absent.
 
 Output retains at most 500 text blocks, lists at most 100 rows, command history
-at most 100 entries and input at most 1024 characters. Nothing is persisted.
+at most 100 entries and input at most 1024 characters. Only window geometry is persisted; commands, output, search and completion data remain in memory.
 Unknown capacity/replica/finality observations stay unknown; logical file bytes
 are not physical storage use. File size divided by 512 KiB is a billing-unit
 estimate, never a measured chunk count. `chunks` inspects the real own-content chunk tree
@@ -177,7 +175,28 @@ objects are never enumerated.
 The technical console supports:
 - Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.
 - Paginated verified block, operation and history lookup via `block <height|hash>`, `op <id>`, and `history [page]`.
-- Central Authority diagnostics and controls via `authority [status|candidates|totals|pause|resume|finalize|settle]`, displaying candidate queue age, waiting times, safety journal status, settlement preview, and allowing pause/resume/finalize and settlement submission (requiring explicit confirmation) without re-prompting for password when already unlocked and authorized.
+- Central Authority diagnostics and settlement preview via `authority [status|candidates|totals|settle]`, gated by the unlocked genesis-key-proven session. Controls remain on the Authority page.
+
+### Monitor and console interaction (2026-10-08)
+
+Network Monitor is a separate nonmodal window, reused when opened again from
+Advanced. Peers, Operations and Own content have separate tabs, each capped at
+256 rows. Updates coalesce over 150 ms and retain selection by object key and
+scroll position. Pause freezes only displayed observations; node activity
+continues. Locking or changing Identity clears own-content rows immediately even
+while paused. Advertised peer deltas remain explicitly unverified. Only window
+geometry is saved, with no diagnostic snapshot persistence.
+
+Console has a compact live scope header, help/search/copy-selection/clear toolbar,
+structured registry-derived help, and bounded command and argument suggestions.
+File arguments come only from the unlocked own catalog, operation IDs from the
+local snapshot, and the block suggestion from the locally verified tip. Authority
+suggestions require current genesis-key proof. Completion inserts text without
+executing it. Tab and Ctrl+Space show suggestions; Tab accepts a visible suggestion.
+Ctrl+F searches output with wrapped previous/next navigation and match counts;
+Ctrl+L clears output and history; Escape dismisses search/completion. Lock, account
+change or lost Authority proof also clears search and completion data. Commands
+retain their existing read-only semantics. Geometry is the only persisted value.
 
 ## Tests and benchmarks
 

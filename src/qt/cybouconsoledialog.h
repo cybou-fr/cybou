@@ -50,8 +50,6 @@ private:
     CybouDesktopModel* const m_model;
     QPlainTextEdit* m_output{nullptr};
     QLineEdit* m_input{nullptr};
-    QPushButton* m_run_btn{nullptr};
-    QPushButton* m_clear_btn{nullptr};
     QLabel* m_scope{nullptr};
     QLineEdit* m_find{nullptr};
     QWidget* m_find_bar{nullptr};

@@ -12,6 +12,8 @@
 #include <functional>
 
 class CybouDesktopModel;
+struct CybouActivityItem;
+struct CybouContact;
 class QFrame;
 class QVBoxLayout;
 

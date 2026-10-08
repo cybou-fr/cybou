@@ -658,7 +658,7 @@ std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const Publi
     // Work still on its way may reuse content of a finalized publication (a mail
     // attaching a file): decide only once every own job is finalized.
     const auto all_jobs = Jobs();
-    std::vector<std::pair<std::string, PublicationJob>> loaded_jobs;
+    std::vector<std::pair<std::string, Job>> loaded_jobs;
     loaded_jobs.reserve(all_jobs.size());
     for (const auto& job_id : all_jobs) {
         auto job = Load(job_id);

@@ -1,4 +1,4 @@
-# CYBOU documentation manifest — 2026-10-07
+# CYBOU documentation manifest — 2026-10-08
 
 This inventory records the current implementation authority, product and
 protocol documents, and machine-readable specifications, excluding this
@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 91 | 4850aa10e11966a3 |
 | docs/cybou/24_DECISIONS.md | 228 | 6e481a2f9aa6cb34 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 125 | a1dbb7c66dd722a1 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 807 | 3cd96c4fa253cb5f |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 835 | e40298f794e95d2c |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -68,7 +68,7 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 261 | 8d95cf75a4f853a9 |
+| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 280 | 42d0b6400b81987a |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |

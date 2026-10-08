@@ -8,7 +8,8 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouconsoledialog.h>
-#include <qt/official_networks.h>
+#include <cybou/official_networks.h>
+#include <qt/cybouapplicationbackend.h>
 
 #include <qt/pages/homepage.h>
 #include <qt/pages/emailpage.h>
@@ -22,6 +23,8 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QPushButton>
+#include <QToolButton>
+#include <QDialog>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTimer>
@@ -154,6 +157,17 @@ void RunScreenshotHarness(CybouMainWindow* window, const QString& directory)
         }
         window->showNetworkDiagnostics();
         save(QStringLiteral("diagnostics"));
+        if (auto* launch = window->findChild<QToolButton*>(QStringLiteral("networkMonitorButton"))) {
+            launch->click();
+            qApp->processEvents();
+            if (auto* table = window->findChild<QWidget*>(QStringLiteral("networkMonitorPeers"))) {
+                if (auto* dialog = qobject_cast<QDialog*>(table->window())) {
+                    dialog->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("network-monitor.png")));
+                    dialog->close();
+                }
+            }
+        }
+
         {
             CybouConsoleDialog console{model, window};
             console.show();

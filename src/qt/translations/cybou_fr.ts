@@ -521,6 +521,118 @@ Le modèle applicatif ne fournit pas la liste réelle des chunks ni les résulta
         <source>Error: Command '%1' is not recognized or not permitted. This console is strictly read-only and accepts only: help, status, storage, files, file, chunks, peers, jobs, clear.</source>
         <translation>Erreur : La commande '%1' n'est pas reconnue ou non autorisée. Cette console est strictement en lecture seule et accepte uniquement : help, status, storage, files, file, chunks, peers, jobs, clear.</translation>
     </message>
+    <message>
+        <source>CYBOU Console</source>
+        <translation>Console CYBOU</translation>
+    </message>
+    <message>
+        <source>Help</source>
+        <translation>Aide</translation>
+    </message>
+    <message>
+        <source>Search output (Ctrl+F)</source>
+        <translation>Rechercher dans la sortie (Ctrl+F)</translation>
+    </message>
+    <message>
+        <source>Copy selection</source>
+        <translation>Copier la sélection</translation>
+    </message>
+    <message>
+        <source>Clear (Ctrl+L)</source>
+        <translation>Effacer (Ctrl+L)</translation>
+    </message>
+    <message>
+        <source>Search output…</source>
+        <translation>Rechercher dans la sortie…</translation>
+    </message>
+    <message>
+        <source>Previous</source>
+        <translation>Précédent</translation>
+    </message>
+    <message>
+        <source>Next</source>
+        <translation>Suivant</translation>
+    </message>
+    <message>
+        <source>%1 / %2</source>
+        <translation>%1 / %2</translation>
+    </message>
+    <message>
+        <source>Locally verified tip</source>
+        <translation>Dernier bloc vérifié localement</translation>
+    </message>
+    <message>
+        <source>NODE</source>
+        <translation>NŒUD</translation>
+    </message>
+    <message>
+        <source>CHAIN</source>
+        <translation>CHAÎNE</translation>
+    </message>
+    <message>
+        <source>YOUR DATA</source>
+        <translation>VOS DONNÉES</translation>
+    </message>
+    <message>
+        <source>AUTHORITY</source>
+        <translation>AUTORITÉ</translation>
+    </message>
+    <message>
+        <source>UTILITY</source>
+        <translation>OUTILS</translation>
+    </message>
+    <message>
+        <source>%1 · %2 · Height %3 · %4 peers · %5 · Read only</source>
+        <translation>%1 · %2 · Hauteur %3 · %4 pairs · %5 · Lecture seule</translation>
+    </message>
+    <message>
+        <source>Own Identity</source>
+        <translation>Votre Identité</translation>
+    </message>
+    <message>
+        <source>Public</source>
+        <translation>Public</translation>
+    </message>
+    <message>
+        <source>CYBOU · %1
+Local read-only diagnostics. Peer announcements are unverified.
+Quick commands: status · peers · storage · history
+Type help for all commands. Tab or Ctrl+Space opens suggestions.</source>
+        <translation>CYBOU · %1
+Diagnostics locaux en lecture seule. Les annonces des pairs ne sont pas vérifiées.
+Commandes rapides : status · peers · storage · history
+Saisissez help pour toutes les commandes. Tab ou Ctrl+Espace ouvre les suggestions.</translation>
+    </message>
+    <message>
+        <source>Run command (Enter)</source>
+        <translation>Exécuter la commande (Entrée)</translation>
+    </message>
+    <message>
+        <source>Authority diagnostics</source>
+        <translation>Diagnostics de l’Autorité</translation>
+    </message>
+    <message>
+        <source>Local finalizer: %1
+Signer enabled: %2
+Candidates: %3 (queue age: %4 s)
+Locally verified height: %5
+Signing safety: %6
+Storage settlement: %7</source>
+        <translation>Finaliseur local : %1
+Signature activée : %2
+Candidats : %3 (ancienneté de la file : %4 s)
+Hauteur vérifiée localement : %5
+Sûreté de signature : %6
+Règlement du stockage : %7</translation>
+    </message>
+    <message>
+        <source>Fail-closed durable append-only journal active.</source>
+        <translation>Journal durable en ajout seul actif ; arrêt en cas d’incertitude.</translation>
+    </message>
+    <message>
+        <source>Locally executed candidates: %1 (volatile pool, queue age: %2 s)</source>
+        <translation>Candidats exécutés localement : %1 (file volatile, ancienneté : %2 s)</translation>
+    </message>
 </context>
 
 <context>
@@ -1440,10 +1552,6 @@ Stan</translation>
         <translation>Rechercher dans la boîte actuelle, ou choisir une suggestion (Ctrl+K)</translation>
     </message>
     <message>
-        <source>Search mail</source>
-        <translation>Rechercher dans les courriers</translation>
-    </message>
-    <message>
         <source>Public CYBOU network</source>
         <translation>Réseau public CYBOU</translation>
     </message>
@@ -2030,6 +2138,52 @@ Racine d’état %7</translation>
         <location line="+0"/>
         <source>Unavailable</source>
         <translation>Indisponible</translation>
+    </message>
+    <message>
+        <source>Pause view</source>
+        <translation>Figer la vue</translation>
+    </message>
+    <message>
+        <source>Resume view</source>
+        <translation>Reprendre la vue</translation>
+    </message>
+    <message>
+        <source>Advertised delta (unverified)</source>
+        <translation>Écart annoncé (non vérifié)</translation>
+    </message>
+    <message>
+        <source>Own content</source>
+        <translation>Vos contenus</translation>
+    </message>
+    <message>
+        <source>Ahead %1</source>
+        <translation>Avance %1</translation>
+    </message>
+    <message>
+        <source>Operations</source>
+        <translation>Opérations</translation>
+    </message>
+    <message>
+        <source>Local observations · Updated %1 · Up to 256 rows per tab</source>
+        <translation>Observations locales · Mise à jour %1 · Au plus 256 lignes par onglet</translation>
+    </message>
+    <message>
+        <source>%1 | %2 | Height %3 | Safety halt %4
+Network binding %5
+Tip %6
+State root %7</source>
+        <translation>%1 | %2 | Hauteur %3 | Arrêt de sûreté %4
+Liaison réseau %5
+Dernier bloc %6
+Racine d’état %7</translation>
+    </message>
+    <message>
+        <source>Network Monitor</source>
+        <translation>Moniteur réseau</translation>
+    </message>
+    <message>
+        <source>Console</source>
+        <translation>Console</translation>
     </message>
 </context>
 <context>
