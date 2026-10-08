@@ -458,9 +458,10 @@ bool MatchesKnownFinalizedChain(const CybouNodeRuntime& runtime, const Hello& pe
 }
 
 PeerSession::PeerSession(boost::asio::ip::tcp::socket socket, const TransportRole transport_role,
-    TlsSessionConfig tls_config)
+    TlsSessionConfig tls_config, std::shared_ptr<TrafficMeter> traffic)
     : m_socket{std::move(socket)}, m_transport_role{transport_role}, m_tls_config{std::move(tls_config)}
 {
+    m_traffic = std::move(traffic);
     boost::system::error_code ec;
     m_socket.non_blocking(true, ec);
     if (ec) m_socket.close();
@@ -571,6 +572,7 @@ bool PeerSession::ReadExact(unsigned char* out, size_t length, std::chrono::stea
         ERR_clear_error();
         const int result = SSL_read_ex(m_ssl, out + done, length - done, &count);
         if (result == 1 && count != 0) {
+            if (m_traffic) m_traffic->Record(count, 0);
             done += count;
             progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
             continue;
@@ -601,6 +603,7 @@ bool PeerSession::WriteExact(const unsigned char* bytes, size_t length,
         ERR_clear_error();
         const int result = SSL_write_ex(m_ssl, bytes + done, length - done, &count);
         if (result == 1 && count != 0) {
+            if (m_traffic) m_traffic->Record(0, count);
             done += count;
             progress_deadline = std::min(deadline, std::chrono::steady_clock::now() + std::chrono::seconds{5});
             continue;

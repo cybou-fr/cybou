@@ -94,7 +94,7 @@ void InboundPeerServer::Run(std::atomic_bool& stopping)
                 tls.certificate_chain_file = identity->certificate_chain_file;
                 tls.private_key_file = identity->private_key_file;
             }
-            PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls)};
+            PeerSession session{std::move(socket), TransportRole::SERVER, std::move(tls), m_runtime.GetTrafficMeter()};
             const auto hello = LocalHello(m_runtime);
             // После `HELLO` дополнительно сверяем уже известную локальную
             // историю, чтобы не обслуживать дальнейший gossip с пиром, который

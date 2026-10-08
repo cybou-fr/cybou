@@ -49,6 +49,7 @@ const Command commands[] = {
     {"help", "help", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Show available commands"), false, false},
     {"status", "status", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local node and Identity status"), false, false},
     {"health", "health", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local runtime observation and candidate pool"), false, false},
+    {"metrics", "metrics", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Local traffic counters and measured transfer rates"), false, false},
     {"network", "network", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Network binding, chain tip and state root"), false, false},
     {"storage", "storage", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Physical storage usage and capacity policy"), false, false},
     {"peers", "peers", QT_TRANSLATE_NOOP("CybouConsoleDialog", "Observed sessions and unverified peer heights"), false, false},
@@ -443,6 +444,16 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(s.finality_known ? QString::number(s.finalized_height) : tr("Unknown"))
             .arg(id_state)
             .arg(s.primary_name.isEmpty() ? tr("None") : s.primary_name));
+    } else if (cmd == QLatin1String{"metrics"}) {
+        const auto& d = m_model->networkDiagnostics();
+        const auto& t = d.traffic;
+        const bool measured = d.observed_unix_ms != 0;
+        appendOutput(tr("Source: Local CYBOU frames, excluding TLS/TCP overhead\nReceived since runtime start: %1 bytes\nSent since runtime start: %2 bytes\nReceived rate: %3 B/s\nSent rate: %4 B/s\nWindow: 60 complete seconds; retries and service frames included.\nObserved: %5\nThis is local traffic, not unique delivery or network transaction throughput.")
+            .arg(measured ? QString::number(t.received_bytes) : tr("Unknown"))
+            .arg(measured ? QString::number(t.sent_bytes) : tr("Unknown"))
+            .arg(measured && t.window_ms ? QLocale{}.toString(t.window_received_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
+            .arg(measured && t.window_ms ? QLocale{}.toString(t.window_sent_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
+            .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown")));
     } else if (cmd == QLatin1String{"health"}) {
         const auto& d = m_model->networkDiagnostics();
         const bool measured = d.observed_unix_ms != 0;

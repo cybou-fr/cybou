@@ -5,6 +5,7 @@
 #ifndef CYBOU_DIAGNOSTICS_H
 #define CYBOU_DIAGNOSTICS_H
 #include <cstdint>
+#include <cybou/traffic_meter.h>
 #include <string>
 #include <vector>
 namespace cybou {
@@ -33,6 +34,7 @@ struct OperationDiagnostics {
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
+    TrafficDiagnostics traffic;
     /// Local passive observation time (UTC) and monotonic runtime lifetime.
     /// A zero observation time means no real runtime sample is available.
     std::uint64_t observed_unix_ms{0}, uptime_ms{0};

@@ -59,6 +59,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
+    snapshot.traffic = m_traffic->Snapshot();
     snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
     snapshot.uptime_ms = std::chrono::duration_cast<std::chrono::milliseconds>(

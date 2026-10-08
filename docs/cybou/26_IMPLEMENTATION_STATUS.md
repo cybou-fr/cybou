@@ -3,6 +3,39 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Passive local traffic observation (2026-10-08)
+
+The shared runtime meter counts actual CYBOU frame-stream bytes at successful
+TLS application read/write progress. Inbound sessions, mesh outbound and pooled
+storage connections use the same counter. Partial/retried/service/invalid-input
+bytes count as traffic; TLS record/handshake and TCP overhead do not. It does not
+measure unique delivered content, finalized operations or network-wide traffic.
+
+One fixed 61-slot ring and a short mutex provide the preceding 60 complete
+seconds, excluding the current partial second. Startup rates remain Unknown;
+complete idle intervals yield measured zero. Lifetime totals survive connection
+churn, reset on runtime restart, and are not reset by diagnostic reads. A delayed
+writer cannot overwrite a newer ring interval. Collection has no GUI dependency,
+per-peer labels, chain scan, new wire message or storage proof request.
+
+Network Advanced Overview displays the shared received/sent B/s observation;
+read-only `metrics` also exposes exact lifetime totals and UTC sample time.
+FR/EN translations are included. Resource measurements, operation rates,
+PUT/GET payload breakdown, charts and cohort consolidation remain open.
+
+Ordinary MinGW desktop/core/Qt binaries rebuild. The passive window case passes
+14 assertions (startup, complete-window boundaries, partial-second exclusion,
+expiry, idle, restart, concurrent writers and delayed-writer ring collision).
+The full P2P peer-manager suite passes 37 cases / 1,178 assertions, including
+actual TLS handshake/ping traffic observed through the runtime meter. Other
+core cases are filtered; this is component transport evidence, not DEVNET load.
+Logs: `artifacts/network-traffic-20261008/`. Desktop SHA-256:
+`a06e7d50bdd8a4c95080dd803d363b2d144465a3c5ecb10aabf582f941648277`.
+
+Full offscreen Qt: 92 passed, 0 failed/skipped; shared Network rates, missing
+observation reset and EN/FR `metrics` totals/rates are covered. Manifest/diff
+checks pass. No running desktop/signer or VPS service is restarted or deployed.
+
 ## Network naming and observability scope correction (2026-10-08)
 
 ### Local passive observation follow-up

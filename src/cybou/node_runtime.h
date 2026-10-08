@@ -274,6 +274,7 @@ public:
     /// \brief Возвращает диагностический snapshot runtime, peer set и storage usage.
     /// \return Данные для UI/CLI diagnostics; peer и state locks не удерживаются одновременно дольше нужного.
     NodeDiagnosticsSnapshot GetDiagnostics() const;
+    std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
     std::shared_ptr<EventWriter> EventLog() const { return m_config.event_writer; }
@@ -697,6 +698,7 @@ private:
         std::atomic<uint16_t> listen_port{0};
     };
     NodeRuntimeConfig m_config;
+    std::shared_ptr<TrafficMeter> m_traffic{std::make_shared<TrafficMeter>()};
     const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
     cybou::Hash256 m_network_binding;
     // Reverse destruction order closes peers before provider/chain storage.

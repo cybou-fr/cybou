@@ -378,6 +378,9 @@ BOOST_AUTO_TEST_CASE(tls_io_ignores_unrelated_thread_crypto_errors)
     BOOST_CHECK_EQUAL(manager.PingAll(), 1U);
     server.join();
     BOOST_CHECK(served);
+    const auto traffic = fixture.runtime->GetDiagnostics().traffic;
+    BOOST_CHECK_GT(traffic.received_bytes, 0U);
+    BOOST_CHECK_GT(traffic.sent_bytes, 0U);
 }
 
 BOOST_AUTO_TEST_CASE(ordinary_handshake_is_independent_of_local_poa_signer)

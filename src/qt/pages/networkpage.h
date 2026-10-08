@@ -128,6 +128,8 @@ private:
     QLabel* m_metric_uptime_sub{nullptr};
     QLabel* m_metric_queue{nullptr};
     QLabel* m_metric_queue_sub{nullptr};
+    QLabel* m_metric_traffic{nullptr};
+    QLabel* m_metric_traffic_sub{nullptr};
     QLabel* m_metric_storage{nullptr};
     QLabel* m_metric_storage_sub{nullptr};
     QLabel* m_metric_protection{nullptr};

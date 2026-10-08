@@ -85,7 +85,7 @@ std::unique_ptr<PeerSession> DialPeer(CybouNodeRuntime& runtime, boost::asio::io
         .finalized_tip = status.finalized_tip, .nonce = *nonce, .listen_port = runtime.ListenPort()};
     TlsSessionConfig tls;
     tls.expected_server_spki_sha256 = runtime.PinnedSpki(endpoint->first, endpoint->second);
-    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls));
+    auto peer = std::make_unique<PeerSession>(std::move(socket), TransportRole::CLIENT, std::move(tls), runtime.GetTrafficMeter());
     if (!peer->Handshake(local)) {
         switch (peer->LastHandshakeStatus()) {
         case HandshakeStatus::UNAVAILABLE: status_out = PeerConnectStatus::UNAVAILABLE; break;

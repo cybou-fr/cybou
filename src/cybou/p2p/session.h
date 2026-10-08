@@ -24,12 +24,13 @@
 #include <chrono>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
 #include <vector>
 
-namespace cybou { class CybouNodeRuntime; }
+namespace cybou { class CybouNodeRuntime; class TrafficMeter; }
 namespace cybou::p2p {
 
 /// \brief Максимальная полезная нагрузка одного transport frame: `64 * 1024` байт = `64 KiB`.
@@ -215,7 +216,7 @@ public:
     /// \param transport_role Клиентская или серверная сторона сеанса.
     /// \param tls_config Необязательная стабильная TLS identity/пин.
     explicit PeerSession(boost::asio::ip::tcp::socket socket, TransportRole transport_role,
-        TlsSessionConfig tls_config = {});
+        TlsSessionConfig tls_config = {}, std::shared_ptr<TrafficMeter> traffic = {});
     ~PeerSession();
     PeerSession(const PeerSession&) = delete;
     PeerSession& operator=(const PeerSession&) = delete;
@@ -323,6 +324,7 @@ private:
     TlsSessionConfig m_tls_config;
     SSL_CTX* m_owned_ssl_context{nullptr};
     SSL* m_ssl{nullptr};
+    std::shared_ptr<TrafficMeter> m_traffic;
     std::array<unsigned char, 32> m_tls_exporter{};
     std::optional<Hello> m_peer;
     std::optional<StorageId> m_peer_storage_id;

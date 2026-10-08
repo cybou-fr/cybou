@@ -71,7 +71,7 @@ time series. Canonical streams/registers must never be added across reporters.
 2. **O2 Network and Console:** cards/charts from O1 and matching proposed
    `health`, `metrics`, `capacity` read-only commands; map/Advanced retained,
    FR/EN, themes, stale/unknown states. `health` has its first bounded package
-   below; `metrics` and `capacity` remain planned.
+   below; `metrics` has its traffic package below; `capacity` remains planned.
 3. **O3 Remote report design:** close normative trust/privacy/deduplication and
    abuse gates before modifying P2P. No new network, genesis or signer needed.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
@@ -93,7 +93,27 @@ The bounded pool is read under its existing lock without scanning history.
 
 Still open: rate windows/retention, transfer counters, CPU/memory/I/O, canonical
 register aggregates, charts, remote reports/consolidation and capacity estimates.
-`metrics` and `capacity` are planned commands; `health` is now implemented.
+`health` is implemented; the traffic package below adds `metrics`. `capacity`
+remains planned.
+
+### O1 passive traffic package (2026-10-08)
+
+Production inbound, mesh-outbound and storage-pool sessions share one runtime
+meter. Successful TLS application reads/writes count actual bytes once per
+progress result, including partial transfers, invalid input, retries and service
+frames. TLS handshake/record and TCP/IP overhead are excluded. Frame-stream
+bytes are neither NIC traffic nor unique content delivered.
+
+A fixed 61-slot one-second ring provides the preceding 60 complete seconds;
+the current partial second is excluded. Rates are Unknown before 60 seconds.
+Continuous passive collection makes complete idle windows a measured zero.
+Reads cannot reset counters. Totals survive session closure/reconnect but reset
+with the runtime. Fixed memory, one short mutex, no per-peer identifiers.
+
+Network Advanced Overview and public read-only `metrics` show received/sent
+rates; Console also shows exact lifetime totals and observation time. Separate
+PUT/GET payload rates, charts, operation rates, resources and remote aggregation
+remain open. This ring is not the proposed 24-hour history collector.
 
 Existing CI and Beta acceptance gates remain. Work in bounded packages;
 collector preparation does not require a live load test or signer restart.

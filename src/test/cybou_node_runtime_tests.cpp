@@ -26,6 +26,37 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(passive_traffic_windows_exclude_partial_seconds_and_expire)
+{
+    using Clock = cybou::TrafficMeter::Clock;
+    const auto start = Clock::time_point{};
+    cybou::TrafficMeter meter{start};
+    meter.Record(120, 60, start);
+    meter.Record(600, 1200, start + std::chrono::seconds{59});
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{59}).window_ms, 0U);
+    const auto minute = meter.Snapshot(start + std::chrono::seconds{60});
+    BOOST_CHECK_EQUAL(minute.window_ms, 60000U);
+    BOOST_CHECK_EQUAL(minute.window_received_bytes, 720U);
+    BOOST_CHECK_EQUAL(minute.window_sent_bytes, 1260U);
+    meter.Record(1000, 2000, start + std::chrono::seconds{60});
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{60}).window_received_bytes, 720U);
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{61}).window_received_bytes, 1600U);
+    const auto idle = meter.Snapshot(start + std::chrono::seconds{121});
+    BOOST_CHECK_EQUAL(idle.window_received_bytes, 0U);
+    BOOST_CHECK_EQUAL(idle.received_bytes, 1720U);
+    meter.Record(7, 9, start + std::chrono::seconds{122});
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{123}).window_received_bytes, 7U);
+    BOOST_CHECK_EQUAL(cybou::TrafficMeter{start + std::chrono::seconds{123}}.Snapshot(start + std::chrono::seconds{123}).window_ms, 0U);
+    std::jthread a{[&] { for (int i = 0; i < 1000; ++i) meter.Record(1, 2, start + std::chrono::seconds{123}); }};
+    std::jthread b{[&] { for (int i = 0; i < 1000; ++i) meter.Record(3, 4, start + std::chrono::seconds{123}); }};
+    a.join(); b.join();
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{124}).received_bytes, 5727U);
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{124}).window_sent_bytes, 6009U);
+    meter.Record(11, 13, start + std::chrono::seconds{62}); // delayed writer, same ring slot
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{124}).window_received_bytes, 4007U);
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{124}).received_bytes, 5738U);
+}
+
 BOOST_AUTO_TEST_CASE(finalized_snapshot_is_shared_immutable_and_reopens_from_disk)
 {
     CybouServiceTestFixture fixture;

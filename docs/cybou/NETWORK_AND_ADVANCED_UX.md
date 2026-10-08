@@ -187,7 +187,7 @@ the same command registry used for dispatch and authorization.
 
 | Access | Implemented commands | Source and scope |
 | --- | --- | --- |
-| Any local session | `help`, `status`, `health`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
+| Any local session | `help`, `status`, `health`, `metrics`, `network`, `storage`, `peers`, `operations`, `block <height|hash>`, `op <id>`, `history [page]`, `clear` | This node's semantic status and bounded diagnostics snapshot; peer heights are unverified announcements; locally verified blocks, operations and blockchain history |
 | Unlocked Identity | `identity`, `wallet`, `files [filter]`, `file <id|name>`, `chunks <id|name>`, `jobs` | Own semantic catalog, account values, active application tasks, real own-content leaf manifests and BLAKE3-256 integrity verification |
 | Unlocked genesis-key-proven Authority | `authority [status|candidates|totals|settle]` | Local signer loop, candidate queue age and waiting times, safety journal status and settlement preview |
 
@@ -215,6 +215,13 @@ initialization/safety observation and candidate-pool operations/bytes. Network
 Advanced Overview uses the same sample. Recent finalized/rejected operation
 history is not counted as candidate load. Missing sample or uninitialized pool
 shows Unknown. This is local load, not global health or operation throughput.
+
+`metrics` reports local frame-stream received/sent totals and rates over the
+preceding 60 complete seconds, with observation time. Advanced Overview shows
+the same rates. TLS/TCP overhead is excluded; service/retry/partial bytes are
+included. This is not unique content or finalized transaction throughput.
+Rates stay Unknown until the complete window exists. Runtime restart resets
+the counters; storage-pool and ordinary mesh sessions share the collector.
 
 The technical console supports:
 - Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.

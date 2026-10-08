@@ -139,6 +139,23 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>Local traffic counters and measured transfer rates</source><translation>Compteurs de trafic local et débits mesurés</translation></message>
+    <message><source>Source: Local CYBOU frames, excluding TLS/TCP overhead
+Received since runtime start: %1 bytes
+Sent since runtime start: %2 bytes
+Received rate: %3 B/s
+Sent rate: %4 B/s
+Window: 60 complete seconds; retries and service frames included.
+Observed: %5
+This is local traffic, not unique delivery or network transaction throughput.</source>
+    <translation>Source : trames CYBOU locales, hors surcharge TLS/TCP
+Reçu depuis le démarrage : %1 octets
+Envoyé depuis le démarrage : %2 octets
+Débit reçu : %3 o/s
+Débit envoyé : %4 o/s
+Fenêtre : 60 secondes complètes ; retransmissions et trames de service incluses.
+Observation : %5
+Il s'agit du trafic local, pas des livraisons uniques ni du débit des opérations du réseau.</translation></message>
     <message><source>Local runtime observation and candidate pool</source><translation>Observation locale du fonctionnement et du pool de candidats</translation></message>
     <message><source>%1 s</source><translation>%1 s</translation></message>
     <message>
@@ -4803,6 +4820,9 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Local traffic</source><translation>Trafic local</translation></message>
+    <message><source>↓ %1 B/s · ↑ %2 B/s</source><translation>↓ %1 o/s · ↑ %2 o/s</translation></message>
+    <message><source>Local CYBOU frames · 60 complete seconds · excludes TLS/TCP overhead</source><translation>Trames CYBOU locales · 60 secondes complètes · hors surcharge TLS/TCP</translation></message>
     <message><source>Node uptime</source><translation>Temps de fonctionnement du nœud</translation></message>
     <message><source>Local candidate pool</source><translation>Pool local de candidats</translation></message>
     <message><source>%1 s</source><translation>%1 s</translation></message>

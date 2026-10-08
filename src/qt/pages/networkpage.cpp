@@ -439,6 +439,9 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [q_val, q_sub] = MetricTile(grid, 1, 1, tr("Local candidate pool"), overview);
     m_metric_queue = q_val; m_metric_queue_sub = q_sub;
     m_metric_queue->setObjectName(QStringLiteral("networkCandidatePool"));
+    auto [t_val, t_sub] = MetricTile(grid, 2, 0, tr("Local traffic"), overview);
+    m_metric_traffic = t_val; m_metric_traffic_sub = t_sub;
+    m_metric_traffic->setObjectName(QStringLiteral("networkTrafficRate"));
 
     overview_layout->addLayout(grid);
     auto* storage_grid = new QGridLayout;
@@ -737,6 +740,11 @@ void NetworkPage::refresh()
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
     const bool measured = diag.observed_unix_ms != 0;
+    const auto& traffic = diag.traffic;
+    m_metric_traffic->setText(measured && traffic.window_ms ? tr("↓ %1 B/s · ↑ %2 B/s")
+        .arg(QLocale{}.toString(traffic.window_received_bytes * 1000.0 / traffic.window_ms, 'f', 1),
+             QLocale{}.toString(traffic.window_sent_bytes * 1000.0 / traffic.window_ms, 'f', 1)) : tr("Unknown"));
+    m_metric_traffic_sub->setText(tr("Local CYBOU frames · 60 complete seconds · excludes TLS/TCP overhead"));
     m_metric_uptime->setText(measured ? tr("%1 s").arg(diag.uptime_ms / 1000) : tr("Unknown"));
     m_metric_uptime_sub->setText(measured ? tr("Local observation: %1 UTC").arg(
         QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(diag.observed_unix_ms), QTimeZone::UTC).toString(QStringLiteral("HH:mm:ss"))) : tr("Unknown"));

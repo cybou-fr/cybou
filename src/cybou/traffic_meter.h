@@ -1,0 +1,63 @@
+// Copyright (c) 2026 Stanislav SAVELIEV
+// SPDX-License-Identifier: Apache-2.0
+#ifndef CYBOU_TRAFFIC_METER_H
+#define CYBOU_TRAFFIC_METER_H
+
+#include <array>
+#include <chrono>
+#include <cstdint>
+#include <mutex>
+
+namespace cybou {
+struct TrafficDiagnostics {
+    uint64_t received_bytes{0}, sent_bytes{0};
+    uint64_t window_received_bytes{0}, window_sent_bytes{0}, window_ms{0};
+};
+
+/// Passive local CYBOU frame bytes, excluding TLS/TCP overhead. No peer identifiers.
+class TrafficMeter {
+public:
+    using Clock = std::chrono::steady_clock;
+    explicit TrafficMeter(Clock::time_point started = Clock::now()) : m_started{started} {}
+    void Record(uint64_t received, uint64_t sent, Clock::time_point now = Clock::now())
+    {
+        std::lock_guard lock{m_mutex};
+        const auto second = Second(now);
+        auto& bucket = m_buckets[second % m_buckets.size()];
+        m_received += received;
+        m_sent += sent;
+        // A delayed writer must not replace a newer bucket after a full ring turn.
+        if (bucket.valid && bucket.second > second) return;
+        if (!bucket.valid || bucket.second != second) bucket = {second, 0, 0, true};
+        bucket.received += received;
+        bucket.sent += sent;
+    }
+    TrafficDiagnostics Snapshot(Clock::time_point now = Clock::now()) const
+    {
+        std::lock_guard lock{m_mutex};
+        TrafficDiagnostics result{.received_bytes = m_received, .sent_bytes = m_sent};
+        const auto second = Second(now);
+        if (second < 60) return result;
+        result.window_ms = 60000;
+        for (const auto& bucket : m_buckets) {
+            if (bucket.valid && bucket.second >= second - 60 && bucket.second < second) {
+                result.window_received_bytes += bucket.received;
+                result.window_sent_bytes += bucket.sent;
+            }
+        }
+        return result;
+    }
+private:
+    uint64_t Second(Clock::time_point now) const
+    {
+        return now < m_started ? 0 : static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::seconds>(now - m_started).count());
+    }
+    struct Bucket { uint64_t second{0}, received{0}, sent{0}; bool valid{false}; };
+    const Clock::time_point m_started;
+    mutable std::mutex m_mutex;
+    std::array<Bucket, 61> m_buckets{};
+    uint64_t m_received{0}, m_sent{0};
+};
+} // namespace cybou
+#endif
