@@ -117,6 +117,10 @@ here is not an instruction to rebuild them.
 - wider network observability: trustworthy source, minimization/retention,
   pseudonyms, session churn and sampled availability window; local peers are
   not a global census and illustrative France positions are not geolocation;
+  [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md) now requires
+  built-in collection and consolidation. Freeze bounded remote reports,
+  replay/stale handling and reporter deduplication in Level 1/2 before transport
+  implementation; reported resource values are not verified service evidence;
 - implemented per-object protection blockers/freshness: preserve safe service-owned evidence
   without exposing provider topology or interpreting missing data as failure;
 - per-object remote purge outcomes: actual available acknowledgements, privacy,

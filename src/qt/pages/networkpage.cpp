@@ -249,7 +249,7 @@ void SchematicFranceMap::paintEvent(QPaintEvent* /*event*/)
     title_font.setBold(true);
     title_font.setPixelSize(13);
     painter.setFont(title_font);
-    painter.drawText(QPointF{16, 24}, tr("PUBLIC CYBOU NETWORK · FRANCE"));
+    painter.drawText(QPointF{16, 24}, tr("NETWORK"));
 
     painter.setPen(CybouTheme::color(CybouTheme::TEXT_MUTED));
     QFont sub_font = painter.font();

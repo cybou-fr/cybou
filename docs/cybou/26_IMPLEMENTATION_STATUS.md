@@ -3,6 +3,24 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Network naming and observability scope correction (2026-10-08)
+
+Navigation/header now use Network / Réseau; the map heading uses NETWORK /
+RÉSEAU. Active DEVNET and France admission remain scoped details. Built-in
+collection/consolidation of actual service bytes, finalized op/min, transfer
+rates, resource load and capacity is required by `NETWORK_OBSERVABILITY_PLAN.md`.
+The desktop plan no longer substitutes a benchmark-first sequence for passive
+monitoring. Existing diagnostics expose local storage/session/finality, not a
+remote resource feed. No passive collector, cohort totals, new Console command
+or capacity estimate is claimed implemented by this contract/naming package.
+
+Isolated MinGW desktop and Qt-test builds pass, including regenerated embedded
+French translations. Five existing navigation/language/Network scenarios pass
+offscreen (7 results including setup/cleanup, 0 failed/skipped). Manifest and
+diff checks pass. Logs and binaries: `artifacts/network-monitoring-contract-20261008/`.
+This is naming/component evidence, not a telemetry or live network acceptance
+result. The running desktop and signer are not restarted.
+
 ## Core CI signed-size build repair (2026-10-08)
 
 Authenticated log for GitHub core job `113302547455` (run `37774708866`,

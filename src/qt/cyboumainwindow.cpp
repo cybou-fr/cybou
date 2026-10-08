@@ -114,7 +114,7 @@ QString PageTitle(CybouPage page)
     case CybouPage::Files: return CybouMainWindow::tr("Files");
     case CybouPage::Wallet: return CybouMainWindow::tr("Wallet");
     case CybouPage::Identity: return CybouMainWindow::tr("Identity & Security");
-    case CybouPage::Network: return CybouMainWindow::tr("Public CYBOU network");
+    case CybouPage::Network: return CybouMainWindow::tr("Network");
     case CybouPage::Settings: return CybouMainWindow::tr("Settings");
     case CybouPage::NetworkAuthority: return CybouMainWindow::tr("Central Authority");
     }

@@ -1696,8 +1696,8 @@ Stan</translation>
         <translation>Rechercher dans la boîte actuelle, ou choisir une suggestion (Ctrl+K)</translation>
     </message>
     <message>
-        <source>Public CYBOU network</source>
-        <translation>Réseau public CYBOU</translation>
+        <source>Network</source>
+        <translation>Réseau</translation>
     </message>
     <message>
         <source>Administration</source>
@@ -5942,8 +5942,8 @@ Enregistrer quand même ?</translation>
     <message><source>%1 connected · %2 known, disconnected (pale)</source><translation>%1 connectés · %2 connus, déconnectés (pâles)</translation></message>
     <message><source>Observed mesh peers</source><translation>Pairs du maillage observés</translation></message>
     <message>
-        <source>PUBLIC CYBOU NETWORK · FRANCE</source>
-        <translation>RÉSEAU PUBLIC CYBOU · FRANCE</translation>
+        <source>NETWORK</source>
+        <translation>RÉSEAU</translation>
     </message>
     <message>
         <source>LOCAL NETWORK</source>

@@ -1,9 +1,10 @@
 # Network and Advanced product contract
 
 Status: Level 5 product target, reviewed against desktop/core source on
-2026-10-05. New surfaces described here are not implemented merely because
+2026-10-08. New surfaces described here are not implemented merely because
 this contract exists. Delivery order and source evidence are in
-[`DESKTOP_UX_DELIVERY_PLAN.md`](DESKTOP_UX_DELIVERY_PLAN.md).
+[`DESKTOP_BETA_ACCEPTANCE_PLAN.md`](DESKTOP_BETA_ACCEPTANCE_PLAN.md) and
+[`NETWORK_OBSERVABILITY_PLAN.md`](NETWORK_OBSERVABILITY_PLAN.md).
 
 ## Product intent and trust boundaries
 
@@ -20,6 +21,14 @@ boundaries. No new canonical task queue, network role or format version is
 introduced by these product features.
 
 ## Network overview
+
+The page is named Network / Réseau in navigation and headers. Built-in passive
+monitoring is standard CYBOU functionality: actual data served, finalized op/min,
+transfer speed, resource load, storage capacity and scoped potential headroom,
+with time-series charts and matching Console detail. The observability plan
+defines sources, consolidation and remaining implementation. Historical load
+benchmarks are separate ceiling evidence and do not replace current telemetry.
+No external monitoring product or synthetic load is required for collection.
 
 Ordinary users see connectivity, local verified height, content protection
 summary, local storage capacity/usage and finalized service budget. Distinguish

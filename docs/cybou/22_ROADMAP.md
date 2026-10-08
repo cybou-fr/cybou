@@ -67,8 +67,12 @@ Mail/Files and shared task architecture is retained. Current order:
    acceptance; live Mail/Files offline/retrieval/repair/shared-retention scenarios.
 4. P0: physical keyboard/mouse/drag/native dialogs, mixed DPI and real assistive
    technology acceptance in FR/EN and both themes.
-5. P1: multi-host stepped/mixed capacity benchmark, then dataset-backed Advanced
-   visualization and targeted final polish. Retain op/min and simulation scope.
+5. Current user priority: built-in passive Network monitoring under
+   [NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md): local counters,
+   charts/Console, normative remote-report design, cohort consolidation and
+   scoped capacity estimates. Collection does not require generated load.
+6. P1: multi-host stepped/mixed capacity benchmark for historical throughput
+   ceilings, then targeted polish. Retain op/min and simulation scope.
 
 Implementation and component passes do not close live Beta gates. Wider census,
 pending-file Compose and stronger purge claims remain explicit design gates;

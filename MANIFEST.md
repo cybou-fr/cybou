@@ -25,10 +25,10 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 102 | 99b437f006c0429f |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 29 | 847caaa3d9e5aa10 |
-| docs/cybou/22_ROADMAP.md | 92 | 577233be5115bb19 |
+| docs/cybou/22_ROADMAP.md | 96 | a02ef31246e2f9d9 |
 | docs/cybou/24_DECISIONS.md | 228 | 6e481a2f9aa6cb34 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 127 | afd12dcd79bf44a5 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1257 | d608e9b55885df9b |
+| docs/cybou/25_OPEN_QUESTIONS.md | 131 | 6214b7baf9c6b581 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1275 | 8e2226d59db1685a |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -64,7 +64,7 @@ editing an included file.
 | docs/cybou/BETA_WALLET_RESTART_ACCEPTANCE.md | 58 | eaf1ba5ab459c30a |
 | docs/cybou/DATA_ASSURANCE_AND_ERASURE.md | 356 | 91484bd174114f8f |
 | docs/cybou/DATA_PROCESSING_INVENTORY.md | 85 | 3ecd23dc757382b1 |
-| docs/cybou/DESKTOP_BETA_ACCEPTANCE_PLAN.md | 217 | e6c0b8e70054c330 |
+| docs/cybou/DESKTOP_BETA_ACCEPTANCE_PLAN.md | 231 | aea5966a13204584 |
 | docs/cybou/DESKTOP_UX_DELIVERY_PLAN.md | 648 | 6e017266f426d9a7 |
 | docs/cybou/DESKTOP_UX_REMAINING_WORK_2026-10-06.md | 236 | 2671655e0e1d9118 |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |
@@ -73,7 +73,8 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 309 | 0a94d6adbbc9aaeb |
+| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 318 | e789e60049461b15 |
+| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 84 | 3b79fd4fee3a938d |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 78 | bc0a8ab5f78ed18a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |

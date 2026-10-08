@@ -14,7 +14,7 @@ depends on acceptance evidence. No percentage of readiness is assigned.
 
 | Surface | Current implementation/evidence | Remaining decision |
 |---|---|---|
-| Console / Network Monitor | Bounded read-only commands, completion/search/history/lock cleanup; retained bounded Monitor tabs and view pause | Freeze feature set; physical/accessibility and live acceptance |
+| Console / Network Monitor | Bounded read-only commands, completion/search/history/lock cleanup; retained bounded Monitor tabs and view pause | Preserve existing surfaces; shared passive telemetry under the observability plan; physical/accessibility and live acceptance |
 | Authority Administration | Local genesis-key proof, pause review, exact settlement preview and stale-review cancellation | Live operator acceptance; no redesign |
 | Mail / Files actions | Correlated durable local acknowledgments, draft safety, shared tasks, ordered Undo and reusable Protected references | Outage/restart and physical entry-point acceptance |
 | Files observations | Persisted replica counts distinguished from volatile local observation time/scope/reasons | Live audit/repair and independent-domain evidence |
@@ -161,6 +161,18 @@ Console, task panel and Authority reviews. Check role/name/state/action, reading
 order, status changes and confirmation focus; labels alone do not establish
 screen-reader usability. Record tested technology/version and uncovered scope.
 
+## Current user priority — Built-in Network monitoring (2026-10-08)
+
+[NETWORK_OBSERVABILITY_PLAN.md](NETWORK_OBSERVABILITY_PLAN.md) requires continuous
+real-data collection and consolidation as standard Network functionality, with
+charts and Console details. Deliver bounded O1 local collection, O2 presentation,
+O3 normative remote-report design, O4 cohort aggregation and O5 scoped estimates.
+This supersedes benchmark-first ordering for monitoring. Passive charts do not
+wait for a load-test dataset or an active local signer. Wider peer reporting
+needs its trust/privacy/deduplication design before transport changes. Existing
+local snapshot and historical reference do not satisfy this requirement.
+Correctness/CI and Beta acceptance gates remain open independently.
+
 ## P1 — Sustained capacity measurement and evidence-led polish
 
 After correctness and topology gates, use BUILD_TESTS DEVNET tools for stepped
@@ -176,7 +188,9 @@ Preserve the accepted desktop op/min unit and scope labels. Internally op/s can
 remain a measurement unit; a headline unit change needs a separate product
 contract decision. No benchmark runs on opening Network, no production loadgen.
 
-Only after a valid dataset consider bounded Advanced charts. Final screenshot/
+Passive Network charts use actual collector data under the observability plan;
+benchmark charts and ceiling references require valid workload evidence.
+Final screenshot/
 copy/quiet-state polish follows reproduced clipping or usability findings. Do not
 add lifecycle diagrams or redo the design system without evidence.
 
