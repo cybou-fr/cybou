@@ -3,6 +3,36 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Mail/Files Tab and visible-focus package (2026-10-08)
+
+Compose Send and Reader Security details used local borderless styles, suppressing
+visible border treatment when focused. Both now reserve a transparent two-pixel
+border and use the theme's primary text color for an explicit focused border.
+The reserved space keeps focus transitions from changing geometry. Command,
+publication, storage and Identity behavior are unchanged.
+
+A new component regression walks complete Tab and Shift+Tab cycles through
+Compose, Reader and Files list/grid in FR/EN and light/dark themes. It verifies
+all currently visible enabled buttons are reachable both ways, icon-only
+controls have accessible names, and Subject/Body are in the Compose cycle.
+Compose includes a dynamic attachment-removal button; Reader includes received
+attachment controls; Files includes the selection toolbar. Native page layout
+and activity are settled after page replacement before walking focus. This is
+reachability evidence, not a claim that every menu/dialog action was activated.
+
+Validation: isolated GUI/test builds succeeded; the full offscreen Qt suite
+passed 89 results and seven focused native Windows scenarios passed nine results
+including setup/cleanup. Native control/panel captures of Send, Security details
+and selection Trash were saved in all four language/theme combinations. Light
+English and dark French Send/Reader panel captures were visually reviewed, with
+clear focused borders; the dark Files Trash control was also inspected.
+Native layout testing reported a Windows maximum-size clamp for the largest
+requested geometry, so that run does not establish physical 1920x1080 acceptance.
+Evidence and final source/binary provenance are under
+`artifacts/ux-focus-20261008/`. The build cache is restored to its usual output;
+no live desktop/signer or VPS was restarted/deployed. Other pages/dialogs,
+physical keyboard, screen-reader and mixed-monitor DPI acceptance remain open.
+
 ## Mail/Files keyboard scope package (2026-10-08)
 
 Files selection shortcuts were attached to the whole page: retained selection

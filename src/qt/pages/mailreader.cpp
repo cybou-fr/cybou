@@ -181,9 +181,10 @@ MailReader::MailReader(CybouDesktopModel* model, QWidget* parent)
     details->setFlat(true);
     details->setToolTip(tr("Security details"));
     details->setAccessibleName(tr("Security details"));
-    details->setStyleSheet(QStringLiteral("QPushButton { border: none; background: transparent; color: %1; padding: 0 4px;"
-                                          " min-height: 0; text-decoration: underline; font-weight: 600; }")
-        .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name()));
+    details->setStyleSheet(QStringLiteral("QPushButton { border: 2px solid transparent; background: transparent; color: %1; padding: 0 4px;"
+                                          " min-height: 0; text-decoration: underline; font-weight: 600; }"
+                                          "QPushButton:focus { border-color: %2; }")
+        .arg(CybouTheme::color(CybouTheme::BRAND_TEAL_DARK).name(), CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
     details->setProperty("cybouId", QStringLiteral("securityDetails"));
     details->setCursor(Qt::PointingHandCursor);
     connect(details, &QPushButton::clicked, this, [this] { showSecurityDetails(); });

@@ -137,6 +137,15 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 Tab/focus package walks complete forward and reverse focus cycles
+through Compose, Reader and Files list/grid in FR/EN and light/dark themes. It
+checks that visible enabled buttons are reachable both ways, icon-only buttons
+have accessible names, and Compose Subject/Body remain in the cycle. Native
+focused-control and surrounding-panel captures document Send, Security details
+and Files selection Trash. Send/Security details had local borderless styles;
+explicit focus borders now retain their geometry. This does not close all
+application pages, physical keyboard, screen-reader or mixed-monitor acceptance.
+
 The 2026-10-08 keyboard scope regression passes in English and French on the
 native Windows Qt platform. Retained Files selection does not make navigation
 or header text editing a rename/Trash shortcut target; list/grid F2 and Delete

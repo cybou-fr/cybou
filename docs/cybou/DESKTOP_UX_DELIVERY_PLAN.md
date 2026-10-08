@@ -609,3 +609,12 @@ The test dismisses completion before returning focus to files and distinguishes
 background projection refresh from file mutation commands. This closes the
 scoped shortcut-routing defect; physical keyboard/tab order, focus visuals,
 screen readers and wider FR/EN/live acceptance remain separate gates.
+
+Tab/focus follow-up (2026-10-08): component regression now walks complete Tab and
+Shift+Tab cycles through Compose fields/dynamic attachment removal, Reader
+buttons and Files list/grid actions in FR/EN and light/dark themes. Send and
+Security details receive explicit visible focus borders because their local
+styles suppressed the common focus treatment; reserved border space avoids
+movement on focus. Native focused-control and panel captures support visual
+review. Physical keyboard, other pages/dialogs, screen readers, mixed-monitor
+DPI and live recovery/outage gates remain open.

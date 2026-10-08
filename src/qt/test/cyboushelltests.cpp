@@ -39,6 +39,8 @@
 #include <QProgressDialog>
 #include <QProgressBar>
 #include <QElapsedTimer>
+#include <QDir>
+#include <QSet>
 
 #include <cybou/network_genesis.h>
 #include <cybou/node_runtime.h>
@@ -1640,6 +1642,107 @@ void CybouShellTests::mailFilesKeyboardScopesInBothLanguages()
         QCOMPARE(body->toPlainText(), QStringLiteral("rf/"));
         QVERIFY(mail->isComposing());
     }
+    window->setLanguage(QStringLiteral("en"));
+    window->close();
+}
+
+void CybouShellTests::mailFilesTabReachabilityAndFocus()
+{
+    ScopedEnvironment appearance{"CYBOU_APPEARANCE", "light"};
+    auto window = makeWindow();
+    window->resize(1280, 860);
+    window->show();
+    window->activateWindow();
+    QVERIFY(QTest::qWaitForWindowActive(window.get()));
+    const QString shots = qEnvironmentVariable("CYBOU_TEST_FOCUS_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) QVERIFY(QDir{}.mkpath(shots));
+    bool cycles_complete = true;
+    bool captures_saved = true;
+    const auto walk = [&](QWidget* start, bool reverse, const QString& prefix) {
+        QSet<QWidget*> visited;
+        QApplication::processEvents(); // Complete page replacement/layout before native focus.
+        window->activateWindow();
+        if (!QTest::qWaitForWindowActive(window.get())) { cycles_complete = false; return visited; }
+        start->setFocus(Qt::TabFocusReason);
+        QApplication::processEvents();
+        for (int i = 0; i < 256; ++i) {
+            QWidget* focused = QApplication::focusWidget();
+            if (!focused || (i > 0 && focused == start)) break;
+            visited.insert(focused);
+            if (!shots.isEmpty() && !reverse &&
+                (focused->objectName() == QLatin1String("sendButton") ||
+                 focused->property("cybouId").toString() == QLatin1String("securityDetails") ||
+                 focused->objectName() == QLatin1String("filesSelectionTrash"))) {
+                const QString semantic_id = focused->property("cybouId").toString();
+                const QString id = semantic_id.isEmpty() ? focused->objectName() : semantic_id;
+                const QString path = shots + QLatin1Char('/') + prefix + QLatin1Char('-') + id;
+                captures_saved &= focused->grab().save(path + QStringLiteral(".png"));
+                captures_saved &= focused->parentWidget()->grab().save(path + QStringLiteral("-context.png"));
+            }
+            QTest::keyClick(focused, Qt::Key_Tab, reverse ? Qt::ShiftModifier : Qt::NoModifier);
+            QApplication::processEvents();
+        }
+        cycles_complete &= QApplication::focusWidget() == start;
+        if (visited.isEmpty()) qWarning("Tab walk started without native focus");
+        return visited;
+    };
+    for (const auto& theme : {QByteArray{"light"}, QByteArray{"dark"}}) {
+        qputenv("CYBOU_APPEARANCE", theme);
+        window->reloadAppearance();
+        for (const auto& language : {QStringLiteral("en"), QStringLiteral("fr")}) {
+            window->setLanguage(language);
+            auto* model = window->desktopModel();
+            QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("mail")));
+            window->showPage(CybouPage::Mail);
+            auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+            mail->openCompose();
+            auto* to = mail->composer()->findChild<QLineEdit*>(QStringLiteral("recipientEdit"));
+            auto* body = mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+            QVERIFY(to && body);
+            to->setText(QStringLiteral("alice.cybou"));
+            body->setPlainText(QStringLiteral("Keyboard acceptance"));
+            CybouAttachmentItem attachment;
+            attachment.id = QStringLiteral("tab-attachment");
+            attachment.name = QStringLiteral("report.pdf");
+            mail->composer()->addProtectedAttachment(attachment);
+            const QString prefix = language + QLatin1Char('-') + QString::fromLatin1(theme);
+            const auto check = [&](QWidget* page, QWidget* start) {
+                const auto forward = walk(start, false, prefix);
+                const auto backward = walk(start, true, prefix);
+                for (auto* button : page->findChildren<QAbstractButton*>()) {
+                    if (!button->isVisible() || !button->isEnabled()) continue;
+                    if (!forward.contains(button) || !backward.contains(button)) return button;
+                    if (button->text().isEmpty() && button->accessibleName().isEmpty()) return button;
+                }
+                return static_cast<QAbstractButton*>(nullptr);
+            };
+            auto* missed = check(mail->composer(), to);
+            QVERIFY2(!missed, missed ? qPrintable(missed->objectName() + missed->accessibleName()) : "");
+            const auto fields = walk(to, false, prefix);
+            QVERIFY(fields.contains(body));
+            QVERIFY(fields.contains(mail->composer()->findChild<QLineEdit*>(QStringLiteral("subjectEdit"))));
+            // Leave the draft through its existing saved-intent path, then inspect a reader.
+            mail->openMessage(QStringLiteral("m-project"));
+            auto* security = FindById<QPushButton>(mail->reader(), "securityDetails");
+            QVERIFY(security);
+            missed = check(mail->reader(), security);
+            QVERIFY2(!missed, missed ? qPrintable(missed->objectName() + missed->accessibleName()) : "");
+            window->showPage(CybouPage::Files);
+            auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+            files->setView(StoragePage::View::Recent);
+            auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+            auto* grid = files->findChild<QListWidget*>(QStringLiteral("filesGrid"));
+            QVERIFY(table && grid && table->topLevelItemCount() > 0);
+            for (bool tiles : {false, true}) {
+                files->setGridMode(tiles);
+                if (tiles) grid->setCurrentRow(0); else table->setCurrentItem(table->topLevelItem(0));
+                missed = check(files, tiles ? static_cast<QWidget*>(grid) : table);
+                QVERIFY2(!missed, missed ? qPrintable(missed->objectName() + missed->accessibleName()) : "");
+            }
+        }
+    }
+    QVERIFY(cycles_complete);
+    QVERIFY(captures_saved);
     window->setLanguage(QStringLiteral("en"));
     window->close();
 }

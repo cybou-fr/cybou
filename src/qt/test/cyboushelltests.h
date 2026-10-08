@@ -55,6 +55,7 @@ private Q_SLOTS:
     void layoutsFitWithoutHorizontalScroll();
     void keyboardAndAsyncUnlock();
     void mailFilesKeyboardScopesInBothLanguages();
+    void mailFilesTabReachabilityAndFocus();
     void notificationsOfferUndo();
     void homeFirstStepsAndQuickActions();
     void globalSearchFindsMailAndFiles();

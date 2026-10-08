@@ -148,11 +148,12 @@ MailCompose::MailCompose(CybouDesktopModel* model, QWidget* parent)
     m_send = new QPushButton{tr("Send"), this};
     m_send->setObjectName(QStringLiteral("sendButton"));
     m_send->setProperty("primary", true);
-    m_send->setStyleSheet(QStringLiteral("QPushButton#sendButton { background: %1; color: white; border: none; border-radius: 10px;"
+    m_send->setStyleSheet(QStringLiteral("QPushButton#sendButton { background: %1; color: white; border: 2px solid transparent; border-radius: 10px;"
                                          " padding: 9px 22px; font-weight: 700; }"
+                                         "QPushButton#sendButton:focus { border-color: %4; }"
                                          "QPushButton#sendButton:disabled { background: %2; color: %3; }")
         .arg(CybouTheme::color(CybouTheme::MINT).name(), CybouTheme::color(CybouTheme::SURFACE).name(),
-            CybouTheme::color(CybouTheme::DIM).name()));
+            CybouTheme::color(CybouTheme::DIM).name(), CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
     m_send->setIcon(QIcon{glyphPixmap(Glyph::Send, {16, 16}, QColor{Qt::white})});
     m_send->setShortcut(QKeySequence{QStringLiteral("Ctrl+Return")});
     m_send->setToolTip(tr("Send (Ctrl+Enter)"));

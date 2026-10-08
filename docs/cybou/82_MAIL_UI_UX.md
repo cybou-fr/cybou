@@ -699,6 +699,13 @@ Delete              move selected message to Trash
 
 All shortcuts must have menu/action equivalents and accessible labels.
 
+Compose Send and Reader Security details retain explicit visible keyboard-focus
+borders even with their local button styles. The border space is reserved in
+both states so focus does not change their geometry. Component acceptance walks
+Tab and Shift+Tab through Compose fields, dynamic attachment removal and visible
+enabled buttons, and Reader actions, in FR/EN and light/dark themes. This is
+programmatic Qt evidence; physical keyboard and screen-reader use remain separate.
+
 ## 20. Performance contract
 
 The Qt event loop must never perform network, block scan, Storage upload,
