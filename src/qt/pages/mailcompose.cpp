@@ -337,6 +337,7 @@ void MailCompose::chooseCybouFiles()
     layout->addWidget(hint);
     auto* files = new QTreeWidget{&dialog};
     files->setObjectName(QStringLiteral("cybouFileChoices"));
+    files->setAccessibleName(tr("Attach from CYBOU Files"));
     files->setHeaderLabels({tr("File"), tr("Size"), tr("State")});
     files->setRootIsDecorated(false);
     files->setSelectionMode(QAbstractItemView::ExtendedSelection);

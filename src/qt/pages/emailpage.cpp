@@ -10,6 +10,7 @@
 #include <qt/pages/mailreader.h>
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFrame>
@@ -305,6 +306,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_list->setContextMenuPolicy(Qt::CustomContextMenu);
     m_list->viewport()->installEventFilter(this);
+    m_list->installEventFilter(this);
     list_layout->addWidget(m_list, 1);
     m_list_empty = MutedText({}, m_list_pane);
     m_list_empty->setAlignment(Qt::AlignCenter);
@@ -589,6 +591,15 @@ QMenu* EmailPage::buildContextMenu(const QStringList& ids, QWidget* parent)
 
 bool EmailPage::eventFilter(QObject* watched, QEvent* event)
 {
+    if ((watched == m_list || watched == m_list->viewport()) && event->type() == QEvent::ContextMenu &&
+        static_cast<QContextMenuEvent*>(event)->reason() == QContextMenuEvent::Keyboard) {
+        if (auto* current = m_list->currentItem()) {
+            m_list->scrollToItem(current);
+            Q_EMIT m_list->customContextMenuRequested(m_list->visualItemRect(current).center());
+        }
+        event->accept();
+        return true;
+    }
     if (watched == m_list->viewport()) {
         if (event->type() == QEvent::MouseButtonPress) {
             auto* mouse = static_cast<QMouseEvent*>(event);

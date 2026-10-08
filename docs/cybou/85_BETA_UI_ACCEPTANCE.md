@@ -137,6 +137,18 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 keyboard menu/dialog package exercises the Qt keyboard context
+request in FR/EN with coordinates pointing away from the current item. Mail
+keeps the current row and existing multi-selection; Files list/grid promotes a
+current item outside retained selection. Menu Home/Down/Return chooses actions;
+Escape cancels the menu, attachment picker and Rename without mutating the draft
+or issuing Rename. Space opens the Compose attachment menu. Keyboard Move
+selects a folder and accepts; an injected save failure keeps its original parent.
+Focus ownership is checked after closure. Nested synthetic input explicitly
+activates the dialog's QWidget focus state before sending its keys. This covers
+the Qt event route; physical Menu/Shift+F10, native OS file dialogs, screen-reader
+use and wider dialog acceptance remain open.
+
 The 2026-10-08 Tab/focus package walks complete forward and reverse focus cycles
 through Compose, Reader and Files list/grid in FR/EN and light/dark themes. It
 checks that visible enabled buttons are reachable both ways, icon-only buttons

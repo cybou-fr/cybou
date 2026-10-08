@@ -618,3 +618,13 @@ styles suppressed the common focus treatment; reserved border space avoids
 movement on focus. Native focused-control and panel captures support visual
 review. Physical keyboard, other pages/dialogs, screen readers, mixed-monitor
 DPI and live recovery/outage gates remain open.
+
+Keyboard menu/dialog follow-up (2026-10-08): Mail and Files anchor keyboard
+context requests to the current item, independently of pointer position. Mail
+retains multi-selection; Files promotes current items outside retained selection.
+FR/EN component coverage exercises menu navigation/activation, Compose Space and
+picker cancellation, Rename cancellation, acknowledged Move with injected failure
+and focus return. Move/picker controls receive explicit accessible names using
+existing translated strings. Synthetic nested input settles QWidget activation;
+ordinary Escape behavior remains unchanged. Physical Menu/Shift+F10 and native
+OS file dialogs remain separate acceptance gates.

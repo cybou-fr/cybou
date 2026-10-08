@@ -699,6 +699,13 @@ Delete              move selected message to Trash
 
 All shortcuts must have menu/action equivalents and accessible labels.
 
+Keyboard context-menu requests use the current message row, scroll it into view
+and anchor the menu there. Pointer coordinates do not select another message.
+An existing multiple selection containing that row is preserved; otherwise the
+current row becomes the selection. Menu actions keep their existing command
+and acknowledgment paths. The CYBOU Files attachment picker has an explicit
+accessible name identifying its purpose.
+
 Compose Send and Reader Security details retain explicit visible keyboard-focus
 borders even with their local button styles. The border space is reserved in
 both states so focus does not change their geometry. Component acceptance walks

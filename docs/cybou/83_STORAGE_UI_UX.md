@@ -27,6 +27,12 @@ another control does not make those controls file-mutation shortcut targets.
 Trash excludes both selection shortcuts; Restore and permanent deletion retain
 their visible actions and permanent-deletion review.
 
+Keyboard context-menu requests in list/grid use the current row/tile rather
+than pointer position. The current item is scrolled into view; an existing
+selection containing it remains, otherwise that item becomes the selection.
+Move and Rename use their existing reviewed/acknowledged paths. The Move folder
+selector exposes its existing "Move to" label as an accessible name.
+
 Folder creation, rename, move, copy, Trash and Restore acknowledge the locally
 saved publication intent. They report a failed save rather than announcing a
 completed change. Move/Trash batches show pending feedback, count saved/failed

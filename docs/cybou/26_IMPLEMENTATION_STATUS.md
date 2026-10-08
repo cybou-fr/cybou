@@ -3,6 +3,40 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Mail/Files keyboard menus and dialogs package (2026-10-08)
+
+Mail previously selected a context-menu row from pointer coordinates even for
+a keyboard request. Mail and Files list/grid now handle keyboard context events
+at the current item, scroll it into view and anchor the existing menu there.
+Mail retains a multiple selection containing that row; Files replaces retained
+selection when its current item is outside it. Mouse requests and the existing
+command/acknowledgment paths remain unchanged. Move's folder selector and the
+CYBOU Files attachment picker now expose explicit accessible names using
+existing translated strings.
+
+FR/EN regression delivers keyboard context events with coordinates away from
+the current item, navigates menus with Home/Down/Return, cancels Mail's menu and
+Rename with Escape, and opens Compose attachments with Space before cancelling
+the CYBOU picker. Cancellation retains draft text and issues no Rename. Files
+Move uses keyboard folder selection and acceptance; injected save failure
+retains the original parent. Focus ownership after closure is checked.
+
+The test uses separate menu/dialog drivers and explicitly settles QWidget
+activation before nested synthetic input. It starts each language in Inbox,
+because language rebuilding correctly preserves an open Compose and can hide
+the list in two-pane mode. Investigation of a cancellation timeout found a
+synthetic activation problem; ordinary application Escape behavior is unchanged.
+These are Qt event-route checks, not physical OS Menu/Shift+F10 acceptance.
+
+Validation: isolated GUI/test builds succeeded; the final full offscreen Qt
+suite passed 90 results and seven focused native Windows scenarios passed nine
+results including setup/cleanup, with no failures. Existing protected-file picker,
+Mail menu/Undo, shortcut scopes, Tab/focus and compose rebuild regressions passed.
+Evidence and source/binary provenance are under `artifacts/ux-menus-20261008/`.
+The build cache is restored to its usual output; no live desktop/signer or VPS
+was restarted/deployed. Physical keys, native OS file dialogs, screen-reader,
+mixed-monitor DPI and wider dialog/live acceptance remain open.
+
 ## Mail/Files Tab and visible-focus package (2026-10-08)
 
 Compose Send and Reader Security details used local borderless styles, suppressing

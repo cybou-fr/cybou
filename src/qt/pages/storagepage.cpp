@@ -9,6 +9,7 @@
 #include <qt/cybouui.h>
 
 #include <QAction>
+#include <QContextMenuEvent>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -476,6 +477,7 @@ StoragePage::StoragePage(CybouDesktopModel* model, std::function<void()> home_re
     for (QAbstractItemView* view : {static_cast<QAbstractItemView*>(m_table), static_cast<QAbstractItemView*>(m_tiles)}) {
         view->viewport()->setAcceptDrops(true);
         view->viewport()->installEventFilter(this);
+        view->installEventFilter(this);
         view->setContextMenuPolicy(Qt::CustomContextMenu);
         connect(view, &QWidget::customContextMenuRequested, this, [this, view](const QPoint& pos) {
             showContextMenu(view->viewport()->mapToGlobal(pos));
@@ -684,6 +686,20 @@ bool StoragePage::handleItemDrag(QWidget* viewport, QEvent* event)
 
 bool StoragePage::eventFilter(QObject* watched, QEvent* event)
 {
+    for (QAbstractItemView* view : {static_cast<QAbstractItemView*>(m_table), static_cast<QAbstractItemView*>(m_tiles)}) {
+        if (view && (watched == view || watched == view->viewport()) && event->type() == QEvent::ContextMenu &&
+            static_cast<QContextMenuEvent*>(event)->reason() == QContextMenuEvent::Keyboard) {
+            const auto current = view->currentIndex();
+            if (current.isValid()) {
+                if (!view->selectionModel()->isSelected(current))
+                    view->selectionModel()->select(current, QItemSelectionModel::ClearAndSelect | QItemSelectionModel::Rows);
+                view->scrollTo(current);
+                Q_EMIT view->customContextMenuRequested(view->visualRect(current).center());
+            }
+            event->accept();
+            return true;
+        }
+    }
     if (watched == m_views) {
         // Only watched for its size; it also sees ChildAdded while its views are built.
         if (event->type() == QEvent::Resize || event->type() == QEvent::Show) updateColumns();
@@ -1341,6 +1357,7 @@ void StoragePage::promptMove(const QString& id)
     auto* layout = new QVBoxLayout{&dialog};
     layout->addWidget(new QLabel{tr("Move to"), &dialog});
     auto* folders = new QComboBox{&dialog};
+    folders->setAccessibleName(tr("Move to"));
     folders->addItem(tr("My files"), QString{});
     for (const auto& item : m_model->fileItems()) {
         if (!item.folder || item.trashed || item.id == id) continue;

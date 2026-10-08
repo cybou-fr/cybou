@@ -33,6 +33,8 @@
 #include <qt/authorityreview.h>
 #include <QMessageBox>
 #include <QInputDialog>
+#include <QContextMenuEvent>
+#include <QComboBox>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QFile>
@@ -1743,6 +1745,230 @@ void CybouShellTests::mailFilesTabReachabilityAndFocus()
     }
     QVERIFY(cycles_complete);
     QVERIFY(captures_saved);
+    window->setLanguage(QStringLiteral("en"));
+    window->close();
+}
+
+void CybouShellTests::mailFilesKeyboardMenusAndDialogs()
+{
+    auto window = makeWindow();
+    window->resize(1280, 860);
+    window->show();
+    const auto focus = [&](QWidget* widget) {
+        QApplication::processEvents();
+        window->activateWindow();
+        if (!QTest::qWaitForWindowActive(window.get())) return false;
+        QApplication::setActiveWindow(window.get());
+        widget->setFocus();
+        QApplication::processEvents();
+        return widget->hasFocus();
+    };
+    const auto activate_dialog = [](QDialog* dialog) {
+        dialog->activateWindow();
+        if (!QTest::qWaitForWindowActive(dialog)) return false;
+        // Nested synthetic key delivery can precede QWidget WindowActivate.
+        QApplication::setActiveWindow(dialog);
+        if (auto* target = dialog->focusWidget()) target->setFocus();
+        QApplication::processEvents();
+        return QApplication::focusWidget() && QApplication::focusWidget()->window() == dialog;
+    };
+    const auto choose = [](QMenu* menu, QAction* target) {
+        if (!target || !target->isEnabled()) return false;
+        QTest::keyClick(menu, Qt::Key_Home);
+        for (int i = 0; i < 40 && menu->activeAction() != target; ++i) QTest::keyClick(menu, Qt::Key_Down);
+        if (menu->activeAction() != target) return false;
+        QTest::keyClick(menu, Qt::Key_Return);
+        return true;
+    };
+    for (const auto& language : {QStringLiteral("en"), QStringLiteral("fr")}) {
+        window->setLanguage(language);
+        auto* model = window->desktopModel();
+        QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+        window->showPage(CybouPage::Mail);
+        auto* mail = static_cast<EmailPage*>(window->page(CybouPage::Mail));
+        mail->setView(EmailPage::View::Inbox); // Each language starts with the list, not a retained composer.
+        auto* list = mail->findChild<QListWidget*>(QStringLiteral("messageList"));
+        QVERIFY(list && list->count() > 1);
+        list->setCurrentRow(1);
+        const QString current_id = list->currentItem()->data(Qt::UserRole).toString();
+        const QString other_id = list->item(0)->data(Qt::UserRole).toString();
+        QVERIFY(focus(list));
+        const QPoint wrong = list->visualItemRect(list->item(0)).center();
+        QContextMenuEvent mail_menu{QContextMenuEvent::Keyboard, wrong, list->viewport()->mapToGlobal(wrong)};
+        QApplication::sendEvent(list->viewport(), &mail_menu);
+        QMenu* popup = nullptr;
+        QTRY_VERIFY((popup = qobject_cast<QMenu*>(QApplication::activePopupWidget())) != nullptr);
+        QCOMPARE(list->selectedItems().size(), 1);
+        QCOMPARE(list->selectedItems().first()->data(Qt::UserRole).toString(), current_id);
+        QTest::keyClick(popup, Qt::Key_Escape);
+        QTRY_VERIFY(QApplication::activePopupWidget() == nullptr);
+        QCOMPARE(window->focusWidget(), list);
+        // Preserve an existing multi-selection when its current item owns the menu.
+        list->item(0)->setSelected(true);
+        QApplication::sendEvent(list, &mail_menu);
+        QTRY_VERIFY((popup = qobject_cast<QMenu*>(QApplication::activePopupWidget())) != nullptr);
+        QCOMPARE(list->selectedItems().size(), 2);
+        QVERIFY(choose(popup, popup->findChild<QAction*>(QStringLiteral("mailArchive"))));
+        QTRY_COMPARE(model->mailItem(current_id)->folder, CybouMailFolder::Archive);
+        QCOMPARE(model->mailItem(other_id)->folder, CybouMailFolder::Archive);
+
+        // A menu button opens with Space; Escape from its picker retains compose text.
+        mail->openCompose();
+        auto* body = mail->composer()->findChild<QTextEdit*>(QStringLiteral("composeBody"));
+        body->setPlainText(QStringLiteral("Keep this draft"));
+        auto* attach = FindById<QPushButton>(mail->composer(), QStringLiteral("attachFile"));
+        QVERIFY(attach && focus(attach));
+        bool picker_seen = false;
+        bool picker_named = false;
+        bool source_chosen = false;
+        int picker_phase = 0;
+        QTimer picker_driver;
+        picker_driver.setInterval(10);
+        QTimer picker_modal;
+        picker_modal.setInterval(10);
+        QObject::connect(&picker_driver, &QTimer::timeout, window.get(), [&] {
+            if (auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget())) {
+                picker_driver.stop();
+                picker_phase = 1;
+                source_chosen = choose(menu, menu->findChild<QAction*>(QStringLiteral("attachCybouFile")));
+            }
+        });
+        QObject::connect(&picker_modal, &QTimer::timeout, window.get(), [&] {
+            if (picker_phase != 1) return;
+            auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+            if (!dialog) return;
+            auto* tree = dialog->findChild<QTreeWidget*>(QStringLiteral("cybouFileChoices"));
+            picker_seen = tree;
+            picker_named = tree && tree->accessibleName() == MailCompose::tr("Attach from CYBOU Files");
+            picker_modal.stop();
+            if (activate_dialog(dialog)) {
+                QWidget* target = dialog->focusWidget();
+                QTest::keyClick(target ? target : dialog, Qt::Key_Escape);
+            } else dialog->reject();
+        });
+        QTimer picker_timeout;
+        picker_timeout.setSingleShot(true);
+        QObject::connect(&picker_timeout, &QTimer::timeout, window.get(), [&] {
+            if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+            if (auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget())) menu->close();
+        });
+        picker_timeout.start(3000);
+        picker_driver.start();
+        picker_modal.start();
+        QTest::keyClick(attach, Qt::Key_Space);
+        QTRY_VERIFY(picker_seen);
+        picker_driver.stop();
+        picker_modal.stop();
+        picker_timeout.stop();
+        QVERIFY(source_chosen && picker_seen && picker_named);
+        QCOMPARE(body->toPlainText(), QStringLiteral("Keep this draft"));
+        QVERIFY(mail->composer()->attachments().isEmpty());
+        QCOMPARE(window->focusWidget(), attach);
+
+        window->showPage(CybouPage::Files);
+        auto* files = static_cast<StoragePage*>(window->page(CybouPage::Files));
+        RecordingBackend backend;
+        model->setApplicationBackend(&backend);
+        model->setFeatureAvailability(AllFeatureAvailability());
+        model->setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+        auto file = ProtectedFile(QStringLiteral("menu-file"), QStringLiteral("A.txt"));
+        auto other = ProtectedFile(QStringLiteral("menu-other"), QStringLiteral("B.txt"));
+        CybouFileItem folder;
+        folder.id = QStringLiteral("destination"); folder.name = QStringLiteral("Projects"); folder.folder = true;
+        model->setFileItems({file, other, folder});
+        files->setView(StoragePage::View::Recent);
+        auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable"));
+        auto* grid = files->findChild<QListWidget*>(QStringLiteral("filesGrid"));
+        for (bool tiles : {false, true}) {
+            files->setGridMode(tiles);
+            QWidget* view = tiles ? static_cast<QWidget*>(grid) : table;
+            // Current keyboard item may be outside a retained selection.
+            if (tiles) {
+                grid->clearSelection();
+                grid->item(0)->setSelected(true);
+                grid->setCurrentRow(1, QItemSelectionModel::NoUpdate);
+            } else {
+                table->clearSelection();
+                table->topLevelItem(0)->setSelected(true);
+                table->setCurrentItem(table->topLevelItem(1), 0, QItemSelectionModel::NoUpdate);
+            }
+            const QString expected = tiles ? grid->currentItem()->data(Qt::UserRole + 1).toString()
+                : table->currentItem()->data(0, Qt::UserRole + 1).toString();
+            QVERIFY(focus(view));
+            for (bool move : {false, true}) {
+                int phase = 0;
+                bool menu_chosen = false;
+                bool named = !move;
+                bool timed_out = false;
+                QTimer driver;
+                driver.setInterval(10);
+                QTimer modal_driver;
+                modal_driver.setInterval(10);
+                QTimer timeout;
+                timeout.setSingleShot(true);
+                QObject::connect(&timeout, &QTimer::timeout, window.get(), [&] {
+                    timed_out = true;
+                    if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+                    if (auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget())) menu->close();
+                });
+                QObject::connect(&driver, &QTimer::timeout, window.get(), [&] {
+                    auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+                    if (!menu) return;
+                    QAction* action = nullptr;
+                    for (auto* candidate : menu->actions())
+                        if (candidate->text() == StoragePage::tr(move ? "Move" : "Rename")) action = candidate;
+                    driver.stop();
+                    phase = 1;
+                    menu_chosen = choose(menu, action);
+                });
+                QObject::connect(&modal_driver, &QTimer::timeout, window.get(), [&] {
+                    if (phase != 1) return;
+                    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                    if (!dialog) return;
+                    phase = 2;
+                    modal_driver.stop();
+                    if (!activate_dialog(dialog)) { dialog->reject(); named = false; return; }
+                    if (move) {
+                        auto* combo = dialog->findChild<QComboBox*>();
+                        auto* buttons = dialog->findChild<QDialogButtonBox*>();
+                        named = combo && combo->accessibleName() == StoragePage::tr("Move to");
+                        if (combo && buttons) {
+                            combo->setFocus();
+                            QTest::keyClick(combo, Qt::Key_End);
+                            buttons->button(QDialogButtonBox::Ok)->setFocus();
+                            QTest::keyClick(buttons->button(QDialogButtonBox::Ok), Qt::Key_Return);
+                        } else dialog->reject();
+                    } else {
+                        QWidget* target = dialog->focusWidget();
+                        QTest::keyClick(target ? target : dialog, Qt::Key_Escape);
+                    }
+                });
+                const int before = backend.file_moves.size();
+                driver.start();
+                modal_driver.start();
+                timeout.start(3000);
+                // Coordinates deliberately point away from the current item.
+                QContextMenuEvent request{QContextMenuEvent::Keyboard, QPoint{1, 1}, view->mapToGlobal(QPoint{1, 1})};
+                QApplication::sendEvent(view, &request);
+                driver.stop();
+                modal_driver.stop();
+                timeout.stop();
+                QVERIFY2(menu_chosen && phase == 2 && named && !timed_out,
+                    qPrintable(QStringLiteral("language=%1 grid=%2 move=%3 chosen=%4 phase=%5 named=%6 timeout=%7")
+                        .arg(language).arg(tiles).arg(move).arg(menu_chosen).arg(phase).arg(named).arg(timed_out)));
+                QCOMPARE(backend.file_moves.size(), before + (move ? 1 : 0));
+                if (!move) QVERIFY(!backend.commands.contains(QStringLiteral("rename:") + expected));
+                if (move) {
+                    QCOMPARE(backend.file_moves.last(), qMakePair(expected, folder.id));
+                    backend.file_results.last()(CybouCommandState::Failed, QStringLiteral("Save failed"));
+                    QVERIFY(model->fileItem(expected)->parent_id.isEmpty());
+                }
+                QCOMPARE(window->focusWidget(), view);
+                QVERIFY(focus(view));
+            }
+        }
+        model->setApplicationBackend(nullptr);
+    }
     window->setLanguage(QStringLiteral("en"));
     window->close();
 }
