@@ -2,6 +2,13 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="fr_FR">
 <context>
+    <name>CybouObservationChart</name>
+    <message><source>Unknown — waiting for a complete interval</source><translation>Inconnu — en attente d'un intervalle complet</translation></message>
+    <message><source>Interval ending at %1 s · %2: %3 %4 · %5: %6 %4</source><translation>Intervalle se terminant à %1 s · %2 : %3 %4 · %5 : %6 %4</translation></message>
+    <message><source>%1 min</source><translation>%1 min</translation></message>
+    <message><source>Latest</source><translation>Récent</translation></message>
+</context>
+<context>
     <name>CybouActivity</name>
     <message>
         <source>Uploading %1</source>
@@ -4823,6 +4830,15 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Traffic history</source><translation>Historique du trafic</translation></message>
+    <message><source>Operation observation history</source><translation>Historique des opérations observées</translation></message>
+    <message><source>Received</source><translation>Reçu</translation></message>
+    <message><source>Sent</source><translation>Envoyé</translation></message>
+    <message><source>B/s</source><translation>o/s</translation></message>
+    <message><source>Observed</source><translation>Observé</translation></message>
+    <message><source>Locally produced</source><translation>Produit localement</translation></message>
+    <message><source>Local frames · 5-second intervals · up to 15 minutes · TLS/TCP overhead excluded</source><translation>Trames locales · intervalles de 5 secondes · jusqu'à 15 minutes · hors surcharge TLS/TCP</translation></message>
+    <message><source>Local arrival observations · 5-second intervals · history imports excluded · not a capacity ceiling</source><translation>Arrivées observées localement · intervalles de 5 secondes · hors imports d'historique · aucune limite de capacité déduite</translation></message>
     <message><source>Observed finalized op/min</source><translation>Op/min finalisées observées</translation></message>
     <message><source>1-minute local observation · history imports excluded · no global freshness proof</source><translation>Observation locale sur 1 minute · hors imports d'historique · aucune preuve d'actualité globale</translation></message>
     <message><source>Local traffic</source><translation>Trafic local</translation></message>

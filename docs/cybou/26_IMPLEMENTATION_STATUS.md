@@ -3,6 +3,39 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Bounded Network observation charts (2026-10-08)
+
+Runtime snapshots now expose up to 180 completed five-second intervals retained
+independently of GUI reads. Both collectors use a fixed 905-second raw ring,
+preserving the oldest completed interval while the latest one is incomplete.
+Traffic retains received/sent frame bytes; finalization retains observed/local
+production counts, excluding historical imports. Startup intervals are absent;
+complete idle intervals are real zero. Restart and canonical replacement retain
+their respective reset behavior. No stored chain scan or disk persistence.
+
+Network Advanced Overview has native Qt traffic and operation-history plots,
+with five-second B/s and op/min, separate from minute-window headline rates.
+Mouse/keyboard interval selection, textual tooltip/accessibility descriptions,
+focus border, theme colors and solid/dashed series distinguish observations.
+UI history is bounded at 180 points and unknown samples clear it. This is local
+arrival/traffic evidence; peaks do not prove global production or capacity.
+Longer retention, exports, resources, cohort aggregation and physical assistive
+technology acceptance remain open.
+
+Ordinary MinGW desktop, core and Qt test binaries rebuild successfully.
+Runtime suite: 21 cases / 295 assertions passed; P2P suite: 37 cases / 1,178
+assertions passed. History tests cover the incomplete startup interval, idle
+zeroes, retention while the newest interval is partial, delayed ring writers,
+history-import exclusion and reset. Other core suites are filtered.
+Full offscreen Qt: 92 passed, 0 failed/skipped, including bounded chart data,
+keyboard selection, exact textual rates and clearing unavailable samples.
+Chart renders were additionally checked with `QT_QPA_FONTDIR=C:/Windows/Fonts`
+(offscreen defaults lack usable glyphs on this host); fixture images are
+synthetic UI evidence, not a live network measurement. Logs and renders:
+`artifacts/network-charts-20261008/`. Manifest/diff checks pass.
+Desktop SHA-256: `a67032e388e8aaf6da3e49b169a3ad5e20804926e061610cb6d1389feffd8f7e`.
+No desktop/signer or VPS service is restarted.
+
 ## Verified operation observation windows (2026-10-08)
 
 Successful runtime block commits record operation counts in a fixed one-second
@@ -19,7 +52,8 @@ local idle windows may be zero. No creation timestamp exists in blocks, so old
 announcements can arrive later. Observation speed is not a measurement of current
 global production, global freshness or a throughput ceiling. The stale timestamp
 check claim in `POA_FINALITY.md` is corrected to the actual block layout.
-History charts, resource metrics and remote aggregation remain open.
+The charts added above cover local history; resource metrics and remote
+aggregation remain open.
 
 Ordinary MinGW desktop, core and Qt test binaries rebuild successfully.
 Runtime suite: 20 cases / 280 assertions passed, including window boundaries,

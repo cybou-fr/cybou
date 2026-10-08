@@ -44,6 +44,8 @@ set(CMAKE_AUTORCC OFF)
 qt6_add_resources(CYBOU_QRC cybou.qrc)
 # CYBOU's native desktop target contains only its own UI and runtime.
 add_library(cybou_qt STATIC
+  cybouobservationchart.cpp
+  cybouobservationchart.h
   cybouapplicationbackend.h
   cyboucoreapplicationadapter.cpp
   cyboucoreapplicationadapter_identity_session.cpp

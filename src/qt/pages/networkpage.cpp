@@ -5,6 +5,7 @@
 
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cybouproduct.h>
+#include <qt/cybouobservationchart.h>
 #include <qt/franceoutline.h>
 #include <qt/benchmarkreference.h>
 #include <qt/cyboutheme.h>
@@ -447,6 +448,24 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_metric_finalization->setObjectName(QStringLiteral("networkFinalizationRate"));
 
     overview_layout->addLayout(grid);
+    auto* traffic_history = Card(overview);
+    auto* traffic_history_layout = new QVBoxLayout{traffic_history};
+    traffic_history_layout->addWidget(SectionTitle(tr("Traffic history"), traffic_history));
+    m_traffic_chart = new CybouObservationChart{tr("Traffic history"), tr("Received"), tr("Sent"),
+        tr("B/s"), 0.2, traffic_history};
+    m_traffic_chart->setObjectName(QStringLiteral("networkTrafficChart"));
+    traffic_history_layout->addWidget(m_traffic_chart);
+    traffic_history_layout->addWidget(MutedText(tr("Local frames · 5-second intervals · up to 15 minutes · TLS/TCP overhead excluded"), traffic_history));
+    overview_layout->addWidget(traffic_history);
+    auto* finalization_history = Card(overview);
+    auto* finalization_history_layout = new QVBoxLayout{finalization_history};
+    finalization_history_layout->addWidget(SectionTitle(tr("Operation observation history"), finalization_history));
+    m_finalization_chart = new CybouObservationChart{tr("Operation observation history"), tr("Observed"),
+        tr("Locally produced"), QStringLiteral("op/min"), 12.0, finalization_history};
+    m_finalization_chart->setObjectName(QStringLiteral("networkFinalizationChart"));
+    finalization_history_layout->addWidget(m_finalization_chart);
+    finalization_history_layout->addWidget(MutedText(tr("Local arrival observations · 5-second intervals · history imports excluded · not a capacity ceiling"), finalization_history));
+    overview_layout->addWidget(finalization_history);
     auto* storage_grid = new QGridLayout;
     storage_grid->setSpacing(14);
     auto [s_val, s_sub] = MetricTile(storage_grid, 0, 0, tr("Storage capacity (V)"), storage);
@@ -743,6 +762,8 @@ void NetworkPage::refresh()
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
     const bool measured = diag.observed_unix_ms != 0;
+    m_traffic_chart->setHistory(measured ? diag.traffic.history : std::vector<cybou::ObservationPoint>{});
+    m_finalization_chart->setHistory(measured && diag.initialized ? diag.finalization.history : std::vector<cybou::ObservationPoint>{});
     const auto& finalization = diag.finalization.windows.front();
     m_metric_finalization->setText(measured && diag.initialized && finalization.complete && finalization.window_ms ?
         QLocale{}.toString(finalization.observed_operations * 60000.0 / finalization.window_ms, 'f', 1) : tr("Unknown"));

@@ -7,9 +7,12 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <utility>
+#include <cybou/observation_history.h>
 
 namespace cybou {
 struct TrafficDiagnostics {
+    std::vector<ObservationPoint> history;
     uint64_t received_bytes{0}, sent_bytes{0};
     uint64_t window_received_bytes{0}, window_sent_bytes{0}, window_ms{0};
 };
@@ -35,8 +38,12 @@ public:
     TrafficDiagnostics Snapshot(Clock::time_point now = Clock::now()) const
     {
         std::lock_guard lock{m_mutex};
-        TrafficDiagnostics result{.received_bytes = m_received, .sent_bytes = m_sent};
+        TrafficDiagnostics result;
+        result.received_bytes = m_received;
+        result.sent_bytes = m_sent;
         const auto second = Second(now);
+        result.history = BuildObservationHistory(second, m_buckets,
+            [](const auto& bucket) { return std::pair{bucket.received, bucket.sent}; });
         if (second < 60) return result;
         result.window_ms = 60000;
         for (const auto& bucket : m_buckets) {
@@ -56,7 +63,8 @@ private:
     struct Bucket { uint64_t second{0}, received{0}, sent{0}; bool valid{false}; };
     const Clock::time_point m_started;
     mutable std::mutex m_mutex;
-    std::array<Bucket, 61> m_buckets{};
+    // Retain the completed 15-minute history plus the current partial five-second interval.
+    std::array<Bucket, 905> m_buckets{};
     uint64_t m_received{0}, m_sent{0};
 };
 } // namespace cybou

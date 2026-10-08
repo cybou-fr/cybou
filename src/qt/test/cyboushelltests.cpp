@@ -1285,9 +1285,11 @@ void CybouShellTests::networkPageReflectsModel()
     observed.initialized = true;
     observed.pending_operations = 3;
     observed.pending_operation_bytes = 700;
+    observed.finalization.history = {{5000, 1, 1}, {10000, 3, 2}};
     observed.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
     observed.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
+    observed.traffic.history = {{5000, 50, 100}, {10000, 150, 200}};
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(uptime->text(), QStringLiteral("120 s"));
     QTRY_COMPARE(pool->text(), QStringLiteral("3"));
@@ -1297,13 +1299,38 @@ void CybouShellTests::networkPageReflectsModel()
     auto* traffic = network->findChild<QLabel*>(QStringLiteral("networkTrafficRate"));
     QVERIFY(traffic);
     QTRY_VERIFY(traffic->text().contains(QLocale{}.toString(100.0, 'f', 1)));
+    auto* traffic_chart = network->findChild<QWidget*>(QStringLiteral("networkTrafficChart"));
+    auto* operation_chart = network->findChild<QWidget*>(QStringLiteral("networkFinalizationChart"));
+    QVERIFY(traffic_chart && operation_chart);
+    QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 2);
+    QTRY_COMPARE(operation_chart->property("sampleCount").toInt(), 2);
+    static_cast<NetworkPage*>(network)->showBenchmarkDetails();
+    window->show();
+    QTest::keyClick(traffic_chart, Qt::Key_Home);
+    QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 5000ULL);
+    QVERIFY(traffic_chart->accessibleDescription().contains(QLocale{}.toString(10.0, 'f', 1)));
+    QTest::keyClick(traffic_chart, Qt::Key_Right);
+    QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 10000ULL);
+    observed.traffic.history.clear();
+    for (uint64_t i = 0; i < 200; ++i) observed.traffic.history.push_back({(i + 1) * 5000, i * 50, (i % 7) * 60});
+    model->setNetworkDiagnostics(observed);
+    QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 180);
+    QTest::keyClick(traffic_chart, Qt::Key_Home);
+    QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 105000ULL);
+    QTest::keyClick(traffic_chart, Qt::Key_End);
+    QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 1000000ULL);
+    QDir{}.mkpath(QStringLiteral("artifacts/network-charts-20261008"));
+    QVERIFY(traffic_chart->grab().save(QStringLiteral("artifacts/network-charts-20261008/traffic-chart.png")));
+    QVERIFY(operation_chart->grab().save(QStringLiteral("artifacts/network-charts-20261008/operations-chart.png")));
     observed.initialized = false;
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(pool->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(finalized_rate->text(), QStringLiteral("Unknown"));
+    QTRY_COMPARE(operation_chart->property("sampleCount").toInt(), 0);
     model->setNetworkDiagnostics({});
     QTRY_COMPARE(uptime->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(traffic->text(), QStringLiteral("Unknown"));
+    QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 0);
 }
 
 void CybouShellTests::adapterSettersDrivePages()

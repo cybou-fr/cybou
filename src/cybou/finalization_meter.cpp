@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Stanislav SAVELIEV
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/finalization_meter.h>
+#include <utility>
 namespace cybou {
 FinalizationMeter::FinalizationMeter(Clock::time_point started) : m_started{started} {}
 uint64_t FinalizationMeter::Second(Clock::time_point now) const
@@ -36,6 +37,8 @@ FinalizationDiagnostics FinalizationMeter::Snapshot(Clock::time_point now) const
     result.local_produced_total = m_produced;
     result.history_total = m_history;
     const auto second = Second(now);
+    result.history = BuildObservationHistory(second, m_buckets,
+        [](const auto& bucket) { return std::pair{bucket.observed, bucket.produced}; });
     for (auto& window : result.windows) {
         const auto seconds = window.window_ms / 1000;
         if (second < seconds) continue;

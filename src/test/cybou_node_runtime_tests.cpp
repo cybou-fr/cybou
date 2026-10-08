@@ -26,6 +26,41 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(observation_history_retains_complete_intervals_independently_of_reads)
+{
+    using Clock = cybou::TrafficMeter::Clock;
+    const auto start = Clock::time_point{};
+    cybou::TrafficMeter traffic{start};
+    traffic.Record(10, 20, start);
+    BOOST_CHECK(traffic.Snapshot(start + std::chrono::seconds{4}).history.empty());
+    const auto initial = traffic.Snapshot(start + std::chrono::seconds{5}).history;
+    BOOST_REQUIRE_EQUAL(initial.size(), 1U);
+    BOOST_CHECK_EQUAL(initial.front().primary, 10U);
+    BOOST_CHECK_EQUAL(initial.front().end_elapsed_ms, 5000U);
+    traffic.Record(30, 40, start + std::chrono::seconds{901});
+    const auto retained = traffic.Snapshot(start + std::chrono::seconds{904}).history;
+    BOOST_REQUIRE_EQUAL(retained.size(), 180U);
+    BOOST_CHECK_EQUAL(retained.front().primary, 10U); // partial tail must not erase the oldest complete interval
+    BOOST_CHECK_EQUAL(retained.back().primary, 0U);
+    const auto advanced = traffic.Snapshot(start + std::chrono::seconds{905}).history;
+    BOOST_CHECK_EQUAL(advanced.front().primary, 0U);
+    BOOST_CHECK_EQUAL(advanced.back().primary, 30U);
+    traffic.Record(70, 80, start + std::chrono::seconds{906});
+    traffic.Record(5, 6, start + std::chrono::seconds{1}); // delayed writer at colliding slot
+    BOOST_CHECK_EQUAL(traffic.Snapshot(start + std::chrono::seconds{910}).history.back().primary, 70U);
+    BOOST_CHECK(cybou::TrafficMeter{start + std::chrono::seconds{910}}.Snapshot(start + std::chrono::seconds{910}).history.empty());
+    cybou::FinalizationMeter finalized{start};
+    finalized.Record(3, cybou::BlockObservation::LOCAL_PRODUCTION, start);
+    finalized.Record(2, cybou::BlockObservation::ANNOUNCEMENT, start);
+    finalized.Record(1000, cybou::BlockObservation::HISTORY, start);
+    const auto operations = finalized.Snapshot(start + std::chrono::seconds{5}).history;
+    BOOST_REQUIRE_EQUAL(operations.size(), 1U);
+    BOOST_CHECK_EQUAL(operations.front().primary, 5U);
+    BOOST_CHECK_EQUAL(operations.front().secondary, 3U);
+    finalized.Reset(start + std::chrono::seconds{5});
+    BOOST_CHECK(finalized.Snapshot(start + std::chrono::seconds{9}).history.empty());
+}
+
 BOOST_AUTO_TEST_CASE(finalization_observation_windows_separate_history_and_reset)
 {
     using Clock = cybou::FinalizationMeter::Clock;

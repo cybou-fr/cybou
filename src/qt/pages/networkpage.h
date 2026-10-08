@@ -68,6 +68,7 @@ private:
     QString m_summary;
 };
 
+class CybouObservationChart;
 class NetworkPage final : public QWidget
 {
     Q_DECLARE_TR_FUNCTIONS(NetworkPage)
@@ -132,6 +133,8 @@ private:
     QLabel* m_metric_traffic_sub{nullptr};
     QLabel* m_metric_finalization{nullptr};
     QLabel* m_metric_finalization_sub{nullptr};
+    CybouObservationChart* m_traffic_chart{nullptr};
+    CybouObservationChart* m_finalization_chart{nullptr};
     QLabel* m_metric_storage{nullptr};
     QLabel* m_metric_storage_sub{nullptr};
     QLabel* m_metric_protection{nullptr};

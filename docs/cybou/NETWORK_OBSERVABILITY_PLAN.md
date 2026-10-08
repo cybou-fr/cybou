@@ -140,3 +140,28 @@ old blocks; their classification is local provenance, not a freshness proof.
 These rates must not be relabeled network production speed or potential ceiling.
 The current retained ring supports rate windows; historical charts/export,
 network availability coverage and broader consolidation remain open.
+
+### O2 bounded observation charts (2026-10-08)
+
+The runtime now supplies up to 180 completed five-second intervals, covering
+15 minutes, independently of page visibility or diagnostic polling. Traffic
+points contain received/sent frame bytes; operation points contain observed
+and locally produced operations, excluding history imports. Missing startup
+intervals are absent, not padded with zeros. Complete idle intervals are zero.
+Both raw rings retain 905 seconds so the oldest completed interval survives
+while the newest five-second interval is still incomplete.
+
+Network Advanced Overview renders two native Qt plots. Traffic values are B/s
+over each five-second interval; operations are normalized to op/min over that
+interval. These differ from the one-minute summary windows; short burst peaks
+do not establish network production time or a performance ceiling. Legend
+lines use distinct colors and solid/dashed patterns. Mouse selection and
+Left/Right/Home/End expose exact interval values through tooltip and accessible
+description; a focus border supports keyboard navigation. Selection is retained
+by interval time while it remains in the bounded history.
+
+No external chart service, disk history, Identity metadata, endpoint labels,
+network census or new wire fields. Restart clears both histories; canonical
+replacement clears operation history. Unavailable observations clear the plots.
+This delivers the first 15-minute in-memory charts; the proposed 30-minute /
+24-hour retention, exporting, resource series and remote totals remain open.

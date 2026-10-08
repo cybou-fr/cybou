@@ -232,6 +232,17 @@ so announcement arrival time does not establish present network production or
 global freshness. Incomplete windows show Unknown and complete local idle windows
 may be zero. This does not establish a performance ceiling.
 
+Overview also shows traffic and operation observation plots from retained runtime
+history, up to 15 minutes / 180 completed five-second intervals. Rates are per
+five-second interval (B/s and op/min); the one-minute headline remains separate.
+History imports are excluded from the operation plot; local production is its
+secondary series. Unknown startup intervals are absent. Restart/reset discards
+the corresponding history. Mouse and Left/Right/Home/End select exact values;
+tooltip and accessible description provide textual detail. Solid/dashed lines
+and theme tokens distinguish series. Presentation pauses while hidden, while
+the core collector keeps history. No physical/screen-reader acceptance is
+implied by these component interaction features.
+
 The technical console supports:
 - Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.
 - Paginated verified block, operation and history lookup via `block <height|hash>`, `op <id>`, and `history [page]`.
