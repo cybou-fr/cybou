@@ -47,6 +47,8 @@
 #include <vector>
 
 namespace cybou {
+class ObservationCollector;
+struct ObservationReport;
 namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; }
 class StorageIoScheduler;
 class CybouKeyStore;
@@ -274,6 +276,8 @@ public:
     /// \brief Возвращает диагностический snapshot runtime, peer set и storage usage.
     /// \return Данные для UI/CLI diagnostics; peer и state locks не удерживаются одновременно дольше нужного.
     NodeDiagnosticsSnapshot GetDiagnostics() const;
+    /// Fixed cached DEC-289 payload; does not collect or touch chain/provider locks.
+    std::array<unsigned char, 191> ReadObservationReport(const std::array<unsigned char, 32>& challenge) const;
     std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
@@ -700,6 +704,7 @@ private:
         std::atomic<uint16_t> listen_port{0};
     };
     NodeRuntimeConfig m_config;
+    ObservationReport CollectObservationReport() const;
     std::shared_ptr<TrafficMeter> m_traffic{std::make_shared<TrafficMeter>()};
     const std::chrono::steady_clock::time_point m_observation_started{std::chrono::steady_clock::now()};
     mutable ProcessCpuMeter m_cpu_observations;
@@ -708,6 +713,8 @@ private:
     ChainCore m_chain;
     ProviderCore m_provider;
     NetworkCore m_network;
+    // Destroy/join collector before any captured runtime data is torn down.
+    std::unique_ptr<ObservationCollector> m_observation_collector;
 };
 
 } // namespace cybou

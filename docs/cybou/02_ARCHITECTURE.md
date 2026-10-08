@@ -217,7 +217,8 @@ Identity signature, PoA route or privileged bootstrap aggregator.
 
 [`NETWORK_OBSERVATION_REPORTS.md`](NETWORK_OBSERVATION_REPORTS.md) freezes bounds,
 rounding, replay/expiry, grouping, aggregation and acceptance for the first direct
-report target. It is not implemented/deployed; current P2P still ends at message
+report target. The payload codec and narrow local runtime cache are implemented;
+remote transport/consolidation remain targets. Current P2P still ends at message
 26. Software-upgrade and governing privacy/security review gates remain. Relayed
 reports, cross-address deduplication and global census remain open.
 

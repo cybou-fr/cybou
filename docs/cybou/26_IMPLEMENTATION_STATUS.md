@@ -3,6 +3,36 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Narrow background observation cache (2026-10-08)
+
+Every runtime now owns a five-second background collector and one fixed 191-byte
+DEC-289 cache, independent of Identity unlock, GUI visibility and diagnostics
+reads. Narrow collection reads the initialized finalized cursor, storage policy
+and accounted lengths, complete traffic window, process CPU mean and resident
+memory. The cursor reads only persisted head and matching network-binding keys,
+which initialization commits atomically; it does not certify state integrity.
+It does not enumerate peers/providers/objects, copy chart history, query
+disk availability or serialize canonical state. A contended chain mutex yields
+an unknown cursor. Other gauge reads use their existing counter/OS APIs.
+
+Cache publication is atomic after collection/validation outside its lock.
+Reads copy cached bytes under a short lock; collection/source work never runs
+under that lock. Startup, collection failure, clock regression and age strictly
+above five seconds return all unknown metrics with age 5001. Age starts before
+collection, so slow collection cannot rejuvenate old readings. CPU mean age
+advances on read and expires independently above 60 seconds. Rounded units and
+CPU ranges obey DEC-289; unknown values are zero, never fabricated measurements.
+Missed refreshes do not generate a catch-up burst. Shutdown interrupts the wait
+and joins the collector before captured runtime members are destroyed.
+
+Validation covers expiry boundaries, immutable bindings/challenges, CPU age,
+atomic concurrent snapshots, blocked/failing sources, prompt shutdown, narrow
+traffic equivalence and headless-style runtime refresh without Identity/UI/
+diagnostics. Codec, runtime, P2P and Qt regressions pass; binaries rebuild.
+OS sampling is verified on Windows only; collector cost, long soak, Linux and
+remote transport/governance acceptance remain open. No remote collection/UI,
+message code extension, VPS deployment or signer/chain/key changes are made.
+
 ## Direct observation payload codec (2026-10-08)
 
 `observation_report.h/.cpp` implements the standalone DEC-289 request (64 bytes)

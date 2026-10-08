@@ -12,6 +12,7 @@
 #include <cybou/poa_finalizer.h>
 #include <cybou/secret_file.h>
 #include <cybou/identity_signer.h>
+#include <cybou/observation_report.h>
 #include <test/cybou_service_test_fixture.h>
 #include <test/cybou_test_setup.h>
 
@@ -25,6 +26,32 @@
 #endif
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
+
+BOOST_AUTO_TEST_CASE(observation_cache_refreshes_without_identity_gui_or_diagnostics)
+{
+    cybou::NodeRuntimeConfig config{
+        .network_genesis = cybou::CreateTestNetworkGenesis(cybou::CreateTestGenesisState(),
+            cybou::TestPoaFinalizerPublicKey(31), cybou::TestNetworkPublicKey(31)),
+        .data_dir = m_data_dir / "observation-runtime", .memory_only = true,
+        .peer_admission_policy = TestPeerAdmissionPolicy()
+    };
+    cybou::CybouNodeRuntime runtime{std::move(config)};
+    BOOST_REQUIRE(runtime.InitializeGenesis(cybou::CreateTestGenesisState()));
+    cybou::ObservationBytes32 nonce{}; nonce.fill(37);
+    cybou::ObservationReport report;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{8};
+    do {
+        report = cybou::DecodeObservationReport(runtime.ReadObservationReport(nonce));
+        if (report.cursor.known && report.storage.known) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    } while (std::chrono::steady_clock::now() < deadline);
+    BOOST_CHECK(report.cursor.known); BOOST_CHECK_EQUAL(report.cursor.height, 0U);
+    BOOST_CHECK(report.storage.known); BOOST_CHECK_EQUAL(report.storage.capacity_bytes, uint64_t{15} << 30);
+    BOOST_CHECK_EQUAL(report.storage.stored_mib, 0U); BOOST_CHECK_EQUAL(report.storage.obligations_mib, 0U);
+    BOOST_CHECK(!report.traffic.known && !report.cpu.known); // complete windows have not elapsed
+    BOOST_CHECK(report.challenge == nonce);
+    BOOST_CHECK(cybou::Hash256{report.network_binding} == runtime.GetNetworkBinding());
+}
 
 BOOST_AUTO_TEST_CASE(process_cpu_intervals_use_elapsed_time_and_reset_on_missing_data)
 {

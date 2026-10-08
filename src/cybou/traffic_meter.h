@@ -37,12 +37,22 @@ public:
     }
     TrafficDiagnostics Snapshot(Clock::time_point now = Clock::now()) const
     {
+        return SnapshotImpl(now, true);
+    }
+    // Narrow report collection does not allocate/copy chart history.
+    TrafficDiagnostics WindowSnapshot(Clock::time_point now = Clock::now()) const
+    {
+        return SnapshotImpl(now, false);
+    }
+private:
+    TrafficDiagnostics SnapshotImpl(Clock::time_point now, bool history) const
+    {
         std::lock_guard lock{m_mutex};
         TrafficDiagnostics result;
         result.received_bytes = m_received;
         result.sent_bytes = m_sent;
         const auto second = Second(now);
-        result.history = BuildObservationHistory(second, m_buckets,
+        if (history) result.history = BuildObservationHistory(second, m_buckets,
             [](const auto& bucket) { return std::pair{bucket.received, bucket.sent}; });
         if (second < 60) return result;
         result.window_ms = 60000;

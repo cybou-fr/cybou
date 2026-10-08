@@ -2,7 +2,8 @@
 
 Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
 Strict standalone request/reply payload codecs are implemented and tested.
-Cache, session acceptance, transport and remote display remain unimplemented;
+The narrow runtime-owned cache refreshes independently every five seconds.
+Session acceptance, transport and remote display remain unimplemented;
 no observation polling is deployed. The running P2P baseline ends at message 26.
 This document freezes the first direct-report contract, not a global census,
 relayed telemetry design or a compliance claim. It follows
@@ -35,6 +36,16 @@ Collect outside the cache mutex, then publish one coherent cache atomically.
 The reply handler copies cached bytes without acquiring chain/provider/peer
 locks or retaining a cache lock across socket I/O. A delayed collector reduces
 data coverage; it must not stall mesh service to produce a fresh report.
+
+Implemented cache: fixed 191-byte storage, monotonic age from collection start,
+unknown startup/failure/backward-time/age over five seconds, and CPU mean age
+advanced at read time (CPU alone becomes unknown above its age bound). Collection
+uses a dedicated runtime worker, no Identity/GUI callback or network request.
+It reads existing counters and the initialized matching-network head metadata, tries the
+chain lock without waiting, and omits chart history and disk queries. Missed
+refreshes are skipped rather than replayed; shutdown interrupts the timed wait
+and joins before runtime storage teardown. These are local implementation facts,
+not transport/replay/consolidation acceptance or measured collector-cost evidence.
 
 The report contains:
 

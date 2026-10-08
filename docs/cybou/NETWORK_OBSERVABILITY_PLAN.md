@@ -86,7 +86,8 @@ and service-eligible network capacity estimates. Local gauges are not network to
    below; `metrics` and `capacity` have bounded local packages below.
 3. **O3 Remote report design:** DEC-289 freezes the first direct-report contract
    in Level 1/2. The standalone strict payload codec is implemented and tested;
-   cache/scheduling/grouping implementation and privacy
+   the narrow five-second background runtime cache is implemented. Scheduled
+   request/reply, grouping implementation and privacy
    acceptance remain; relayed/cross-address design is open. No new network,
    genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
