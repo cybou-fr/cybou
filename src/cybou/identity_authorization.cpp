@@ -59,16 +59,23 @@ std::optional<IdentityAuthorizationBytes> SerializeIdentityAuthorization(
 std::optional<IdentityAuthorization> DeserializeIdentityAuthorization(
     std::span<const unsigned char> bytes)
 {
+    constexpr size_t ED25519_SIZE{32};
+    constexpr size_t RECOVERY_TOTAL{1 + ED25519_SIZE + ROOT_PQ_SIZE};
     if (bytes.size() != IDENTITY_AUTHORIZATION_SIZE ||
-        bytes[0] != ROOT_SUITE || bytes[1985] != AUTHORIZATION_SUITE) return std::nullopt;
+        bytes[0] != ROOT_SUITE || bytes[RECOVERY_TOTAL] != AUTHORIZATION_SUITE) return std::nullopt;
     IdentityAuthorization auth{
         .recovery_root = IdentityHybridPublicKey{.purpose = IdentityKeyPurpose::RECOVERY_ROOT, .ed25519 = {}, .ml_dsa = {}},
         .authorization_key = IdentityHybridPublicKey{.purpose = IdentityKeyPurpose::AUTHORIZATION, .ed25519 = {}, .ml_dsa = {}},
     };
-    std::copy_n(bytes.begin() + 1, 32, auth.recovery_root.ed25519.begin());
-    auth.recovery_root.ml_dsa.assign(bytes.begin() + 33, bytes.begin() + 1985);
-    std::copy_n(bytes.begin() + 1986, 32, auth.authorization_key.ed25519.begin());
-    auth.authorization_key.ml_dsa.assign(bytes.begin() + 2018, bytes.end());
+    size_t offset{1};
+    std::copy_n(bytes.begin() + offset, ED25519_SIZE, auth.recovery_root.ed25519.begin());
+    offset += ED25519_SIZE;
+    auth.recovery_root.ml_dsa.assign(bytes.begin() + offset, bytes.begin() + offset + ROOT_PQ_SIZE);
+    offset += ROOT_PQ_SIZE;
+    offset += 1; // AUTHORIZATION_SUITE byte
+    std::copy_n(bytes.begin() + offset, ED25519_SIZE, auth.authorization_key.ed25519.begin());
+    offset += ED25519_SIZE;
+    auth.authorization_key.ml_dsa.assign(bytes.begin() + offset, bytes.end());
     if (!Valid(auth)) return std::nullopt;
     return auth;
 }

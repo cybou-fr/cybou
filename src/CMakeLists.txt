@@ -73,6 +73,15 @@ if(CYBOU_ENABLE_TEST_HOOKS)
   target_compile_definitions(cybou_core PRIVATE CYBOU_ENABLE_TEST_HOOKS=1)
 endif()
 
+target_precompile_headers(cybou_core PRIVATE
+  <openssl/evp.h>
+  <openssl/sha.h>
+  <vector>
+  <string>
+  <memory>
+  <cstdint>
+)
+
 
 
 # CYBOU node runtime and P2P library.
@@ -136,6 +145,7 @@ target_link_libraries(cybou_node
     ZLIB::ZLIB
     $<$<PLATFORM_ID:Windows>:crypt32>
 )
+target_precompile_headers(cybou_node REUSE_FROM cybou_core)
 
 # One production executable `cybou`: desktop and ordinary Full Node commands.
 add_library(cybou_cli STATIC cybou/cli/cybou_cli.cpp)

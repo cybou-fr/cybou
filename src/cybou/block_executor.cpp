@@ -153,7 +153,7 @@ bool BlockExecutor::CanFinalize() const
     return final_supply == m_initial_supply;
 }
 
-BlockExecutionResult BlockExecutor::Finalize() const
+BlockExecutionResult BlockExecutor::Finalize() const &
 {
     const auto fail = [](BlockExecutionError error) {
         BlockExecutionResult result{};
@@ -172,6 +172,29 @@ BlockExecutionResult BlockExecutor::Finalize() const
     if (!root) return fail(BlockExecutionError::INVALID_STATE);
     BlockExecutionResult success{};
     success.state = m_candidate;
+    success.state_root = *root;
+    return success;
+}
+
+BlockExecutionResult BlockExecutor::Finalize() &&
+{
+    const auto fail = [](BlockExecutionError error) {
+        BlockExecutionResult result{};
+        result.error = error;
+        return result;
+    };
+    if (!m_valid) return fail(m_init_error);
+    uint64_t final_supply{0};
+    if (ValidateCybouState(m_candidate, &final_supply) != StateValidationError::NONE) {
+        return fail(BlockExecutionError::INVALID_STATE);
+    }
+    if (final_supply != m_initial_supply) {
+        return fail(BlockExecutionError::SUPPLY_CHANGED);
+    }
+    const auto root = CybouStateHash(m_candidate, /*validate=*/false);
+    if (!root) return fail(BlockExecutionError::INVALID_STATE);
+    BlockExecutionResult success{};
+    success.state = std::move(m_candidate);
     success.state_root = *root;
     return success;
 }
@@ -205,7 +228,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
             return result;
         }
     }
-    return executor.Finalize();
+    return std::move(executor).Finalize();
 }
 
 } // namespace cybou

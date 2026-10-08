@@ -116,7 +116,8 @@ public:
     bool CanFinalize() const;
 
     /// \brief Финализирует блок: проверяет supply, валидирует состояние и считает `state root`.
-    BlockExecutionResult Finalize() const;
+    BlockExecutionResult Finalize() const &;
+    BlockExecutionResult Finalize() &&;
 
     /// \brief Текущее накапливающееся кандидатное состояние.
     const CybouState& GetState() const noexcept { return m_candidate; }

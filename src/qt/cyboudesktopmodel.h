@@ -504,6 +504,10 @@ private:
     QVector<CybouActivityItem> m_extra_activity;
     /** Live mode: Recent activity is derived from Mail, Files and Wallet state. */
     void rebuildActivity();
+    void scheduleRebuildActivity();
+    void scheduleRebuildContacts();
+    bool m_activity_update_scheduled{false};
+    bool m_contacts_update_scheduled{false};
     QVector<CybouWalletEntry> m_wallet_entries;
     QVector<CybouContact> m_contacts;
     CybouRestoreProgress m_restore_progress;

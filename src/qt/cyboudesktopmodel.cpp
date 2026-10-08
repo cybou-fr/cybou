@@ -3,6 +3,7 @@
 
 #include <qt/cyboudesktopmodel.h>
 
+#include <qt/cybouactivity.h>
 #include <qt/cybouapplicationbackend.h>
 
 #include <cybou/identity_operation_coordinator.h>
@@ -109,49 +110,39 @@ CybouDesktopModel::CybouDesktopModel(QString network_name, QObject* parent)
     connect(finality_watch, &QTimer::timeout, this, &CybouDesktopModel::updateFinalityStall);
     finality_watch->start(5000);
     connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::refreshStorageUsed);
-    connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::rebuildActivity);
-    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildActivity);
-    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::rebuildActivity);
-    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::rebuildContacts);
-    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::rebuildContacts);
+    connect(this, &CybouDesktopModel::filesChanged, this, &CybouDesktopModel::scheduleRebuildActivity);
+    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::scheduleRebuildActivity);
+    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::scheduleRebuildActivity);
+    connect(this, &CybouDesktopModel::mailChanged, this, &CybouDesktopModel::scheduleRebuildContacts);
+    connect(this, &CybouDesktopModel::walletChanged, this, &CybouDesktopModel::scheduleRebuildContacts);
     // Yourself never appears; the own name may be learned after mail loaded.
-    connect(this, &CybouDesktopModel::namesChanged, this, &CybouDesktopModel::rebuildContacts);
+    connect(this, &CybouDesktopModel::namesChanged, this, &CybouDesktopModel::scheduleRebuildContacts);
+}
+
+void CybouDesktopModel::scheduleRebuildActivity()
+{
+    if (m_activity_update_scheduled) return;
+    m_activity_update_scheduled = true;
+    QTimer::singleShot(0, this, [this] {
+        m_activity_update_scheduled = false;
+        rebuildActivity();
+    });
+}
+
+void CybouDesktopModel::scheduleRebuildContacts()
+{
+    if (m_contacts_update_scheduled) return;
+    m_contacts_update_scheduled = true;
+    QTimer::singleShot(0, this, [this] {
+        m_contacts_update_scheduled = false;
+        rebuildContacts();
+    });
 }
 
 void CybouDesktopModel::rebuildActivity()
 {
     if (fixtureMode()) return;
-    const auto timed = [](const QDateTime& time) { return time.isValid() && time.toSecsSinceEpoch() > 0; };
-    QVector<CybouActivityItem> items = m_extra_activity;
-    for (const auto& mail : m_mail) {
-        if (mail.draft || !timed(mail.time)) continue;
-        const QString subject = mail.subject.isEmpty() ? tr("(no subject)") : mail.subject;
-        if (mail.folder == CybouMailFolder::Trash) continue;
-        if (mail.outgoing || mail.folder == CybouMailFolder::Sent) {
-            items.append({CybouActivityKind::MailSent, tr("Mail to %1").arg(mail.to_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
-        } else if (mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive) {
-            items.append({CybouActivityKind::MailReceived, tr("Mail from %1").arg(mail.from_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
-        }
-    }
-    for (const auto& file : m_files) {
-        if (file.folder || file.trashed || !timed(file.modified)) continue;
-        items.append({CybouActivityKind::FileUploaded, tr("%1 added to Files").arg(file.name),
-            CybouProduct::sizeText(file.logical_size), file.modified, QStringLiteral("file:") + file.id});
-    }
-    for (const auto& entry : m_wallet_entries) {
-        if (!timed(entry.time)) continue;
-        const QString amount = cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
-        if (entry.kind == CybouWalletEntryKind::Sent) {
-            items.append({CybouActivityKind::PaymentSent, tr("%1 sent").arg(amount), entry.counterparty_name, entry.time, QStringLiteral("wallet:") + entry.id});
-        } else if (entry.kind == CybouWalletEntryKind::Received) {
-            items.append({CybouActivityKind::PaymentReceived, tr("%1 received").arg(amount), entry.counterparty_name,
-                entry.time, QStringLiteral("wallet:") + entry.id});
-        }
-    }
-    std::stable_sort(items.begin(), items.end(),
-        [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
-    if (items.size() > 20) items.resize(20);
-    NormalizeActivityIds(items);
+    auto items = CybouBuildActivityItems(*this, m_extra_activity);
     if (items == m_activity) return;
     m_activity = std::move(items);
     Q_EMIT activityChanged();
@@ -1097,48 +1088,8 @@ std::optional<quint64> CybouDesktopModel::supportMailFee() const
 
 void CybouDesktopModel::rebuildContacts()
 {
-    if (m_fixture_mode) return;
-    // Mail counterparties retain full routing addresses even without a name.
-    QHash<QString, QDateTime> last_seen;
-    const auto seen = [&](const QString& raw, const QDateTime& when, const QString& address = QString{}) {
-        QString name = raw.trimmed().toLower();
-        if (name == m_status.primary_name.toLower() || (!address.isEmpty() && address == m_status.account_id)) return;
-        if (!name.endsWith(QStringLiteral(".cybou"))) {
-            name = address.toLower();
-            if (!QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(name).hasMatch()) return;
-        }
-        auto& latest = last_seen[name];
-        if (!latest.isValid() || (when.isValid() && when > latest)) latest = when;
-    };
-    for (const auto& mail : m_mail) {
-        if (mail.draft) continue;
-        seen(mail.from_name, mail.time, mail.from_address);
-        seen(mail.to_name, mail.time, mail.to_address);
-    }
-    for (const auto& entry : m_wallet_entries) {
-        if (entry.kind == CybouWalletEntryKind::Sent || entry.kind == CybouWalletEntryKind::Received) {
-            seen(entry.counterparty_name, entry.time);
-        }
-    }
-    QVector<QPair<QString, QDateTime>> ordered;
-    for (auto it = last_seen.cbegin(); it != last_seen.cend(); ++it) ordered.append({it.key(), it.value()});
-    std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) {
-        return a.second != b.second ? a.second > b.second : a.first < b.first;
-    });
-    QVector<CybouContact> contacts;
-    // Everyone can reach support by default, once the authority claimed the name.
-    bool support_available = false;
-    if (m_identity_service) {
-        const auto loaded = m_identity_service->GetNodeRuntime().GetStore().GetStateSnapshot();
-        support_available = loaded && loaded.state && cybou::SupportAccount(*loaded.state).has_value();
-    }
-    const QString support = supportName();
-    if (support_available && m_status.primary_name.toLower() != support) {
-        contacts.append({tr("CYBOU Support"), support, true});
-    }
-    for (const auto& [name, when] : ordered) {
-        if (name != support) contacts.append({name.endsWith(QStringLiteral(".cybou")) ? name.chopped(6) : CybouProduct::shortId(name), name, true});
-    }
+    if (fixtureMode()) return;
+    auto contacts = CybouBuildContacts(*this);
     if (contacts.size() == m_contacts.size() && std::equal(contacts.begin(), contacts.end(), m_contacts.begin(),
             [](const CybouContact& a, const CybouContact& b) { return a.name == b.name; })) return;
     m_contacts = std::move(contacts);

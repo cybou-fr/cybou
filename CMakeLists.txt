@@ -23,6 +23,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 #=============================
 option(BUILD_GUI "Build the CYBOU desktop executable." OFF)
 option(BUILD_TESTS "Build the CYBOU tests and developer tools." ON)
+option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors." OFF)
 option(CYBOU_ENABLE_TEST_HOOKS "Enable deterministic crash hooks in CYBOU test builds." OFF)
 option(WITH_CCACHE "Use ccache when it is installed." ON)
 set(SANITIZERS "" CACHE STRING "Comma-separated -fsanitize values, e.g. address,undefined.")
@@ -89,8 +90,8 @@ if(WIN32)
   if(MSVC)
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
     target_compile_definitions(core_interface INTERFACE _UNICODE UNICODE _CRT_SECURE_NO_WARNINGS)
-    target_compile_options(core_interface INTERFACE /utf-8 /Zc:preprocessor /Zc:__cplusplus /sdl /W3 $<$<CONFIG:Debug>:/bigobj>)
-    target_link_options(core_interface INTERFACE /MANIFEST:NO /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT)
+    target_compile_options(core_interface INTERFACE /utf-8 /Zc:preprocessor /Zc:__cplusplus /sdl /W3 $<$<CONFIG:Debug>:/bigobj> $<$<BOOL:${WARNINGS_AS_ERRORS}>:/WX>)
+    target_link_options(core_interface INTERFACE /MANIFEST:NO /DYNAMICBASE /HIGHENTROPYVA /NXCOMPAT $<$<BOOL:${WARNINGS_AS_ERRORS}>:/WX>)
   else()
     target_compile_definitions(core_interface INTERFACE WIN32 _WINDOWS _MT)
     # MinGW: unaligned vector moves (GCC bug 54412), large debug objects, static runtime.
@@ -106,6 +107,9 @@ if(SANITIZERS)
 endif()
 
 if(NOT MSVC)
+  if(WARNINGS_AS_ERRORS)
+    cybou_add_compile_flag(core_interface -Werror)
+  endif()
   foreach(flag IN ITEMS
       -Wall -Wextra -Wformat -Wformat-security -Wvla -Wredundant-decls -Wdate-time
       -Wduplicated-branches -Wduplicated-cond -Wlogical-op -Woverloaded-virtual

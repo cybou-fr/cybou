@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 Stanislav Saveliev
+// Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
 #ifndef CYBOU_QT_CYBOUACTIVITY_H
@@ -26,6 +26,13 @@ struct CybouActivityOperation {
 
 /** Everything in flight or failed, derived from the model's semantic state. */
 QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel& model);
+
+/** Live mode: Recent activity derived from Mail, Files and Wallet state. */
+QVector<CybouActivityItem> CybouBuildActivityItems(const CybouDesktopModel& model,
+    const QVector<CybouActivityItem>& extra_activity);
+
+/** Live mode: people this Identity mailed, heard from or paid, most recent first. */
+QVector<CybouContact> CybouBuildContacts(const CybouDesktopModel& model);
 
 /**
  * Header control for the one place that shows every running or failed

@@ -5,6 +5,7 @@
 
 #include <QKeyEvent>
 
+#include <qt/cybouscreenshotharness.h>
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cyboutheme.h>
@@ -172,7 +173,9 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
     const QString shot_dir = qEnvironmentVariable("CYBOU_SCREENSHOT_DIR");
     if (!shot_dir.isEmpty()) {
         const int delay_ms = qEnvironmentVariableIntValue("CYBOU_SCREENSHOT_DELAY_MS");
-        QTimer::singleShot(delay_ms > 0 ? delay_ms : 1500, this, [this, shot_dir] { runScreenshotHarness(shot_dir); });
+        QTimer::singleShot(delay_ms > 0 ? delay_ms : 1500, this, [this, shot_dir] {
+            cybou::gui::RunScreenshotHarness(this, shot_dir);
+        });
     }
     connect(m_desktop_model, &CybouDesktopModel::applicationLoadChanged, this, &CybouMainWindow::refreshApplicationLoading);
     connect(m_desktop_model, &CybouDesktopModel::statusChanged, this, &CybouMainWindow::refreshApplicationLoading);
@@ -996,174 +999,6 @@ void CybouMainWindow::openNotificationTarget()
     } else if (m_notification_target.startsWith(QStringLiteral("pay:")) || m_notification_target == QLatin1String{"wallet"}) {
         showPage(CybouPage::Wallet);
     }
-}
-
-void CybouMainWindow::runScreenshotHarness(const QString& directory)
-{
-    // Dev-only QA harness (CYBOU_SCREENSHOT_DIR): captures the named
-    // screens for the active fixture and quits. File names are
-    // <prefix><screen>.png, e.g. 1280x860-mail-reader.png.
-    QDir{}.mkpath(directory);
-    const QString prefix = qEnvironmentVariable("CYBOU_SCREENSHOT_PREFIX");
-    const QString fixture = CybouUiFixtures::requestedFixture();
-    const auto save = [this, directory, prefix](const QString& screen) {
-        QEventLoop settle;
-        QTimer::singleShot(250, &settle, &QEventLoop::quit);
-        settle.exec();
-        for (int i = 0; i < 3; ++i) qApp->processEvents();
-        grab().save(QDir{directory}.filePath(QStringLiteral("%1%2.png").arg(prefix, screen)));
-    };
-    auto* home = static_cast<HomePage*>(page(CybouPage::Home));
-    auto* mail = static_cast<EmailPage*>(page(CybouPage::Mail));
-    auto* files = static_cast<StoragePage*>(page(CybouPage::Files));
-    auto* model = m_desktop_model;
-
-    if (fixture == QLatin1String{"empty"} || fixture.isEmpty()) {
-        showPage(CybouPage::Home);
-        save(QStringLiteral("home-empty"));
-        home->onboarding()->showScreen(OnboardingView::Screen::Restore);
-        save(QStringLiteral("identity-restore"));
-    } else if (fixture == QLatin1String{"restoring"}) {
-        showPage(CybouPage::Home);
-        save(QStringLiteral("identity-restoring"));
-    } else if (fixture == QLatin1String{"offline"}) {
-        showPage(CybouPage::Mail);
-        mail->setView(EmailPage::View::Sent);
-        mail->openMessage(QStringLiteral("m-outgoing"));
-        save(QStringLiteral("mail-offline"));
-    } else {
-        showPage(CybouPage::Home);
-        save(QStringLiteral("home-active"));
-        showPage(CybouPage::Identity);
-        save(QStringLiteral("identity-active"));
-
-        showPage(CybouPage::Mail);
-        mail->setView(EmailPage::View::Inbox);
-        save(QStringLiteral("mail-inbox"));
-        mail->openMessage(QStringLiteral("m-project"));
-        save(QStringLiteral("mail-reader"));
-        mail->setView(EmailPage::View::Sent);
-        mail->openMessage(QStringLiteral("m-sent-securing"));
-        save(QStringLiteral("mail-attachment-progress"));
-        mail->openMessage(QStringLiteral("m-sent-validated"));
-        save(QStringLiteral("mail-validated"));
-        mail->setView(EmailPage::View::Inbox);
-        CybouMailItem draft;
-        draft.to_name = QStringLiteral("alice.cybou");
-        draft.subject = tr("Project files");
-        draft.body = tr("Hello Alice,\n\nHere are the final files.\n\nStan");
-        if (const auto attachment = model->attachmentFromFile(QStringLiteral("f-report"))) draft.attachments = {*attachment};
-        mail->openCompose(draft);
-        save(QStringLiteral("mail-compose"));
-
-        showPage(CybouPage::Files);
-        files->setView(StoragePage::View::MyFiles);
-        save(QStringLiteral("files-list"));
-        if (auto* table = files->findChild<QTreeWidget*>(QStringLiteral("filesTable")); table && table->topLevelItemCount()) {
-            table->topLevelItem(0)->setSelected(true);
-            save(QStringLiteral("files-selection"));
-            table->clearSelection();
-        }
-        files->setGridMode(true);
-        save(QStringLiteral("files-grid"));
-        files->setGridMode(false);
-        files->showDetails(QStringLiteral("f-report"));
-        save(QStringLiteral("files-details"));
-        files->showDetails({});
-        QTemporaryDir temp;
-        const QString upload = temp.filePath(QStringLiteral("presentation.pdf"));
-        QFile file{upload};
-        if (file.open(QIODevice::WriteOnly)) {
-            file.write(QByteArray(2 * 1024 * 1024, 'x'));
-            file.close();
-            const QString id = model->requestFileUpload(upload);
-            model->setFileState(id, CybouContentState::Securing, 42);
-        }
-        save(QStringLiteral("files-upload"));
-
-        showPage(CybouPage::Wallet);
-        save(QStringLiteral("wallet"));
-        save(QStringLiteral("wallet-pending")); // fixture activity: Waiting / Finalized
-        showPage(CybouPage::Network);
-        // Synthetic local diagnostics only in the explicit screenshot fixture.
-        cybou::NodeDiagnosticsSnapshot map_snapshot;
-        // The fixture uses the compiled public DEVNET profile. Peer observations
-        // remain synthetic; the benchmark resource, if accepted, remains historical.
-        map_snapshot.network_binding = cybou::ComputeNetworkBinding(
-            cybou::RequireOfficialNetwork("devnet").genesis.GetNetworkPublicKey()).GetHex();
-        map_snapshot.peers = {{"51.255.46.58:29461", 48213, ""}, {"51.255.46.58:29462", 48212, ""}, {"127.0.0.1:29461", 48213, ""}};
-        model->setNetworkDiagnostics(map_snapshot);
-        save(QStringLiteral("network"));
-        auto* network = static_cast<NetworkPage*>(page(CybouPage::Network));
-        network->selectPeer(0);
-        save(QStringLiteral("network-peer"));
-        network->showAdvanced();
-        save(QStringLiteral("network-advanced-peer"));
-        network->showBenchmarkDetails();
-        save(QStringLiteral("network-benchmark"));
-        network->findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"))->setCurrentIndex(2);
-        save(QStringLiteral("network-storage"));
-        network->findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
-        map_snapshot.peers.erase(map_snapshot.peers.begin());
-        model->setNetworkDiagnostics(map_snapshot);
-        save(QStringLiteral("network-known-peer"));
-        if (auto* backend = model->applicationBackend()) {
-            Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Loading, 35, 100, {});
-            qApp->processEvents();
-            if (m_application_loading) m_application_loading->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("identity-loading.png")));
-            showPage(CybouPage::Files);
-            m_application_loading->findChild<QPushButton*>(QStringLiteral("applicationLoadingLocalButton"))->click();
-            save(QStringLiteral("recovery-background"));
-            Q_EMIT backend->applicationLoadChanged(CybouApplicationLoadState::Ready, 0, 0, {});
-        }
-        showNetworkDiagnostics();
-        save(QStringLiteral("diagnostics"));
-        {
-            CybouConsoleDialog console{model, this};
-            console.show();
-            console.executeCommand(QStringLiteral("help"));
-            console.executeCommand(QStringLiteral("status"));
-            console.executeCommand(QStringLiteral("storage"));
-            qApp->processEvents();
-            console.grab().save(QDir{directory}.filePath(prefix + QStringLiteral("console-user.png")));
-        }
-        showPage(CybouPage::Settings);
-        save(QStringLiteral("settings"));
-
-        // Operator console with a representative finalizer snapshot.
-        CybouNetworkAuthorityStatus authority;
-        authority.proven = true;
-        authority.signer_enabled = true;
-        authority.finalizer = CybouFinalizerState::Finalizing;
-        authority.finalized_height = 48'213;
-        authority.candidates = 4;
-        authority.identities = 1'284;
-        authority.names = 911;
-        authority.pending_name_commits = 7;
-        authority.total_balance = 12'480'300;
-        authority.total_system_balance = 3'902'144;
-        authority.storage_escrow = 1'204'500;
-        model->setNetworkAuthority(authority);
-        {
-            CybouConsoleDialog console{model, this};
-            console.show();
-            console.executeCommand(QStringLiteral("help"));
-            console.executeCommand(QStringLiteral("authority status"));
-            qApp->processEvents();
-            console.grab().save(QDir{directory}.filePath(prefix + QStringLiteral("console-authority.png")));
-        }
-        showPage(CybouPage::NetworkAuthority);
-        save(QStringLiteral("network-authority"));
-        authority.finalizer = CybouFinalizerState::Paused;
-        model->setNetworkAuthority(authority);
-        save(QStringLiteral("network-authority-paused"));
-        model->setNetworkAuthority({});
-
-        model->setFileItems({});
-        showPage(CybouPage::Files);
-        save(QStringLiteral("files-empty"));
-    }
-    qApp->quit();
 }
 
 void CybouMainWindow::closeEvent(QCloseEvent* event)

@@ -19,6 +19,14 @@
 #include <QVBoxLayout>
 #include <QTextDocument>
 #include <QTimeZone>
+#include <QCompleter>
+#include <QStandardItemModel>
+#include <QAbstractItemView>
+#include <QShortcut>
+#include <QSettings>
+#include <QCloseEvent>
+#include <QToolButton>
+#include <QTextCursor>
 
 using namespace CybouUi;
 
@@ -72,16 +80,42 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     layout->setContentsMargins(18, 16, 18, 16);
     layout->setSpacing(10);
 
-    // Header card
-    auto* hero = Card(this);
-    auto* hero_layout = new QVBoxLayout{hero};
-    hero_layout->setContentsMargins(16, 12, 16, 12);
-    hero_layout->setSpacing(2);
-    hero_layout->addWidget(SectionTitle(tr("Bounded Read-Only Console"), hero));
-    hero_layout->addWidget(MutedText(
-        tr("Inspect local network state, own file metadata and available operator diagnostics. "
-           "Shell, mutation, and scripting commands are disabled."), hero));
-    layout->addWidget(hero);
+    auto* header = new QHBoxLayout;
+    header->addWidget(SectionTitle(tr("CYBOU Console"), this));
+    header->addStretch();
+    for (const auto& action : QList<QPair<Glyph, QString>>{{Glyph::Info, tr("Help")}, {Glyph::Search, tr("Search output (Ctrl+F)")}, {Glyph::Copy, tr("Copy selection")}, {Glyph::Trash, tr("Clear (Ctrl+L)")}}) {
+        auto* button = IconButton(action.first, this, action.second, IconButtonSize::Toolbar);
+        header->addWidget(button);
+        connect(button, &QToolButton::clicked, this, [this, glyph = action.first] {
+            if (glyph == Glyph::Info) executeCommand(QStringLiteral("help"));
+            else if (glyph == Glyph::Search) { m_find_bar->show(); m_find->setFocus(); }
+            else if (glyph == Glyph::Copy) m_output->copy();
+            else clearOutput();
+        });
+    }
+    layout->addLayout(header);
+    m_scope = MutedText({}, this);
+    m_scope->setObjectName(QStringLiteral("consoleScope"));
+    layout->addWidget(m_scope);
+    m_find_bar = new QWidget{this};
+    auto* find_layout = new QHBoxLayout{m_find_bar};
+    find_layout->setContentsMargins(0, 0, 0, 0);
+    m_find = new QLineEdit{m_find_bar};
+    m_find->setObjectName(QStringLiteral("consoleSearch"));
+    m_find->setPlaceholderText(tr("Search output…"));
+    m_find->setMaxLength(256);
+    m_find->installEventFilter(this);
+    m_matches = MutedText({}, m_find_bar);
+    find_layout->addWidget(m_find, 1);
+    find_layout->addWidget(m_matches);
+    for (bool backward : {true, false}) {
+        auto* button = new QPushButton{backward ? tr("Previous") : tr("Next"), m_find_bar};
+        find_layout->addWidget(button);
+        connect(button, &QPushButton::clicked, this, [this, backward] { findOutput(backward); });
+    }
+    connect(m_find, &QLineEdit::textChanged, this, [this] { findOutput(); });
+    layout->addWidget(m_find_bar);
+    m_find_bar->hide();
 
     // Output area
     m_output = new QPlainTextEdit{this};
@@ -113,25 +147,108 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     connect(m_run_btn, &QPushButton::clicked, this, [this] { handleRun(); });
     input_bar->addWidget(m_run_btn);
 
-    m_clear_btn = new QPushButton{tr("Clear"), this};
-    m_clear_btn->setObjectName(QStringLiteral("secondaryButton"));
-    m_clear_btn->setCursor(Qt::PointingHandCursor);
-    connect(m_clear_btn, &QPushButton::clicked, this, [this] { clearOutput(); });
-    input_bar->addWidget(m_clear_btn);
-
     layout->addLayout(input_bar);
-
-    appendOutput(tr("CYBOU Bounded Console initialized. Type 'help' to view permitted read-only commands."));
+    m_suggestions = new QStandardItemModel{this};
+    m_completer = new QCompleter{m_suggestions, this};
+    m_completer->setWidget(m_input);
+    m_completer->setCompletionRole(Qt::UserRole);
+    m_completer->setCaseSensitivity(Qt::CaseInsensitive);
+    connect(m_completer, qOverload<const QModelIndex&>(&QCompleter::activated), this, [this](const QModelIndex& index) {
+        m_input->setText(index.data(Qt::UserRole).toString());
+        m_input->setFocus();
+    });
+    connect(m_input, &QLineEdit::textEdited, this, [this] { completeInput(); });
+    auto* search = new QShortcut{QKeySequence{Qt::CTRL | Qt::Key_F}, this};
+    connect(search, &QShortcut::activated, this, [this] { m_find_bar->show(); m_find->setFocus(); m_find->selectAll(); });
+    auto* clear = new QShortcut{QKeySequence{Qt::CTRL | Qt::Key_L}, this};
+    connect(clear, &QShortcut::activated, this, [this] { clearOutput(); m_input->setFocus(); });
+    restoreGeometry(QSettings{}.value(QStringLiteral("console/geometry")).toByteArray());
+    appendOutput(tr("CYBOU · %1\nLocal read-only diagnostics. Peer announcements are unverified.\nQuick commands: status · peers · storage · history\nType help for all commands. Tab or Ctrl+Space opens suggestions.").arg(m_model->status().network_name));
 
     m_private_session = m_model->status().identity_state == CybouIdentityState::Active;
     m_authority_session = m_model->isNetworkAuthority();
     m_account = m_model->status().account_id;
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { checkVaultLock(); });
     connect(m_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] { checkVaultLock(); });
+    checkVaultLock();
+}
+
+void CybouConsoleDialog::closeEvent(QCloseEvent* event)
+{
+    QSettings{}.setValue(QStringLiteral("console/geometry"), saveGeometry());
+    QDialog::closeEvent(event);
+}
+
+void CybouConsoleDialog::completeInput()
+{
+    m_suggestions->clear();
+    const auto text = m_input->text();
+    auto add = [this](const QString& value, const QString& description = {}) {
+        if (m_suggestions->rowCount() >= kMaxRows || value.size() > 1024) return;
+        auto* item = new QStandardItem{description.isEmpty() ? value : value + QStringLiteral(" — ") + description};
+        item->setData(value, Qt::UserRole);
+        m_suggestions->appendRow(item);
+    };
+    const bool unlocked = m_model->status().identity_state == CybouIdentityState::Active;
+    if (!text.contains(QLatin1Char{' '})) {
+        for (const auto& command : commands) {
+            if (command.private_data && !unlocked) continue;
+            if (command.authority && !m_model->isNetworkAuthority()) continue;
+            add(QLatin1String{command.name}, tr(command.description));
+        }
+    } else {
+        const auto command = text.section(QLatin1Char{' '}, 0, 0).toLower();
+        if ((command == QLatin1String{"file"} || command == QLatin1String{"chunks"}) && unlocked) {
+            for (const auto& file : m_model->fileItems()) if (!file.folder) {
+                add(command + QLatin1Char{' '} + file.id, file.name);
+                if (file.name != file.id) add(command + QLatin1Char{' '} + file.name);
+            }
+        } else if (command == QLatin1String{"op"}) {
+            for (const auto& op : m_model->networkDiagnostics().operations) add(command + QLatin1Char{' '} + QString::fromStdString(op.operation_id));
+        } else if (command == QLatin1String{"block"}) {
+            const auto& d = m_model->networkDiagnostics();
+            if (d.initialized) add(command + QLatin1Char{' '} + QString::number(d.height), tr("Locally verified tip"));
+        } else if (command == QLatin1String{"authority"} && unlocked && m_model->isNetworkAuthority()) {
+            for (const auto& argument : {"status", "candidates", "totals", "settle"}) add(command + QLatin1Char{' '} + QLatin1String{argument});
+        }
+    }
+    m_completer->setCompletionPrefix(text);
+    if (m_completer->completionCount()) m_completer->complete();
+    else m_completer->popup()->hide();
+}
+
+void CybouConsoleDialog::findOutput(bool backward)
+{
+    const auto query = m_find->text();
+    if (query.isEmpty()) { m_matches->clear(); return; }
+    const auto flags = backward ? QTextDocument::FindBackward : QTextDocument::FindFlags{};
+    if (!m_output->find(query, flags)) {
+        auto cursor = m_output->textCursor();
+        cursor.movePosition(backward ? QTextCursor::End : QTextCursor::Start);
+        m_output->setTextCursor(cursor);
+        m_output->find(query, flags);
+    }
+    const auto text = m_output->toPlainText();
+    const int count = text.count(query, Qt::CaseInsensitive);
+    const int position = text.left(m_output->textCursor().selectionEnd()).count(query, Qt::CaseInsensitive);
+    m_matches->setText(tr("%1 / %2").arg(count ? position : 0).arg(count));
 }
 
 bool CybouConsoleDialog::eventFilter(QObject* watched, QEvent* event)
 {
+    if (event->type() == QEvent::KeyPress) {
+        auto* key = static_cast<QKeyEvent*>(event);
+        if (key->key() == Qt::Key_Escape && (m_find_bar->isVisible() || m_completer->popup()->isVisible())) {
+            m_completer->popup()->hide(); m_find_bar->hide(); m_input->setFocus(); return true;
+        }
+        if (watched == m_find && (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter)) { findOutput(key->modifiers() & Qt::ShiftModifier); return true; }
+        if (watched == m_input && key->key() == Qt::Key_Tab && m_completer->popup()->isVisible()) {
+            const auto index = m_completer->popup()->currentIndex().isValid() ? m_completer->popup()->currentIndex() : m_completer->completionModel()->index(0,0);
+            m_input->setText(index.data(Qt::UserRole).toString()); m_completer->popup()->hide(); return true;
+        }
+        if (watched == m_input && (key->key() == Qt::Key_Tab || (key->key() == Qt::Key_Space && key->modifiers() & Qt::ControlModifier))) { completeInput(); return true; }
+        if (watched == m_input && m_completer->popup()->isVisible()) return false;
+    }
     if (watched == m_input && event->type() == QEvent::KeyPress) {
         auto* key_event = static_cast<QKeyEvent*>(event);
         if (key_event->key() == Qt::Key_Return || key_event->key() == Qt::Key_Enter) {
@@ -164,6 +281,8 @@ void CybouConsoleDialog::handleRun()
 {
     const QString line = m_input->text().trimmed();
     m_input->clear();
+    m_suggestions->clear();
+    m_completer->popup()->hide();
     m_history_index = -1;
     if (line.isEmpty()) return;
     executeCommand(line);
@@ -175,6 +294,9 @@ void CybouConsoleDialog::clearOutput()
     m_history.clear();
     m_history_index = -1;
     m_input->clear();
+    m_find->clear();
+    m_suggestions->clear();
+    m_completer->popup()->hide();
 }
 
 QString CybouConsoleDialog::outputText() const
@@ -184,7 +306,14 @@ QString CybouConsoleDialog::outputText() const
 
 void CybouConsoleDialog::appendOutput(const QString& text)
 {
-    m_output->appendPlainText(text.left(8192));
+    auto cursor = m_output->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    if (!m_output->document()->isEmpty()) cursor.insertBlock();
+    QTextCharFormat format;
+    if (text.startsWith(QStringLiteral("> "))) format.setForeground(CybouTheme::color(CybouTheme::BRAND_TEAL));
+    if (text == tr("NODE") || text == tr("CHAIN") || text == tr("YOUR DATA") || text == tr("AUTHORITY") || text == tr("UTILITY")) format.setFontWeight(QFont::Bold);
+    cursor.insertText(text.left(8192), format);
+    m_output->setTextCursor(cursor);
     m_output->verticalScrollBar()->setValue(m_output->verticalScrollBar()->maximum());
 }
 
@@ -200,6 +329,12 @@ void CybouConsoleDialog::checkVaultLock()
     m_private_session = active;
     m_authority_session = authority;
     m_account = account;
+    const auto& status = m_model->status();
+    m_scope->setText(tr("%1 · %2 · Height %3 · %4 peers · %5 · Read only")
+        .arg(status.network_name, status.online ? tr("Online") : tr("Offline"))
+        .arg(status.finality_known ? QString::number(status.finalized_height) : tr("Unknown"))
+        .arg(status.peer_count).arg(active ? tr("Own Identity") : tr("Public")));
+    if (m_completer->popup()->isVisible()) completeInput();
 }
 
 void CybouConsoleDialog::executeCommand(const QString& command_line)
@@ -247,10 +382,20 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
     }
     if (cmd == QLatin1String{"help"} || cmd == QLatin1String{"?"}) {
         appendOutput(tr("Available read-only commands:"));
-        for (const auto& entry : commands) {
-            if (entry.private_data && !unlocked) continue;
-            if (entry.authority && !m_model->isNetworkAuthority()) continue;
-            appendOutput(QStringLiteral("  %1 — %2").arg(QLatin1String{entry.syntax}, tr(entry.description)));
+        const QStringList headings{tr("NODE"), tr("CHAIN"), tr("YOUR DATA"), tr("AUTHORITY"), tr("UTILITY")};
+        for (int group = 0; group < headings.size(); ++group) {
+            bool heading = false;
+            for (const auto& entry : commands) {
+                if (entry.private_data && !unlocked) continue;
+                if (entry.authority && !m_model->isNetworkAuthority()) continue;
+                const QString name = QLatin1String{entry.name};
+                const int category = entry.authority ? 3 : entry.private_data ? 2 :
+                    (name == QLatin1String{"help"} || name == QLatin1String{"clear"}) ? 4 :
+                    (name == QLatin1String{"block"} || name == QLatin1String{"op"} || name == QLatin1String{"history"} || name == QLatin1String{"operations"}) ? 1 : 0;
+                if (category != group) continue;
+                if (!heading) { appendOutput(headings[group]); heading = true; }
+                appendOutput(QStringLiteral("  %1 — %2").arg(QLatin1String{entry.syntax}, tr(entry.description)));
+            }
         }
         if (!unlocked) appendOutput(tr("Unlock your Identity for private catalog commands."));
     } else if (cmd == QLatin1String{"status"}) {

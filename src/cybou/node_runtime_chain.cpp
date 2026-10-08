@@ -141,8 +141,14 @@ std::optional<uint64_t> CybouNodeRuntime::PrepareOperationWork(const ProtocolOpe
         nonce = SolveOperationWork(m_network_binding, *op_id, bits);
         if (!nonce) return std::nullopt;
         std::lock_guard lock(m_chain.mutex);
-        if (m_chain.solved_work.size() >= 1024) m_chain.solved_work.erase(m_chain.solved_work.begin());
+        if (!m_chain.solved_work.contains(*op_id)) {
+            m_chain.solved_work_order.push_back(*op_id);
+        }
         m_chain.solved_work[*op_id] = *nonce;
+        while (m_chain.solved_work_order.size() > 1024) {
+            m_chain.solved_work.erase(m_chain.solved_work_order.front());
+            m_chain.solved_work_order.pop_front();
+        }
     }
     return nonce;
 }

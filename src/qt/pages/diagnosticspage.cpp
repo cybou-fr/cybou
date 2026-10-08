@@ -24,6 +24,10 @@
 #include <QTimer>
 #include <QShowEvent>
 #include <QVBoxLayout>
+#include <QTabWidget>
+#include <QSettings>
+#include <QScrollBar>
+#include <QDateTime>
 
 #include <utility>
 
@@ -134,7 +138,9 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, QWidget* parent)
     auto* monitor = new QPushButton{tr("Open Network Monitor"), this};
     monitor->setObjectName(QStringLiteral("networkMonitorButton"));
     connect(monitor, &QPushButton::clicked, this, [this] {
+        if (m_monitor) { m_monitor->show(); m_monitor->raise(); m_monitor->activateWindow(); return; }
         auto* dialog = new QDialog{this};
+        m_monitor = dialog;
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         dialog->setWindowTitle(tr("CYBOU Network Monitor"));
         dialog->resize(1000, 700);
@@ -143,46 +149,82 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, QWidget* parent)
         head->setTextFormat(Qt::PlainText);
         head->setTextInteractionFlags(Qt::TextSelectableByMouse);
         layout->addWidget(head);
-        auto table = [dialog,layout](const QStringList& headings) {
+        auto* toolbar = new QHBoxLayout;
+        auto* pause = new QPushButton{tr("Pause view"), dialog};
+        pause->setObjectName(QStringLiteral("networkMonitorPause"));
+        pause->setCheckable(true);
+        auto* observed = MutedText({}, dialog);
+        toolbar->addWidget(observed, 1); toolbar->addWidget(pause);
+        layout->addLayout(toolbar);
+        auto* tabs = new QTabWidget{dialog};
+        tabs->setObjectName(QStringLiteral("networkMonitorTabs"));
+        layout->addWidget(tabs, 1);
+        auto table = [dialog,tabs](const QStringList& headings, const QString& caption) {
             auto* widget = new QTableWidget{0,static_cast<int>(headings.size()),dialog};
             widget->setHorizontalHeaderLabels(headings);
             widget->setEditTriggers(QAbstractItemView::NoEditTriggers);
             widget->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-            layout->addWidget(widget); return widget;
+            widget->setSelectionBehavior(QAbstractItemView::SelectRows);
+            tabs->addTab(widget, caption); return widget;
         };
-        auto* peers = table({tr("Peer endpoint"),tr("Advertised height"),tr("Lag"),tr("StorageId")});
-        auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")});
-        auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")});
+        auto* peers = table({tr("Peer endpoint"),tr("Advertised height"),tr("Advertised delta (unverified)"),tr("StorageId")}, tr("Peers"));
+        auto* operations = table({tr("OperationID"),tr("Local assessment"),tr("Finalized height")}, tr("Operations"));
+        auto* storage = table({tr("Application object ID"),tr("Content state"),tr("Remote replicas"),tr("Target"),tr("OperationID")}, tr("Own content"));
         peers->setObjectName(QStringLiteral("networkMonitorPeers"));
         operations->setObjectName(QStringLiteral("networkMonitorOperations"));
         storage->setObjectName(QStringLiteral("networkMonitorContent"));
-        auto refresh = [this,head,peers,operations,storage] {
+        auto* timer = new QTimer{dialog}; timer->setSingleShot(true); timer->setInterval(150);
+        auto refresh = [this,head,peers,operations,storage,pause,observed] {
+            const bool active = m_model->status().identity_state == CybouIdentityState::Active;
+            if (!active || storage->property("account").toString() != m_model->status().account_id) storage->setRowCount(0);
+            storage->setProperty("account",m_model->status().account_id);
+            if (pause->isChecked()) return;
+            observed->setText(tr("Local observations · Updated %1 · Up to 256 rows per tab").arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"))));
             const auto& d = m_model->networkDiagnostics();
-            head->setText(tr("%1 | %2 | Height %3 | Safety halt %4\nNetworkID %5\nTip %6\nState root %7")
+            head->setText(tr("%1 | %2 | Height %3 | Safety halt %4\nNetwork binding %5\nTip %6\nState root %7")
                 .arg(m_model->status().network_name, m_model->status().online ? tr("Online") : tr("Offline"))
                 .arg(d.height).arg(d.safety_halted ? tr("YES") : tr("No"))
                 .arg(QString::fromStdString(d.network_binding),QString::fromStdString(d.tip),QString::fromStdString(d.state_root)));
+            for (auto* table : {peers,operations,storage}) {
+                table->setProperty("selectedKey",table->currentRow()>=0 ? table->item(table->currentRow(),0)->text() : QString{});
+                table->setProperty("scroll",table->verticalScrollBar()->value()); table->setProperty("nextRow",0);
+            }
             auto row = [](QTableWidget* table, const QStringList& values) {
-                int r=table->rowCount(); table->insertRow(r);
-                for (int c=0;c<values.size();++c) table->setItem(r,c,new QTableWidgetItem{values[c]});
+                const int r=table->property("nextRow").toInt(); if (r>=256) return;
+                if (r>=table->rowCount()) table->insertRow(r);
+                for (int c=0;c<values.size();++c) {
+                    if (!table->item(r,c)) table->setItem(r,c,new QTableWidgetItem{values[c]});
+                    else if (table->item(r,c)->text()!=values[c]) table->item(r,c)->setText(values[c]);
+                }
+                table->setProperty("nextRow",r+1);
             };
-            peers->setRowCount(0);
             for (const auto& peer : d.peers) row(peers,{QString::fromStdString(peer.endpoint),
                 QString::number(peer.advertised_height),
-                QString::number(d.height > peer.advertised_height ? d.height-peer.advertised_height : 0),QString::fromStdString(peer.storage_id)});
-            operations->setRowCount(0);
+                peer.advertised_height > d.height ? tr("Ahead %1").arg(peer.advertised_height-d.height) : QString::number(d.height-peer.advertised_height),QString::fromStdString(peer.storage_id)});
             const QStringList states{tr("Unknown"),tr("Local pending"),tr("Accepted remotely"),tr("Finalized"),tr("Rejected"),tr("History unavailable")};
             for (const auto& op : d.operations) row(operations,{QString::fromStdString(op.operation_id),
                 op.state < static_cast<unsigned>(states.size()) ? states[op.state] : tr("Unknown"),QString::number(op.finalized_height)});
-            storage->setRowCount(0);
-            for (const auto& file : m_model->fileItems()) if (!file.folder && storage->rowCount()<256)
+            for (const auto& file : m_model->fileItems()) if (active && !file.folder)
                 row(storage,{file.id,CybouProduct::contentStateText(file.state),file.min_remote_replicas < 0 ? tr("Unknown") : QString::number(file.min_remote_replicas),file.remote_replica_target < 0 ? tr("Unknown") : QString::number(file.remote_replica_target),file.operation_id});
-            for (const auto& mail : m_model->mailItems()) if (!mail.draft && storage->rowCount()<256)
+            for (const auto& mail : m_model->mailItems()) if (active && !mail.draft)
                 row(storage,{mail.id,CybouProduct::contentStateText(mail.state),mail.min_remote_replicas < 0 ? tr("Unknown") : QString::number(mail.min_remote_replicas),mail.remote_replica_target < 0 ? tr("Unknown") : QString::number(mail.remote_replica_target),mail.operation_id});
+            for (auto* table : {peers,operations,storage}) {
+                table->setRowCount(table->property("nextRow").toInt()); table->clearSelection(); table->setCurrentItem(nullptr);
+                for (int r=0;r<table->rowCount();++r) if (table->item(r,0)->text()==table->property("selectedKey").toString()) { table->setCurrentCell(r,0); break; }
+                table->verticalScrollBar()->setValue(table->property("scroll").toInt());
+            }
         };
-        connect(m_model,&CybouDesktopModel::statusChanged,dialog,refresh);
-        connect(m_model,&CybouDesktopModel::filesChanged,dialog,refresh);
-        connect(m_model,&CybouDesktopModel::mailChanged,dialog,refresh);
+        auto schedule = [timer,storage,this] {
+            if (m_model->status().identity_state!=CybouIdentityState::Active || storage->property("account").toString()!=m_model->status().account_id) storage->setRowCount(0);
+            if (!timer->isActive()) timer->start();
+        };
+        connect(timer,&QTimer::timeout,dialog,refresh);
+        connect(m_model,&CybouDesktopModel::statusChanged,dialog,schedule);
+        connect(m_model,&CybouDesktopModel::filesChanged,dialog,schedule);
+        connect(m_model,&CybouDesktopModel::mailChanged,dialog,schedule);
+        connect(pause,&QPushButton::toggled,dialog,[refresh,pause](bool paused) { pause->setText(paused ? tr("Resume view") : tr("Pause view")); refresh(); });
+        dialog->restoreGeometry(QSettings{}.value(QStringLiteral("networkMonitor/geometry")).toByteArray());
+        connect(dialog,&QDialog::finished,dialog,[dialog] { QSettings{}.setValue(QStringLiteral("networkMonitor/geometry"),dialog->saveGeometry()); });
         refresh(); dialog->show();
     });
     root->addWidget(monitor, 0, Qt::AlignLeft);
@@ -191,7 +233,9 @@ DiagnosticsPage::DiagnosticsPage(CybouDesktopModel* model, QWidget* parent)
     console_btn->setObjectName(QStringLiteral("readOnlyConsoleButton"));
     console_btn->setCursor(Qt::PointingHandCursor);
     connect(console_btn, &QPushButton::clicked, this, [this] {
+        if (m_console) { m_console->show(); m_console->raise(); m_console->activateWindow(); return; }
         auto* console = new CybouConsoleDialog{m_model, this};
+        m_console = console;
         console->setAttribute(Qt::WA_DeleteOnClose);
         console->show();
     });

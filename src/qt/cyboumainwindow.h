@@ -134,7 +134,6 @@ private:
     void openSearchResult(const QString& kind, const QString& id);
     void submitSearch(const QString& text);
     void setSidebarCompact(bool compact);
-    void runScreenshotHarness(const QString& directory);
 };
 
 #endif // CYBOU_QT_CYBOUMAINWINDOW_H

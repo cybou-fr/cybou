@@ -924,10 +924,36 @@ void CybouShellTests::networkMonitorUsesCoreSnapshot()
     QCOMPARE(peers->item(0,2)->text(),QStringLiteral("3"));
     QCOMPARE(peers->item(0,3)->text(),QStringLiteral("provider"));
     QCOMPARE(operations->item(0,1)->text(),QStringLiteral("Finalized"));
+    peers->setCurrentCell(0,0);
+    auto* retained = peers->item(0,0);
+    snapshot.peers[0].advertised_height = 13;
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_COMPARE(peers->item(0,2)->text(),QStringLiteral("Ahead 1"));
+    QCOMPARE(peers->item(0,0),retained);
+    QCOMPARE(peers->currentRow(),0);
+    monitor->click();
+    QCOMPARE(page.findChildren<QTableWidget*>(QStringLiteral("networkMonitorPeers")).size(),1);
+    auto* pause = page.findChild<QPushButton*>(QStringLiteral("networkMonitorPause"));
+    QVERIFY(pause);
+    pause->click();
+    snapshot.peers[0].advertised_height = 14;
+    model.setNetworkDiagnostics(snapshot);
+    QTest::qWait(200);
+    QCOMPARE(peers->item(0,1)->text(),QStringLiteral("13"));
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("own"),1);
+    CybouFileItem file; file.id=QStringLiteral("private-file");file.name=QStringLiteral("private.txt");
+    model.setFileItems({file});
+    pause->click();
+    auto* content = page.findChild<QTableWidget*>(QStringLiteral("networkMonitorContent"));
+    QTRY_COMPARE(content->rowCount(),1);
+    pause->click();
+    model.setIdentityState(CybouIdentityState::Locked);
+    QCOMPARE(content->rowCount(),0);
+    pause->click();
     snapshot.peers.clear(); snapshot.operations.clear();
     model.setNetworkDiagnostics(snapshot);
-    QCOMPARE(peers->rowCount(),0);
-    QCOMPARE(operations->rowCount(),0);
+    QTRY_COMPARE(peers->rowCount(),0);
+    QTRY_COMPARE(operations->rowCount(),0);
 }
 
 void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
@@ -4327,4 +4353,41 @@ void CybouShellTests::benchmarkReferenceRequiresAcceptedEvidence()
     QVERIFY(!CybouBenchmarkReference::Parse("{}"));
     QVERIFY(!CybouBenchmarkReference::Parse("{\"operations\":3,\"operations_per_s\":1}"));
     QVERIFY(!CybouBenchmarkReference::Parse(QByteArray(1024*1024+1,' ')));
+}
+
+void CybouShellTests::consoleCompletionAndSearchClearOnLock()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("own"),1);
+    CybouFileItem file; file.id=QStringLiteral("private-id");file.name=QStringLiteral("private.txt");
+    model.setFileItems({file});
+    CybouConsoleDialog console{&model};
+    console.show(); console.activateWindow();
+    auto* input=console.findChild<QLineEdit*>(QStringLiteral("consoleInput"));
+    auto* find=console.findChild<QLineEdit*>(QStringLiteral("consoleSearch"));
+    auto* completion=console.findChild<QCompleter*>();
+    QVERIFY(input); QVERIFY(find); QVERIFY(completion);
+    input->setFocus(); input->setText(QStringLiteral("file "));
+    QTest::keyClick(input,Qt::Key_Space,Qt::ControlModifier);
+    QCOMPARE(completion->completionCount(),2);
+    QCOMPARE(console.historyCount(),0); // Suggestions never dispatch a command.
+    completion->popup()->hide();
+    console.executeCommand(QStringLiteral("file private-id"));
+    console.executeCommand(QStringLiteral("file private-id"));
+    input->setFocus();
+    QTest::keyClick(input,Qt::Key_F,Qt::ControlModifier);
+    QVERIFY(find->isVisible());
+    find->setText(QStringLiteral("private-id"));
+    QVERIFY(console.findChild<QPlainTextEdit*>(QStringLiteral("consoleOutput"))->textCursor().hasSelection());
+    model.setIdentityState(CybouIdentityState::Locked);
+    QCOMPARE(console.historyCount(),0);
+    QVERIFY(find->text().isEmpty()); QVERIFY(input->text().isEmpty());
+    QCOMPARE(completion->model()->rowCount(),0);
+    QVERIFY(!console.outputText().contains(QStringLiteral("private-id")));
+    input->setText(QStringLiteral("file "));
+    QTest::keyClick(input,Qt::Key_Space,Qt::ControlModifier);
+    QCOMPARE(completion->completionCount(),0);
+    console.executeCommand(QStringLiteral("status"));
+    input->setFocus(); QTest::keyClick(input,Qt::Key_L,Qt::ControlModifier);
+    QVERIFY(console.outputText().isEmpty()); QCOMPARE(console.historyCount(),0);
 }

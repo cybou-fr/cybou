@@ -60,6 +60,8 @@ add_library(cybou_qt STATIC
   cyboufixturebackend.cpp
   cyboufixturebackend.h
   cyboumainwindow.cpp
+  cybouscreenshotharness.cpp
+  cybouscreenshotharness.h
   cybouactivity.cpp
   cybouactivity.h
   cyboumainwindow.h

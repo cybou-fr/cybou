@@ -621,8 +621,8 @@ std::optional<PublicationService::Staged> PublicationService::Stage(const std::s
             error = "Cannot save staged chunk order"; return fail();
         }
         return staged;
-    } catch (const std::exception&) {
-        error = "Local staging failed";
+    } catch (const std::exception& ex) {
+        error = std::string{"Local staging failed: "} + ex.what();
         return fail();
     }
 
@@ -652,32 +652,36 @@ std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const Publi
             return std::nullopt;
         }
         if (m_runtime.GetOperationStatus(revoke).kind != OperationStatusKind::REJECTED_KNOWN) return target;
-        m_application_db.Erase(REVOKING_KEY); // refused (e.g. window full): try again later
+        (void)m_application_db.Erase(REVOKING_KEY); // refused (e.g. window full): clear transient marker to try again later
         return std::nullopt;
     }
     // Work still on its way may reuse content of a finalized publication (a mail
     // attaching a file): decide only once every own job is finalized.
     const auto all_jobs = Jobs();
+    std::vector<std::pair<std::string, PublicationJob>> loaded_jobs;
+    loaded_jobs.reserve(all_jobs.size());
     for (const auto& job_id : all_jobs) {
-        const auto job = Load(job_id);
-        if (job && job->phase != PublicationJobPhase::SECURING && job->phase != PublicationJobPhase::PROTECTED) {
-            return std::nullopt;
+        auto job = Load(job_id);
+        if (job) {
+            if (job->phase != PublicationJobPhase::SECURING && job->phase != PublicationJobPhase::PROTECTED) {
+                return std::nullopt;
+            }
+            loaded_jobs.emplace_back(job_id, std::move(*job));
         }
     }
 
-    for (const auto& job_id : all_jobs) {
+    for (const auto& [job_id, job] : loaded_jobs) {
         if (job_id.starts_with("bridge-")) continue; // recovery bridges keep restores possible
-        const auto job = Load(job_id);
-        if (!job || job->account_id != *me || job->operation_id.IsNull() ||
-            (job->phase != PublicationJobPhase::SECURING && job->phase != PublicationJobPhase::PROTECTED)) continue;
-        if (!m_runtime.IsPublicationActive(job->operation_id)) {
+        if (job.account_id != *me || job.operation_id.IsNull() ||
+            (job.phase != PublicationJobPhase::SECURING && job.phase != PublicationJobPhase::PROTECTED)) continue;
+        if (!m_runtime.IsPublicationActive(job.operation_id)) {
             ForgetRevokedJob(job_id); // revoked from another device
             continue;
         }
         const auto leaves = LoadLeaves(job_id);
-        if (!leaves || needed(job->operation_id, *leaves)) continue;
+        if (!leaves || needed(job.operation_id, *leaves)) continue;
 
-        const RevokePublicationPayload payload{job->operation_id};
+        const RevokePublicationPayload payload{job.operation_id};
         const auto commitment = ComputeRevokePublicationPayloadCommitment(payload);
         if (!commitment) continue;
         const auto result = m_coordinator.Execute(IdentityOperationKind::REVOKE_PUBLICATION, *commitment,
@@ -685,11 +689,11 @@ std::optional<cybou::Hash256> PublicationService::RevokeUnreferenced(const Publi
                 return ProtocolOperation{AuthorizedRevokePublication{authorization, payload}};
             });
         if (!result) return std::nullopt;
-        std::vector<unsigned char> marker(job->operation_id.begin(), job->operation_id.end());
+        std::vector<unsigned char> marker(job.operation_id.begin(), job.operation_id.end());
         marker.insert(marker.end(), result.op_id.begin(), result.op_id.end());
         marker.insert(marker.end(), job_id.begin(), job_id.end());
         m_application_db.Put(REVOKING_KEY, marker);
-        return job->operation_id;
+        return job.operation_id;
     }
     return std::nullopt;
 }

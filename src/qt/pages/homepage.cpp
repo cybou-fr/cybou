@@ -138,7 +138,9 @@ HomePage::HomePage(CybouDesktopModel* model, std::function<void()> /*diagnostics
     connect(m_model, &CybouDesktopModel::applicationRefreshChanged, this, [this] { refresh(); });
     // Relative activity times age while the window stays open.
     auto* ticker = new QTimer{this};
-    connect(ticker, &QTimer::timeout, this, [this] { refresh(); });
+    connect(ticker, &QTimer::timeout, this, [this] {
+        if (isVisibleTo(window())) refresh();
+    });
     ticker->start(60000);
     refresh();
 }

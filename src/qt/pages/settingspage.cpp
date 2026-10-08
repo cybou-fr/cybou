@@ -277,7 +277,13 @@ SettingsPage::SettingsPage(CybouDesktopModel* model, std::function<void()> diagn
     advanced->addWidget(diagnostics, 0, Qt::AlignLeft);
     root->addStretch();
 
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refresh(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] {
+        const QString data_dir = m_model->status().data_directory;
+        const QString displayed = data_dir.isEmpty() ? tr("Available after node startup") : QDir::toNativeSeparators(data_dir);
+        if (m_data_directory->text() != displayed) {
+            m_data_directory->setText(displayed);
+        }
+    });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refresh(); });
     refresh();
 }

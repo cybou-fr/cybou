@@ -318,16 +318,18 @@ std::optional<std::vector<unsigned char>> EncodeFrame(const Frame& frame)
     if (frame.payload.size() > MAX_FRAME_PAYLOAD ||
         !IsSupportedMessageType(static_cast<uint8_t>(frame.type))) return std::nullopt;
     std::vector<unsigned char> bytes;
-    bytes.resize(HEADER_SIZE);
+    const auto payload_size = frame.payload.size();
+    bytes.resize(HEADER_SIZE + payload_size);
     bytes[0] = 'C';
     bytes[1] = 'Y';
     bytes[2] = 'B';
     bytes[3] = 'P';
     bytes[4] = static_cast<unsigned char>(frame.type);
-    const auto size = static_cast<uint32_t>(frame.payload.size());
+    const auto size = static_cast<uint32_t>(payload_size);
     for (int i = 0; i < 4; ++i) bytes[5 + i] = static_cast<unsigned char>(size >> (8 * i));
-    bytes.reserve(HEADER_SIZE + frame.payload.size());
-    bytes.insert(bytes.end(), frame.payload.begin(), frame.payload.end());
+    if (payload_size > 0) {
+        std::memcpy(bytes.data() + HEADER_SIZE, frame.payload.data(), payload_size);
+    }
     return bytes;
 }
 
@@ -679,11 +681,14 @@ std::vector<unsigned char> StorageProofMessage(const Hello& signer,const Hello& 
 {
     if (tls_exporter.size() != 32) return {};
     constexpr std::string_view DOMAIN{"CYBOU/STORAGE-PROOF"};
-    std::vector<unsigned char> message(DOMAIN.begin(),DOMAIN.end());
+    const auto signer_bytes = EncodeHello(signer);
+    const auto verifier_bytes = EncodeHello(verifier);
+    std::vector<unsigned char> message;
+    message.reserve(DOMAIN.size() + tls_exporter.size() + signer_bytes.size() + verifier_bytes.size());
+    message.insert(message.end(), DOMAIN.begin(), DOMAIN.end());
     message.insert(message.end(), tls_exporter.begin(), tls_exporter.end());
-    const auto signer_bytes=EncodeHello(signer),verifier_bytes=EncodeHello(verifier);
-    message.insert(message.end(),signer_bytes.begin(),signer_bytes.end());
-    message.insert(message.end(),verifier_bytes.begin(),verifier_bytes.end());
+    message.insert(message.end(), signer_bytes.begin(), signer_bytes.end());
+    message.insert(message.end(), verifier_bytes.begin(), verifier_bytes.end());
     return message;
 }
 
@@ -710,7 +715,9 @@ std::optional<StorageId> VerifyStorageProof(const std::span<const unsigned char>
     // `StorageId` коммитит оба публичных ключа под отдельным provider domain,
     // чтобы его нельзя было спутать ни с AccountID, ни с иными 32-байтовыми идентификаторами.
     constexpr std::string_view DOMAIN{"CYBOU/STORAGE-ID"};
-    std::vector<unsigned char> id_input(DOMAIN.begin(), DOMAIN.end());
+    std::vector<unsigned char> id_input;
+    id_input.reserve(DOMAIN.size() + STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
+    id_input.insert(id_input.end(), DOMAIN.begin(), DOMAIN.end());
     id_input.insert(id_input.end(), payload.begin(), payload.begin() + STORAGE_ED25519_KEY + STORAGE_MLDSA_KEY);
     return ComputeBlake3Digest(id_input);
 }

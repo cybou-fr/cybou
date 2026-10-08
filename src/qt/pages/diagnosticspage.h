@@ -6,6 +6,8 @@
 
 #include <QCoreApplication>
 #include <QWidget>
+#include <QPointer>
+class QDialog;
 
 
 class CybouDesktopModel;
@@ -36,6 +38,8 @@ private:
     QVBoxLayout* m_services{nullptr};
 
     QTimer* m_refresh_timer{nullptr};
+    QPointer<QDialog> m_monitor;
+    QPointer<QDialog> m_console;
     void scheduleRefresh();
     void refresh();
 };

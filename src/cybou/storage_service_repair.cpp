@@ -156,9 +156,6 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
             }
         }
     }
-    if (changed && !m_placements->Save(placement)) {
-        return {.state = DurabilityState::NEEDS_ATTENTION, .error = "Cannot save placement state"};
-    }
     result = Summarize(placement);
     if (result.state != DurabilityState::PROTECTED) {
         result.error = content_missing ? "Some encrypted content is temporarily unavailable"

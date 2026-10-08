@@ -12,6 +12,10 @@ class CybouDesktopModel;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
+class QCompleter;
+class QStandardItemModel;
+class QLabel;
+class QCloseEvent;
 
 /**
  * Bounded read-only operator console.
@@ -40,6 +44,7 @@ public:
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     CybouDesktopModel* const m_model;
@@ -47,6 +52,12 @@ private:
     QLineEdit* m_input{nullptr};
     QPushButton* m_run_btn{nullptr};
     QPushButton* m_clear_btn{nullptr};
+    QLabel* m_scope{nullptr};
+    QLineEdit* m_find{nullptr};
+    QWidget* m_find_bar{nullptr};
+    QLabel* m_matches{nullptr};
+    QCompleter* m_completer{nullptr};
+    QStandardItemModel* m_suggestions{nullptr};
     QStringList m_history;
     int m_history_index{-1};
     bool m_private_session{false};
@@ -57,6 +68,8 @@ private:
     void handleRun();
     void appendOutput(const QString& text);
     void checkVaultLock();
+    void completeInput();
+    void findOutput(bool backward = false);
 };
 
 #endif // CYBOU_QT_CYBOUCONSOLEDIALOG_H

@@ -634,6 +634,7 @@ private:
         CybouStateStore store;
         OperationPool operation_pool;
         std::map<cybou::Hash256, uint64_t> solved_work;
+        std::deque<cybou::Hash256> solved_work_order;
         std::unique_ptr<PoaFinalizer> poa_finalizer;
         // Preserve the exact journaled candidate across signing/commit retries.
         BlockProductionStatus production_status{BlockProductionStatus::SIGNER_UNAVAILABLE};

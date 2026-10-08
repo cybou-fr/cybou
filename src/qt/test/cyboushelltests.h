@@ -99,6 +99,7 @@ private Q_SLOTS:
     void authorityExplorerAndEvidenceWorkspace();
     void ownContentInspectorAndBoundedConsole();
     void consoleTranslationsPermissionsAndBounds();
+    void consoleCompletionAndSearchClearOnLock();
     void assuranceLifecycleAndRecoveryGates();
 
 private:

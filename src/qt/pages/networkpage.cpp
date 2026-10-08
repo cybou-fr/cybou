@@ -575,7 +575,10 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { scheduleRefresh(); });
 
     auto* timer = new QTimer{this};
-    connect(timer, &QTimer::timeout, this, &NetworkPage::refresh);
+    connect(timer, &QTimer::timeout, this, [this] {
+        if (isVisibleTo(window())) refresh();
+        else m_stale = true;
+    });
     timer->start(15000);
 
     updateDetails();

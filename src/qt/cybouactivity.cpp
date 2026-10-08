@@ -7,16 +7,128 @@
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 
+#include <cybou/identity_service.h>
+#include <cybou/node_runtime.h>
+#include <cybou/support_mail.h>
+
+#include <QCryptographicHash>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScreen>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cstdlib>
 
 using namespace CybouUi;
+
+namespace {
+void NormalizeActivityIds(QVector<CybouActivityItem>& items)
+{
+    QHash<QString, int> occurrences;
+    for (auto& item : items) {
+        if (item.id.isEmpty()) {
+            const auto digest = [](const QString& text) {
+                return QString::fromLatin1(QCryptographicHash::hash(text.toUtf8(), QCryptographicHash::Sha256).toHex());
+            };
+            item.id = QStringLiteral("event:%1:%2:%3:%4").arg(static_cast<int>(item.kind))
+                .arg(item.time.toMSecsSinceEpoch()).arg(digest(item.title), digest(item.subtitle));
+        }
+        const auto occurrence = occurrences[item.id]++;
+        if (occurrence) item.id += QStringLiteral(":%1").arg(occurrence);
+    }
+}
+} // namespace
+
+QVector<CybouActivityItem> CybouBuildActivityItems(const CybouDesktopModel& model,
+    const QVector<CybouActivityItem>& extra_activity)
+{
+    if (model.fixtureMode()) return {};
+    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouActivity", text); };
+    const auto timed = [](const QDateTime& time) { return time.isValid() && time.toSecsSinceEpoch() > 0; };
+    QVector<CybouActivityItem> items = extra_activity;
+    for (const auto& mail : model.mailItems()) {
+        if (mail.draft || !timed(mail.time)) continue;
+        const QString subject = mail.subject.isEmpty() ? tr("(no subject)") : mail.subject;
+        if (mail.folder == CybouMailFolder::Trash) continue;
+        if (mail.outgoing || mail.folder == CybouMailFolder::Sent) {
+            items.append({CybouActivityKind::MailSent, QString(tr("Mail to %1")).arg(mail.to_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
+        } else if (mail.folder == CybouMailFolder::Inbox || mail.folder == CybouMailFolder::Archive) {
+            items.append({CybouActivityKind::MailReceived, QString(tr("Mail from %1")).arg(mail.from_name), subject, mail.time, QStringLiteral("mail:") + mail.id});
+        }
+    }
+    for (const auto& file : model.fileItems()) {
+        if (file.folder || file.trashed || !timed(file.modified)) continue;
+        items.append({CybouActivityKind::FileUploaded, QString(tr("%1 added to Files")).arg(file.name),
+            CybouProduct::sizeText(file.logical_size), file.modified, QStringLiteral("file:") + file.id});
+    }
+    for (const auto& entry : model.walletEntries()) {
+        if (!timed(entry.time)) continue;
+        const QString amount = cybouAmountText(static_cast<quint64>(std::llabs(entry.amount)));
+        if (entry.kind == CybouWalletEntryKind::Sent) {
+            items.append({CybouActivityKind::PaymentSent, QString(tr("%1 sent")).arg(amount), entry.counterparty_name, entry.time, QStringLiteral("wallet:") + entry.id});
+        } else if (entry.kind == CybouWalletEntryKind::Received) {
+            items.append({CybouActivityKind::PaymentReceived, QString(tr("%1 received")).arg(amount), entry.counterparty_name,
+                entry.time, QStringLiteral("wallet:") + entry.id});
+        }
+    }
+    std::stable_sort(items.begin(), items.end(),
+        [](const CybouActivityItem& a, const CybouActivityItem& b) { return a.time > b.time; });
+    if (items.size() > 20) items.resize(20);
+    NormalizeActivityIds(items);
+    return items;
+}
+
+QVector<CybouContact> CybouBuildContacts(const CybouDesktopModel& model)
+{
+    if (model.fixtureMode()) return {};
+    const auto tr = [](const char* text) { return QCoreApplication::translate("CybouActivity", text); };
+    QHash<QString, QDateTime> last_seen;
+    const auto seen = [&](const QString& raw, const QDateTime& when, const QString& address = QString{}) {
+        QString name = raw.trimmed().toLower();
+        if (name == model.status().primary_name.toLower() || (!address.isEmpty() && address == model.status().account_id)) return;
+        if (!name.endsWith(QStringLiteral(".cybou"))) {
+            name = address.toLower();
+            if (!QRegularExpression{QStringLiteral("^[0-9a-f]{64}$")}.match(name).hasMatch()) return;
+        }
+        auto& latest = last_seen[name];
+        if (!latest.isValid() || (when.isValid() && when > latest)) latest = when;
+    };
+    for (const auto& mail : model.mailItems()) {
+        if (mail.draft) continue;
+        seen(mail.from_name, mail.time, mail.from_address);
+        seen(mail.to_name, mail.time, mail.to_address);
+    }
+    for (const auto& entry : model.walletEntries()) {
+        if (entry.kind == CybouWalletEntryKind::Sent || entry.kind == CybouWalletEntryKind::Received) {
+            seen(entry.counterparty_name, entry.time);
+        }
+    }
+    QVector<QPair<QString, QDateTime>> ordered;
+    for (auto it = last_seen.cbegin(); it != last_seen.cend(); ++it) ordered.append({it.key(), it.value()});
+    std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) {
+        return a.second != b.second ? a.second > b.second : a.first < b.first;
+    });
+    QVector<CybouContact> contacts;
+    bool support_available = false;
+    if (model.identityService()) {
+        const auto loaded = model.identityService()->GetNodeRuntime().GetStore().GetStateSnapshot();
+        support_available = loaded && loaded.state && cybou::SupportAccount(*loaded.state).has_value();
+    }
+    const QString support = CybouDesktopModel::supportName();
+    if (support_available && model.status().primary_name.toLower() != support) {
+        contacts.append({tr("CYBOU Support"), support, true});
+    }
+    for (const auto& [name, when] : ordered) {
+        if (name != support) {
+            contacts.append({name.endsWith(QStringLiteral(".cybou")) ? name.chopped(6) : CybouProduct::shortId(name), name, true});
+        }
+    }
+    return contacts;
+}
 
 QVector<CybouActivityOperation> CybouActivityOperations(const CybouDesktopModel& model)
 {
