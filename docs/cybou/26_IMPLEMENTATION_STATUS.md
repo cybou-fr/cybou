@@ -3,6 +3,34 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Standalone observation exchange guard (2026-10-08)
+
+`p2p::ObservationExchange` implements DEC-289 pending-request and abuse controls
+without socket I/O or runtime call sites. Fresh challenges use OpenSSL's CSPRNG;
+acceptance requires the supplied admitted same-network local session context and
+its exact outstanding challenge. Accepted challenges are erased; wrong-session,
+foreign-network, wrong-challenge, duplicate and late replies produce no report.
+Malformed payloads throw codec errors for future protocol-abuse handling.
+
+Bounds: four pending requests, one per session, five-second deadline (expired
+at the deadline); per-IP send/serve cooldowns of 30 seconds; rolling global
+16-send/32-serve limits per 30 seconds; 128 shared IP entries with 90-second
+inactivity expiry, refusing new addresses rather than evicting live cooldowns.
+IPv4-mapped addresses normalize to IPv4. Closing a session removes its pending
+challenge while preserving IP cooldowns. Backwards time refuses work without
+refunding budgets. A mutex encapsulates concurrent guard access; CSPRNG and
+payload decoding occur outside it. No accepted-report cache, raw logs, persistent
+session/reporter identity, role, StorageId or PoA data is added.
+
+Tests cover HELLO/network/session/challenge mismatch, malformed/duplicate/late
+replies, fresh next challenges, exact deadlines, reconnect cooldown, mapped IP,
+pending/global/128-address bounds, rolling-window edges, expiry, backwards time
+and concurrent admission. New guard, codec/cache and existing P2P tests pass;
+desktop/core binaries rebuild. No live transport, collector wiring, polling,
+fairness/overhead/interop evidence, remote UI or deployment is claimed. The
+future transaction scheduler must own handles, disconnect/expiry and socket I/O.
+Current message codes still end at 26; upgrade/governance gates remain open.
+
 ## Narrow background observation cache (2026-10-08)
 
 Every runtime now owns a five-second background collector and one fixed 191-byte

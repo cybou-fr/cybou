@@ -118,6 +118,7 @@ add_library(cybou_node STATIC
   cybou/process_cpu.cpp
   cybou/observation_report.cpp
   cybou/observation_cache.cpp
+  cybou/p2p/observation_exchange.cpp
   cybou/node_runtime_observation.cpp
   cybou/node_runtime_network.cpp
   cybou/node_runtime_provider.cpp

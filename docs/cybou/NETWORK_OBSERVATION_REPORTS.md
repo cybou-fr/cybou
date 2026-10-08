@@ -3,7 +3,8 @@
 Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
 Strict standalone request/reply payload codecs are implemented and tested.
 The narrow runtime-owned cache refreshes independently every five seconds.
-Session acceptance, transport and remote display remain unimplemented;
+The standalone exchange guard implements pending challenges and rate limits.
+Live session wiring, transport and remote display remain unimplemented;
 no observation polling is deployed. The running P2P baseline ends at message 26.
 This document freezes the first direct-report contract, not a global census,
 relayed telemetry design or a compliance claim. It follows
@@ -137,6 +138,25 @@ Fresh challenges prevent delivery replay across sessions/requests. They do not
 prevent a dishonest endpoint from attaching old or fabricated measurements to
 a fresh challenge. Cache age and every resource value remain declarations.
 No new signatures, exporter construction or cryptographic domains are needed.
+
+Implemented helper: `p2p::ObservationExchange` issues CSPRNG challenges, validates
+the local admitted-HELLO/network context, consumes a reply only for its exact
+pending session/challenge, and expires it at the five-second deadline. Malformed
+payloads follow codec exceptions; valid mismatches return no report. It retains
+at most four pending challenges, 128 shared numeric-address budget entries, and
+16/32 send/serve timestamps in rolling 30-second windows. IPv4-mapped addresses
+normalize to IPv4; ports are absent. Session close removes its challenge without
+refunding the address cooldown; unused address metadata expires after 90 seconds.
+Clock regression refuses work without resetting budgets. No accepted report,
+raw payload/address log or persistent identifier is retained by this helper.
+
+This is not a live P2P handler: callers must use the actual socket address, assign
+nonrecycled local live-session handles, close them on teardown, run expiry from
+the scheduler and invoke I/O only through the existing transaction owner. These
+local handles are not network identities and never enter the payload. The guard
+does not prove admission or truthful measurements independently of its caller.
+Codes 27/28 and polling remain disabled; busy-session fairness, callback wiring,
+mixed-software upgrade and transport acceptance remain implementation work.
 
 ## Grouping, expiry and consolidation
 

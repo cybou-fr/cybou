@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 100 | 9ab20b1138313a5a |
 | docs/cybou/24_DECISIONS.md | 229 | d0e8669d1a35ba5f |
 | docs/cybou/25_OPEN_QUESTIONS.md | 134 | 684d6237165d5200 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1583 | 8c7f032ce988a1fc |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1611 | 3afd7c8bd9240bc7 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -74,8 +74,8 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
 | docs/cybou/NETWORK_AND_ADVANCED_UX.md | 382 | 761293abc29cc34d |
-| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 248 | 4ab3b1dc99c219ae |
-| docs/cybou/NETWORK_OBSERVATION_REPORTS.md | 224 | c73478c838013a7a |
+| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 248 | 056a212b47b0e0ba |
+| docs/cybou/NETWORK_OBSERVATION_REPORTS.md | 244 | 75fae4c2397eac7f |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 80 | ff21737a8991696a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
