@@ -475,6 +475,18 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_observed_coverage->setObjectName(QStringLiteral("networkObservedCoverage"));
     observed_layout->addWidget(m_observed_coverage);
     overview_layout->addWidget(observed);
+    auto* remote_history = Card(overview);
+    auto* remote_layout = new QVBoxLayout{remote_history};
+    remote_layout->addWidget(SectionTitle(tr("Reporting group history"), remote_history));
+    m_remote_storage_chart = new CybouObservationChart{tr("Declared storage history"), tr("Declared capacity"), tr("Stored copies"), tr("GiB"), 1.0 / (uint64_t{1} << 30), remote_history};
+    m_remote_storage_chart->setObjectName(QStringLiteral("networkRemoteStorageChart"));
+    m_remote_traffic_chart = new CybouObservationChart{tr("Reported frame traffic history"), tr("Received"), tr("Sent"), tr("B/s"), 1, remote_history};
+    m_remote_traffic_chart->setObjectName(QStringLiteral("networkRemoteTrafficChart"));
+    m_remote_cpu_chart = new CybouObservationChart{tr("Reported CPU history"), tr("Reported process CPU mean"), {}, QStringLiteral("%"), 1, remote_history};
+    m_remote_cpu_chart->setObjectName(QStringLiteral("networkRemoteCpuChart"));
+    for (auto* chart : {m_remote_storage_chart, m_remote_traffic_chart, m_remote_cpu_chart}) remote_layout->addWidget(chart);
+    remote_layout->addWidget(MutedText(tr("Partial declarations · snapshots about every 5 seconds · up to 15 minutes in RAM · gaps and cohort changes break lines. Traffic uses declared 60-second windows; CPU keeps its reported window. No network ceiling or host census."), remote_history));
+    overview_layout->addWidget(remote_history);
     auto* traffic_history = Card(overview);
     auto* traffic_history_layout = new QVBoxLayout{traffic_history};
     traffic_history_layout->addWidget(SectionTitle(tr("Traffic history"), traffic_history));
@@ -815,6 +827,12 @@ void NetworkPage::refresh()
     m_metric_memory->setText(measured && diag.process_resident_bytes ?
         CybouProduct::sizeText(*diag.process_resident_bytes) : tr("Unknown"));
     m_metric_memory_sub->setText(tr("Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages"));
+    const auto* remote = diag.network_observation.get();
+    const bool history_matches = remote && cybou::Hash256{remote->network_binding}.GetHex() == diag.network_binding;
+    const auto points = history_matches ? remote->remote_history : std::vector<cybou::NetworkObservationPoint>{};
+    m_remote_storage_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::STORAGE);
+    m_remote_traffic_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::TRAFFIC);
+    m_remote_cpu_chart->setRemoteHistory(points, CybouObservationChart::RemoteMetric::CPU);
     m_traffic_chart->setHistory(measured ? diag.traffic.history : std::vector<cybou::ObservationPoint>{});
     m_finalization_chart->setHistory(measured && diag.initialized ? diag.finalization.history : std::vector<cybou::ObservationPoint>{});
     const auto& finalization = diag.finalization.windows.front();

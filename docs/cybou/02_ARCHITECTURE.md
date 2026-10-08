@@ -220,7 +220,8 @@ rounding, replay/expiry, grouping, aggregation and acceptance for the first dire
 report target. Payload codec, local cache, runtime guard and direct TLS transaction
 and runtime-owned bounded grouping/declared-resource totals, close/expiry hooks
 and immutable address-free snapshots and Network/Console partial summary cards
-are implemented; automatic polling and remote cohort charts remain targets.
+and bounded remote gauge history/cohort charts are implemented; automatic
+polling remains a target.
 Source P2P ends at message 28; deployed upgrade and governing privacy/security
 review gates remain. Relayed
 reports, cross-address deduplication and global census remain open.

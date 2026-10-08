@@ -50,6 +50,7 @@ namespace cybou {
 class ObservationCollector;
 struct ObservationReport;
 struct NetworkObservationSnapshot;
+class NetworkObservationHistory;
 namespace p2p { class PeerAdmissionPolicy; class PeerManager; class StorageSessionPool; class ObservationExchange; class ObservationGroups; }
 class StorageIoScheduler;
 class CybouKeyStore;
@@ -716,6 +717,7 @@ private:
     cybou::Hash256 m_network_binding;
     std::shared_ptr<p2p::ObservationExchange> m_observation_exchange;
     std::shared_ptr<p2p::ObservationGroups> m_observation_groups;
+    std::unique_ptr<NetworkObservationHistory> m_network_observation_history;
     // Reverse destruction order closes peers before provider/chain storage.
     ChainCore m_chain;
     ProviderCore m_provider;

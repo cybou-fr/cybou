@@ -7,6 +7,13 @@
     <message><source>Interval ending at %1 s · %2: %3 %4 · %5: %6 %4</source><translation>Intervalle se terminant à %1 s · %2 : %3 %4 · %5 : %6 %4</translation></message>
     <message><source>%1 min</source><translation>%1 min</translation></message>
     <message><source>Latest</source><translation>Récent</translation></message>
+<message><source>%1 contributors · fresh %2 / %3 · missing %4 · oldest receipt %5 ms · cohort %6</source><translation>%1 contributeurs · récents %2 / %3 · manquants %4 · réception la plus ancienne %5 ms · groupe %6</translation></message>
+<message><source> · CPU windows %1–%2 ms · ages %3–%4 ms</source><translation> · fenêtres CPU %1–%2 ms · âges %3–%4 ms</translation></message>
+<message><source>Unknown — invalid collection clock</source><translation>Inconnu — horloge de collecte invalide</translation></message>
+<message><source>Unknown — no reported samples</source><translation>Inconnu — aucun échantillon déclaré</translation></message>
+<message><source>Sample at %1 s · %2: %3 %4</source><translation>Échantillon à %1 s · %2 : %3 %4</translation></message>
+<message><source> · %1: %2 %3</source><translation> · %1 : %2 %3</translation></message>
+<message><source>Unknown</source><translation>Inconnu</translation></message>
 </context>
 <context>
     <name>CybouActivity</name>
@@ -5249,6 +5256,13 @@ SHA-256 du générateur de charge : %10
 <message><source>Declared capacity</source><translation>Capacité déclarée</translation></message>
 <message><source>Observed CYBOU frame traffic</source><translation>Trafic des trames CYBOU observé</translation></message>
 <message><source>Reported process CPU mean</source><translation>CPU moyen des processus déclaré</translation></message>
+<message><source>Reporting group history</source><translation>Historique des groupes déclarants</translation></message>
+<message><source>Declared storage history</source><translation>Historique du stockage déclaré</translation></message>
+<message><source>Stored copies</source><translation>Copies stockées</translation></message>
+<message><source>GiB</source><translation>Gio</translation></message>
+<message><source>Reported frame traffic history</source><translation>Historique du trafic de trames déclaré</translation></message>
+<message><source>Reported CPU history</source><translation>Historique du CPU déclaré</translation></message>
+<message><source>Partial declarations · snapshots about every 5 seconds · up to 15 minutes in RAM · gaps and cohort changes break lines. Traffic uses declared 60-second windows; CPU keeps its reported window. No network ceiling or host census.</source><translation>Déclarations partielles · instantanés environ toutes les 5 secondes · jusqu’à 15 minutes en RAM · lacunes et changements de groupe interrompent les courbes. Trafic sur fenêtres déclarées de 60 secondes ; CPU selon sa fenêtre déclarée. Aucun plafond réseau ni recensement des hôtes.</translation></message>
 </context>
 <context>
     <name>OnboardingView</name>

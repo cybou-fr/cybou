@@ -21,12 +21,13 @@ std::shared_ptr<const NetworkObservationSnapshot> CybouNodeRuntime::GetNetworkOb
     const auto local = DecodeObservationReport(ReadObservationReport({}));
     snapshot->local = {true, 0, local.cache_age_ms, local.cursor, local.storage, local.traffic, local.cpu, local.memory};
     snapshot->remote = m_observation_groups->Snapshot();
+    snapshot->remote_history = m_network_observation_history->Snapshot();
     return snapshot;
 }
 ObservationReport CybouNodeRuntime::CollectObservationReport() const
 {
     m_observation_exchange->Expire();
-    m_observation_groups->Expire();
+    m_network_observation_history->Observe(m_observation_groups->Snapshot());
     ObservationReport r;
     {
         // Contended chain work reduces coverage instead of delaying the sampler.

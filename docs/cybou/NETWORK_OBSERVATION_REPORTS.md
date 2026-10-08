@@ -7,7 +7,8 @@ The runtime exchange guard and direct TLS request/reply transaction are implemen
 The runtime-owned bounded address-group store, session close/expiry wiring and
 immutable address-free consolidated snapshot are implemented.
 Network/Console partial-coverage summary cards are implemented.
-Automatic polling and remote cohort charts remain unimplemented;
+Runtime bounded remote history and Network cohort charts are implemented.
+Automatic polling remains unimplemented;
 no observation exchange is deployed. The source P2P baseline ends at message 28;
 older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
@@ -224,7 +225,7 @@ sample immediately; report receipt and metadata inactivity expire at 90 seconds.
 CPU mean age advances on read and expires independently. Local loopbacks collapse
 and are excluded from all remote totals. Snapshots contain no address/handle/
 challenge/binding/row ID; a volatile cohort revision marks selection and known-
-contributor changes for future charts. Checked sums, matched storage denominators,
+contributor changes for cohort chart segments. Checked sums, matched storage denominators,
 separate traffic directions and counted arithmetic CPU means follow the rules
 above; zero, missing and overflow remain distinct. The component does not verify
 measurement truth or perform network I/O.
@@ -251,8 +252,23 @@ ages and missing/limited coverage. Foreign-network/invalid-clock snapshots displ
 Unknown; absence and overflow never become zero. Snapshot monotonic capture age
 advances displayed receipt/CPU ages; if background delivery stalls past a report
 expiry, the stale aggregate becomes Unknown rather than retaining frozen values. No endpoint labels, memory/disk
-sums or throughput ceiling. Remote cohort chart segmentation and scheduled
-acquisition remain unconnected.
+sums or throughput ceiling.
+
+The existing runtime collector samples the group snapshot about every five seconds
+into at most 180 gauge points spanning at most 15 minutes. Sampling is independent
+of page visibility; no catch-up/backfill, extra collector, I/O, disk history or
+reporter identifiers. Unknown remains absent; exact aggregate byte fields and
+per-metric counts/window/age metadata retain their meaning. Frame rates are still
+declared 60-second measurements and CPU means keep their reported windows, not
+five-second averages. Clock regression clears history; restart/network replacement
+creates an empty ring. Reads expire old history without adding samples.
+
+Network charts show declared capacity/stored copies, separate frame directions
+and reported process CPU means. Lines break on volatile cohort changes, unknown
+values and missed sampling spans; real elapsed times keep gaps visible. Point
+selection exposes counts and ages through keyboard/mouse and accessible text.
+No operation/memory/disk sums or potential ceiling. Scheduled acquisition remains
+unconnected; charts cannot manufacture reporting coverage.
 
 ## Acceptance and release gates
 
@@ -279,8 +295,7 @@ partial known subsets, weighted utilization, receive/send separation, membership
 changes and no sum of memory/disk/chain streams. Verify locked/headless collection,
 minimal logs and absence of Identity/PoA/content identifiers in serialized data.
 
-Next bounded packages: remote cohort chart segments; then
-low-priority idle-session polling with the two-second owner deadline. Codec,
+Next bounded packages: low-priority idle-session polling with the two-second owner deadline. Codec,
 cache, guarded direct TLS and standalone address-group totals are implemented.
 Auto polling waits for coordinated deployed-software acceptance. No extra wire
 fields or persistent observation history are part of this sequence.

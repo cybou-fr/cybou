@@ -52,10 +52,42 @@ BOOST_AUTO_TEST_CASE(observation_cache_refreshes_without_identity_gui_or_diagnos
     BOOST_CHECK(!report.traffic.known && !report.cpu.known); // complete windows have not elapsed
     const auto snapshot = runtime.GetNetworkObservation();
     BOOST_CHECK(snapshot->local.cursor.known && snapshot->local.storage.known);
+    BOOST_CHECK(!snapshot->remote_history.empty()); // background samples before any GUI read
     BOOST_CHECK_EQUAL(snapshot->local.storage.capacity_bytes, report.storage.capacity_bytes);
     BOOST_CHECK_EQUAL(snapshot->remote.fresh_remote_groups, 0U);
     BOOST_CHECK(report.challenge == nonce);
     BOOST_CHECK(cybou::Hash256{report.network_binding} == runtime.GetNetworkBinding());
+}
+
+BOOST_AUTO_TEST_CASE(remote_history_preserves_gaps_cohorts_and_bounded_retention)
+{
+    using Clock = cybou::NetworkObservationHistory::Clock;
+    const auto start = Clock::time_point{};
+    cybou::NetworkObservationHistory history{start};
+    cybou::p2p::ObservationGroupSnapshot group; group.cohort_revision = 1;
+    group.storage.capacity_bytes = 0; group.storage.contributors = 1;
+    history.Observe(group, start);
+    history.Observe(group, start + std::chrono::seconds{1});
+    auto first = history.Snapshot(start + std::chrono::seconds{1});
+    BOOST_REQUIRE_EQUAL(first.size(), 1U); BOOST_REQUIRE(first[0].storage.capacity_bytes);
+    BOOST_CHECK_EQUAL(*first[0].storage.capacity_bytes, 0U);
+    group.cohort_revision = 2; group.storage.capacity_bytes.reset();
+    history.Observe(group, start + std::chrono::seconds{5});
+    group.storage.capacity_bytes = 17;
+    history.Observe(group, start + std::chrono::seconds{20}); // no catch-up samples
+    const auto gap = history.Snapshot(start + std::chrono::seconds{20});
+    BOOST_REQUIRE_EQUAL(gap.size(), 3U);
+    BOOST_CHECK(!gap[1].storage.capacity_bytes); BOOST_CHECK_EQUAL(gap[2].end_elapsed_ms, 20000U);
+    BOOST_CHECK_EQUAL(gap[0].cohort_revision, 1U); BOOST_CHECK_EQUAL(gap[2].cohort_revision, 2U);
+    BOOST_REQUIRE(first[0].storage.capacity_bytes); // returned snapshot remains immutable
+    for (int n = 5; n <= 200; ++n) history.Observe(group, start + std::chrono::seconds{n * 5});
+    const auto bounded = history.Snapshot(start + std::chrono::seconds{1000});
+    BOOST_CHECK_LE(bounded.size(), 180U);
+    BOOST_CHECK(history.Snapshot(start + std::chrono::seconds{1900}).empty());
+    history.Observe(group, start + std::chrono::seconds{1900});
+    BOOST_CHECK(history.Snapshot(start + std::chrono::seconds{1899}).empty());
+    history.Observe(group, start + std::chrono::seconds{1900});
+    BOOST_REQUIRE_EQUAL(history.Snapshot(start + std::chrono::seconds{1900}).size(), 1U);
 }
 
 BOOST_AUTO_TEST_CASE(network_observation_snapshot_is_immutable_and_runtime_scoped)

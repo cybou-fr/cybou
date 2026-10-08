@@ -12,6 +12,7 @@
 #include <cybou/observation_cache.h>
 #include <cybou/p2p/observation_exchange.h>
 #include <cybou/p2p/observation_groups.h>
+#include <cybou/network_observation_history.h>
 #include <stdexcept>
 #include <algorithm>
 
@@ -59,6 +60,7 @@ CybouNodeRuntime::CybouNodeRuntime(NodeRuntimeConfig config)
     std::copy(m_network_binding.begin(), m_network_binding.end(), binding.begin());
     m_observation_exchange = std::make_shared<p2p::ObservationExchange>(binding);
     m_observation_groups = std::make_shared<p2p::ObservationGroups>(binding);
+    m_network_observation_history = std::make_unique<NetworkObservationHistory>();
     m_observation_collector = std::make_unique<ObservationCollector>(binding, [this] { return CollectObservationReport(); });
 }
 

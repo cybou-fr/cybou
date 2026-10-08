@@ -3,6 +3,42 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Bounded reporting cohort charts (2026-10-09)
+
+The existing background observation worker now samples accepted address-group
+aggregates about every five seconds into a runtime-owned ring, at most 180
+points and 15 minutes. Points are gauges retaining checked storage bytes,
+separate declared frame rates, normalized process CPU mean/window/ages, metric
+contributor counts, fresh/selected/missing groups and volatile cohort revision.
+No addresses, handles, challenges, stable reporter IDs or per-user data are kept.
+Unknown stays absent; no zero fill, interpolation/backfill or synchronous GUI
+sampling. History expires on reads, resets on backwards clock and starts empty
+on runtime replacement. Its clocks are sampled inside the short mutex.
+
+Network Advanced renders declared capacity/stored copies (GiB), received/sent
+frames (B/s) and process CPU means (%). Native chart paths break at cohort
+changes, unknown values and missed sampling spans; actual elapsed time preserves
+gaps. Keyboard/mouse selection and accessible descriptions expose point scope,
+counts, receipt age and CPU windows/ages in EN/FR. All-unknown history remains
+Unknown rather than drawing a guessed numeric range. Existing local traffic
+and canonical operation charts retain their original interval semantics.
+
+Validation: desktop/core/Qt binaries rebuild; all 33 focused core cases pass
+(groups 8, runtime 25), and full Qt passes 94 cases. Tests cover known zero versus
+absence, sampling cadence without catch-up, cohort metadata, retention expiry,
+backwards-clock reset, immutable snapshots and collection before GUI reads.
+Native chart regression checks discontinuities, keyboard point selection,
+Unknown gaps and clearing. Its offscreen PNG was inspected for visible breaks
+and readable labels; this is one fixture render, not physical screen/live-network
+acceptance. Existing local chart and EN/FR regressions pass. Manifest and
+whitespace checks pass.
+
+These are snapshots of declarations, not five-second throughput/CPU averages,
+unique content, network census or capacity ceilings. Collection continues with
+the page hidden; restart clears RAM history. No persistence/export, additional
+wire fields, network I/O, PoA/signer change or deployment. Automatic polling is
+still pending, so no live remote coverage is claimed.
+
 ## Network/Console partial reporting summary (2026-10-08)
 
 Diagnostics now carry the immutable NetworkObservationSnapshot through the existing

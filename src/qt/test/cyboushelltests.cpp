@@ -1,3 +1,4 @@
+#include <qt/cybouobservationchart.h>
 #include <qt/networkobservationtext.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
@@ -1133,6 +1134,29 @@ void CybouShellTests::filesNavigationAndViews()
     QVERIFY(model->fileItem(uploaded)->available_offline); // the uploading device keeps its copy
     QCOMPARE(model->fileItem(uploaded)->state, CybouContentState::Local);
     QCOMPARE(model->fileItem(uploaded)->logical_size, quint64{5});
+}
+
+void CybouShellTests::remoteObservationChartsBreakAtGapsAndCohorts()
+{
+    CybouObservationChart chart{QStringLiteral("Reported traffic"), QStringLiteral("Received"), QStringLiteral("Sent"), QStringLiteral("B/s"), 1, nullptr};
+    std::vector<cybou::NetworkObservationPoint> points(5);
+    for (size_t n = 0; n < points.size(); ++n) {
+        points[n].end_elapsed_ms = (n + 1) * 5000; points[n].cohort_revision = n < 2 ? 1 : 2;
+        points[n].traffic.received_bytes_per_second = 0; points[n].traffic.sent_bytes_per_second = 10;
+    }
+    points[3].traffic = {}; points[4].end_elapsed_ms = 40000;
+    chart.setRemoteHistory(points, CybouObservationChart::RemoteMetric::TRAFFIC);
+    QCOMPARE(chart.property("sampleCount").toInt(), 5);
+    QCOMPARE(chart.property("segmentCount").toInt(), 3);
+    chart.resize(780, 260); chart.show(); chart.setFocus(); QTest::keyClick(&chart, Qt::Key_Home);
+    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Received: ") + QLocale{}.toString(0.0, 'f', 1)));
+    QTest::keyClick(&chart, Qt::Key_Right); QTest::keyClick(&chart, Qt::Key_Right); QTest::keyClick(&chart, Qt::Key_Right);
+    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Unknown")));
+    QVERIFY(!chart.grab().isNull());
+    if (const auto path = qEnvironmentVariable("CYBOU_CHART_CAPTURE"); !path.isEmpty()) QVERIFY(chart.grab().save(path));
+    chart.setRemoteHistory({}, CybouObservationChart::RemoteMetric::TRAFFIC);
+    QCOMPARE(chart.property("sampleCount").toInt(), 0);
+    QVERIFY(chart.accessibleDescription().contains(QStringLiteral("Unknown")));
 }
 
 void CybouShellTests::networkObservationCardsKeepPartialScope()
