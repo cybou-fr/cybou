@@ -117,3 +117,26 @@ remain open. This ring is not the proposed 24-hour history collector.
 
 Existing CI and Beta acceptance gates remain. Work in bounded packages;
 collector preparation does not require a live load test or signer restart.
+
+### O1 finalized-operation windows (2026-10-08)
+
+Successful canonical commits now feed a fixed 901-slot one-second ring for
+1/5/15-minute windows. Counts are operations, not block-height deltas. Local
+production and direct accepted announcements form the observed series;
+historical batch sync/default imports form a separate history series. Only
+successful commits count, so repeated/rejected blocks do not increase totals.
+A replacement at an existing height resets all operation windows and totals;
+restart starts new measurements. Empty blocks add zero operations.
+
+Network Advanced displays one-minute observed finalized op/min; `metrics`
+exposes all three windows, local-production contribution, history import counts
+and totals since observation reset. Incomplete windows are Unknown. Complete
+idle local windows can be zero without claiming global network inactivity.
+Current partial seconds are excluded; collection uses the existing chain lock
+and does not scan stored blocks or depend on GUI visibility.
+
+Blocks contain no creation timestamp. Arrival-time announcements can be delayed
+old blocks; their classification is local provenance, not a freshness proof.
+These rates must not be relabeled network production speed or potential ceiling.
+The current retained ring supports rate windows; historical charts/export,
+network availability coverage and broader consolidation remain open.

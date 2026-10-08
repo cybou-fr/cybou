@@ -468,6 +468,7 @@ std::optional<FinalizedBlock> CybouNodeRuntime::ProduceBlock(const bool sync)
             return std::nullopt;
         }
         if (!m_chain.store.CommitFinalizedBlock(*m_chain.production_finalized, sync)) return std::nullopt;
+        m_chain.finalization_observations.Record(m_chain.production_finalized->block.operations.size(), BlockObservation::LOCAL_PRODUCTION);
         auto finalized = std::move(*m_chain.production_finalized);
         m_chain.production_candidate.reset();
         m_chain.production_finalized.reset();
@@ -519,7 +520,7 @@ bool CybouNodeRuntime::IsPoaSignerActive() const
     return m_chain.poa_finalizer && m_chain.poa_finalizer->SignerEnabled();
 }
 
-BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync)
+BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block, const bool sync, const BlockObservation observation)
 {
     std::lock_guard lock(m_chain.mutex);
     const auto loaded = m_chain.store.GetStateSnapshot();
@@ -529,8 +530,11 @@ BlockTransitionResult CybouNodeRuntime::CommitBlock(const FinalizedBlock& block,
     if (loaded.error != StateLoadError::NONE || !bool(loaded.state)) {
         return BlockTransitionResult{.error = BlockTransitionError::STATE_NOT_INITIALIZED};
     }
+    const auto previous_height = m_chain.store.GetFinalizedHeight().value_or(0);
     const auto result = m_chain.store.CommitFinalizedBlock(block, sync);
     if (result) {
+        if (block.block.height <= previous_height) m_chain.finalization_observations.Reset();
+        else m_chain.finalization_observations.Record(block.block.operations.size(), observation);
         EmitFinalizedEvents(block, false);
         RevalidateCandidates();
     }

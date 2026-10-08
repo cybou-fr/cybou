@@ -12,7 +12,9 @@ The Central Authority executes candidate operations independently from its
 desktop, trusts no peer state, and publishes finalized blocks.
 
 Every full node independently checks certificate signatures, height, parent,
-timestamp, operation execution and deterministic state root. A signature alone
+operation execution and deterministic state root. The current block has no
+creation timestamp; local arrival time cannot prove production time or global
+freshness. A signature alone
 never validates an invalid transition.
 
 ## Certificate

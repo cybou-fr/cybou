@@ -76,6 +76,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
     {
         std::lock_guard lock{m_chain.mutex};
         snapshot.pending_operations = m_chain.operation_pool.Size();
+        snapshot.finalization = m_chain.finalization_observations.Snapshot();
         snapshot.pending_operation_bytes = m_chain.operation_pool.Bytes();
         snapshot.operations.reserve(m_chain.recent_operation_status_order.size());
         for (const auto& id : m_chain.recent_operation_status_order) {

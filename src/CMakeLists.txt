@@ -113,6 +113,7 @@ add_library(cybou_node STATIC
   cybou/wallet_service.cpp
   cybou/node_runtime.cpp
   cybou/node_runtime_chain.cpp
+  cybou/finalization_meter.cpp
   cybou/node_runtime_network.cpp
   cybou/node_runtime_provider.cpp
   cybou/node_service.h

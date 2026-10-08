@@ -26,6 +26,38 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(finalization_observation_windows_separate_history_and_reset)
+{
+    using Clock = cybou::FinalizationMeter::Clock;
+    const auto start = Clock::time_point{};
+    cybou::FinalizationMeter meter{start};
+    meter.Record(3, cybou::BlockObservation::LOCAL_PRODUCTION, start);
+    meter.Record(2, cybou::BlockObservation::ANNOUNCEMENT, start + std::chrono::seconds{59});
+    meter.Record(1000, cybou::BlockObservation::HISTORY, start);
+    BOOST_CHECK(!meter.Snapshot(start + std::chrono::seconds{59}).windows[0].complete);
+    const auto minute = meter.Snapshot(start + std::chrono::seconds{60});
+    BOOST_CHECK(minute.windows[0].complete);
+    BOOST_CHECK_EQUAL(minute.windows[0].observed_operations, 5U);
+    BOOST_CHECK_EQUAL(minute.windows[0].local_produced_operations, 3U);
+    BOOST_CHECK_EQUAL(minute.windows[0].history_operations, 1000U);
+    BOOST_CHECK(!minute.windows[1].complete);
+    meter.Record(1, cybou::BlockObservation::ANNOUNCEMENT, start + std::chrono::seconds{60});
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{60}).windows[0].observed_operations, 5U);
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{61}).windows[0].observed_operations, 3U);
+    const auto five = meter.Snapshot(start + std::chrono::seconds{300});
+    BOOST_CHECK(five.windows[1].complete);
+    BOOST_CHECK_EQUAL(five.windows[0].observed_operations, 0U);
+    BOOST_CHECK_EQUAL(five.windows[1].observed_operations, 6U);
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{900}).windows[2].observed_operations, 6U);
+    meter.Record(7, cybou::BlockObservation::ANNOUNCEMENT, start + std::chrono::seconds{901});
+    BOOST_CHECK_EQUAL(meter.Snapshot(start + std::chrono::seconds{902}).windows[2].observed_operations, 10U);
+    meter.Reset(start + std::chrono::seconds{902});
+    const auto reset = meter.Snapshot(start + std::chrono::seconds{902});
+    BOOST_CHECK(!reset.windows[0].complete);
+    BOOST_CHECK_EQUAL(reset.observed_total, 0U);
+    BOOST_CHECK_EQUAL(reset.history_total, 0U);
+}
+
 BOOST_AUTO_TEST_CASE(passive_traffic_windows_exclude_partial_seconds_and_expire)
 {
     using Clock = cybou::TrafficMeter::Clock;
@@ -209,6 +241,21 @@ BOOST_AUTO_TEST_CASE(runtime_finalizes_account_and_observer_verifies_block)
     BOOST_REQUIRE(observer.InitializeGenesis(fixture.genesis));
     BOOST_CHECK(!observer.GetStatus().poa_signer_active);
     BOOST_REQUIRE(observer.CommitBlock(*block));
+    BOOST_CHECK_EQUAL(observer.GetDiagnostics().finalization.history_total, 1U);
+    BOOST_CHECK_EQUAL(observer.GetDiagnostics().finalization.observed_total, 0U);
+    BOOST_CHECK(!observer.CommitBlock(*block, true, cybou::BlockObservation::ANNOUNCEMENT));
+    BOOST_CHECK_EQUAL(observer.GetDiagnostics().finalization.history_total, 1U);
+    BOOST_CHECK_EQUAL(fixture.runtime->GetDiagnostics().finalization.local_produced_total,
+        fixture.runtime->GetDiagnostics().finalization.observed_total);
+    BOOST_CHECK_GT(fixture.runtime->GetDiagnostics().finalization.local_produced_total, 0U);
+    cybou::CybouNodeRuntime announcement_observer{{.network_genesis = fixture.definition,
+        .data_dir = fixture.directory / "announcement-observer", .memory_only = true,
+        .wipe_data = true, .operation_work_bits = 0}};
+    BOOST_REQUIRE(announcement_observer.InitializeGenesis(fixture.genesis));
+    BOOST_REQUIRE(announcement_observer.CommitBlock(*block, true, cybou::BlockObservation::ANNOUNCEMENT));
+    BOOST_CHECK_EQUAL(announcement_observer.GetDiagnostics().finalization.observed_total, 1U);
+    BOOST_CHECK_EQUAL(announcement_observer.GetDiagnostics().finalization.local_produced_total, 0U);
+    BOOST_CHECK_EQUAL(announcement_observer.GetDiagnostics().finalization.history_total, 0U);
     BOOST_CHECK(observer.GetAccountState(*account) == fixture.runtime->GetAccountState(*account));
     BOOST_CHECK_EQUAL(observer.GetFinalizedHeight().value_or(0), 1);
     BOOST_REQUIRE_EQUAL(block->block.operations.size(), 1U);
@@ -339,6 +386,7 @@ BOOST_AUTO_TEST_CASE(runtime_resolves_valid_poa_equivocation_deterministically)
     const bool conflicting_wins = cybou::ComputeBlockId(conflicting_block) < cybou::ComputeBlockId(canonical->block);
     if (conflicting_wins) {
         BOOST_CHECK(result.error == cybou::BlockTransitionError::NONE);
+        BOOST_CHECK_EQUAL(fixture.runtime->GetDiagnostics().finalization.observed_total, 0U);
         BOOST_CHECK(fixture.runtime->GetFinalizedTip() == cybou::ComputeBlockId(conflicting_block));
     } else {
         BOOST_CHECK(result.error == cybou::BlockTransitionError::POA_EQUIVOCATION_DETECTED);

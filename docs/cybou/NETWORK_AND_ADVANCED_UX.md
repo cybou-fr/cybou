@@ -223,6 +223,15 @@ included. This is not unique content or finalized transaction throughput.
 Rates stay Unknown until the complete window exists. Runtime restart resets
 the counters; storage-pool and ordinary mesh sessions share the collector.
 
+`metrics` also reports verified operation observations over 1/5/15 complete
+minutes: observed op/min (local production plus direct announcements), local
+production contribution and separate historical imports. The overview uses the
+one-minute observed value. Repeated/rejected blocks do not count; canonical
+replacement resets operation observations. No block creation timestamp exists,
+so announcement arrival time does not establish present network production or
+global freshness. Incomplete windows show Unknown and complete local idle windows
+may be zero. This does not establish a performance ceiling.
+
 The technical console supports:
 - Real own-content leaf manifests and BLAKE3-256 integrity/retrieval evidence via `chunks <id|name>` without enumerating common ChunkStore or foreign provider objects.
 - Paginated verified block, operation and history lookup via `block <height|hash>`, `op <id>`, and `history [page]`.

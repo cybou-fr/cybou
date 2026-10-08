@@ -139,6 +139,9 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>Verified local observations: %1 operations (%2 locally produced); history imports: %3. Totals since observation reset.</source><translation>Observations locales vérifiées : %1 opérations (%2 produites localement) ; imports d'historique : %3. Totaux depuis la réinitialisation des observations.</translation></message>
+    <message><source>%1 min: observed %2 op/min · locally produced %3 op/min · history %4 operations</source><translation>%1 min : observé %2 op/min · produit localement %3 op/min · historique %4 opérations</translation></message>
+    <message><source>Arrival-time windows, excluding partial seconds. Announced blocks have no production timestamp; these observations do not prove global freshness or a network capacity limit.</source><translation>Fenêtres selon l'heure d'arrivée, hors secondes partielles. Les blocs annoncés n'ont pas d'horodatage de production ; ces observations ne prouvent ni l'actualité globale ni une limite de capacité du réseau.</translation></message>
     <message><source>Local traffic counters and measured transfer rates</source><translation>Compteurs de trafic local et débits mesurés</translation></message>
     <message><source>Source: Local CYBOU frames, excluding TLS/TCP overhead
 Received since runtime start: %1 bytes
@@ -4820,6 +4823,8 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Observed finalized op/min</source><translation>Op/min finalisées observées</translation></message>
+    <message><source>1-minute local observation · history imports excluded · no global freshness proof</source><translation>Observation locale sur 1 minute · hors imports d'historique · aucune preuve d'actualité globale</translation></message>
     <message><source>Local traffic</source><translation>Trafic local</translation></message>
     <message><source>↓ %1 B/s · ↑ %2 B/s</source><translation>↓ %1 o/s · ↑ %2 o/s</translation></message>
     <message><source>Local CYBOU frames · 60 complete seconds · excludes TLS/TCP overhead</source><translation>Trames CYBOU locales · 60 secondes complètes · hors surcharge TLS/TCP</translation></message>

@@ -442,6 +442,9 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [t_val, t_sub] = MetricTile(grid, 2, 0, tr("Local traffic"), overview);
     m_metric_traffic = t_val; m_metric_traffic_sub = t_sub;
     m_metric_traffic->setObjectName(QStringLiteral("networkTrafficRate"));
+    auto [f_val, f_sub] = MetricTile(grid, 2, 1, tr("Observed finalized op/min"), overview);
+    m_metric_finalization = f_val; m_metric_finalization_sub = f_sub;
+    m_metric_finalization->setObjectName(QStringLiteral("networkFinalizationRate"));
 
     overview_layout->addLayout(grid);
     auto* storage_grid = new QGridLayout;
@@ -740,6 +743,10 @@ void NetworkPage::refresh()
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
     const bool measured = diag.observed_unix_ms != 0;
+    const auto& finalization = diag.finalization.windows.front();
+    m_metric_finalization->setText(measured && diag.initialized && finalization.complete && finalization.window_ms ?
+        QLocale{}.toString(finalization.observed_operations * 60000.0 / finalization.window_ms, 'f', 1) : tr("Unknown"));
+    m_metric_finalization_sub->setText(tr("1-minute local observation · history imports excluded · no global freshness proof"));
     const auto& traffic = diag.traffic;
     m_metric_traffic->setText(measured && traffic.window_ms ? tr("↓ %1 B/s · ↑ %2 B/s")
         .arg(QLocale{}.toString(traffic.window_received_bytes * 1000.0 / traffic.window_ms, 'f', 1),

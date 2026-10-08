@@ -1285,17 +1285,22 @@ void CybouShellTests::networkPageReflectsModel()
     observed.initialized = true;
     observed.pending_operations = 3;
     observed.pending_operation_bytes = 700;
+    observed.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
     observed.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(uptime->text(), QStringLiteral("120 s"));
     QTRY_COMPARE(pool->text(), QStringLiteral("3"));
+    auto* finalized_rate = network->findChild<QLabel*>(QStringLiteral("networkFinalizationRate"));
+    QVERIFY(finalized_rate);
+    QTRY_COMPARE(finalized_rate->text(), QLocale{}.toString(5.0, 'f', 1));
     auto* traffic = network->findChild<QLabel*>(QStringLiteral("networkTrafficRate"));
     QVERIFY(traffic);
     QTRY_VERIFY(traffic->text().contains(QLocale{}.toString(100.0, 'f', 1)));
     observed.initialized = false;
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(pool->text(), QStringLiteral("Unknown"));
+    QTRY_COMPARE(finalized_rate->text(), QStringLiteral("Unknown"));
     model->setNetworkDiagnostics({});
     QTRY_COMPARE(uptime->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(traffic->text(), QStringLiteral("Unknown"));
@@ -5429,6 +5434,8 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     snapshot.uptime_ms = 120000;
     snapshot.pending_operations = 3;
     snapshot.pending_operation_bytes = 700;
+    snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5,
+        .local_produced_operations = 3, .history_operations = 1000, .complete = true};
     snapshot.traffic = {.received_bytes = 6000, .sent_bytes = 12000,
         .window_received_bytes = 6000, .window_sent_bytes = 12000, .window_ms = 60000};
     model->setNetworkDiagnostics(snapshot);
@@ -5440,6 +5447,9 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Usage: health")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Received since runtime start: 6000 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("1 min: observed ") + QLocale{}.toString(5.0, 'f', 1)));
+    QVERIFY(console.outputText().contains(QStringLiteral("history 1000 operations")));
+    QVERIFY(console.outputText().contains(QStringLiteral("5 min: observed Unknown")));
     QVERIFY(console.outputText().contains(QStringLiteral("Received rate: ") + QLocale{}.toString(100.0, 'f', 1)));
 
     CybouNetworkAuthorityStatus authority;
@@ -5511,6 +5521,7 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("3 opérations / 700 octets")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Reçu depuis le démarrage : 6000 octets")));
+    QVERIFY(console.outputText().contains(QStringLiteral("historique 1000 opérations")));
     qApp->removeTranslator(&translator);
 
     QVector<CybouFileItem> many;

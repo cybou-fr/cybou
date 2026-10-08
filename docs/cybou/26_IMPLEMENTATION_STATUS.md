@@ -3,6 +3,37 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Verified operation observation windows (2026-10-08)
+
+Successful runtime block commits record operation counts in a fixed one-second
+ring supporting 1/5/15-minute windows. Local production and directly accepted
+announcements count in the observed series; batch/default history imports stay
+separate. Duplicate/rejected commits never increment; replacing a canonical
+height resets windows/totals. Zero-operation blocks are not transaction activity.
+Collection uses the existing chain mutex with no history scan or GUI dependency.
+
+Network Advanced shows observed finalized op/min over a complete minute.
+Console `metrics` shows all windows, local-produced contribution, history counts
+and totals since observation reset. Startup/reset windows are Unknown; complete
+local idle windows may be zero. No creation timestamp exists in blocks, so old
+announcements can arrive later. Observation speed is not a measurement of current
+global production, global freshness or a throughput ceiling. The stale timestamp
+check claim in `POA_FINALITY.md` is corrected to the actual block layout.
+History charts, resource metrics and remote aggregation remain open.
+
+Ordinary MinGW desktop, core and Qt test binaries rebuild successfully.
+Runtime suite: 20 cases / 280 assertions passed, including window boundaries,
+source separation, duplicate commit, actual local production and canonical
+replacement behavior. Full P2P suite: 37 cases / 1,178 assertions passed.
+Remaining core cases are filtered; no full-core-suite or live throughput claim.
+Logs: `artifacts/network-finalization-20261008/`.
+
+Full offscreen Qt: 92 passed, 0 failed/skipped. Coverage includes the observed
+op/min tile, Unknown on missing/uninitialized samples, incomplete longer windows,
+separate history counts and EN/FR `metrics` output. Manifest/diff checks pass.
+Desktop SHA-256: `9e7529e864f849f48bdbe31e3418b268ff7b9e6ab783110574ab392c2b2e455f`.
+No desktop/signer or VPS service is restarted; these are component observations.
+
 ## Passive local traffic observation (2026-10-08)
 
 The shared runtime meter counts actual CYBOU frame-stream bytes at successful

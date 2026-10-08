@@ -454,6 +454,20 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(measured && t.window_ms ? QLocale{}.toString(t.window_received_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
             .arg(measured && t.window_ms ? QLocale{}.toString(t.window_sent_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
             .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown")));
+        const auto& f = d.finalization;
+        appendOutput(tr("Verified local observations: %1 operations (%2 locally produced); history imports: %3. Totals since observation reset.")
+            .arg(measured && d.initialized ? QString::number(f.observed_total) : tr("Unknown"))
+            .arg(measured && d.initialized ? QString::number(f.local_produced_total) : tr("Unknown"))
+            .arg(measured && d.initialized ? QString::number(f.history_total) : tr("Unknown")));
+        for (const auto& window : f.windows) {
+            const bool ready = measured && d.initialized && window.complete && window.window_ms;
+            appendOutput(tr("%1 min: observed %2 op/min · locally produced %3 op/min · history %4 operations")
+                .arg(window.window_ms / 60000)
+                .arg(ready ? QLocale{}.toString(window.observed_operations * 60000.0 / window.window_ms, 'f', 1) : tr("Unknown"))
+                .arg(ready ? QLocale{}.toString(window.local_produced_operations * 60000.0 / window.window_ms, 'f', 1) : tr("Unknown"))
+                .arg(ready ? QString::number(window.history_operations) : tr("Unknown")));
+        }
+        appendOutput(tr("Arrival-time windows, excluding partial seconds. Announced blocks have no production timestamp; these observations do not prove global freshness or a network capacity limit."));
     } else if (cmd == QLatin1String{"health"}) {
         const auto& d = m_model->networkDiagnostics();
         const bool measured = d.observed_unix_ms != 0;

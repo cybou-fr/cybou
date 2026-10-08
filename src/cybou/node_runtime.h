@@ -410,7 +410,8 @@ public:
     /// \param sync true просит синхронно сбросить commit в backing store.
     /// \return Итог verified commit.
     /// \post При успехе candidate pool приведён к новому finalized head.
-    BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true);
+    BlockTransitionResult CommitBlock(const FinalizedBlock& block, bool sync = true,
+        BlockObservation observation = BlockObservation::HISTORY);
 
     /// \brief Читает finalized block по высоте из локальной canonical history.
     /// \param height Целевая высота finalized chain.
@@ -634,6 +635,7 @@ private:
         std::unique_ptr<KVStore> db;
         CybouStateStore store;
         OperationPool operation_pool;
+        FinalizationMeter finalization_observations;
         std::map<cybou::Hash256, uint64_t> solved_work;
         std::deque<cybou::Hash256> solved_work_order;
         std::unique_ptr<PoaFinalizer> poa_finalizer;

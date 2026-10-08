@@ -1352,7 +1352,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
             }
             // A failed commit (duplicate race or state conflict) must not kill
             // the session; the offered height simply stays unavailable.
-            const bool committed = static_cast<bool>(runtime.CommitBlock(*block));
+            const bool committed = static_cast<bool>(runtime.CommitBlock(*block, true, BlockObservation::ANNOUNCEMENT));
             return committed ? BlockAnnounceResult::APPLIED : BlockAnnounceResult::GAP;
         };
         auto have_height = [&](uint64_t h, const cybou::Hash256& expected) {

@@ -6,6 +6,7 @@
 #define CYBOU_DIAGNOSTICS_H
 #include <cstdint>
 #include <cybou/traffic_meter.h>
+#include <cybou/finalization_meter.h>
 #include <string>
 #include <vector>
 namespace cybou {
@@ -35,6 +36,7 @@ struct OperationDiagnostics {
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
     TrafficDiagnostics traffic;
+    FinalizationDiagnostics finalization;
     /// Local passive observation time (UTC) and monotonic runtime lifetime.
     /// A zero observation time means no real runtime sample is available.
     std::uint64_t observed_unix_ms{0}, uptime_ms{0};
