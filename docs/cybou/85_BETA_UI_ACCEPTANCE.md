@@ -92,6 +92,10 @@ prove those outcomes.
 
 ## 4. Files
 
+Prepared scenario: [FILES-RESTORE-01](BETA_FILES_CLEAN_RESTORE_ACCEPTANCE.md),
+NOT RUN. It requires a separate clean client, unavailable source, actual remote
+retrieval and exact-byte comparison; copied indexes/cache do not satisfy it.
+
 ```text
 [ ] My files opens without Storage protocol terminology
 [ ] create folder

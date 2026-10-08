@@ -191,6 +191,9 @@ reconciliation. It is NOT RUN and authorizes no live payment.
 [MAIL-OFFLINE-01](BETA_MAIL_OFFLINE_ACCEPTANCE.md) prepares offline-recipient
 attachment delivery and saved-Files retention after recipient Mail deletion.
 It is NOT RUN; ordinary-client closure does not stop the separate signer.
+[FILES-RESTORE-01](BETA_FILES_CLEAN_RESTORE_ACCEPTANCE.md) prepares clean-client
+catalog reconstruction and exact-byte remote retrieval with the source offline.
+It is NOT RUN; it does not import source caches or interrupt the signer.
 Preparation can proceed while P0 remote CI is pending; execution follows the
 applicable green-revision gate. Avoid broad refactors or repeated full builds
 for documentation-only preparation.
