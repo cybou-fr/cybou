@@ -3,6 +3,34 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Recovery/Console keyboard package (2026-10-08)
+
+Recovery phrase replacement explicitly defaults to No at its first confirmation.
+The recovery word display and two distinct numbered confirmation fields expose
+translated accessible names; confirmation labels are associated with their
+fields. The existing phrase/password gate and confirmation checks remain in use.
+
+Console allows ordinary Tab traversal from an empty command input. Tab still
+opens/accepts suggestions for nonempty commands, and Ctrl+Space remains available
+on an empty input. Command and output fields expose translated names; output
+reserves a contrasting focus border.
+
+FR/EN and light/dark component coverage uses synthetic words only. It exercises
+password/acknowledgment gating and cancellation without revealing a phrase,
+Return on the default No before rotation proceeds, wrong/correct confirmation
+words, Escape and text cleanup in the rotation phrase dialog. Console coverage
+checks empty-input Tab/Shift+Tab, command execution and Up/Down history, Ctrl+F,
+search Escape without closing, Ctrl+L and final Escape. This does not establish
+clean-machine restore, real key rotation/finality, physical keyboard,
+screen-reader or mixed-monitor acceptance.
+
+Validation: isolated GUI/test builds succeeded; full offscreen Qt passed
+92 results and four focused native Windows scenarios passed 6 results including
+setup/cleanup, with no failures/skips. The initial native test sent focus before
+page event processing; settling the page before activation fixed the test.
+Evidence and source/binary provenance: `artifacts/ux-recovery-console-keyboard-20261008/`.
+The build cache is restored; no live vault, signer or VPS was changed/restarted.
+
 ## Identity/Wallet/Network keyboard package (2026-10-08)
 
 Wallet activity rows and folded fee groups now participate in Tab navigation,

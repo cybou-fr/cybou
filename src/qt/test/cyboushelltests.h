@@ -57,6 +57,7 @@ private Q_SLOTS:
     void mailFilesKeyboardScopesInBothLanguages();
     void mailFilesTabReachabilityAndFocus();
     void identityWalletNetworkKeyboardNavigation();
+    void recoveryAndConsoleKeyboardNavigation();
     void mailFilesKeyboardMenusAndDialogs();
     void notificationsOfferUndo();
     void homeFirstStepsAndQuickActions();

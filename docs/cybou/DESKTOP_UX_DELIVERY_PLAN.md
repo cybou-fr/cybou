@@ -637,3 +637,12 @@ an explicit focus border. Details cancellation, map arrow selection and valid
 Network balance input followed by Escape are covered without a transfer.
 Physical keys, screen-reader action semantics, mixed-monitor DPI and remaining
 Identity recovery/rotation and native-dialog acceptance remain open.
+
+Recovery/Console keyboard follow-up (2026-10-08): recovery replacement defaults
+to No; numbered confirmation fields and the word display expose accessible
+names. FR/EN/both-theme component checks use synthetic words and cancel before
+any real rotation, testing phrase gating and cleanup. Console permits Tab from
+an empty input while preserving nonempty completion and Ctrl+Space. History,
+search dismissal, clear and dialog Escape are covered. Clean-machine restore,
+real interrupted rotation/finality, physical input and screen readers remain
+open; this package does not count them as passed.

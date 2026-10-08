@@ -288,6 +288,7 @@ QWidget* IdentityPage::buildContent()
                                           "The old phrase stops working after network confirmation."), danger));
     auto* replace = new QPushButton{tr("Replace recovery phrase…"), danger};
     replace->setObjectName(QStringLiteral("secondaryButton"));
+    replace->setProperty("cybouId", QStringLiteral("replaceRecoveryPhrase"));
     replace->setStyleSheet(QStringLiteral("QPushButton { color: %1; border-color: %2; }")
         .arg(CybouTheme::color(CybouTheme::ROSE).name(), CybouTheme::color(CybouTheme::ROSE_SOFT).name()));
     connect(replace, &QPushButton::clicked, this, [this] { replaceRecoveryPhrase(); });
@@ -404,7 +405,8 @@ void IdentityPage::replaceRecoveryPhrase()
 {
     const auto choice = QMessageBox::question(this, tr("Replace recovery phrase"),
         tr("CYBOU will create a new recovery phrase and replace all Identity keys. "
-           "The old phrase stops working after network confirmation. Continue?"));
+           "The old phrase stops working after network confirmation. Continue?"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (choice != QMessageBox::Yes) return;
     bool accepted{false};
     QString password = QInputDialog::getText(this, tr("Confirm with your vault password"),

@@ -137,6 +137,13 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 Recovery/Console package checks FR/EN and both themes with
+synthetic recovery words. It covers the password/acknowledgment gate, default No
+for rotation, wrong/correct word confirmation, Escape and displayed-word cleanup.
+Console checks empty-input Tab traversal, Up/Down history, search Escape,
+Ctrl+L and closing Escape. Real clean-machine restore, interrupted rotation and
+finality, physical keys, screen readers and mixed-monitor acceptance remain open.
+
 The 2026-10-08 Identity/Wallet/Network package checks complete Tab/Shift+Tab
 cycles for enabled page actions in FR/EN and both themes, Wallet activity
 Enter/Space activation and fee expansion with focus return, map arrow selection,

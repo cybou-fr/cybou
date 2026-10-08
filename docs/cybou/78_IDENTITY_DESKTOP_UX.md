@@ -35,3 +35,12 @@ and device-local drafts/preferences. Record phrase confirmation as a local user
 action, not evidence of a recoverable external backup. Clean-machine restore
 acceptance needs actual available encrypted content and historical-KEM recovery,
 not only a successfully opened vault.
+
+## Keyboard confirmation
+
+Phrase replacement defaults to No at the initial confirmation. Revealing words
+requires a nonempty vault password and explicit acknowledgment. The phrase
+confirmation fields identify their distinct word numbers through associated
+labels and accessible names. Escape cancels the phrase dialog and clears its
+displayed text; component checks use synthetic phrases and do not establish a
+successful real restore or finalized rotation.

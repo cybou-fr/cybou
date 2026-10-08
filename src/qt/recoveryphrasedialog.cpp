@@ -88,6 +88,8 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
     auto* words_view = new QTextEdit{this};
     m_words_view = words_view;
     words_view->setReadOnly(true);
+    words_view->setObjectName(QStringLiteral("recoveryWords"));
+    words_view->setAccessibleName(tr("Your 24 recovery words in order"));
     words_view->setMinimumHeight(250);
     words_view->setStyleSheet(QStringLiteral(
         "QTextEdit { font-family: 'Cascadia Mono', 'Consolas', monospace; font-size: 13px; }"));
@@ -143,6 +145,9 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
         auto* first_label = new QLabel{tr("Word #%1:").arg(m_first_index + 1), this};
         first_row->addWidget(first_label);
         m_first_edit = new QLineEdit{this};
+        m_first_edit->setObjectName(QStringLiteral("recoveryConfirmFirst"));
+        m_first_edit->setAccessibleName(first_label->text());
+        first_label->setBuddy(m_first_edit);
         m_first_edit->setPlaceholderText(tr("type the word"));
         first_row->addWidget(m_first_edit, 1);
         layout->addLayout(first_row);
@@ -151,6 +156,9 @@ RecoveryPhraseDialog::RecoveryPhraseDialog(Mode mode, const QStringList& words, 
         auto* second_label = new QLabel{tr("Word #%1:").arg(m_second_index + 1), this};
         second_row->addWidget(second_label);
         m_second_edit = new QLineEdit{this};
+        m_second_edit->setObjectName(QStringLiteral("recoveryConfirmSecond"));
+        m_second_edit->setAccessibleName(second_label->text());
+        second_label->setBuddy(m_second_edit);
         m_second_edit->setPlaceholderText(tr("type the word"));
         second_row->addWidget(m_second_edit, 1);
         layout->addLayout(second_row);

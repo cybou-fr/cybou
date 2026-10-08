@@ -30,6 +30,8 @@
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/walletpage.h>
 #include <qt/cybouconsoledialog.h>
+#include <qt/recoveryphrasedialog.h>
+#include <QCheckBox>
 #include <qt/authorityreview.h>
 #include <QMessageBox>
 #include <QInputDialog>
@@ -1893,6 +1895,125 @@ void CybouShellTests::identityWalletNetworkKeyboardNavigation()
             QVERIFY(group && focus(group));
             QTest::keyClick(group, Qt::Key_Return);
             QTRY_VERIFY(window->focusWidget() && window->focusWidget()->property("walletEntryId").toString() == entries.first().id);
+        }
+    }
+    window->setLanguage(QStringLiteral("en"));
+    window->close();
+}
+
+void CybouShellTests::recoveryAndConsoleKeyboardNavigation()
+{
+    ScopedEnvironment appearance{"CYBOU_APPEARANCE", "light"};
+    auto window = makeWindow();
+    window->show();
+    const auto activate = [](QWidget* dialog, QWidget* target) {
+        QApplication::processEvents();
+        dialog->activateWindow();
+        if (!QTest::qWaitForWindowActive(dialog)) return false;
+        QApplication::setActiveWindow(dialog);
+        target->setFocus();
+        QApplication::processEvents();
+        return target->hasFocus();
+    };
+    for (const auto& theme : {QByteArray{"light"}, QByteArray{"dark"}}) {
+        qputenv("CYBOU_APPEARANCE", theme);
+        window->reloadAppearance();
+        for (const auto& language : {QStringLiteral("en"), QStringLiteral("fr")}) {
+            window->setLanguage(language);
+            auto* model = window->desktopModel();
+            QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+            window->showPage(CybouPage::Identity);
+            auto* page = window->page(CybouPage::Identity);
+            auto* reveal = FindById<QPushButton>(page, QStringLiteral("recoveryOptions"));
+            QVERIFY(reveal && activate(window.get(), reveal));
+            QTest::keyClick(reveal, Qt::Key_Space);
+            QDialog* gate = nullptr;
+            QTRY_VERIFY((gate = page->findChild<QDialog*>(QStringLiteral("revealRecoveryDialog"))) != nullptr);
+            auto* password = gate->findChild<QLineEdit*>(QStringLiteral("revealPassword"));
+            auto* ack = gate->findChild<QCheckBox*>(QStringLiteral("revealAcknowledge"));
+            auto* accept = gate->findChild<QPushButton*>(QStringLiteral("primaryButton"));
+            QVERIFY(password && ack && accept && !password->accessibleName().isEmpty());
+            QVERIFY(!accept->isEnabled());
+            QVERIFY(activate(gate, password));
+            QTest::keyClicks(password, "synthetic-password");
+            QVERIFY(!accept->isEnabled());
+            ack->setFocus(); QTest::keyClick(ack, Qt::Key_Space);
+            QVERIFY(accept->isEnabled());
+            QTest::keyClick(ack, Qt::Key_Escape);
+            QTRY_VERIFY(!page->findChild<QDialog*>(QStringLiteral("revealRecoveryDialog")));
+            QCOMPARE(window->focusWidget(), reveal);
+
+            auto* replace = FindById<QPushButton>(page, QStringLiteral("replaceRecoveryPhrase"));
+            QVERIFY(replace && activate(window.get(), replace));
+            bool review_seen = false;
+            bool safe_default = false;
+            QTimer review_driver;
+            review_driver.setInterval(10);
+            QObject::connect(&review_driver, &QTimer::timeout, window.get(), [&] {
+                auto* review = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+                if (!review) return;
+                review_driver.stop(); review_seen = true;
+                safe_default = review->defaultButton() == review->button(QMessageBox::No);
+                QApplication::setActiveWindow(review);
+                QTest::keyClick(review, Qt::Key_Return);
+            });
+            QTimer watchdog;
+            watchdog.setSingleShot(true);
+            QObject::connect(&watchdog, &QTimer::timeout, window.get(), [] {
+                if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+            });
+            review_driver.start(); watchdog.start(3000);
+            QTest::keyClick(replace, Qt::Key_Space);
+            QVERIFY(review_seen && safe_default);
+            QCOMPARE(window->focusWidget(), replace);
+
+            QStringList words;
+            for (int i = 0; i < 24; ++i) words << QStringLiteral("syntheticword");
+            RecoveryPhraseDialog phrase{RecoveryPhraseDialog::Mode::Rotate, words, window.get()};
+            phrase.show();
+            auto* first = phrase.findChild<QLineEdit*>(QStringLiteral("recoveryConfirmFirst"));
+            auto* second = phrase.findChild<QLineEdit*>(QStringLiteral("recoveryConfirmSecond"));
+            auto* confirm = phrase.findChild<QPushButton*>(QStringLiteral("primaryButton"));
+            QVERIFY(first && second && confirm);
+            QVERIFY(!first->accessibleName().isEmpty() && first->accessibleName() != second->accessibleName());
+            QVERIFY(activate(&phrase, first));
+            QTest::keyClicks(first, "wrong"); QTest::keyClicks(second, "syntheticword");
+            QVERIFY(!confirm->isEnabled());
+            first->setText(QStringLiteral("syntheticword"));
+            QVERIFY(confirm->isEnabled());
+            QTest::keyClick(first, Qt::Key_Tab);
+            QCOMPARE(QApplication::focusWidget(), second);
+            QTest::keyClick(second, Qt::Key_Escape);
+            QCOMPARE(phrase.result(), int(QDialog::Rejected));
+            QVERIFY(phrase.findChild<QTextEdit*>(QStringLiteral("recoveryWords"))->toPlainText().isEmpty());
+
+            CybouConsoleDialog console{model, window.get()};
+            console.show();
+            auto* input = console.findChild<QLineEdit*>(QStringLiteral("consoleInput"));
+            auto* output = console.findChild<QPlainTextEdit*>(QStringLiteral("consoleOutput"));
+            auto* run = console.findChild<QToolButton*>(QStringLiteral("consoleRun"));
+            QVERIFY(input && output && run && !input->accessibleName().isEmpty());
+            QVERIFY(activate(&console, input));
+            QTest::keyClick(input, Qt::Key_Tab);
+            QCOMPARE(QApplication::focusWidget(), run);
+            QTest::keyClick(run, Qt::Key_Tab, Qt::ShiftModifier);
+            QCOMPARE(QApplication::focusWidget(), input);
+            input->setText(QStringLiteral("status"));
+            QTest::keyClick(input, Qt::Key_Return);
+            QCOMPARE(console.historyCount(), 1);
+            QTest::keyClick(input, Qt::Key_Up);
+            QCOMPARE(input->text(), QStringLiteral("status"));
+            QTest::keyClick(input, Qt::Key_Down);
+            QVERIFY(input->text().isEmpty());
+            QTest::keyClick(input, Qt::Key_F, Qt::ControlModifier);
+            auto* find = console.findChild<QLineEdit*>(QStringLiteral("consoleSearch"));
+            QCOMPARE(QApplication::focusWidget(), find);
+            QTest::keyClick(find, Qt::Key_Escape);
+            QVERIFY(console.isVisible()); QCOMPARE(QApplication::focusWidget(), input);
+            QTest::keyClick(input, Qt::Key_L, Qt::ControlModifier);
+            QVERIFY(console.outputText().isEmpty()); QCOMPARE(console.historyCount(), 0);
+            QTest::keyClick(input, Qt::Key_Escape);
+            QVERIFY(!console.isVisible());
         }
     }
     window->setLanguage(QStringLiteral("en"));

@@ -122,11 +122,13 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     m_output = new QPlainTextEdit{this};
     m_output->setObjectName(QStringLiteral("consoleOutput"));
     m_output->setReadOnly(true);
+    m_output->setAccessibleName(tr("CYBOU Console"));
     m_output->installEventFilter(this);
     m_output->setMaximumBlockCount(kMaxLines);
     m_output->setFont(QFont(QStringLiteral("Consolas"), 9));
     m_output->setStyleSheet(QStringLiteral(
-        "QPlainTextEdit { background: %1; color: %2; border: 1px solid %3; border-radius: 6px; padding: 8px; }"
+        "QPlainTextEdit { background: %1; color: %2; border: 2px solid %3; border-radius: 6px; padding: 8px; }"
+        "QPlainTextEdit:focus { border-color: %2; }"
     ).arg(CybouTheme::color(CybouTheme::CANVAS).name(),
           CybouTheme::color(CybouTheme::TEXT_PRIMARY).name(),
           CybouTheme::color(CybouTheme::BORDER).name()));
@@ -139,6 +141,7 @@ CybouConsoleDialog::CybouConsoleDialog(CybouDesktopModel* model, QWidget* parent
     m_input = new QLineEdit{this};
     m_input->setObjectName(QStringLiteral("consoleInput"));
     m_input->setPlaceholderText(tr("Type a command (e.g. 'help', 'status', 'files', 'storage')…"));
+    m_input->setAccessibleName(m_input->placeholderText());
     m_input->setMaxLength(1024);
     m_input->installEventFilter(this);
     input_bar->addWidget(m_input, 1);
@@ -262,7 +265,7 @@ bool CybouConsoleDialog::eventFilter(QObject* watched, QEvent* event)
             const auto index = m_completer->popup()->currentIndex().isValid() ? m_completer->popup()->currentIndex() : m_completer->completionModel()->index(0,0);
             m_input->setText(index.data(Qt::UserRole).toString()); m_completer->popup()->hide(); return true;
         }
-        if (watched == m_input && (key->key() == Qt::Key_Tab || (key->key() == Qt::Key_Space && key->modifiers() & Qt::ControlModifier))) { completeInput(); return true; }
+        if (watched == m_input && ((key->key() == Qt::Key_Tab && !m_input->text().trimmed().isEmpty()) || (key->key() == Qt::Key_Space && key->modifiers() & Qt::ControlModifier))) { completeInput(); return true; }
         if (watched == m_input && m_completer->popup()->isVisible()) return false;
     }
     if (watched == m_input && event->type() == QEvent::KeyPress) {
