@@ -11,6 +11,7 @@
 #include <qt/cybouactivity.h>
 #include <qt/cyboumainwindow.h>
 #include <qt/cyboutheme.h>
+#include <qt/cybouproduct.h>
 #include <qt/cybouui.h>
 #include <qt/cybounotifier.h>
 #include <qt/cybouuifixtures.h>
@@ -1282,6 +1283,7 @@ void CybouShellTests::networkPageReflectsModel()
     cybou::NodeDiagnosticsSnapshot observed;
     observed.observed_unix_ms = 1791460800000ULL;
     observed.uptime_ms = 120000;
+    observed.process_resident_bytes = 1048576;
     observed.initialized = true;
     observed.pending_operations = 3;
     observed.pending_operation_bytes = 700;
@@ -1292,6 +1294,12 @@ void CybouShellTests::networkPageReflectsModel()
     observed.traffic.history = {{5000, 50, 100}, {10000, 150, 200}};
     model->setNetworkDiagnostics(observed);
     QTRY_COMPARE(uptime->text(), QStringLiteral("120 s"));
+    auto* memory = network->findChild<QLabel*>(QStringLiteral("networkProcessMemory"));
+    QVERIFY(memory);
+    QTRY_COMPARE(memory->text(), CybouProduct::sizeText(1048576));
+    observed.process_resident_bytes.reset();
+    model->setNetworkDiagnostics(observed);
+    QTRY_COMPARE(memory->text(), QStringLiteral("Unknown"));
     QTRY_COMPARE(pool->text(), QStringLiteral("3"));
     auto* finalized_rate = network->findChild<QLabel*>(QStringLiteral("networkFinalizationRate"));
     QVERIFY(finalized_rate);
@@ -5457,8 +5465,11 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     console.clearOutput();
     console.executeCommand(QStringLiteral("health"));
     QVERIFY(console.outputText().contains(QStringLiteral("Node uptime: Unknown")));
+    console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
+    QVERIFY(console.outputText().contains(QStringLiteral("resident memory: Unknown bytes")));
     snapshot.observed_unix_ms = 1791460800000ULL;
     snapshot.uptime_ms = 120000;
+    snapshot.process_resident_bytes = 1048576;
     snapshot.pending_operations = 3;
     snapshot.pending_operation_bytes = 700;
     snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5,
@@ -5474,6 +5485,7 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("Usage: health")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Received since runtime start: 6000 bytes")));
+    QVERIFY(console.outputText().contains(QStringLiteral("resident memory: 1048576 bytes")));
     QVERIFY(console.outputText().contains(QStringLiteral("1 min: observed ") + QLocale{}.toString(5.0, 'f', 1)));
     QVERIFY(console.outputText().contains(QStringLiteral("history 1000 operations")));
     QVERIFY(console.outputText().contains(QStringLiteral("5 min: observed Unknown")));
@@ -5548,6 +5560,7 @@ void CybouShellTests::consoleTranslationsPermissionsAndBounds()
     QVERIFY(console.outputText().contains(QStringLiteral("3 opérations / 700 octets")));
     console.clearOutput(); console.executeCommand(QStringLiteral("metrics"));
     QVERIFY(console.outputText().contains(QStringLiteral("Reçu depuis le démarrage : 6000 octets")));
+    QVERIFY(console.outputText().contains(QStringLiteral("Mémoire résidente du processus CYBOU local : 1048576 octets")));
     QVERIFY(console.outputText().contains(QStringLiteral("historique 1000 opérations")));
     qApp->removeTranslator(&translator);
 

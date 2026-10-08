@@ -146,6 +146,9 @@
 </context>
 <context>
     <name>CybouConsoleDialog</name>
+    <message><source>Local CYBOU process resident memory: %1 bytes
+Source: OS working set / RSS, instantaneous; includes GUI and shared pages. Not host or network memory.</source><translation>Mémoire résidente du processus CYBOU local : %1 octets
+Source : ensemble de travail / RSS du système, instantané ; inclut l'interface et les pages partagées. Ne mesure pas la mémoire de l'hôte ni du réseau.</translation></message>
     <message><source>Verified local observations: %1 operations (%2 locally produced); history imports: %3. Totals since observation reset.</source><translation>Observations locales vérifiées : %1 opérations (%2 produites localement) ; imports d'historique : %3. Totaux depuis la réinitialisation des observations.</translation></message>
     <message><source>%1 min: observed %2 op/min · locally produced %3 op/min · history %4 operations</source><translation>%1 min : observé %2 op/min · produit localement %3 op/min · historique %4 opérations</translation></message>
     <message><source>Arrival-time windows, excluding partial seconds. Announced blocks have no production timestamp; these observations do not prove global freshness or a network capacity limit.</source><translation>Fenêtres selon l'heure d'arrivée, hors secondes partielles. Les blocs annoncés n'ont pas d'horodatage de production ; ces observations ne prouvent ni l'actualité globale ni une limite de capacité du réseau.</translation></message>
@@ -4830,6 +4833,8 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>CYBOU process memory</source><translation>Mémoire du processus CYBOU</translation></message>
+    <message><source>Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages</source><translation>Ensemble de travail / RSS instantané · processus CYBOU entier, interface et pages partagées incluses</translation></message>
     <message><source>Traffic history</source><translation>Historique du trafic</translation></message>
     <message><source>Operation observation history</source><translation>Historique des opérations observées</translation></message>
     <message><source>Received</source><translation>Reçu</translation></message>

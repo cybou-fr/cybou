@@ -351,6 +351,12 @@ BOOST_AUTO_TEST_CASE(ordinary_node_executes_candidates_before_relay)
     BOOST_CHECK(ordinary.HasRelayedOperation(*commit_id));
     BOOST_CHECK(ordinary.HasCandidateOperation(*commit_id));
     const auto queued = ordinary.GetDiagnostics();
+#if defined(_WIN32) || defined(__linux__)
+    BOOST_REQUIRE(queued.process_resident_bytes.has_value());
+    BOOST_CHECK_GT(*queued.process_resident_bytes, 0U);
+#else
+    BOOST_CHECK(!queued.process_resident_bytes.has_value());
+#endif
     BOOST_CHECK_EQUAL(queued.pending_operations, 1U);
     BOOST_CHECK_EQUAL(queued.pending_operation_bytes, commit_bytes->size());
     // An ordinary node's own pool is not finalizer acceptance.

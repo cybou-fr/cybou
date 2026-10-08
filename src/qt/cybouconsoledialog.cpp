@@ -455,6 +455,8 @@ void CybouConsoleDialog::executeCommand(const QString& command_line)
             .arg(measured && t.window_ms ? QLocale{}.toString(t.window_sent_bytes * 1000.0 / t.window_ms, 'f', 1) : tr("Unknown"))
             .arg(measured ? QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(d.observed_unix_ms), QTimeZone::UTC).toString(Qt::ISODateWithMs) : tr("Unknown")));
         const auto& f = d.finalization;
+        appendOutput(tr("Local CYBOU process resident memory: %1 bytes\nSource: OS working set / RSS, instantaneous; includes GUI and shared pages. Not host or network memory.")
+            .arg(measured && d.process_resident_bytes ? QString::number(*d.process_resident_bytes) : tr("Unknown")));
         appendOutput(tr("Verified local observations: %1 operations (%2 locally produced); history imports: %3. Totals since observation reset.")
             .arg(measured && d.initialized ? QString::number(f.observed_total) : tr("Unknown"))
             .arg(measured && d.initialized ? QString::number(f.local_produced_total) : tr("Unknown"))

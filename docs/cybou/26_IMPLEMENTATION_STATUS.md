@@ -3,6 +3,35 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Local instantaneous process memory (2026-10-08)
+
+Shared runtime diagnostics expose an optional resident-byte gauge for the entire
+CYBOU executable. Windows uses `GetProcessMemoryInfo` working set; Linux reads
+the fixed `/proc/self/statm` RSS record and OS page size with checked arithmetic.
+Unsupported platforms and read failures return absent, never a fabricated zero.
+The snapshot's UTC time applies to this instantaneous reading; the existing
+background collector reads it while Network is hidden. No history, process
+enumeration, external collector or new wire message is added.
+
+Network Advanced Overview displays process memory in human-readable units;
+Console `metrics` exposes exact bytes in EN/FR. Shared pages and the GUI are
+included. This is neither host RAM nor unique physical RAM, mean load, peak
+memory or a network total. CPU normalization/intervals, resource history,
+storage I/O and remote resource reports remain open.
+
+Ordinary MinGW desktop/core/Qt test binaries rebuild. Runtime suite: 21 cases /
+296 assertions passed, including a positive live OS resident-memory reading
+in the ordinary runtime diagnostics. Other core suites are filtered. This
+package verifies the Windows implementation; the Linux branch is not compiled
+or executed by this Windows check. Logs: `artifacts/network-memory-20261008/`.
+Desktop SHA-256: `38985b4a2769512742f7b0030aaae5ede12bc8dab46f71b6d19717d973b9a5e7`.
+No desktop/signer or VPS service is restarted.
+
+Full offscreen Qt with system fonts: 92 passed, 0 failed/skipped. The memory
+tile handles a value and an absent measurement; read-only `metrics` covers
+missing samples and exact-byte EN/FR output. Manifest/diff checks pass. These
+are component tests, not a live network workload or physical UI acceptance.
+
 ## Bounded Network observation charts (2026-10-08)
 
 Runtime snapshots now expose up to 180 completed five-second intervals retained

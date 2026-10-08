@@ -5,6 +5,7 @@
 #ifndef CYBOU_DIAGNOSTICS_H
 #define CYBOU_DIAGNOSTICS_H
 #include <cstdint>
+#include <optional>
 #include <cybou/traffic_meter.h>
 #include <cybou/finalization_meter.h>
 #include <string>
@@ -37,6 +38,8 @@ struct OperationDiagnostics {
 struct NodeDiagnosticsSnapshot {
     TrafficDiagnostics traffic;
     FinalizationDiagnostics finalization;
+    /// OS working set / RSS for the whole local executable, not host or network memory.
+    std::optional<std::uint64_t> process_resident_bytes;
     /// Local passive observation time (UTC) and monotonic runtime lifetime.
     /// A zero observation time means no real runtime sample is available.
     std::uint64_t observed_unix_ms{0}, uptime_ms{0};

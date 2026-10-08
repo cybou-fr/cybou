@@ -114,6 +114,7 @@ add_library(cybou_node STATIC
   cybou/node_runtime.cpp
   cybou/node_runtime_chain.cpp
   cybou/finalization_meter.cpp
+  cybou/process_memory.cpp
   cybou/node_runtime_network.cpp
   cybou/node_runtime_provider.cpp
   cybou/node_service.h
@@ -145,6 +146,7 @@ target_link_libraries(cybou_node
     OpenSSL::SSL
     ZLIB::ZLIB
     $<$<PLATFORM_ID:Windows>:crypt32>
+    $<$<PLATFORM_ID:Windows>:psapi>
 )
 target_precompile_headers(cybou_node PRIVATE
   <openssl/evp.h>

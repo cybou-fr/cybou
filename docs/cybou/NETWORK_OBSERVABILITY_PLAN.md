@@ -165,3 +165,19 @@ network census or new wire fields. Restart clears both histories; canonical
 replacement clears operation history. Unavailable observations clear the plots.
 This delivers the first 15-minute in-memory charts; the proposed 30-minute /
 24-hour retention, exporting, resource series and remote totals remain open.
+
+### O1 instantaneous process memory (2026-10-08)
+
+Runtime diagnostics read the local executable's resident bytes from the OS:
+Windows working set or Linux RSS via the fixed `/proc/self/statm` record.
+Failure and unsupported platforms return an absent value. This is a current
+gauge, not a peak, average, allocation total or host memory measurement. Shared
+resident pages and the desktop GUI are included. It is not unique physical RAM
+and must not be summed across nodes as a network memory total.
+
+Network Advanced Overview shows the sample in human-readable units; read-only
+`metrics` shows exact bytes and the same snapshot's UTC time. No Identity unlock,
+process enumeration, external service or retained per-process labels. The
+background snapshot collection remains independent of page visibility.
+CPU interval measurement/normalization, resource history/averages, host memory,
+storage I/O and remote resource reports remain open.

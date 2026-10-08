@@ -446,6 +446,9 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     auto [f_val, f_sub] = MetricTile(grid, 2, 1, tr("Observed finalized op/min"), overview);
     m_metric_finalization = f_val; m_metric_finalization_sub = f_sub;
     m_metric_finalization->setObjectName(QStringLiteral("networkFinalizationRate"));
+    auto [memory_val, memory_sub] = MetricTile(grid, 3, 0, tr("CYBOU process memory"), overview);
+    m_metric_memory = memory_val; m_metric_memory_sub = memory_sub;
+    m_metric_memory->setObjectName(QStringLiteral("networkProcessMemory"));
 
     overview_layout->addLayout(grid);
     auto* traffic_history = Card(overview);
@@ -762,6 +765,9 @@ void NetworkPage::refresh()
     m_metric_peers_sub->setText(tr("Direct mesh sessions"));
 
     const bool measured = diag.observed_unix_ms != 0;
+    m_metric_memory->setText(measured && diag.process_resident_bytes ?
+        CybouProduct::sizeText(*diag.process_resident_bytes) : tr("Unknown"));
+    m_metric_memory_sub->setText(tr("Instantaneous OS working set / RSS · entire CYBOU process, including GUI and shared pages"));
     m_traffic_chart->setHistory(measured ? diag.traffic.history : std::vector<cybou::ObservationPoint>{});
     m_finalization_chart->setHistory(measured && diag.initialized ? diag.finalization.history : std::vector<cybou::ObservationPoint>{});
     const auto& finalization = diag.finalization.windows.front();

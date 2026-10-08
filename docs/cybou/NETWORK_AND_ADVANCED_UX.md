@@ -22,6 +22,12 @@ introduced by these product features.
 
 ## Network overview
 
+The local process-memory tile is an instantaneous OS working set / RSS gauge
+for the entire CYBOU executable, including GUI and shared resident pages.
+It uses the diagnostics sample time, displays Unknown when absent, and has
+matching exact-byte output in Console `metrics`. It is not host memory, average
+load or a network total. CPU/history and remote resource reports remain planned.
+
 The page is named Network / Réseau in navigation and headers. Built-in passive
 monitoring is standard CYBOU functionality: actual data served, finalized op/min,
 transfer speed, resource load, storage capacity and scoped potential headroom,

@@ -8,6 +8,7 @@
 #include <cybou/p2p/peer_manager.h>
 #include <cybou/p2p/storage_session_pool.h>
 #include <cybou/storage_io_scheduler.h>
+#include <cybou/process_memory.h>
 #include <stdexcept>
 #include <algorithm>
 
@@ -59,6 +60,7 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
 {
     const auto status = GetStatus();
     NodeDiagnosticsSnapshot snapshot;
+    snapshot.process_resident_bytes = ReadProcessResidentBytes();
     snapshot.traffic = m_traffic->Snapshot();
     snapshot.observed_unix_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
