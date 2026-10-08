@@ -107,6 +107,7 @@ public:
         m_password->setObjectName(QStringLiteral("revealPassword"));
         m_password->setEchoMode(QLineEdit::Password);
         m_password->setPlaceholderText(IdentityPage::tr("Vault password"));
+        m_password->setAccessibleName(IdentityPage::tr("Vault password"));
         layout->addWidget(m_password);
         m_ack = new QCheckBox{IdentityPage::tr("I understand and want to show my recovery phrase"), this};
         m_ack->setObjectName(QStringLiteral("revealAcknowledge"));

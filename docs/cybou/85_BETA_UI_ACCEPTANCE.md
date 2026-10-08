@@ -137,6 +137,14 @@ Windows 150% DPI
 
 ## 8. Accessibility/productivity
 
+The 2026-10-08 Identity/Wallet/Network package checks complete Tab/Shift+Tab
+cycles for enabled page actions in FR/EN and both themes, Wallet activity
+Enter/Space activation and fee expansion with focus return, map arrow selection,
+and Escape from a valid Network balance input without submission. Explicit
+focus borders cover Wallet rows and the map. This is component/native Qt event
+evidence; physical keys, screen-reader action semantics, broader Identity
+recovery/rotation dialogs and mixed-monitor acceptance remain open.
+
 The 2026-10-08 keyboard menu/dialog package exercises the Qt keyboard context
 request in FR/EN with coordinates pointing away from the current item. Mail
 keeps the current row and existing multi-selection; Files list/grid promotes a

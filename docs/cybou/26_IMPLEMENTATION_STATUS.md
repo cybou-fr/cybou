@@ -3,6 +3,30 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Identity/Wallet/Network keyboard package (2026-10-08)
+
+Wallet activity rows and folded fee groups now participate in Tab navigation,
+expose translated semantic names/descriptions and activate on Enter or Space.
+Keyboard expansion focuses the first individual fee; existing row retention and
+command paths remain in use. Rows reserve a two-pixel focus border. The Network
+map now repaints an explicit contrasting border on focus changes. Identity's
+recovery password and Wallet's Network balance amount expose explicit names.
+
+Component coverage walks complete forward/reverse Tab cycles through enabled
+Identity, Wallet and Network actions in FR/EN and light/dark themes. It checks
+map arrow selection, activity details cancellation and focus return, fee-group
+expansion, and Escape after entering a valid Network balance amount without
+submitting or changing balances. Synthetic dialog input settles QWidget
+activation. Physical keyboard, screen readers, native OS file dialogs,
+mixed-monitor DPI and live DEVNET acceptance remain separate gates.
+
+Validation: isolated GUI/test builds succeeded. Full offscreen Qt: 91 passed,
+0 failed, 0 skipped. Seven focused native Windows scenarios: 9 passed including
+setup/cleanup, 0 failed, 0 skipped. Native focused-row captures in EN/light and
+FR/dark and the FR/dark map were visually inspected; borders are visible.
+Evidence and source/binary provenance: `artifacts/ux-account-network-keyboard-20261008/`.
+The build cache is restored; no live desktop/signer or VPS was restarted.
+
 ## Mail/Files keyboard menus and dialogs package (2026-10-08)
 
 Mail previously selected a context-menu row from pointer coordinates even for

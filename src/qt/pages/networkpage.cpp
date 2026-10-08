@@ -216,6 +216,18 @@ void SchematicFranceMap::keyPressEvent(QKeyEvent* event)
     QWidget::keyPressEvent(event);
 }
 
+void SchematicFranceMap::focusInEvent(QFocusEvent* event)
+{
+    QWidget::focusInEvent(event);
+    update();
+}
+
+void SchematicFranceMap::focusOutEvent(QFocusEvent* event)
+{
+    QWidget::focusOutEvent(event);
+    update();
+}
+
 void SchematicFranceMap::paintEvent(QPaintEvent* /*event*/)
 {
     QPainter painter{this};
@@ -226,9 +238,10 @@ void SchematicFranceMap::paintEvent(QPaintEvent* /*event*/)
     for (auto& r : m_peer_hit_rects) r = QRectF{};
 
     // Card background
-    painter.setPen(QPen{CybouTheme::color(CybouTheme::BORDER), 1.0});
+    painter.setPen(QPen{CybouTheme::color(hasFocus() ? CybouTheme::TEXT_PRIMARY : CybouTheme::BORDER),
+        hasFocus() ? 2.0 : 1.0});
     painter.setBrush(CybouTheme::color(CybouTheme::CARD));
-    painter.drawRoundedRect(bounds.adjusted(0.5, 0.5, -0.5, -0.5), 12, 12);
+    painter.drawRoundedRect(bounds.adjusted(1, 1, -1, -1), 12, 12);
 
     // Title & subtitle
     painter.setPen(CybouTheme::color(CybouTheme::TEXT_PRIMARY));

@@ -1749,6 +1749,156 @@ void CybouShellTests::mailFilesTabReachabilityAndFocus()
     window->close();
 }
 
+void CybouShellTests::identityWalletNetworkKeyboardNavigation()
+{
+    ScopedEnvironment appearance{"CYBOU_APPEARANCE", "light"};
+    auto window = makeWindow();
+    window->resize(1280, 860);
+    window->show();
+    const auto focus = [&](QWidget* widget) {
+        QApplication::processEvents();
+        window->activateWindow();
+        if (!QTest::qWaitForWindowActive(window.get())) return false;
+        QApplication::setActiveWindow(window.get());
+        widget->setFocus(Qt::TabFocusReason);
+        QApplication::processEvents();
+        return widget->hasFocus();
+    };
+    const QString shots = qEnvironmentVariable("CYBOU_TEST_FOCUS_SCREENSHOT_DIR");
+    if (!shots.isEmpty()) QVERIFY(QDir{}.mkpath(shots));
+    for (const auto& theme : {QByteArray{"light"}, QByteArray{"dark"}}) {
+        qputenv("CYBOU_APPEARANCE", theme);
+        window->reloadAppearance();
+        for (const auto& language : {QStringLiteral("en"), QStringLiteral("fr")}) {
+            window->setLanguage(language);
+            auto* model = window->desktopModel();
+            QVERIFY(CybouUiFixtures::apply(*model, QStringLiteral("active")));
+            for (const auto page_id : {CybouPage::Identity, CybouPage::Wallet, CybouPage::Network}) {
+                window->showPage(page_id);
+                QWidget* page = window->page(page_id);
+                QApplication::processEvents();
+                auto buttons = page->findChildren<QAbstractButton*>();
+                QWidget* start = nullptr;
+                for (auto* button : buttons) {
+                    if (button->isVisible() && button->isEnabled()) { start = button; break; }
+                }
+                QVERIFY(start);
+                for (bool reverse : {false, true}) {
+                    QVERIFY(focus(start));
+                    QSet<QWidget*> visited;
+                    for (int i = 0; i < 256; ++i) {
+                        auto* current = QApplication::focusWidget();
+                        QVERIFY(current);
+                        if (i > 0 && current == start) break;
+                        visited.insert(current);
+                        QTest::keyClick(current, Qt::Key_Tab, reverse ? Qt::ShiftModifier : Qt::NoModifier);
+                        QApplication::processEvents();
+                    }
+                    QCOMPARE(QApplication::focusWidget(), start);
+                    for (auto* button : buttons) {
+                        if (!button->isVisible() || !button->isEnabled()) continue;
+                        QVERIFY2(visited.contains(button), qPrintable(button->objectName() + button->text()));
+                        QVERIFY(!button->text().isEmpty() || !button->accessibleName().isEmpty());
+                    }
+                    for (auto* row : page->findChildren<QFrame*>(QStringLiteral("walletActivityRow"))) {
+                        QVERIFY(visited.contains(row));
+                        QVERIFY(!row->accessibleName().isEmpty());
+                    }
+                    if (page_id == CybouPage::Network) {
+                        QVERIFY(visited.contains(static_cast<NetworkPage*>(page)->mapWidget()));
+                    }
+                }
+            }
+            window->showPage(CybouPage::Network);
+            auto* network = static_cast<NetworkPage*>(window->page(CybouPage::Network));
+            cybou::NodeDiagnosticsSnapshot snap;
+            snap.peers = {{"127.0.0.1:29461", 12, ""}, {"192.168.1.50:29461", 10, ""}};
+            model->setNetworkDiagnostics(snap);
+            QTRY_COMPARE(network->peerCount(), 2);
+            network->selectPeer(0);
+            QVERIFY(focus(network->mapWidget()));
+            QTest::keyClick(network->mapWidget(), Qt::Key_Right);
+            QCOMPARE(network->selectedPeerIndex(), 1);
+            QTest::keyClick(network->mapWidget(), Qt::Key_Left);
+            QCOMPARE(network->selectedPeerIndex(), 0);
+            const QString prefix = shots + QLatin1Char('/') + language + QLatin1Char('-') + QString::fromLatin1(theme);
+            if (!shots.isEmpty()) QVERIFY(network->mapWidget()->grab().save(prefix + QStringLiteral("-map.png")));
+
+            window->showPage(CybouPage::Wallet);
+            auto* wallet = window->page(CybouPage::Wallet);
+            QFrame* entry_row = nullptr;
+            for (auto* row : wallet->findChildren<QFrame*>(QStringLiteral("walletActivityRow"))) {
+                if (!row->property("walletEntryId").toString().isEmpty()) { entry_row = row; break; }
+            }
+            QVERIFY(entry_row && focus(entry_row));
+            if (!shots.isEmpty()) QVERIFY(entry_row->grab().save(prefix + QStringLiteral("-wallet-row.png")));
+            const auto drive_dialog = [&](const QString& name, bool amount_dialog) {
+                bool seen = false;
+                bool valid = false;
+                QTimer driver;
+                driver.setInterval(10);
+                QObject::connect(&driver, &QTimer::timeout, window.get(), [&] {
+                    auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget());
+                    if (!dialog || dialog->objectName() != name) return;
+                    driver.stop();
+                    seen = true;
+                    dialog->activateWindow();
+                    QApplication::setActiveWindow(dialog);
+                    if (amount_dialog) {
+                        auto* amount = dialog->findChild<QLineEdit*>(QStringLiteral("walletLockAmount"));
+                        auto* confirm = dialog->findChild<QPushButton*>(QStringLiteral("primaryButton"));
+                        valid = amount && confirm && !amount->accessibleName().isEmpty() && !confirm->isEnabled();
+                        if (amount) { amount->setFocus(); QTest::keyClicks(amount, "1"); }
+                        valid &= confirm && confirm->isEnabled();
+                    } else {
+                        valid = true;
+                    }
+                    if (auto* child = dialog->focusWidget()) QTest::keyClick(child, Qt::Key_Escape);
+                    valid &= !dialog->isVisible();
+                    if (dialog->isVisible()) dialog->reject();
+                });
+                QTimer timeout;
+                timeout.setSingleShot(true);
+                QObject::connect(&timeout, &QTimer::timeout, window.get(), [] {
+                    if (auto* dialog = qobject_cast<QDialog*>(QApplication::activeModalWidget())) dialog->reject();
+                });
+                driver.start(); timeout.start(3000);
+                QTest::keyClick(QApplication::focusWidget(), Qt::Key_Space);
+                return seen && valid;
+            };
+            QVERIFY(drive_dialog(QStringLiteral("walletEntryDetails"), false));
+            QCOMPARE(window->focusWidget(), entry_row);
+            auto* lock = FindById<QPushButton>(wallet, QStringLiteral("walletLock"));
+            QVERIFY(lock && focus(lock));
+            const auto balance = model->status().balance;
+            const auto system = model->status().system_balance;
+            QSignalSpy submitted{model, &CybouDesktopModel::systemLockFinished};
+            QVERIFY(drive_dialog(QStringLiteral("walletLockDialog"), true));
+            QCOMPARE(submitted.count(), 0);
+            QCOMPARE(model->status().balance, balance);
+            QCOMPARE(model->status().system_balance, system);
+            QCOMPARE(window->focusWidget(), lock);
+
+            auto entries = model->walletEntries();
+            QVERIFY(!entries.isEmpty());
+            entries = {entries.first(), entries.first()};
+            entries[0].id = language + QString::fromLatin1(theme) + QStringLiteral("keyboard-fee-a");
+            entries[1].id = language + QString::fromLatin1(theme) + QStringLiteral("keyboard-fee-b");
+            for (auto& e : entries) { e.kind = CybouWalletEntryKind::NetworkServiceFee; e.operation_state = CybouOperationState::Finalized; e.operation_id.clear(); }
+            model->setWalletEntries(entries);
+            QFrame* group = nullptr;
+            for (auto* row : wallet->findChildren<QFrame*>(QStringLiteral("walletActivityRow"))) {
+                if (!row->property("walletFeeGroup").toStringList().isEmpty()) group = row;
+            }
+            QVERIFY(group && focus(group));
+            QTest::keyClick(group, Qt::Key_Return);
+            QTRY_VERIFY(window->focusWidget() && window->focusWidget()->property("walletEntryId").toString() == entries.first().id);
+        }
+    }
+    window->setLanguage(QStringLiteral("en"));
+    window->close();
+}
+
 void CybouShellTests::mailFilesKeyboardMenusAndDialogs()
 {
     auto window = makeWindow();

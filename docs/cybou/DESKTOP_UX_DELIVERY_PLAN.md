@@ -628,3 +628,12 @@ and focus return. Move/picker controls receive explicit accessible names using
 existing translated strings. Synthetic nested input settles QWidget activation;
 ordinary Escape behavior remains unchanged. Physical Menu/Shift+F10 and native
 OS file dialogs remain separate acceptance gates.
+
+Identity/Wallet/Network keyboard follow-up (2026-10-08): full forward/reverse
+Tab cycles now cover enabled actions on all three pages in FR/EN and both themes.
+Wallet activity and folded fee rows receive explicit focus and Enter/Space
+activation; keyboard expansion transfers focus to the first fee. The map gains
+an explicit focus border. Details cancellation, map arrow selection and valid
+Network balance input followed by Escape are covered without a transfer.
+Physical keys, screen-reader action semantics, mixed-monitor DPI and remaining
+Identity recovery/rotation and native-dialog acceptance remain open.

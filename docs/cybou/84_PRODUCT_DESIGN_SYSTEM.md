@@ -574,3 +574,14 @@ the genesis-authorized PoA key; the UI must describe this trust boundary honestl
 Network, operator tools and the own-content console follow
 [`NETWORK_AND_ADVANCED_UX.md`](NETWORK_AND_ADVANCED_UX.md). Security and deletion
 labels follow scoped evidence, never an unconditional RGPD/certification badge.
+
+## Keyboard activity and map controls
+
+Wallet history details and folded fee groups are reachable by Tab and activate
+with Enter or Space. Expanding a group with the keyboard focuses its first fee;
+closing details returns to the originating row. Activity rows and the Network
+map expose explicit contrasting focus borders in both themes. Map arrow keys
+select observed peers through the same details path as pointer selection.
+Network balance amount and recovery password fields have translated accessible
+names. These component behaviors do not imply screen-reader certification or
+physical-input acceptance.

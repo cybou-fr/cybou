@@ -14,6 +14,7 @@
 #include <QEvent>
 #include <QLocale>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QFrame>
 #include <QGridLayout>
 #include <QGuiApplication>
@@ -425,8 +426,12 @@ void WalletPage::showReceive()
 
 bool WalletPage::eventFilter(QObject* watched, QEvent* event)
 {
-    if (event->type() == QEvent::MouseButtonRelease &&
-        static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+    const bool mouse_activation = event->type() == QEvent::MouseButtonRelease &&
+        static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton;
+    const auto* key = event->type() == QEvent::KeyPress ? static_cast<QKeyEvent*>(event) : nullptr;
+    const bool keyboard_activation = key && !key->isAutoRepeat() && key->modifiers() == Qt::NoModifier &&
+        (key->key() == Qt::Key_Return || key->key() == Qt::Key_Enter || key->key() == Qt::Key_Space);
+    if (mouse_activation || keyboard_activation) {
         const QString id = watched->property("walletEntryId").toString();
         if (!id.isEmpty()) {
             showEntryDetails(id);
@@ -435,7 +440,15 @@ bool WalletPage::eventFilter(QObject* watched, QEvent* event)
         const QStringList group = watched->property("walletFeeGroup").toStringList();
         if (!group.isEmpty()) {
             for (const auto& id : group) m_expanded_fees.insert(id);
-            QMetaObject::invokeMethod(this, [this] { rebuildActivity(); }, Qt::QueuedConnection);
+            QMetaObject::invokeMethod(this, [this, first = group.first(), keyboard_activation] {
+                rebuildActivity();
+                if (keyboard_activation) {
+                    if (auto* row = m_activity_widgets.value(first)) {
+                        row->show();
+                        row->setFocus(Qt::OtherFocusReason);
+                    }
+                }
+            }, Qt::QueuedConnection);
             return true;
         }
     }
@@ -522,6 +535,7 @@ void WalletPage::showLockDialog()
     auto* amount = new QLineEdit{&dialog};
     amount->setObjectName(QStringLiteral("walletLockAmount"));
     amount->setPlaceholderText(tr("Whole CYBOU"));
+    amount->setAccessibleName(amount_label->text());
     amount->setMinimumHeight(38);
     amount->setValidator(new QRegularExpressionValidator{QRegularExpression{QStringLiteral("[0-9]{1,11}")}, amount});
     layout->addWidget(amount);
@@ -553,6 +567,16 @@ void WalletPage::rebuildActivity()
     while (auto* item = m_activity_rows->takeAt(0)) delete item;
     QSet<QString> retained;
     int shown = 0;
+    const auto make_accessible = [](QFrame* row, const QString& name) {
+        row->setObjectName(QStringLiteral("walletActivityRow"));
+        row->setFocusPolicy(Qt::StrongFocus);
+        row->setAccessibleName(name);
+        row->setAccessibleDescription(row->toolTip());
+        row->setStyleSheet(QStringLiteral(
+            "QFrame#walletActivityRow { border: 2px solid transparent; border-radius: 6px; }"
+            "QFrame#walletActivityRow:focus { border-color: %1; }")
+            .arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
+    };
     const auto& entries = m_model->walletEntries();
     for (qsizetype i = 0; i < entries.size() && shown < 12; ++i) {
         const auto& entry = entries.at(i);
@@ -590,6 +614,7 @@ void WalletPage::rebuildActivity()
                 if (auto* sub = row->findChild<QLabel*>(QStringLiteral("rowSub"))) sub->setText(sub_text);
                 if (auto* meta = row->findChild<QLabel*>(QStringLiteral("rowMeta"))) meta->setText(meta_text);
             }
+            make_accessible(row, title_text + QStringLiteral(" · ") + meta_text);
             m_activity_rows->addWidget(row);
             ++shown;
             i = run_end;
@@ -634,6 +659,7 @@ void WalletPage::rebuildActivity()
                 }
             }
         }
+        make_accessible(row, EntryTitle(entry) + QStringLiteral(" · ") + meta_text);
         m_activity_rows->addWidget(row);
         ++shown;
     }
