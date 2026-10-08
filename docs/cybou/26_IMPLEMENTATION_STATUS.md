@@ -3,6 +3,37 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Core CI signed-size build repair (2026-10-08)
+
+Authenticated log for GitHub core job `113302547455` (run `37774708866`,
+source `1f5417fb`) identifies `-Werror=sign-compare` in POSIX
+`ReadSecretFile`: signed `stat::st_size` was compared with unsigned `size_t`.
+Linux `-Wall -Wextra -Werror` syntax checking reproduces the failure. C++20
+`std::cmp_greater` now compares the integers without narrowing or suppressing
+warnings. Positive-size, one-MiB policy, private ownership/permissions, regular
+file and link rejection remain in force. The existing regression adds too-small,
+zero and over-policy size limits while retaining the exact-limit successful read.
+
+A fresh isolated WSL Ubuntu 26.04/GCC 15.2 headless build uses CI's
+RelWithDebInfo `-O2 -g0`, BUILD_TESTS, test hooks and WARNINGS_AS_ERRORS settings;
+all five CI targets build. It uses local OpenSSL/BLAKE3 dependencies, not the
+Ubuntu 24.04/GCC 13.3 CI image: this is local strict-build evidence. The full
+core suite passes 266 cases / 98,757 assertions. Official DEVNET help/info/doctor
+checks pass; doctor leaves the supplied absent data directory absent.
+
+Isolated MinGW desktop/core/Qt builds pass. Full offscreen Qt: 92 passed,
+0 failed/skipped. Three native Windows Qt scenarios: 5 results including
+setup/cleanup, all passed. The Windows secret-file case passes 7 assertions
+(the remaining 258 cases are intentionally filtered, not a Windows full-suite
+claim). Python battle/benchmark/report discovery passes 6 tests. Build cache
+output is restored. Logs, original failing CI log and binary/source provenance
+are under `artifacts/ci-integrity-20261008/`.
+
+This repairs the diagnosed source failure; green remote core/desktop CI for the
+published corrected revision is still required before closing P0. The earlier
+desktop jobs were in vcpkg setup at the status check. No running desktop,
+signer, VPS, accepted network material or signing history was changed.
+
 ## Acceptance planning review (2026-10-08)
 
 Active remaining work is [DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md),

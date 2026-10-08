@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 92 | 577233be5115bb19 |
 | docs/cybou/24_DECISIONS.md | 228 | 6e481a2f9aa6cb34 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 127 | afd12dcd79bf44a5 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1226 | 9bce8c4860b4b423 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1257 | d608e9b55885df9b |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -60,7 +60,7 @@ editing an included file.
 | docs/cybou/APPLICATION_DATA_PLANE.md | 536 | 85c2b1079dbf91cd |
 | docs/cybou/DATA_ASSURANCE_AND_ERASURE.md | 356 | 91484bd174114f8f |
 | docs/cybou/DATA_PROCESSING_INVENTORY.md | 85 | 3ecd23dc757382b1 |
-| docs/cybou/DESKTOP_BETA_ACCEPTANCE_PLAN.md | 183 | 046b7be5bfb2c579 |
+| docs/cybou/DESKTOP_BETA_ACCEPTANCE_PLAN.md | 199 | a2da02c9323feb8d |
 | docs/cybou/DESKTOP_UX_DELIVERY_PLAN.md | 648 | 6e017266f426d9a7 |
 | docs/cybou/DESKTOP_UX_REMAINING_WORK_2026-10-06.md | 236 | 2671655e0e1d9118 |
 | docs/cybou/DEVNET_DEVELOPMENT.md | 52 | 0b41dfc58c33b6a3 |

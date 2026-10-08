@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/secret_file.h>
 #include <cybou/crypto/cleanse.h>
+#include <utility>
 #ifdef _WIN32
 #include <windows.h>
 #include <sddl.h>
@@ -97,7 +98,7 @@ std::optional<std::vector<unsigned char>> ReadSecretFile(const std::filesystem::
     const bool ok=ReadFile(file,bytes.data(),bytes.size(),&read,nullptr)&&read==bytes.size();CloseHandle(file);
 #else
     const int fd=open(path.c_str(),O_RDONLY|O_CLOEXEC|O_NOFOLLOW);if(fd<0)return std::nullopt;
-    struct stat info{};if(fstat(fd,&info)!=0||!S_ISREG(info.st_mode)||info.st_uid!=geteuid()||(info.st_mode&0077)||info.st_size<=0||info.st_size>max_bytes) {close(fd);return std::nullopt;}
+    struct stat info{};if(fstat(fd,&info)!=0||!S_ISREG(info.st_mode)||info.st_uid!=geteuid()||(info.st_mode&0077)||info.st_size<=0||std::cmp_greater(info.st_size,max_bytes)) {close(fd);return std::nullopt;}
     std::vector<unsigned char> bytes(info.st_size);size_t offset=0;
     while(offset<bytes.size()) {const auto n=read(fd,bytes.data()+offset,bytes.size()-offset);if(n<0&&errno==EINTR)continue;if(n<=0)break;offset+=n;}close(fd);const bool ok=offset==bytes.size();
 #endif

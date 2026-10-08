@@ -71,6 +71,9 @@ BOOST_AUTO_TEST_CASE(secret_files_are_private_and_reject_links)
     const auto read = cybou::ReadSecretFile(path, 4);
     BOOST_REQUIRE(read);
     BOOST_CHECK(*read == std::vector<unsigned char>(secret.begin(), secret.end()));
+    BOOST_CHECK(!cybou::ReadSecretFile(path, secret.size() - 1));
+    BOOST_CHECK(!cybou::ReadSecretFile(path, 0));
+    BOOST_CHECK(!cybou::ReadSecretFile(path, (1U << 20) + 1));
     BOOST_CHECK(!cybou::CreateSecretFile(path, secret));
 #ifndef _WIN32
     struct stat info{};

@@ -58,6 +58,22 @@ must retain the original failure and explain resolution. Defer large new UI
 refactors until this gate passes; targeted build/acceptance defect repairs remain
 allowed. No CI repair is claimed by this documentation update.
 
+### Core build diagnosis follow-up (2026-10-08)
+
+The authenticated GitHub job log is now available. Job `113302547455` fails in
+`secret_file.cpp::ReadSecretFile`: POSIX signed `st_size` compared with unsigned
+`size_t max_bytes` produces `-Werror=sign-compare` on GCC 13.3. Local Linux strict
+syntax checking reproduces the same error. The correction uses C++20
+`std::cmp_greater`, preserving the positive-size check and avoiding narrowing.
+Size-limit regression coverage retains exact-limit reads and rejects too-small,
+zero and over-policy limits. Private owner/mode and link rejection are unchanged.
+
+The previous unknown-cause statement above is the original review snapshot,
+not the current diagnosis. Local validation and toolchain differences are in
+`26_IMPLEMENTATION_STATUS.md`. The P0 gate remains open until core and desktop
+GitHub Actions validate the published corrected revision; local passes alone do
+not close it. The older desktop run remains in vcpkg setup at this follow-up.
+
 ## P0 — Acceptance environment and independent remote domains
 
 Prepare clients and providers before Mail/Files durability tests. Record actual
