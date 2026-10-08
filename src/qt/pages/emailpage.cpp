@@ -30,6 +30,8 @@
 #include <QShowEvent>
 #include <QScrollBar>
 #include <QSet>
+#include <QStyledItemDelegate>
+#include <QStyle>
 #include <QStackedWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -44,6 +46,8 @@ namespace {
 /** Window width at which Mail shows folders, list and reader together. */
 constexpr int kThreePaneWindowWidth = 1400;
 constexpr int kRankRole = Qt::UserRole + 1;
+constexpr int kOperationRole = Qt::UserRole + 2;
+constexpr int kOnlineRole = Qt::UserRole + 3;
 class MessageItem final : public QListWidgetItem {
 public:
     using QListWidgetItem::QListWidgetItem;
@@ -94,119 +98,109 @@ QString RowPeer(const CybouMailItem& item)
         ? EmailPage::tr("To: %1").arg(item.to_name) : item.from_name;
 }
 
-/** "Subject — preview" on one line, subject emphasised, elided to fit. */
-class SubjectPreview final : public QWidget
+/** Paint only visible semantic rows. No per-message widgets or plaintext body layout. */
+class MailDelegate final : public QStyledItemDelegate
 {
 public:
-    SubjectPreview(QString subject, QString preview, bool unread, QWidget* parent)
-        : QWidget{parent}, m_subject{std::move(subject)}, m_preview{std::move(preview)}, m_unread{unread}
+    using Lookup = std::function<const CybouMailItem*(const QString&)>;
+    MailDelegate(Lookup lookup, QObject* parent) : QStyledItemDelegate{parent}, m_lookup{std::move(lookup)} {}
+
+    QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex&) const override
     {
-        setMinimumWidth(0);
-        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-        setFixedHeight(fontMetrics().height() + 2);
-        setAccessibleName(m_subject);
+        return {0, std::max(62, 2 * QFontMetrics{option.font}.height() + 20)};
     }
 
-protected:
-    void paintEvent(QPaintEvent*) override
+    void paint(QPainter* painter, const QStyleOptionViewItem& supplied, const QModelIndex& index) const override
     {
-        QPainter painter{this};
-        QFont bold = font();
-        bold.setWeight(m_unread ? QFont::Bold : QFont::DemiBold);
-        const QFontMetrics bold_metrics{bold};
-        const QString subject = bold_metrics.elidedText(m_subject, Qt::ElideRight, width());
-        painter.setFont(bold);
-        painter.setPen(CybouTheme::color(CybouTheme::TEXT_PRIMARY));
-        painter.drawText(QRect{0, 0, width(), height()}, Qt::AlignLeft | Qt::AlignVCenter, subject);
-        const int used = bold_metrics.horizontalAdvance(subject);
-        if (m_preview.isEmpty() || used >= width() - 24) return;
-        painter.setFont(font());
-        painter.setPen(CybouTheme::color(CybouTheme::TEXT_MUTED));
-        const QString rest = fontMetrics().elidedText(QStringLiteral(" — ") + m_preview, Qt::ElideRight, width() - used);
-        painter.drawText(QRect{used, 0, width() - used, height()}, Qt::AlignLeft | Qt::AlignVCenter, rest);
+        const auto* item = m_lookup(index.data(Qt::UserRole).toString());
+        if (!item) return;
+        QStyleOptionViewItem option{supplied};
+        initStyleOption(&option, index);
+        option.text.clear();
+        const auto* style = option.widget ? option.widget->style() : QApplication::style();
+        style->drawControl(QStyle::CE_ItemViewItem, &option, painter, option.widget);
+        painter->save();
+        painter->setClipRect(option.rect);
+        painter->setRenderHint(QPainter::Antialiasing);
+        const int left = option.rect.left(), center = option.rect.center().y();
+        if (item->unread) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(CybouTheme::color(CybouTheme::MINT));
+            painter->drawEllipse(QPoint{left + 10, center}, 4, 4);
+        }
+        const QString peer = item->outgoing || item->folder == CybouMailFolder::Sent || item->draft ? item->to_name : item->from_name;
+        painter->drawPixmap(left + 24, center - 16, avatarPixmap(peer.left(1), PeerColor(peer), 32));
+        const int text_left = left + 66;
+        int right = option.rect.right() - 12;
+        const int width = std::max(0, right - text_left);
+        QFont normal{option.widget ? option.widget->font() : option.font};
+        const int line_height = QFontMetrics{normal}.height() + 2;
+        const int top = center - line_height - 1;
+        const auto operation = static_cast<CybouOperationState>(index.data(kOperationRole).toInt());
+        const bool pending = !item->draft && (CybouProduct::itemPending(item->state, operation) || item->state == CybouContentState::NeedsAttention);
+        const bool online = index.data(kOnlineRole).toBool();
+        QFont meta{normal};
+        meta.setPixelSize(12);
+        if (item->unread) meta.setWeight(QFont::Bold);
+        painter->setFont(meta);
+        const QString meta_text = pending
+            ? (item->state == CybouContentState::Securing ? CybouProduct::contentStateText(item->state)
+                : CybouProduct::contentWithOperationText(item->state, operation, online)) : shortTime(item->time);
+        const QFontMetrics meta_metrics{meta};
+        const int meta_width = std::min(width / 2, meta_metrics.horizontalAdvance(meta_text) + (pending ? 13 : 0) + 6);
+        painter->setPen(CybouTheme::color(item->state == CybouContentState::NeedsAttention ? CybouTheme::ROSE
+            : item->unread ? CybouTheme::TEXT_PRIMARY : CybouTheme::TEXT_MUTED));
+        painter->drawText(QRect{right - meta_width + (pending ? 13 : 0), top, std::max(0, meta_width - (pending ? 13 : 0)), line_height},
+            Qt::AlignRight | Qt::AlignVCenter, meta_metrics.elidedText(meta_text, Qt::ElideRight, std::max(0, meta_width - (pending ? 13 : 0))));
+        if (pending) {
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(CybouTheme::color(stateColor(item->state, operation)));
+            painter->drawEllipse(QPoint{right - meta_width + 4, top + line_height / 2}, 3, 3);
+        }
+        right -= meta_width + 8;
+        const auto icon = [&](Glyph glyph, QRgb color, int size) {
+            painter->drawPixmap(right - size, top + (line_height - size) / 2, glyphPixmap(glyph, {size, size}, CybouTheme::color(color)));
+            right -= size + 8;
+        };
+        if (!pending && !item->draft && (item->state == CybouContentState::Protected || item->state == CybouContentState::Received))
+            icon(Glyph::Lock, CybouTheme::BRAND_TEAL_DARK, 12);
+        if (!pending && item->below_support_rate) {
+            const QString below = EmailPage::tr("Below support rate");
+            const int below_width = std::min(std::max(0, (right - text_left) / 2), meta_metrics.horizontalAdvance(below) + 6);
+            painter->setFont(meta);
+            painter->setPen(CybouTheme::color(CybouTheme::ROSE));
+            painter->drawText(QRect{right - below_width, top, below_width, line_height}, Qt::AlignRight | Qt::AlignVCenter,
+                meta_metrics.elidedText(below, Qt::ElideRight, below_width));
+            right -= below_width + 8;
+        }
+        if (item->starred) icon(Glyph::Star, CybouTheme::AMBER, 14);
+        if (!item->attachments.isEmpty()) icon(Glyph::File, CybouTheme::TEXT_MUTED, 14);
+        QFont name{normal};
+        if (item->unread) name.setWeight(QFont::Bold);
+        painter->setFont(name);
+        painter->setPen(CybouTheme::color(item->unread ? CybouTheme::TEXT_PRIMARY : CybouTheme::TEXT_SECONDARY));
+        const int name_width = std::max(0, right - text_left);
+        painter->drawText(QRect{text_left, top, name_width, line_height}, Qt::AlignLeft | Qt::AlignVCenter,
+            QFontMetrics{name}.elidedText(RowPeer(*item), Qt::ElideRight, name_width));
+        QFont subject_font{normal};
+        subject_font.setWeight(item->unread ? QFont::Bold : QFont::DemiBold);
+        const QFontMetrics subject_metrics{subject_font};
+        const QString subject = subject_metrics.elidedText(item->subject.isEmpty() ? EmailPage::tr("(no subject)") : item->subject, Qt::ElideRight, width);
+        painter->setFont(subject_font);
+        painter->setPen(CybouTheme::color(CybouTheme::TEXT_PRIMARY));
+        painter->drawText(QRect{text_left, center + 2, width, line_height}, Qt::AlignLeft | Qt::AlignVCenter, subject);
+        const int used = subject_metrics.horizontalAdvance(subject);
+        if (!item->preview.isEmpty() && used < width - 24) {
+            painter->setFont(normal);
+            painter->setPen(CybouTheme::color(CybouTheme::TEXT_MUTED));
+            painter->drawText(QRect{text_left + used, center + 2, width - used, line_height}, Qt::AlignLeft | Qt::AlignVCenter,
+                QFontMetrics{normal}.elidedText(QStringLiteral(" — ") + item->preview, Qt::ElideRight, width - used));
+        }
+        painter->restore();
     }
-
 private:
-    QString m_subject;
-    QString m_preview;
-    bool m_unread;
+    const Lookup m_lookup;
 };
-
-QWidget* MailRow(const CybouMailItem& item, CybouOperationState operation, bool online, QWidget* parent)
-{
-    auto* row = new QWidget{parent};
-    row->setObjectName(QStringLiteral("mailRow"));
-    // List selection and dragging belong to the viewport, including presses on child labels.
-    row->setAttribute(Qt::WA_TransparentForMouseEvents);
-    row->setAccessibleName(EmailPage::tr("%1, %2%3").arg(RowPeer(item), item.subject,
-        item.unread ? EmailPage::tr(", unread") : QString{}));
-    auto* layout = new QHBoxLayout{row};
-    layout->setContentsMargins(6, 6, 12, 6);
-    layout->setSpacing(10);
-    // Unread marker keeps its space so rows stay aligned.
-    auto* marker = new QLabel{row};
-    marker->setFixedSize(8, 8);
-    marker->setStyleSheet(item.unread ? QStringLiteral("background: %1; border-radius: 4px;").arg(CybouTheme::color(CybouTheme::MINT).name())
-                                      : QStringLiteral("background: transparent;"));
-    layout->addWidget(marker, 0, Qt::AlignVCenter);
-    const QString peer = item.outgoing || item.folder == CybouMailFolder::Sent || item.draft ? item.to_name : item.from_name;
-    layout->addWidget(Avatar(peer.left(1), PeerColor(peer), row, 32), 0, Qt::AlignVCenter);
-
-    auto* text = new QVBoxLayout;
-    text->setSpacing(3);
-    auto* top = new QHBoxLayout;
-    top->setSpacing(8);
-    auto* who = new ElidedLabel{RowPeer(item), row};
-    who->setStyleSheet(item.unread ? QStringLiteral("font-weight: 700; color: %1;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name())
-                                   : QStringLiteral("color: %1;").arg(CybouTheme::color(CybouTheme::TEXT_SECONDARY).name()));
-    top->addWidget(who, 1);
-    if (!item.attachments.isEmpty()) {
-        auto* clip = new QLabel{row};
-        clip->setPixmap(glyphPixmap(Glyph::File, {14, 14}, CybouTheme::color(CybouTheme::TEXT_MUTED)));
-        clip->setToolTip(EmailPage::tr("Has attachments"));
-        top->addWidget(clip);
-    }
-    if (item.starred) {
-        auto* star = new QLabel{row};
-        star->setPixmap(glyphPixmap(Glyph::Star, {14, 14}, CybouTheme::color(CybouTheme::AMBER)));
-        top->addWidget(star);
-    }
-    const bool pending = CybouProduct::itemPending(item.state, operation) || item.state == CybouContentState::NeedsAttention;
-    QLabel* when{nullptr};
-    if (pending && !item.draft) {
-        when = StateChip(item.state, item.state == CybouContentState::Securing
-            ? CybouProduct::contentStateText(item.state)
-            : CybouProduct::contentWithOperationText(item.state, operation, online), row, operation);
-    } else {
-        if (item.below_support_rate) {
-            auto* below = new QLabel{EmailPage::tr("Below support rate"), row};
-            below->setObjectName(QStringLiteral("rowMeta"));
-            below->setToolTip(EmailPage::tr("This message paid less than the support rate; it may be sent by a modified client or be spam."));
-            below->setStyleSheet(QStringLiteral("color: %1; font-weight: 600;").arg(CybouTheme::color(CybouTheme::ROSE).name()));
-            top->addWidget(below);
-        }
-        if (!item.draft && (item.state == CybouContentState::Protected || item.state == CybouContentState::Received)) {
-            // Settled mail: a tiny lock beside the time; the tooltip says what it means.
-            auto* lock = new QLabel{row};
-            lock->setObjectName(QStringLiteral("stateLock"));
-            lock->setPixmap(glyphPixmap(Glyph::Lock, {12, 12}, CybouTheme::color(CybouTheme::BRAND_TEAL_DARK)));
-            lock->setToolTip(item.state == CybouContentState::Protected
-                ? EmailPage::tr("Protected: encrypted here and stored encrypted on the network")
-                : EmailPage::tr("Received: end-to-end encrypted"));
-            lock->setAccessibleName(CybouProduct::contentStateText(item.state));
-            top->addWidget(lock);
-        }
-        when = new QLabel{shortTime(item.time), row};
-        when->setObjectName(QStringLiteral("rowMeta"));
-        if (item.unread) when->setStyleSheet(QStringLiteral("color: %1; font-weight: 700;").arg(CybouTheme::color(CybouTheme::TEXT_PRIMARY).name()));
-    }
-    top->addWidget(when);
-    text->addLayout(top);
-    text->addWidget(new SubjectPreview{item.subject.isEmpty() ? EmailPage::tr("(no subject)") : item.subject,
-        item.preview, item.unread, row});
-    layout->addLayout(text, 1);
-    return row;
-}
 
 } // namespace
 
@@ -298,6 +292,10 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
 
     m_list = new QListWidget{m_list_pane};
     m_list->setObjectName(QStringLiteral("messageList"));
+    m_list->setItemDelegate(new MailDelegate{[this](const QString& id) -> const CybouMailItem* {
+        const auto it = m_rendered_mail.constFind(id);
+        return it == m_rendered_mail.cend() ? nullptr : &it.value();
+    }, m_list});
     m_list->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     m_list->setAccessibleName(tr("Messages"));
     m_list->setFrameShape(QFrame::NoFrame);
@@ -798,12 +796,23 @@ void EmailPage::rebuildList()
         const auto operation = m_model->displayedOperationState(mail.operation_id, mail.operation_state);
         const QStringList meta{QString::number(static_cast<int>(operation)), QString::number(m_model->status().online), shortTime(mail.time)};
         if (!m_rendered_mail.contains(mail.id) || m_rendered_mail.value(mail.id) != mail || m_rendered_meta.value(mail.id) != meta) {
-            item->setData(Qt::AccessibleTextRole, tr("%1, %2%3").arg(RowPeer(mail), mail.subject,
-                mail.unread ? tr(", unread") : QString{}));
-            // Qt deletes a replaced index widget later; hide it immediately so
-            // it cannot paint over the new row during the current event turn.
-            if (auto* previous = m_list->itemWidget(item)) previous->hide();
-            m_list->setItemWidget(item, MailRow(mail, operation, m_model->status().online, m_list));
+            QStringList accessible{RowPeer(mail), mail.subject.isEmpty() ? tr("(no subject)") : mail.subject};
+            if (mail.unread) accessible.append(tr("unread"));
+            if (mail.starred) accessible.append(tr("Starred"));
+            if (!mail.attachments.isEmpty()) accessible.append(tr("Has attachments"));
+            if (mail.below_support_rate) accessible.append(tr("Below support rate"));
+            const QString state = mail.draft ? tr("Draft") : CybouProduct::contentWithOperationText(mail.state, operation, m_model->status().online);
+            accessible.append(state);
+            accessible.append(meta[2]);
+            item->setData(Qt::AccessibleTextRole, accessible.join(QStringLiteral(", ")));
+            item->setData(Qt::AccessibleDescriptionRole, mail.preview);
+            QString tooltip = accessible.join(QStringLiteral(" · "));
+            if (mail.state == CybouContentState::Protected) tooltip += QStringLiteral("\n") + tr("Protected: encrypted here and stored encrypted on the network");
+            else if (mail.state == CybouContentState::Received) tooltip += QStringLiteral("\n") + tr("Received: end-to-end encrypted");
+            if (mail.below_support_rate) tooltip += QStringLiteral("\n") + tr("This message paid less than the support rate; it may be sent by a modified client or be spam.");
+            item->setToolTip(QStringLiteral("<qt>%1</qt>").arg(tooltip.toHtmlEscaped().replace(QLatin1Char{'\n'}, QStringLiteral("<br/>"))));
+            item->setData(kOperationRole, static_cast<int>(operation));
+            item->setData(kOnlineRole, m_model->status().online);
             m_rendered_mail.insert(mail.id, mail);
             m_rendered_meta.insert(mail.id, meta);
         }
@@ -822,6 +831,7 @@ void EmailPage::rebuildList()
         : tr("%1 is empty.").arg(ViewName(m_view)));
     m_list_empty->setVisible(items.isEmpty() && identity);
     m_list->setVisible(!items.isEmpty());
+    m_list->viewport()->update();
 }
 
 void EmailPage::refreshBanner()

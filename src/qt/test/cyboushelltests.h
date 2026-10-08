@@ -76,6 +76,8 @@ private Q_SLOTS:
     void fileAdvancedSurvivesRefresh();
     void fileRowsRetainInteractionAcrossUpdates();
     void mailRowsRetainContextAndReplacement();
+    void largeMailboxPresentationProfile();
+    void mailDelegateExposesSemanticStatus();
     void mailReaderKeepsContextAndClearsOnLock();
     void largeFileCatalogUpdatesInPlace();
     void folderImportIsCancellableAndPreservesStructure();

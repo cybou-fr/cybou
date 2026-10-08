@@ -2725,6 +2725,14 @@ Objet : %3
         <source>%1 messages deleted; %2 could not be deleted. Their content is kept. Try again.</source>
         <translation>%1 messages supprimés ; %2 n’ont pas pu être supprimés. Leur contenu est conservé. Réessayez.</translation>
     </message>
+    <message>
+        <source>unread</source>
+        <translation>non lu</translation>
+    </message>
+    <message>
+        <source>Draft</source>
+        <translation>Brouillon</translation>
+    </message>
 </context>
 <context>
     <name>HomePage</name>

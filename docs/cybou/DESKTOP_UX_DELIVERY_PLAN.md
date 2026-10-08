@@ -588,3 +588,14 @@ limits display to 100 tasks, and clears private cached labels on lock. The journ
 is volatile; durable application ownership remains unchanged. Next delivery work
 is large-Mail presentation profiling and the remaining physical/live acceptance
 gates, rather than another task API or a generic mutation replay mechanism.
+
+Mail viewport follow-up (2026-10-08): measured 2,000/10,000-message construction,
+completed Qt viewport rendering, ten scrolls and ten one-message updates before
+and after replacing per-message widget trees with one delegate. Styled native
+Windows results and their scope are recorded in implementation status. Stable
+selection, anchor, search, IDs, handoff and semantic accessibility remain; short
+metadata clipping found during visual review was corrected. Large-mailbox
+presentation profiling/delegate work is delivered at component scope. Remaining
+gates include physical input/mixed-monitor DPI, screen-reader use, broader
+FR/EN acceptance and clean-machine/live outage/recovery scenarios. Independent
+remote failure-domain evidence remains separate from UI rendering performance.

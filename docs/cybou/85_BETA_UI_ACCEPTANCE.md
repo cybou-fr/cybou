@@ -27,6 +27,14 @@ hidden-popup lock cleanup and terminal retention without dropping active work.
 These are local Qt/component checks, not physical input or restart acceptance
 for every live workflow; the task journal itself is intentionally volatile.
 
+Mail presentation evidence (2026-10-08) compares 2,000/10,000 synthetic-message
+construction and completed Qt renders before/after viewport delegate delivery.
+Regression covers retained IDs/selection/scroll/search/handoff, semantic status
+and escaped/plain-text metadata, and lock cleanup. Styled native Windows timings
+at DPR 1.75 and visual fixture review are scoped in implementation status;
+physical mouse/mixed-monitor DPI, real screen-reader interaction and live index
+catch-up are not inferred from these component results.
+
 ## 1. Clean-machine onboarding
 
 ```text

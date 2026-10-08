@@ -3,6 +3,48 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Mail viewport performance package (2026-10-08)
+
+Profiling confirmed that per-message widgets dominated initial presentation.
+Mail now paints visible semantic rows through one QStyledItemDelegate; stable
+QListWidgetItem IDs, rank, selection/current/anchor and replacement-ID handoff
+remain. The delegate preserves avatar, direction, unread/star/attachment markers,
+plain subject/preview, status/date, protection and support-rate explanations.
+Accessible item text/description and escaped tooltips replace child-widget-only
+labels. A visual review caught short metadata clipping; font source and text
+padding were corrected, with light/dark status captures retained. Reader,
+compose, encrypted index ownership, delivery and publication semantics are unchanged.
+
+Native Windows component runs with the actual desktop stylesheet initialized,
+1040x720 geometry and DPR 1.75 gave these observations (milliseconds):
+
+| Synthetic mailbox | Construction before / after | First completed Qt render before / after | Scroll render median before / after | One-message update + render median before / after |
+| --- | ---: | ---: | ---: | ---: |
+| 2,000 messages | 972 / 27 | 1,252 / 112 | 9 / 5 | 26 / 13 |
+| 10,000 messages | 12,171 / 144 | 17,304 / 219 | 32 / 5 | 117 / 44 |
+
+Scroll/update columns each use ten samples, not long-run percentile estimates.
+Separate unstyled native baseline logs are retained, including the earlier
+7,440 ms first render at 10,000 messages; they are not mixed with the styled
+comparison. The baseline row-widget counts after ten updates include ten
+widgets awaiting Qt deferred deletion; final rows create zero mailRow widgets.
+A synchronous viewport grab establishes completed Qt rendering, not physical
+monitor presentation. These are synthetic local UI observations, excluding
+network/storage/index discovery I/O and clean-machine/live acceptance.
+
+Validation: isolated GUI/test builds succeeded; the final full Qt suite passed
+87 results, and seven targeted native Windows scenarios passed (nine results
+including setup/cleanup). Profiling runs each passed at 2,000 and 10,000 messages.
+Regression covers semantic status/date/unread/star/attachment metadata, escaped
+tooltips, zero message-row widgets, retained current/selection/anchor/search,
+replacement IDs, lock clearing and existing acknowledged Mail/Files core-adapter
+flows. Light/dark status captures and a French dark desktop Inbox fixture were
+visually inspected. Evidence, baseline source patch/binary provenance, structured
+measurements and final source/binary provenance are under
+`artifacts/ux-mail-performance-20261008/`. The build cache is restored to its
+normal output directory. No live desktop/signer or VPS was restarted/deployed.
+Physical drag/mixed-monitor DPI and real screen-reader acceptance remain open.
+
 ## Shared Mail/Files task panel package (2026-10-08)
 
 The existing header Activity panel now receives correlated local Files command

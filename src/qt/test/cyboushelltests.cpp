@@ -2640,6 +2640,145 @@ void CybouShellTests::mailReaderKeepsContextAndClearsOnLock()
     QTRY_VERIFY(FindById<QPushButton>(&reader, QStringLiteral("downloadAttachment")) == nullptr);
 }
 
+void CybouShellTests::largeMailboxPresentationProfile()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    const int requested = qEnvironmentVariableIntValue("CYBOU_TEST_MAILBOX_SIZE");
+    const int count = requested > 0 ? std::clamp(requested, 2000, 10000) : 2000;
+    const auto now = QDateTime::currentDateTime();
+    QVector<CybouMailItem> mail;
+    mail.reserve(count);
+    for (int i = 0; i < count; ++i) {
+        CybouMailItem message;
+        message.id = QStringLiteral("mail-%1").arg(i);
+        message.subject = QStringLiteral("Mailbox profile subject %1").arg(i);
+        message.preview = QStringLiteral("A locally indexed encrypted message preview.");
+        message.from_name = QStringLiteral("alice.cybou");
+        message.to_name = QStringLiteral("bob.cybou");
+        message.time = now.addSecs(-i * 60);
+        message.state = CybouContentState::Received;
+        message.unread = i % 3 == 0;
+        message.starred = i % 7 == 0;
+        if (i % 5 == 0) message.attachments.append(CybouAttachmentItem{});
+        mail.append(message);
+    }
+    model.setMailItems(mail);
+    QElapsedTimer timer;
+    timer.start();
+    EmailPage page{&model, {}};
+    const qint64 construction = timer.elapsed();
+    page.resize(1040, 720);
+    page.show();
+    QCoreApplication::processEvents();
+    auto* list = page.findChild<QListWidget*>(QStringLiteral("messageList"));
+    QVERIFY(list);
+    const auto first = list->viewport()->grab();
+    QVERIFY(!first.isNull());
+    const qint64 first_render = timer.elapsed();
+    QCOMPARE(list->count(), count);
+    auto* retained = list->item(1000);
+    list->setCurrentItem(retained);
+    list->scrollToItem(retained, QAbstractItemView::PositionAtTop);
+    QVector<qint64> scroll_times, update_times;
+    for (int i = 0; i < 10; ++i) {
+        timer.restart();
+        list->verticalScrollBar()->setValue(list->verticalScrollBar()->maximum() * i / 9);
+        QVERIFY(!list->viewport()->grab().isNull()); // synchronous completed Qt render, not monitor presentation
+        scroll_times.append(timer.elapsed());
+    }
+    list->scrollToItem(retained, QAbstractItemView::PositionAtTop);
+    const int anchor = list->verticalScrollBar()->value();
+    for (int i = 0; i < 10; ++i) {
+        timer.restart();
+        mail[1000].preview = QStringLiteral("Updated preview %1").arg(i);
+        model.setMailItems(mail);
+        QVERIFY(!list->viewport()->grab().isNull());
+        update_times.append(timer.elapsed());
+        QCOMPARE(list->item(1000), retained);
+        QCOMPARE(list->currentItem(), retained);
+        QVERIFY(retained->isSelected());
+        QCOMPARE(list->verticalScrollBar()->value(), anchor);
+    }
+    std::sort(scroll_times.begin(), scroll_times.end());
+    std::sort(update_times.begin(), update_times.end());
+    qInfo("Synthetic %d-message mailbox (%s, DPR %.2f): construction %lld ms; first completed Qt viewport render %lld ms; 10 scroll renders median %lld/max %lld ms; 10 one-message update+render median %lld/max %lld ms; row widgets %lld (no network/storage I/O or monitor presentation timing)",
+        count, qPrintable(QGuiApplication::platformName()), list->devicePixelRatioF(),
+        static_cast<long long>(construction), static_cast<long long>(first_render),
+        static_cast<long long>(scroll_times[5]), static_cast<long long>(scroll_times.last()),
+        static_cast<long long>(update_times[5]), static_cast<long long>(update_times.last()),
+        static_cast<long long>(page.findChildren<QWidget*>(QStringLiteral("mailRow")).size()));
+    QCOMPARE(page.findChildren<QWidget*>(QStringLiteral("mailRow")).size(), 0);
+    QVERIFY(!list->itemWidget(retained));
+    const QString screenshot = qEnvironmentVariable("CYBOU_TEST_MAILBOX_SCREENSHOT");
+    if (!screenshot.isEmpty()) QVERIFY(page.grab().save(screenshot));
+    page.setSearchText(QStringLiteral("subject 1000"));
+    QCOMPARE(list->count(), 1);
+    QCOMPARE(list->item(0), retained);
+    model.requestLockVault();
+    QCOMPARE(list->count(), 0);
+}
+
+void CybouShellTests::mailDelegateExposesSemanticStatus()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    QVERIFY(CybouUiFixtures::apply(model, QStringLiteral("active")));
+    QVector<CybouMailItem> messages;
+    for (int i = 0; i < 6; ++i) {
+        CybouMailItem message;
+        message.id = QString::number(i);
+        message.from_name = QStringLiteral("alice.cybou");
+        message.to_name = QStringLiteral("bob.cybou");
+        message.subject = QStringLiteral("<b>literal subject</b>");
+        message.preview = QStringLiteral("A plain preview");
+        message.time = QDateTime::currentDateTime().addSecs(-i * 60);
+        message.state = CybouContentState::Received;
+        messages.append(message);
+    }
+    messages[0].unread = messages[0].starred = true;
+    messages[0].attachments.append(CybouAttachmentItem{});
+    messages[1].outgoing = true;
+    messages[1].state = CybouContentState::Protected;
+    messages[2].outgoing = true;
+    messages[2].state = CybouContentState::Local;
+    messages[2].operation_state = CybouOperationState::Submitted;
+    messages[3].state = CybouContentState::Securing;
+    messages[4].state = CybouContentState::NeedsAttention;
+    messages[5].below_support_rate = true;
+    model.setMailItems(messages);
+    EmailPage page{&model, {}};
+    page.resize(1040, 720);
+    page.show();
+    auto* list = page.findChild<QListWidget*>(QStringLiteral("messageList"));
+    QVERIFY(list);
+    QCoreApplication::processEvents();
+    QVERIFY(!list->viewport()->grab().isNull());
+    const QString first = list->item(0)->data(Qt::AccessibleTextRole).toString();
+    QVERIFY(first.contains(QStringLiteral("<b>literal subject</b>")));
+    QVERIFY(first.contains(CybouUi::shortTime(messages[0].time)));
+    QVERIFY(first.contains(QStringLiteral("unread")) && first.contains(QStringLiteral("Starred")) && first.contains(QStringLiteral("Has attachments")));
+    QVERIFY(list->item(0)->toolTip().contains(QStringLiteral("&lt;b&gt;literal subject&lt;/b&gt;")));
+    QCOMPARE(list->item(0)->data(Qt::AccessibleDescriptionRole).toString(), messages[0].preview);
+    QVERIFY(list->item(1)->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("To: bob.cybou")));
+    QVERIFY(list->item(1)->toolTip().contains(QStringLiteral("Protected: encrypted here")));
+    QVERIFY(list->item(2)->data(Qt::AccessibleTextRole).toString().contains(CybouProduct::contentWithOperationText(
+        messages[2].state, messages[2].operation_state, model.status().online)));
+    QVERIFY(list->item(3)->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("Securing")));
+    QVERIFY(list->item(4)->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("Needs attention")));
+    QVERIFY(list->item(5)->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("Below support rate")));
+    for (int i = 0; i < list->count(); ++i) QVERIFY(!list->itemWidget(list->item(i)));
+    const QString screenshot = qEnvironmentVariable("CYBOU_TEST_MAILBOX_SCREENSHOT");
+    if (!screenshot.isEmpty()) QVERIFY(page.grab().save(screenshot));
+    messages[0].draft = true;
+    messages[0].folder = CybouMailFolder::Drafts;
+    model.setMailItems(messages);
+    page.setView(EmailPage::View::Drafts);
+    QCOMPARE(list->count(), 1);
+    QVERIFY(list->item(0)->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("Draft")));
+    model.requestLockVault();
+    QCOMPARE(list->count(), 0);
+}
+
 void CybouShellTests::mailRowsRetainContextAndReplacement()
 {
     CybouDesktopModel model{QStringLiteral("DEVNET")};
@@ -2670,18 +2809,18 @@ void CybouShellTests::mailRowsRetainContextAndReplacement()
     QTRY_VERIFY(list->verticalScrollBar()->maximum() > 0);
     auto* selected = list->item(50);
     auto* other = list->item(51);
-    QPointer<QWidget> other_widget{list->itemWidget(other)};
+    QVERIFY(!list->itemWidget(other));
     list->setCurrentItem(selected);
     other->setSelected(true);
     list->scrollToItem(selected, QAbstractItemView::PositionAtTop);
     const int scroll = list->verticalScrollBar()->value();
     page.openMessage(QStringLiteral("mail-50"));
-    QPointer<QWidget> previous_selected_widget{list->itemWidget(selected)};
     mail[50].starred = true;
     model.setMailItems(mail);
-    QVERIFY(!previous_selected_widget || !previous_selected_widget->isVisible());
+    QVERIFY(!list->itemWidget(selected));
+    QVERIFY(selected->data(Qt::AccessibleTextRole).toString().contains(QStringLiteral("Starred")));
     QCOMPARE(list->item(50), selected);
-    QCOMPARE(list->itemWidget(other), other_widget.data());
+    QVERIFY(!list->itemWidget(other));
     QCOMPARE(folders->itemWidget(folders->item(0)), inbox_target.data());
     QVERIFY(selected->isSelected() && other->isSelected());
     QCOMPARE(list->currentItem(), selected);
@@ -2704,7 +2843,7 @@ void CybouShellTests::mailRowsRetainContextAndReplacement()
     QCOMPARE(list->item(51), selected);
     QCOMPARE(list->itemAt(QPoint{1, 0}), selected);
     QCOMPARE(list->currentItem(), selected);
-    QCOMPARE(list->itemWidget(other), other_widget.data());
+    QVERIFY(!list->itemWidget(other));
     mail.removeAt(51);
     model.setMailItems(mail);
     QVERIFY(inbox_target->findChild<QLabel*>(QStringLiteral("folderCount"))->isHidden());

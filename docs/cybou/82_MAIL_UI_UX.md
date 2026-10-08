@@ -21,6 +21,23 @@ The normal user operates mail, not a blockchain, key exchange, finality mechanis
 or storage protocol. Technical evidence remains inspectable through Security
 Details and Advanced diagnostics.
 
+The message list uses one viewport delegate over stable ID-keyed Qt items.
+Rows do not create per-message QWidget trees; only visible rows are painted.
+Sender/recipient direction, avatar, unread marker, star, attachments, date,
+protection/confirmation state and the support-rate warning remain semantic data.
+Subject and preview are drawn as plain text. Escaped row tooltips preserve
+protection and rate explanations; accessible text/description expose these
+facts without relying on icons or color. Selection, current item, scroll anchor,
+search, drag IDs and draft-to-finalized ID handoff remain the existing paths.
+Lock removes the items and private rendering cache.
+
+Large-mailbox profiling records construction, first completed Qt viewport
+render, ten synchronous scroll renders and ten one-message update/render samples
+for 2,000 and 10,000 synthetic messages. Timings are environment observations,
+not product SLAs, monitor presentation latency or live sync/storage throughput.
+Compare like-for-like native platform, theme initialization, DPR and geometry;
+see the dated implementation evidence for the current before/after results.
+
 ## 0. Content lifecycle (finality first)
 
 Every outgoing message, with or without attachments, follows one
