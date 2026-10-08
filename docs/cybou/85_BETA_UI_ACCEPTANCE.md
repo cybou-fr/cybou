@@ -102,6 +102,10 @@ does not satisfy clean-machine restore or operator restart acceptance.
 
 ## 5. Wallet
 
+Prepared scenario: [WALLET-RESTART-01](BETA_WALLET_RESTART_ACCEPTANCE.md),
+NOT RUN. Missing the actual uncertainty window is INCONCLUSIVE; unchanged
+ledger text alone does not prove exact-byte retry or absence of duplicate signing.
+
 ```text
 [ ] recipient entered primarily as name.cybou
 [ ] amount and deterministic fee are clear before confirmation

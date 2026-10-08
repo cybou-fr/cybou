@@ -185,6 +185,9 @@ add lifecycle diagrams or redo the design system without evidence.
 Work one bounded scenario at a time, preserving its result and limitations.
 [ID-SESSION-01](BETA_IDENTITY_SESSION_ACCEPTANCE.md) prepares ordinary-client
 lock/unlock/restart acceptance. It is NOT RUN and does not restart a signer.
+[WALLET-RESTART-01](BETA_WALLET_RESTART_ACCEPTANCE.md) prepares one payment
+through demonstrated uncertainty, ordinary-client restart and exact-byte
+reconciliation. It is NOT RUN and authorizes no live payment.
 Preparation can proceed while P0 remote CI is pending; execution follows the
 applicable green-revision gate. Avoid broad refactors or repeated full builds
 for documentation-only preparation.
