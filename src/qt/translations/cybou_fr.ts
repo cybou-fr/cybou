@@ -1241,6 +1241,14 @@ Règlement du stockage : %7</translation>
         <source>Local refresh was interrupted. Try again.</source>
         <translation>L’actualisation locale a été interrompue. Réessayez.</translation>
     </message>
+    <message>
+        <source>Storage period %1 submitted: %2 payouts, %3. Waiting for PoA finalization.</source>
+        <translation>Période de stockage %1 soumise : %2 versements, %3. En attente de finalisation PoA.</translation>
+    </message>
+    <message>
+        <source>Signing policy: durable and fail-closed. Last observed loop status: %1. This is not a journal integrity audit.</source>
+        <translation>Politique de signature : durable, arrêt en cas d’incertitude. Dernier état observé de la boucle : %1. Il ne s’agit pas d’un audit d’intégrité du journal.</translation>
+    </message>
 </context>
 <context>
     <name>CybouFixtureApplicationBackend</name>
@@ -1554,6 +1562,10 @@ Stan</translation>
     <message>
         <source>Public CYBOU network</source>
         <translation>Réseau public CYBOU</translation>
+    </message>
+    <message>
+        <source>Administration</source>
+        <translation>Administration</translation>
     </message>
 </context>
 <context>
@@ -4538,6 +4550,58 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
         <source>Storage escrow</source>
         <translation>Séquestre de stockage</translation>
     </message>
+    <message>
+        <source>Locking the user Vault does not stop an already active PoA finalizer. Pause finalization explicitly before locking if needed. Unlock the Identity to use operator controls.</source>
+        <translation>Verrouiller le coffre utilisateur n’arrête pas un finaliseur PoA déjà actif. Mettez explicitement la finalisation en pause avant le verrouillage si nécessaire. Déverrouillez l’Identité pour utiliser les commandes opérateur.</translation>
+    </message>
+    <message>
+        <source>Review storage settlement</source>
+        <translation>Examiner le règlement du stockage</translation>
+    </message>
+    <message>
+        <source>Pause finalization</source>
+        <translation>Mettre la finalisation en pause</translation>
+    </message>
+    <message>
+        <source>Resume finalization</source>
+        <translation>Reprendre la finalisation</translation>
+    </message>
+    <message>
+        <source>New operations will remain pending until finalization resumes. The Full Node continues networking and storage. Locking the Vault alone does not pause finalization.</source>
+        <translation>Les nouvelles opérations resteront en attente jusqu’à la reprise. Le Full Node poursuit le réseau et le stockage. Verrouiller le coffre seul ne suspend pas la finalisation.</translation>
+    </message>
+    <message>
+        <source>Network binding</source>
+        <translation>Liaison réseau</translation>
+    </message>
+    <message>
+        <source>Unknown: no local signing journal observation is available.</source>
+        <translation>Inconnu : aucune observation locale du journal de signature n’est disponible.</translation>
+    </message>
+    <message>
+        <source>Unknown: no settlement period is available.</source>
+        <translation>Inconnu : aucune période de règlement n’est disponible.</translation>
+    </message>
+    <message>
+        <source>Period %1 · %2 UTC. Review prepares actual payout entries from local off-chain storage observations. Provider independence and network-wide audit quality are not established.</source>
+        <translation>Période %1 · %2 UTC. L’examen prépare les versements réels à partir d’observations locales de stockage hors chaîne. L’indépendance des fournisseurs et la qualité des audits à l’échelle du réseau ne sont pas établies.</translation>
+    </message>
+    <message>
+        <source>Advertised height %1 (unverified)</source>
+        <translation>Hauteur annoncée %1 (non vérifiée)</translation>
+    </message>
+    <message>
+        <source> · Ahead %1</source>
+        <translation> · Avance %1</translation>
+    </message>
+    <message>
+        <source> · Behind %1</source>
+        <translation> · Retard %1</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
 </context>
 <context>
     <name>NetworkPage</name>
@@ -5392,6 +5456,10 @@ Mail, Files, Names and Wallet.</source>
     <message>
         <source>Restore did not complete. Check the phrase and try again.</source>
         <translation type="vanished">La restauration n’a pas abouti. Vérifiez la phrase et réessayez.</translation>
+    </message>
+    <message>
+        <source>The PoA finalizer continues in the background while your Vault is locked. Unlock to manage finalization.</source>
+        <translation>Le finaliseur PoA continue en arrière-plan pendant que votre coffre est verrouillé. Déverrouillez l’Identité pour gérer la finalisation.</translation>
     </message>
 </context>
 <context>
@@ -7101,6 +7169,61 @@ Poursuivre la suppression définitive ?</translation>
         <location line="-102"/>
         <source>Network balance pays CYBOU network fees and storage for your Mail, Files and payments.</source>
         <translation>Le solde réseau paie les frais réseau CYBOU et le stockage de votre courrier, de vos fichiers et de vos paiements.</translation>
+    </message>
+</context>
+<context>
+    <name>AuthorityReview</name>
+    <message>
+        <source>Review storage settlement</source>
+        <translation>Examiner le règlement du stockage</translation>
+    </message>
+    <message>
+        <source>Confirm settlement</source>
+        <translation>Confirmer le règlement</translation>
+    </message>
+    <message>
+        <source>PublicationID | payout AccountID | CYBOU
+First %1 of %2 entries:</source>
+        <translation>PublicationID | AccountID bénéficiaire | CYBOU
+Les %1 premières entrées sur %2 :</translation>
+    </message>
+    <message>
+        <source>Period %1
+UTC interval: %2 — %3
+Payout accounts: %4
+Prepared entries: %5
+Amount: %6
+Current storage escrow: %7
+
+Evidence: locally prepared off-chain storage observations. These do not prove global reliability or independent failure domains.
+
+Confirmation submits these exact entries for local execution. Only a finalized PoA block records settlement.</source>
+        <translation>Période %1
+Intervalle UTC : %2 — %3
+Comptes bénéficiaires : %4
+Entrées préparées : %5
+Montant : %6
+Séquestre de stockage actuel : %7
+
+Preuves : observations de stockage hors chaîne préparées localement. Elles ne prouvent ni une fiabilité globale ni des domaines de défaillance indépendants.
+
+La confirmation soumet ces entrées exactes à l’exécution locale. Seul un bloc finalisé par PoA enregistre le règlement.</translation>
+    </message>
+    <message>
+        <source>Cancel</source>
+        <translation>Annuler</translation>
+    </message>
+    <message>
+        <source>Show payout entries</source>
+        <translation>Afficher les versements</translation>
+    </message>
+    <message>
+        <source>Hide payout entries</source>
+        <translation>Masquer les versements</translation>
+    </message>
+    <message>
+        <source>No eligible payouts were prepared. This may reflect missing local evidence. A finalized settlement closes this period; later evidence cannot amend it.</source>
+        <translation>Aucun versement éligible n’a été préparé. Des preuves locales peuvent manquer. Un règlement finalisé clôt cette période ; des preuves ultérieures ne peuvent pas la modifier.</translation>
     </message>
 </context>
 </TS>

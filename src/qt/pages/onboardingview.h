@@ -100,6 +100,7 @@ private:
     QLabel* m_unlock_title{nullptr};
     QLineEdit* m_unlock_password{nullptr};
     QLabel* m_unlock_hint{nullptr};
+    QLabel* m_background_finalizer{nullptr};
 
     QWidget* buildWelcome();
     QWidget* buildPassword();

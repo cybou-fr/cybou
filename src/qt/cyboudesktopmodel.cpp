@@ -894,20 +894,30 @@ void CybouDesktopModel::setNetworkAuthority(const CybouNetworkAuthorityStatus& s
 
 void CybouDesktopModel::requestFinalizationPaused(bool paused)
 {
-    if (!m_network_authority.proven) return;
+    if (!m_network_authority.proven || !m_network_authority.signer_enabled || m_status.identity_state != CybouIdentityState::Active ||
+        (m_network_authority.finalizer != CybouFinalizerState::Finalizing && m_network_authority.finalizer != CybouFinalizerState::Paused)) return;
     Q_EMIT finalizationPauseRequested(paused);
 }
 
 void CybouDesktopModel::requestFinalizeNow()
 {
-    if (!m_network_authority.proven) return;
+    if (!m_network_authority.proven || !m_network_authority.signer_enabled || m_status.identity_state != CybouIdentityState::Active ||
+        m_network_authority.finalizer != CybouFinalizerState::Paused) return;
     Q_EMIT finalizeNowRequested();
 }
 
 void CybouDesktopModel::requestStorageSettlement()
 {
-    if (!m_network_authority.proven || !m_network_authority.signer_enabled) return;
+    if (!m_network_authority.proven || !m_network_authority.signer_enabled || !m_network_authority.settlement_due ||
+        m_status.identity_state != CybouIdentityState::Active || m_network_authority.finalizer == CybouFinalizerState::SafetyHalt) return;
     Q_EMIT storageSettlementRequested();
+}
+
+void CybouDesktopModel::setBackgroundFinalizerActive(bool active)
+{
+    if (m_status.background_finalizer_active == active) return;
+    m_status.background_finalizer_active = active;
+    Q_EMIT statusChanged();
 }
 
 void CybouDesktopModel::setOperationStatus(const CybouOperationStatus& status)

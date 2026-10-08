@@ -6,6 +6,13 @@ This document converts the product contracts in docs 81–84 into end-to-end
 acceptance scenarios. It does not replace protocol/security tests; a Beta build
 must satisfy both.
 
+Presentation evidence from 2026-10-08 is recorded in
+`26_IMPLEMENTATION_STATUS.md`: 14 native Windows fixture profiles cover FR/EN,
+light/dark, three window sizes and Qt scaling at 125%, with 79 passing Qt tests.
+These do not mark the live scenarios below passed. Physical mixed-monitor DPI,
+screen-reader use, clean-machine flow and independent remote failure domains
+still require their own acceptance evidence.
+
 ## 1. Clean-machine onboarding
 
 ```text
@@ -246,4 +253,20 @@ features explicitly instead of counting them as passed Beta acceptance.
 [ ] shared-reference/unlink-failure/restart purge tests preserve byte accounting
 [ ] historical capsules, recipient copies and backups are disclosed as erasure limits
 [ ] no blanket RGPD/certification/crypto-erasure badge is inferred from encryption
+```
+
+## 16. Authority operator acceptance
+
+```text
+[ ] Administration appears only for the locally proven genesis-authorized key
+[ ] Vault lock discloses the observed background finalizer without granting controls
+[ ] pause explains pending-operation consequences and defaults to Cancel/Escape
+[ ] resume and one-block finalization obey the current local signer state
+[ ] settlement review shows the exact prepared period, entries, accounts and amount
+[ ] payout details disclose any display truncation; reviewed vector remains exact
+[ ] missing local evidence is not claimed as no service or independent durability
+[ ] lock/account/proof/period/escrow changes cancel stale review without submission
+[ ] submission stays pending until a verified PoA block records settlement
+[ ] worker submission leaves the GUI responsive and signing safety fails closed
+[ ] FR/EN review labels fit at supported physical DPI and are keyboard accessible
 ```

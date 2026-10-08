@@ -3,6 +3,42 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Authority and desktop presentation QA package (2026-10-08)
+
+Authority now occupies a separate Administration navigation section visible only
+with local genesis-key proof. Operator controls also require an unlocked Identity
+and active signer. Pause has a Cancel-default consequences review; resume is
+direct. The page and unlock screen explain that locking the user Vault does not
+stop an already active background PoA finalizer. That local runtime observation
+does not grant permissions or announce a network role.
+
+Storage settlement prepares actual payout entries on the application worker,
+then reviews period/UTC interval, unique payout accounts, entry count, amount,
+escrow and the first 100 exact entries. Missing evidence is not reported as zero
+service. Lock, account/proof loss, halt, changed period or changed escrow closes
+the review without submission. Confirmed entries are submitted on a worker after
+rechecking unlocked key and runtime cursor. Submission is explicitly pending
+PoA finality. Journal status is the available local observation, not an asserted
+integrity audit. Explorer separates finalized diagnostics from volatile candidates
+and keeps selection by identifier; peer deltas remain unverified announcements.
+
+Validation: isolated MinGW GUI/test builds passed; complete Qt suite 79 passed,
+0 failed. The final dialog sizing/keyboard adjustment also passed its focused
+regression (3 including setup/cleanup). Native Windows synthetic fixtures were
+captured in FR/EN, light/dark, at 1040×720, 1280×860 and 1920×1080, plus dark
+1040×720 with Qt scale 1.25: 14 profiles. Contact sheets cover Home, Mail, Files,
+Wallet, Identity/recovery, Network/Advanced, Monitor, Console and Authority;
+full-size operator reviews and locked-Vault views were inspected. The pass fixed
+translated details-button clipping. Updated reviews include expanded payout
+entries and pause consequences. Language fixture selection does not persist real
+user preferences.
+
+Evidence and isolated binaries: ignored `artifacts/ux-authority-20261008/`.
+Fixtures and component checks are presentation evidence, not live settlement,
+independent remote durability, clean-machine Beta acceptance or screen-reader
+certification. Physical mixed-monitor DPI and assistive-technology acceptance
+remain open. This package does not replace the running PoA desktop binary.
+
 ## Monitor and Console package (2026-10-08)
 
 Network Monitor now opens one reusable nonmodal window from Advanced, with

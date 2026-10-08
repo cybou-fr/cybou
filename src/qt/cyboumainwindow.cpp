@@ -136,7 +136,11 @@ CybouMainWindow::CybouMainWindow(std::filesystem::path data_directory, QWidget* 
       m_pages{new QStackedWidget{this}},
       m_navigation{new QButtonGroup{this}}
 {
-    setLanguage(QSettings{}.value(QStringLiteral("desktop/language"), QStringLiteral("fr")).toString());
+    const bool screenshot_fixture = !qEnvironmentVariableIsEmpty("CYBOU_SCREENSHOT_DIR") &&
+        CybouUiFixtures::names().contains(CybouUiFixtures::requestedFixture());
+    const auto screenshot_language = qEnvironmentVariable("CYBOU_SCREENSHOT_LANGUAGE");
+    setLanguage(screenshot_fixture && (screenshot_language == QLatin1String{"fr"} || screenshot_language == QLatin1String{"en"})
+        ? screenshot_language : QSettings{}.value(QStringLiteral("desktop/language"), QStringLiteral("fr")).toString());
     connect(m_controller.get(), &CybouDesktopController::startupFailed, this,
         [this](const QString& reason) {
             QTimer::singleShot(0, this, [this, reason] {
@@ -382,6 +386,18 @@ QFrame* CybouMainWindow::buildSidebar(QWidget* parent)
     add_button(CybouPage::Network, CybouTheme::NavIcon::Network);
 
     add_button(CybouPage::Settings, CybouTheme::NavIcon::Settings);
+    m_authority_section = new QWidget{sidebar};
+    m_authority_section->setObjectName(QStringLiteral("authorityAdministrationSection"));
+    auto* administration = new QVBoxLayout{m_authority_section};
+    administration->setContentsMargins(0, 12, 0, 4);
+    auto* administration_line = new QFrame{m_authority_section};
+    administration_line->setFrameShape(QFrame::HLine);
+    administration_line->setObjectName(QStringLiteral("separator"));
+    administration->addWidget(administration_line);
+    m_administration_label = CybouUi::MutedText(tr("Administration"), m_authority_section);
+    administration->addWidget(m_administration_label);
+    layout->addWidget(m_authority_section);
+    m_authority_section->hide();
     add_button(CybouPage::NetworkAuthority, CybouTheme::NavIcon::Diagnostics);
     // Hidden unless the unlocked Identity is proven to be the genesis authority.
     m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))->setVisible(false);
@@ -622,11 +638,13 @@ void CybouMainWindow::buildShell()
     addPage(new NetworkAuthorityPage{m_desktop_model, nullptr}, true);
     m_shell_connections.push_back(connect(m_desktop_model, &CybouDesktopModel::networkAuthorityChanged, this, [this] {
         const bool authority = m_desktop_model->isNetworkAuthority();
+        m_authority_section->setVisible(authority);
         m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))->setVisible(authority);
         if (!authority && m_pages->currentIndex() == static_cast<int>(CybouPage::NetworkAuthority)) showPage(CybouPage::Home);
     }));
     m_navigation->button(static_cast<int>(CybouPage::NetworkAuthority))
         ->setVisible(m_desktop_model->isNetworkAuthority());
+    m_authority_section->setVisible(m_desktop_model->isNetworkAuthority());
 
     connect(m_navigation, &QButtonGroup::idClicked, this, [this](int id) { showPage(static_cast<CybouPage>(id)); });
     m_navigation->button(0)->setChecked(true);
@@ -685,6 +703,7 @@ void CybouMainWindow::setSidebarCompact(bool compact)
     m_sidebar->setFixedWidth(compact ? kCompactSidebar : kSidebarWidth);
     m_brand_text->setVisible(!compact);
     m_brand_name->setVisible(!compact);
+    m_administration_label->setVisible(!compact);
     for (auto* button : m_navigation->buttons()) {
         auto* tool = qobject_cast<QToolButton*>(button);
         tool->setToolButtonStyle(compact ? Qt::ToolButtonIconOnly : Qt::ToolButtonTextBesideIcon);
@@ -1106,7 +1125,8 @@ void CybouMainWindow::setLanguage(const QString& language)
     QLocale::setDefault(QLocale{french ? QLocale::French : QLocale::English});
     if (french && m_french_translator.load(QStringLiteral(":/i18n/cybou_fr.qm")))
         app->installTranslator(&m_french_translator);
-    QSettings{}.setValue(QStringLiteral("desktop/language"), french ? QStringLiteral("fr") : QStringLiteral("en"));
+    if (qEnvironmentVariableIsEmpty("CYBOU_SCREENSHOT_DIR") || !CybouUiFixtures::names().contains(CybouUiFixtures::requestedFixture()))
+        QSettings{}.setValue(QStringLiteral("desktop/language"), french ? QStringLiteral("fr") : QStringLiteral("en"));
     if (m_constructed) {
         reloadAppearance();
         rebuildTrayMenu();

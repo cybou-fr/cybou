@@ -103,6 +103,8 @@ add_library(cybou_qt STATIC
   recoveryphrasedialog.h
   cybouconsoledialog.cpp
   cybouconsoledialog.h
+  authorityreview.cpp
+  authorityreview.h
   ${CYBOU_QRC}
 )
 target_compile_definitions(cybou_qt PUBLIC QT_NO_KEYWORDS QT_USE_QSTRINGBUILDER)

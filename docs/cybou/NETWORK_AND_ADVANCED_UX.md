@@ -139,6 +139,35 @@ or physical independence. Implement evidence aggregation before claiming a
 complete payout/audit dashboard. Scope sensitive operational exports and
 redact them; viewing a panel does not authorize publishing it.
 
+### Authority operator interaction (2026-10-08)
+
+The proven Authority entry has its own Administration section. Unproven sessions
+see neither the section nor its navigation entry. Compact navigation retains the
+separator and icon. Controls require an unlocked authorized Identity and an active
+signer; a safety halt disables them. Locking the user Vault leaves an already
+active PoA production loop running. Authority explains this before locking, and
+the unlock screen displays a local background-finalizer observation independently
+of the locked Identity's proof. This observation grants no control permissions or
+network role. Pausing uses a Cancel-default consequences dialog; resume is direct.
+
+Storage settlement first prepares actual entries off the GUI thread. A Cancel-default
+review shows the UTC period, unique payout AccountIDs, exact entry count/amount,
+observed escrow and scoped local off-chain evidence. Details list the first 100
+entries and disclose truncation. No entries means no eligible locally prepared
+payouts, not proof of zero service; finalization closes the period. Lock, account
+change, proof loss, safety halt, changed period or changed escrow invalidates the
+review. Confirmation submits the exact reviewed vector on a worker after checking
+the unlocked key and runtime cursor again. Pending preparation is single-flight;
+closing a session invalidates stale callbacks. Submission remains Submitted until
+PoA finality. No new keys, signer histories, protocol operations or evidence claims
+are introduced by this UI.
+
+Signing safety displays the available local observation, or Unknown; it never
+asserts that a journal integrity audit occurred. Settlement readiness declares its
+local evidence scope. The verified explorer excludes nonfinalized diagnostic entries,
+while the candidate section remains explicitly volatile. Peer deltas are unverified
+announcements and never prove synchronization or authority.
+
 ## Own-content inspector and console
 
 The redundant standalone diagnostics text window is removed. Network Advanced

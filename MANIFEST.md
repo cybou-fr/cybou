@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 91 | 4850aa10e11966a3 |
 | docs/cybou/24_DECISIONS.md | 228 | 6e481a2f9aa6cb34 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 125 | a1dbb7c66dd722a1 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 835 | e40298f794e95d2c |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 871 | 85f8b767b94dbfba |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -53,7 +53,7 @@ editing an included file.
 | docs/cybou/82_MAIL_UI_UX.md | 699 | edf4a8f8e9edee85 |
 | docs/cybou/83_STORAGE_UI_UX.md | 645 | 8af54a2ec0dfe4e6 |
 | docs/cybou/84_PRODUCT_DESIGN_SYSTEM.md | 576 | 2b52533ce1868df8 |
-| docs/cybou/85_BETA_UI_ACCEPTANCE.md | 249 | 09619c425bd21a91 |
+| docs/cybou/85_BETA_UI_ACCEPTANCE.md | 272 | c36c2074f431cae2 |
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 113 | 3dea6e6943d833b6 |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 35 | 870d2d08b963af58 |
 | docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 34 | a5ebc90bd1cb068b |
@@ -68,9 +68,9 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 280 | 42d0b6400b81987a |
+| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 309 | 0a94d6adbbc9aaeb |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
-| docs/cybou/POA_FINALITY.md | 75 | 52c4c96a014901fd |
+| docs/cybou/POA_FINALITY.md | 78 | bc0a8ab5f78ed18a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
 | docs/cybou/README.md | 83 | 47725f729289ea91 |
 | docs/cybou/ROOT_PUBLICATION.md | 138 | 2e27b102ccf69528 |

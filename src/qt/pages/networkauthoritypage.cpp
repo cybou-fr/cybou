@@ -21,6 +21,7 @@
 #include <QTableWidget>
 #include <QTableWidgetItem>
 #include <QTimer>
+#include <QTimeZone>
 #include <QVBoxLayout>
 
 using namespace CybouUi;
@@ -40,6 +41,9 @@ QLabel* Tile(QGridLayout* grid, int row, int column, const QString& caption, QWi
     auto* value = new QLabel{card};
     value->setObjectName(QStringLiteral("metric"));
     value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    value->setWordWrap(true);
+    value->setMinimumWidth(0);
+    value->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     layout->addWidget(label);
     layout->addWidget(value);
     grid->addWidget(card, row, column);
@@ -93,6 +97,9 @@ QLabel* Row(QVBoxLayout* layout, const QString& key, const QString& value, bool 
     auto* v = new QLabel{value, parent};
     v->setObjectName(QStringLiteral("rowTitle"));
     v->setWordWrap(true);
+    v->setTextFormat(Qt::PlainText);
+    v->setMinimumWidth(0);
+    v->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     v->setTextInteractionFlags(Qt::TextSelectableByMouse);
     if (mono) k->setStyleSheet(QStringLiteral("font-family: Consolas, 'Cascadia Mono', monospace;"));
     row->addWidget(k, 0, Qt::AlignTop);
@@ -128,7 +135,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     // Finalizer: the one thing the operator must see first, with its controls.
     auto* hero = new QFrame{this};
     hero->setObjectName(QStringLiteral("heroHeader"));
-    auto* hero_layout = new QHBoxLayout{hero};
+    auto* hero_layout = new QVBoxLayout{hero};
     hero_layout->setContentsMargins(28, 20, 28, 20);
     hero_layout->setSpacing(18);
     auto* hero_text = new QVBoxLayout;
@@ -144,27 +151,50 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_finalizer_detail = HeroSubtitle({}, hero);
     m_finalizer_detail->setWordWrap(true);
     hero_text->addWidget(m_finalizer_detail);
-    hero_layout->addLayout(hero_text, 1);
+    hero_layout->addLayout(hero_text);
+    hero_layout->addWidget(MutedText(tr("Locking the user Vault does not stop an already active PoA finalizer. Pause finalization explicitly before locking if needed. Unlock the Identity to use operator controls."), hero));
+    auto* actions = new QHBoxLayout;
+    actions->setSpacing(8);
     m_pause = new QPushButton{hero};
     m_pause->setObjectName(QStringLiteral("secondaryButton"));
     m_pause->setProperty("cybouId", QStringLiteral("authorityPause"));
     m_pause->setCursor(Qt::PointingHandCursor);
-    hero_layout->addWidget(m_pause, 0, Qt::AlignVCenter);
+    actions->addWidget(m_pause);
     m_finalize_now = new QPushButton{tr("Finalize one block"), hero};
     m_finalize_now->setObjectName(QStringLiteral("primaryButton"));
     m_finalize_now->setProperty("cybouId", QStringLiteral("authorityFinalizeNow"));
     m_finalize_now->setCursor(Qt::PointingHandCursor);
     m_finalize_now->setToolTip(tr("Available while finalization is paused"));
-    hero_layout->addWidget(m_finalize_now, 0, Qt::AlignVCenter);
-    m_settle_storage = new QPushButton{tr("Settle storage period"), hero};
+    actions->addWidget(m_finalize_now);
+    m_settle_storage = new QPushButton{tr("Review storage settlement"), hero};
     m_settle_storage->setObjectName(QStringLiteral("secondaryButton"));
     m_settle_storage->setProperty("cybouId", QStringLiteral("authoritySettleStorage"));
     m_settle_storage->setCursor(Qt::PointingHandCursor);
     m_settle_storage->setToolTip(tr("Pays verified storage service of the next complete period and returns escrow of ended leases"));
-    hero_layout->addWidget(m_settle_storage, 0, Qt::AlignVCenter);
+    actions->addWidget(m_settle_storage);
+    actions->addStretch();
+    hero_layout->addLayout(actions);
     root->addWidget(hero);
     connect(m_pause, &QPushButton::clicked, this, [this] {
-        m_model->requestFinalizationPaused(m_model->networkAuthority().finalizer != CybouFinalizerState::Paused);
+        if (m_model->networkAuthority().finalizer == CybouFinalizerState::Paused) { m_model->requestFinalizationPaused(false); return; }
+        const auto account = m_model->status().account_id;
+        QMessageBox review{QMessageBox::Question, tr("Pause finalization"),
+            tr("New operations will remain pending until finalization resumes. The Full Node continues networking and storage. Locking the Vault alone does not pause finalization."),
+            QMessageBox::NoButton, this};
+        review.setObjectName(QStringLiteral("authorityPauseReview"));
+        auto* confirm = review.addButton(tr("Pause finalization"), QMessageBox::AcceptRole);
+        confirm->setObjectName(QStringLiteral("authorityConfirmPause"));
+        auto* cancel = review.addButton(QMessageBox::Cancel);
+        cancel->setText(tr("Cancel"));
+        review.setDefaultButton(cancel);
+        const auto invalidate = [&] {
+            const auto& a = m_model->networkAuthority();
+            if (m_model->status().identity_state != CybouIdentityState::Active || m_model->status().account_id != account || !a.proven || !a.signer_enabled || a.finalizer != CybouFinalizerState::Finalizing) review.reject();
+        };
+        connect(m_model, &CybouDesktopModel::statusChanged, &review, invalidate);
+        connect(m_model, &CybouDesktopModel::networkAuthorityChanged, &review, invalidate);
+        review.exec();
+        if (review.clickedButton() == confirm && m_model->status().account_id == account) m_model->requestFinalizationPaused(true);
     });
     connect(m_finalize_now, &QPushButton::clicked, this, [this] { m_model->requestFinalizeNow(); });
     connect(m_settle_storage, &QPushButton::clicked, this, [this] { m_model->requestStorageSettlement(); });
@@ -189,6 +219,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_explorer_filter_edit->setObjectName(QStringLiteral("authorityExplorerFilter"));
     m_explorer_filter_edit->setPlaceholderText(tr("Filter by operation ID, block height, or status…"));
     m_explorer_filter_edit->setClearButtonEnabled(true);
+    m_explorer_filter_edit->setMaxLength(128);
     filter_bar->addWidget(m_explorer_filter_edit);
     explorer_sec->addLayout(filter_bar);
 
@@ -265,7 +296,7 @@ NetworkAuthorityPage::NetworkAuthorityPage(CybouDesktopModel* model, QWidget* pa
     m_chain = Rows(Section(root, tr("Chain"), this));
     m_chain_tip = Row(m_chain, tr("Tip"), QStringLiteral("—"), true);
     m_chain_state_root = Row(m_chain, tr("State root"), QStringLiteral("—"), true);
-    m_chain_network_id = Row(m_chain, tr("Network ID"), QStringLiteral("—"), true);
+    m_chain_network_id = Row(m_chain, tr("Network binding"), QStringLiteral("—"), true);
     m_chain_connection = Row(m_chain, tr("Connection"), QStringLiteral("—"));
 
     root->addStretch();
@@ -353,13 +384,13 @@ void NetworkAuthorityPage::refresh()
         break;
     }
 
-    const bool is_authorized = a.proven && a.signer_enabled;
+    const bool is_authorized = a.proven && a.signer_enabled && m_model->status().identity_state == CybouIdentityState::Active;
     const bool paused = a.finalizer == CybouFinalizerState::Paused;
-    m_pause->setText(paused ? tr("Resume") : tr("Pause"));
+    m_pause->setText(paused ? tr("Resume finalization") : tr("Pause finalization"));
     m_pause->setEnabled(is_authorized && (a.finalizer == CybouFinalizerState::Finalizing || paused));
     m_finalize_now->setVisible(paused);
     m_finalize_now->setEnabled(is_authorized && paused);
-    m_settle_storage->setEnabled(is_authorized && a.finalizer != CybouFinalizerState::SafetyHalt);
+    m_settle_storage->setEnabled(is_authorized && a.settlement_due && a.finalizer != CybouFinalizerState::SafetyHalt);
 
     m_height->setText(a.proven ? locale.toString(a.finalized_height) : QStringLiteral("—"));
     m_candidates->setText(locale.toString(a.candidates));
@@ -368,8 +399,10 @@ void NetworkAuthorityPage::refresh()
     m_escrow->setText(cybouAmountText(a.storage_escrow));
 
     // Off-chain evidence & signer safety status
-    m_safety_journal->setText(tr("Fail-closed durable append-only journal active. Equivocation conflicts resolved by min(BlockID)."));
-    m_settlement_readiness->setText(tr("Off-chain replica service receipts and audit confirmations tracked. Settlement transactions execute upon period close."));
+    m_safety_journal->setText(a.safety_journal_status.isEmpty() ? tr("Unknown: no local signing journal observation is available.") : a.safety_journal_status);
+    m_settlement_readiness->setText(a.next_settlement_due_utc == 0 ? tr("Unknown: no settlement period is available.") :
+        tr("Period %1 · %2 UTC. Review prepares actual payout entries from local off-chain storage observations. Provider independence and network-wide audit quality are not established.")
+            .arg(a.next_settlement_period).arg(QDateTime::fromSecsSinceEpoch(a.next_settlement_due_utc, QTimeZone::UTC).toString(QStringLiteral("yyyy-MM-dd HH:mm"))));
     if (is_authorized) {
         m_read_only_notice->setText(tr("Authorized signer: Genesis-authorized PoA signing key is active. Finalization and settlement controls are enabled."));
     } else {
@@ -416,7 +449,7 @@ void NetworkAuthorityPage::refresh()
     m_total_names->setText(tr("%1  ·  %2 commits pending")
         .arg(locale.toString(a.names), locale.toString(a.pending_name_commits)));
 
-    std::vector<std::string> peer_sig;
+    std::vector<std::string> peer_sig{std::to_string(d.height), d.initialized ? "initialized" : "unknown"};
     for (const auto& peer : d.peers) {
         peer_sig.push_back(peer.endpoint + ":" + std::to_string(peer.advertised_height) + ":" + peer.storage_id);
     }
@@ -426,9 +459,10 @@ void NetworkAuthorityPage::refresh()
         if (d.peers.empty()) m_peer_rows->addWidget(MutedText(tr("No peers connected."), m_peer_rows->parentWidget()));
         for (const auto& peer : d.peers) {
             const quint64 lag = d.height > peer.advertised_height ? d.height - peer.advertised_height : 0;
-            QString text = lag == 0 ? tr("height %1  ·  in step").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
-                                    : tr("height %1  ·  %2 behind").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)))
-                                          .arg(locale.toString(lag));
+            QString text = tr("Advertised height %1 (unverified)").arg(locale.toString(static_cast<qulonglong>(peer.advertised_height)));
+            if (d.initialized) text += peer.advertised_height > d.height
+                ? tr(" · Ahead %1").arg(locale.toString(peer.advertised_height-d.height))
+                : tr(" · Behind %1").arg(locale.toString(lag));
             if (!peer.storage_id.empty()) text += tr("  ·  StorageId %1").arg(ShortHex(peer.storage_id));
             Row(m_peer_rows, QString::fromStdString(peer.endpoint), text);
         }
@@ -444,6 +478,8 @@ void NetworkAuthorityPage::refresh()
 
 void NetworkAuthorityPage::rebuildExplorerItems()
 {
+    const auto selected_id = m_selected_explorer_index >= 0 && m_selected_explorer_index < m_filtered_items.size()
+        ? m_filtered_items[m_selected_explorer_index].identifier : QString{};
     const auto& a = m_model->networkAuthority();
     const auto& d = m_model->networkDiagnostics();
     const QLocale locale;
@@ -464,6 +500,7 @@ void NetworkAuthorityPage::rebuildExplorerItems()
 
     // 2. Finalized operations
     for (auto it = d.operations.rbegin(); it != d.operations.rend(); ++it) {
+        if (it->state != static_cast<std::uint32_t>(cybou::OperationStatusKind::FINALIZED)) continue;
         CybouExplorerItem item;
         item.height = static_cast<quint64>(it->finalized_height);
         item.phase_or_height = (it->finalized_height > 0)
@@ -479,7 +516,7 @@ void NetworkAuthorityPage::rebuildExplorerItems()
     }
 
     // 3. Finalized block header tip if observed
-    if (d.height > 0 && !d.tip.empty()) {
+    if (d.initialized && d.height > 0 && !d.tip.empty()) {
         CybouExplorerItem block_item;
         block_item.height = static_cast<quint64>(d.height);
         block_item.phase_or_height = tr("Block %1 (Tip)").arg(locale.toString(static_cast<qulonglong>(d.height)));
@@ -503,6 +540,10 @@ void NetworkAuthorityPage::rebuildExplorerItems()
         }
     }
 
+    m_selected_explorer_index = -1;
+    if (!selected_id.isEmpty()) for (int i=0;i<m_filtered_items.size();++i) {
+        if (m_filtered_items[i].identifier == selected_id) { m_selected_explorer_index = i; m_explorer_page = i/kPageSize+1; break; }
+    }
     updateExplorerPage();
 }
 

@@ -634,6 +634,10 @@ QWidget* OnboardingView::buildUnlock()
     layout->addWidget(m_unlock_password);
     m_unlock_hint = MutedText({}, page);
     layout->addWidget(m_unlock_hint);
+    m_background_finalizer = MutedText(tr("The PoA finalizer continues in the background while your Vault is locked. Unlock to manage finalization."), page);
+    m_background_finalizer->setObjectName(QStringLiteral("backgroundFinalizerNotice"));
+    layout->addWidget(m_background_finalizer);
+    m_background_finalizer->hide();
     auto* unlock = Button(tr("Unlock"), true, page);
     unlock->setObjectName(QStringLiteral("primaryButton"));
     unlock->setProperty("cybouId", QStringLiteral("unlockSubmit"));
@@ -953,6 +957,7 @@ void OnboardingView::clearSecrets()
 
 void OnboardingView::refresh()
 {
+    m_background_finalizer->setVisible(m_model->status().identity_state == CybouIdentityState::Locked && m_model->status().background_finalizer_active);
     const auto& status = m_model->status();
     switch (status.identity_state) {
     case CybouIdentityState::Creating: {

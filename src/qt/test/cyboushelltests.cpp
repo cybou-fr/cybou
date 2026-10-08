@@ -30,6 +30,8 @@
 #include <qt/pages/networkauthoritypage.h>
 #include <qt/pages/walletpage.h>
 #include <qt/cybouconsoledialog.h>
+#include <qt/authorityreview.h>
+#include <QMessageBox>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QFile>
@@ -960,6 +962,7 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
 {
     CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
     model.setNodeStatus(true, 2, true);
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("authority"),1);
     CybouNetworkAuthorityStatus authority;
     authority.proven = true;
     authority.signer_enabled = true;
@@ -995,13 +998,17 @@ void CybouShellTests::authorityDashboardUsesLocalHeightObservation()
     QVERIFY(finalize_now);
     QVERIFY(finalize_now->isHidden());
     QSignalSpy paused{&model, &CybouDesktopModel::finalizationPauseRequested};
+    QTimer::singleShot(0,&page,[&page] {
+        auto* review=page.findChild<QMessageBox*>(QStringLiteral("authorityPauseReview"));
+        if (review) review->findChild<QPushButton*>(QStringLiteral("authorityConfirmPause"))->click();
+    });
     pause->click();
     QCOMPARE(paused.count(), 1);
     QCOMPARE(paused.at(0).at(0).toBool(), true);
     authority.finalizer = CybouFinalizerState::Paused;
     model.setNetworkAuthority(authority);
     QVERIFY(!finalize_now->isHidden());
-    QCOMPARE(pause->text(), QStringLiteral("Resume"));
+    QCOMPARE(pause->text(), QStringLiteral("Resume finalization"));
     QSignalSpy finalize{&model, &CybouDesktopModel::finalizeNowRequested};
     finalize_now->click();
     QCOMPARE(finalize.count(), 1);
@@ -3546,6 +3553,7 @@ void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
 {
     auto window = makeWindow();
     auto* model = window->desktopModel();
+    model->setIdentityState(CybouIdentityState::Active,QStringLiteral("authority"),1);
     QVERIFY(model);
 
     // 1. Setup authorized state with candidate operations and diagnostic history
@@ -3554,6 +3562,9 @@ void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
     authority.signer_enabled = true;
     authority.finalizer = CybouFinalizerState::Finalizing;
     authority.finalized_height = 42;
+    authority.safety_journal_status = QStringLiteral("Observed durable signing journal status");
+    authority.next_settlement_period = 3;
+    authority.next_settlement_due_utc = 86400;
     for (int i = 0; i < 12; ++i) {
         authority.candidate_ids.append(QStringLiteral("cand_%1_%2").arg(i).arg(QString(60, QLatin1Char{'c'})));
     }
@@ -3561,6 +3572,7 @@ void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
     model->setNetworkAuthority(authority);
 
     cybou::NodeDiagnosticsSnapshot diag;
+    diag.initialized = true;
     diag.height = 42;
     diag.tip = std::string(64, 't');
     for (int i = 0; i < 5; ++i) {
@@ -3577,6 +3589,12 @@ void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
 
     // Total = 12 candidates + 5 finalized ops + 1 block tip = 18 items
     QCOMPARE(page->explorerItemCount(), 18);
+    diag.operations.push_back({"rejected-local",static_cast<unsigned>(cybou::OperationStatusKind::REJECTED_KNOWN),0});
+    model->setNetworkDiagnostics(diag);
+    QCOMPARE(page->explorerItemCount(),18);
+    QVERIFY(!page->explorerDetailWidget()->findChild<QLabel*>()->text().contains(QStringLiteral("rejected-local")));
+    QVERIFY(!window->findChild<QWidget*>(QStringLiteral("authorityAdministrationSection"))->isHidden());
+
     QCOMPARE(page->explorerPage(), 1);
     QCOMPARE(page->explorerTable()->rowCount(), 10);
 
@@ -3609,10 +3627,10 @@ void CybouShellTests::authorityExplorerAndEvidenceWorkspace()
     bool found_settlement_readiness = false;
     bool found_auth_notice = false;
     for (const auto* label : page->findChildren<QLabel*>()) {
-        if (label->text().contains(QStringLiteral("Fail-closed durable append-only journal active"), Qt::CaseInsensitive)) {
+        if (label->text().contains(QStringLiteral("Observed durable signing journal status"), Qt::CaseInsensitive)) {
             found_safety_journal = true;
         }
-        if (label->text().contains(QStringLiteral("Off-chain replica service receipts"), Qt::CaseInsensitive)) {
+        if (label->text().contains(QStringLiteral("actual payout entries from local off-chain"), Qt::CaseInsensitive)) {
             found_settlement_readiness = true;
         }
         if (label->text().contains(QStringLiteral("Genesis-authorized PoA signing key is active"), Qt::CaseInsensitive)) {
@@ -4401,4 +4419,53 @@ void CybouShellTests::consoleCompletionAndSearchClearOnLock()
     CybouConsoleDialog reopened{&model};
     QCOMPARE(reopened.size(),QSize(740,600));
     QSettings{}.setValue(QStringLiteral("console/geometry"),saved_geometry);
+}
+
+void CybouShellTests::authorityReviewsRejectStaleSessions()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("authority"),1);
+    CybouNetworkAuthorityStatus authority;
+    authority.proven=true; authority.signer_enabled=true; authority.finalizer=CybouFinalizerState::Finalizing;
+    authority.settlement_due=true; authority.next_settlement_period=3;
+    authority.next_settlement_start_utc=86400; authority.next_settlement_due_utc=172800;
+    authority.storage_escrow=1000;
+    model.setNetworkAuthority(authority);
+    QWidget host;
+    cybou::Hash256 publication{1};
+    cybou::Hash256 account{2};
+    const std::vector<cybou::StorageSettlementEntry> entries{{publication,cybou::AccountId{account},500}};
+    bool preview_inspected=false;
+    QTimer::singleShot(0,&host,[&] {
+        auto* review=host.findChild<QMessageBox*>(QStringLiteral("authoritySettlementReview"));
+        if (!review) return;
+        preview_inspected=review->text().contains(QStringLiteral("500")) && review->text().contains(QStringLiteral("Payout accounts: 1")) && review->detailedText().contains(QString::fromStdString(account.GetHex()));
+        QCOMPARE(review->defaultButton(),qobject_cast<QPushButton*>(review->button(QMessageBox::Cancel)));
+        QTest::keyClick(review, Qt::Key_Escape);
+    });
+    QVERIFY(!ReviewStorageSettlement(&model,3,86400,172800,entries,&host));
+    QVERIFY(preview_inspected);
+    QTimer::singleShot(0,&host,[&] {
+        host.findChild<QMessageBox*>(QStringLiteral("authoritySettlementReview"))->findChild<QPushButton*>(QStringLiteral("authorityConfirmSettlement"))->click();
+    });
+    QVERIFY(ReviewStorageSettlement(&model,3,86400,172800,entries,&host));
+    QTimer::singleShot(0,&host,[&] { model.setIdentityState(CybouIdentityState::Locked); });
+    QVERIFY(!ReviewStorageSettlement(&model,3,86400,172800,entries,&host));
+    QSignalSpy pauses{&model,&CybouDesktopModel::finalizationPauseRequested};
+    QSignalSpy settles{&model,&CybouDesktopModel::storageSettlementRequested};
+    model.requestFinalizationPaused(true); model.requestStorageSettlement();
+    QCOMPARE(pauses.count(),0); QCOMPARE(settles.count(),0);
+    OnboardingView unlock{&model};
+    auto* notice = unlock.findChild<QLabel*>(QStringLiteral("backgroundFinalizerNotice"));
+    QVERIFY(notice); QVERIFY(notice->isHidden());
+    model.setBackgroundFinalizerActive(true);
+    QVERIFY(!notice->isHidden());
+    QVERIFY(!model.isNetworkAuthority() || model.status().identity_state == CybouIdentityState::Locked);
+    model.requestFinalizationPaused(true); model.requestStorageSettlement();
+    QCOMPARE(pauses.count(),0); QCOMPARE(settles.count(),0);
+    model.setBackgroundFinalizerActive(false);
+    QVERIFY(notice->isHidden());
+    model.setIdentityState(CybouIdentityState::Active,QStringLiteral("authority"),1);
+    QTimer::singleShot(0,&host,[&] { authority.next_settlement_period=4; model.setNetworkAuthority(authority); });
+    QVERIFY(!ReviewStorageSettlement(&model,3,86400,172800,entries,&host));
 }

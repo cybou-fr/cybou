@@ -70,6 +70,9 @@ whose journal conflicts with the selected canonical history fails closed.
 The production worker remains alive through transient errors and signer locks.
 Retry uses bounded backoff and preserves the exact journaled candidate and any
 issued certificate until commit. Safety failures disable the signer and cannot
-be cleared by another unlock. A normal lock/unlock resumes production without
-restarting the application or reconnecting peers. Failed durable intent writes
+be cleared by another unlock. Locking the user Vault leaves an already active local PoA signer and production
+loop running in the background. It does not pause finalization. Explicit pause
+stops the production loop; signer safety rules remain unchanged. Operator controls
+require the unlocked authorized Identity. Unlocking does not restart the application
+or reconnect peers. Failed durable intent writes
 fail closed because their persistence outcome is uncertain.

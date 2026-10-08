@@ -88,6 +88,8 @@ private:
     QVector<QWidget*> m_page_widgets;
     QButtonGroup* m_navigation;
     QFrame* m_sidebar{nullptr};
+    QWidget* m_authority_section{nullptr};
+    QLabel* m_administration_label{nullptr};
     QLabel* m_brand_text{nullptr};
     QLabel* m_brand_name{nullptr};
     QLabel* m_header_title{nullptr};

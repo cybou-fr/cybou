@@ -58,6 +58,8 @@ struct CybouDesktopStatus {
     int peer_count{0};
     quint64 finalized_height{0};
     bool finality_known{false};
+    /** Local runtime observation only; does not grant access to operator controls. */
+    bool background_finalizer_active{false};
     /** Minutes this Identity's submitted work has waited with no new block; 0 when finality flows. */
     int finality_stall_minutes{0};
     /** Median finalized height connected peers announce (unverified), to show sync progress. */
@@ -186,6 +188,7 @@ public:
     void requestFinalizationPaused(bool paused);
     void requestFinalizeNow();
     void requestStorageSettlement();
+    void setBackgroundFinalizerActive(bool active);
     void setSyncing(bool syncing);
     void setSyncError(const QString& error);
     void setLastSync(const QDateTime& when);

@@ -97,6 +97,7 @@ private Q_SLOTS:
     void networkRefreshCoalescesStatusBurst();
     void networkReferenceAndAdvancedScopes();
     void authorityExplorerAndEvidenceWorkspace();
+    void authorityReviewsRejectStaleSessions();
     void ownContentInspectorAndBoundedConsole();
     void consoleTranslationsPermissionsAndBounds();
     void consoleCompletionAndSearchClearOnLock();

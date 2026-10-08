@@ -8,6 +8,8 @@
 
 #include <qt/cyboucoreapplicationadapter.h>
 #include <qt/cyboudesktopmodel.h>
+#include <qt/authorityreview.h>
+#include <QApplication>
 
 #include <cybou/official_networks.h>
 #include <cybou/identity_service.h>
@@ -156,6 +158,10 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
     if (m_model) {
         connect(m_model, &CybouDesktopModel::lockVaultRequested, this, [this] { lockIdentity(); });
         connect(m_model, &CybouDesktopModel::statusChanged, this, [this] {
+            if (m_settlement_pending && m_model->status().identity_state != CybouIdentityState::Active) {
+                ++m_settlement_generation;
+                m_settlement_pending = false;
+            }
             updatePoaSigner();
             updateIdentitySigner();
         });
@@ -177,7 +183,8 @@ CybouDesktopController::~CybouDesktopController()
 
 void CybouDesktopController::settleStoragePeriod()
 {
-    if (!m_node_service || !m_application) return;
+    if (!m_node_service || !m_application || m_settlement_pending ||
+        m_model->status().identity_state != CybouIdentityState::Active || !m_model->isNetworkAuthority()) return;
     auto& runtime = m_node_service->Runtime();
     const auto cursor = runtime.GetStorageSettlementCursor();
     if (!cursor) return;
@@ -194,20 +201,40 @@ void CybouDesktopController::settleStoragePeriod()
         return;
     }
     const auto period = cursor->next_period;
+    const auto account = m_model->status().account_id;
+    m_settlement_pending = true;
+    const auto generation = ++m_settlement_generation;
     m_application->prepareStorageSettlement(period, static_cast<std::int64_t>(start) * 1000,
-        [this, start, period](std::vector<cybou::StorageSettlementEntry> entries) {
+        [this, start, period, period_seconds, account, generation](std::vector<cybou::StorageSettlementEntry> entries) {
+          QMetaObject::invokeMethod(this, [this, start, period, period_seconds, account, generation, entries = std::move(entries)]() mutable {
+            if (generation != m_settlement_generation) return;
+            if (m_model->status().account_id != account || !ReviewStorageSettlement(m_model, period, start,
+                    start + period_seconds, entries, QApplication::activeWindow())) { if (generation == m_settlement_generation) m_settlement_pending = false; return; }
             std::uint64_t total{0};
             for (const auto& entry : entries) total += entry.amount;
             const auto count = entries.size();
-            const auto result = m_node_service->Runtime().SubmitStorageSettlement(start, std::move(entries));
-            const bool ok = result.status == cybou::OperationSubmitStatus::ACCEPTED ||
-                result.status == cybou::OperationSubmitStatus::ALREADY_PENDING;
-            QMetaObject::invokeMethod(m_model, [model = m_model, ok, period, count, total] {
-                model->notify(ok
-                    ? CybouDesktopModel::tr("Storage period %1 settled: %2 payouts, %3 CYBOU. It is finalized in the next block.")
+            if (m_settlement_worker.joinable()) m_settlement_worker.join();
+            m_settlement_worker = std::jthread([this, start, period, generation, count, total, entries = std::move(entries)]() mutable {
+              bool ok = false;
+              try {
+                std::lock_guard identity_access{m_identity_access_mutex};
+                const auto current = m_node_service->Runtime().GetStorageSettlementCursor();
+                if (m_identity_service->IsUnlocked() && m_identity_service->IsNetworkAuthority() && current &&
+                    current->next_period == period && (current->next_period_start_utc == 0 || current->next_period_start_utc == start)) {
+                    const auto result = m_node_service->Runtime().SubmitStorageSettlement(start, std::move(entries));
+                    ok = result.status == cybou::OperationSubmitStatus::ACCEPTED || result.status == cybou::OperationSubmitStatus::ALREADY_PENDING;
+                }
+              } catch (const std::exception&) { /* Core signing safety remains fail-closed. */ }
+              QMetaObject::invokeMethod(this, [this, generation, ok, period, count, total] {
+                if (generation != m_settlement_generation) return;
+                m_settlement_pending = false;
+                m_model->notify(ok
+                    ? CybouDesktopModel::tr("Storage period %1 submitted: %2 payouts, %3. Waiting for PoA finalization.")
                           .arg(period).arg(count).arg(cybouAmountText(total))
                     : CybouDesktopModel::tr("The storage settlement was rejected by local execution."));
             }, Qt::QueuedConnection);
+            });
+          }, Qt::QueuedConnection);
         });
 }
 
@@ -464,6 +491,8 @@ void CybouDesktopController::publishNetworkAuthority()
 {
     CybouNetworkAuthorityStatus status;
     std::lock_guard identity_access{m_identity_access_mutex};
+    const bool background_active = m_node_service && m_node_service->Runtime().IsPoaSignerActive() &&
+        !m_production_paused && m_node_service->Runtime().LastBlockProductionStatus() != cybou::BlockProductionStatus::SAFETY_HALT;
     if (m_identity_service && m_node_service && m_identity_service->IsNetworkAuthority()) {
         auto& runtime = m_node_service->Runtime();
         status.signer_enabled = runtime.IsPoaSignerActive();
@@ -507,7 +536,7 @@ void CybouDesktopController::publishNetworkAuthority()
         case cybou::BlockProductionStatus::SIGNER_UNAVAILABLE: prod_status_text = QStringLiteral("Signer inactive"); break;
         case cybou::BlockProductionStatus::RETRY: prod_status_text = QStringLiteral("Idle / waiting for candidates"); break;
         }
-        status.safety_journal_status = QStringLiteral("Fail-closed durable append-only journal active. Last loop status: %1. Conflicts resolved by min(BlockID).")
+        status.safety_journal_status = CybouDesktopModel::tr("Signing policy: durable and fail-closed. Last observed loop status: %1. This is not a journal integrity audit.")
             .arg(prod_status_text);
 
         const auto cursor = runtime.GetStorageSettlementCursor();
@@ -540,7 +569,10 @@ void CybouDesktopController::publishNetworkAuthority()
             }
         }
     }
-    QMetaObject::invokeMethod(m_model, [model = m_model, status] { model->setNetworkAuthority(status); },
+    QMetaObject::invokeMethod(this, [model = m_model, status, background_active] {
+        model->setNetworkAuthority(status);
+        model->setBackgroundFinalizerActive(background_active);
+    },
         Qt::QueuedConnection);
 }
 
@@ -633,6 +665,7 @@ void CybouDesktopController::publishAuthority()
 
 void CybouDesktopController::stop()
 {
+    if (m_settlement_worker.joinable()) m_settlement_worker.join();
     m_identity_signer_state.reset();
     m_poa_signer_state.reset();
     if (m_node_service) m_node_service->StopNetwork();

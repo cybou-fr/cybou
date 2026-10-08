@@ -8,6 +8,8 @@
 #include <qt/cyboudesktopmodel.h>
 #include <qt/cybouuifixtures.h>
 #include <qt/cybouconsoledialog.h>
+#include <qt/authorityreview.h>
+#include <QMessageBox>
 #include <cybou/official_networks.h>
 #include <qt/cybouapplicationbackend.h>
 
@@ -193,6 +195,11 @@ void RunScreenshotHarness(CybouMainWindow* window, const QString& directory)
         authority.total_balance = 12'480'300;
         authority.total_system_balance = 3'902'144;
         authority.storage_escrow = 1'204'500;
+        authority.safety_journal_status = QStringLiteral("Synthetic signing journal observation (fixture)");
+        authority.settlement_due = true;
+        authority.next_settlement_period = 3;
+        authority.next_settlement_start_utc = 86400;
+        authority.next_settlement_due_utc = 172800;
         model->setNetworkAuthority(authority);
         {
             CybouConsoleDialog console{model, window};
@@ -204,10 +211,40 @@ void RunScreenshotHarness(CybouMainWindow* window, const QString& directory)
         }
         window->showPage(CybouPage::NetworkAuthority);
         save(QStringLiteral("network-authority"));
+        QTimer::singleShot(100,window,[window,directory,prefix] {
+            if (auto* review = window->findChild<QMessageBox*>(QStringLiteral("authoritySettlementReview"))) {
+                review->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("authority-settlement-review.png")));
+                for (auto* button : review->buttons()) {
+                    if (review->buttonRole(button) == QMessageBox::ActionRole) button->click();
+                }
+                qApp->processEvents();
+                review->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("authority-settlement-entries.png")));
+                review->reject();
+            }
+        });
+        ReviewStorageSettlement(model,3,86400,172800,{{cybou::Hash256{1},cybou::AccountId{cybou::Hash256{2}},250}},window);
+        QTimer::singleShot(100, window, [window,directory,prefix] {
+            if (auto* review = window->findChild<QMessageBox*>(QStringLiteral("authorityPauseReview"))) {
+                review->grab().save(QDir{directory}.filePath(prefix + QStringLiteral("authority-pause-review.png")));
+                review->reject();
+            }
+        });
+        for (auto* button : window->findChildren<QPushButton*>()) {
+            if (button->property("cybouId").toString() == QStringLiteral("authorityPause")) { button->click(); break; }
+        }
         authority.finalizer = CybouFinalizerState::Paused;
         model->setNetworkAuthority(authority);
         save(QStringLiteral("network-authority-paused"));
+        authority.finalizer = CybouFinalizerState::SafetyHalt;
+        authority.signer_enabled = false;
+        model->setNetworkAuthority(authority);
+        save(QStringLiteral("network-authority-safety-halt"));
         model->setNetworkAuthority({});
+        model->setIdentityState(CybouIdentityState::Locked, model->status().account_id, model->status().creation_height);
+        model->setBackgroundFinalizerActive(true);
+        save(QStringLiteral("authority-vault-locked"));
+        model->setBackgroundFinalizerActive(false);
+        model->setIdentityState(CybouIdentityState::Active, QStringLiteral("fixture-account"), 1);
 
         model->setFileItems({});
         window->showPage(CybouPage::Files);
