@@ -14,7 +14,7 @@ editing an included file.
 | README.md | 51 | 78bec1020c6e34cd |
 | SECURITY.md | 60 | 2b778dc87a772ffa |
 | docs/cybou/00_VISION.md | 73 | af47eb77b0dcd95d |
-| docs/cybou/02_ARCHITECTURE.md | 239 | c7be1483820130bf |
+| docs/cybou/02_ARCHITECTURE.md | 240 | ddb0d288b2eb3301 |
 | docs/cybou/04_NETWORK_LIFECYCLE.md | 213 | fb7b33f5a6ff1f0a |
 | docs/cybou/05_CHAIN_STATE.md | 91 | 27a609d613aa7382 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 54 | ee6747d95045a75c |
@@ -26,9 +26,9 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 29 | 847caaa3d9e5aa10 |
 | docs/cybou/22_ROADMAP.md | 100 | 9ab20b1138313a5a |
-| docs/cybou/24_DECISIONS.md | 229 | ccb7a373b00388a0 |
+| docs/cybou/24_DECISIONS.md | 229 | a13167bcc95412a1 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 134 | 684d6237165d5200 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1648 | 6797f45d393d1a99 |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1685 | 3f537ef2d15f1137 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |
@@ -74,8 +74,8 @@ editing an included file.
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
 | docs/cybou/NETWORK_AND_ADVANCED_UX.md | 382 | 761293abc29cc34d |
-| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 249 | 7c52c2df26ad5587 |
-| docs/cybou/NETWORK_OBSERVATION_REPORTS.md | 252 | 9b389e835b82c604 |
+| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 252 | ae4ed03cc010c6a3 |
+| docs/cybou/NETWORK_OBSERVATION_REPORTS.md | 266 | 95a06577a3989857 |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 80 | ff21737a8991696a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |

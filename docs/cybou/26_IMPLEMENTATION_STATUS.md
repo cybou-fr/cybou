@@ -3,6 +3,43 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Bounded observation groups and declared-resource totals (2026-10-08)
+
+`p2p::ObservationGroups` implements a standalone volatile store of at most 32
+numeric transport-address groups. Caller session order selects one admitted
+same-network live handle per group, retained until close/inactivity expiry;
+capacity values never replace it. IPv4-mapped IPv6 normalizes to IPv4 and all
+loopback transports share one local group excluded from remote totals. A session
+cannot occupy two address groups. Replacement/close immediately discards its
+prior report; the next selected session starts without a sample.
+
+Reports expire at 90 seconds of local monotonic receipt even if selection or
+snapshot reads continue. Inactive group metadata expires after 90 seconds.
+CPU means advance their age and become unknown separately above 60 seconds.
+Selection, report/known-contributor changes, close and expiry advance a volatile
+cohort revision for future chart segmentation. Clock regression refuses work;
+close still removes the disconnected report. Default clocks are read under the
+mutex. A new store on restart/network change starts empty; nothing is persisted.
+
+Snapshots expose selected/fresh/missing remote group counts, slot-capacity status,
+separate local reports, per-field contributor counts and per-report metrics.
+They include no address, connection handle, challenge, network binding or stable
+row identifier. Storage sums use checked byte arithmetic and utilization uses
+the same known-storage subset. Receive/send sums and declared rates remain
+separate. CPU is an arithmetic mean of completed normalized process means with
+window/age range and count, never network CPU load. Overflowed totals/ratios are
+unknown; known zero and legitimate above-policy use remain distinct. Memory and
+unverified cursors stay per report, with no memory/disk/chain stream aggregate.
+
+Validation: shared/mapped IP selection, replacement/close, loopback exclusion,
+receipt/inactivity/CPU expiry, weighted utilization and different metric subsets,
+directional traffic, over-policy/zero/overflow boundaries, cohort segmentation,
+network/clock rejection, 32-slot cap and concurrent access. New group, guard,
+codec/cache and P2P regression tests pass; binaries rebuild. This is component
+evidence for untrusted partial declarations, not a host census or network ceiling.
+No runtime store/poller call site, remote UI, persistence/export or deployment is
+added yet. Scheduled acquisition/disconnect wiring and Network/Console remain.
+
 ## Direct observation TLS transactions (2026-10-08)
 
 Source now accepts `GET_OBSERVATION` (27, exactly 64 bytes) and `OBSERVATION`

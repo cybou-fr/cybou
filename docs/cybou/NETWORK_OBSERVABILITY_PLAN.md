@@ -88,11 +88,14 @@ and service-eligible network capacity estimates. Local gauges are not network to
    in Level 1/2. The standalone strict payload codec is implemented and tested;
    the narrow five-second background runtime cache and standalone challenge/
    rate-limit guard are implemented. Direct TLS request/reply and runtime guard
-   wiring are implemented without automatic polling. Scheduled polling, grouping and privacy
+   wiring and the standalone bounded group store/totals are implemented without
+   automatic polling. Scheduled acquisition/store lifecycle/UI wiring and privacy
    acceptance remain; relayed/cross-address design is open. No new network,
    genesis or signer needed; deployed software must upgrade before polling.
 4. **O4 Cohort aggregation:** accepted reports, bounded aggregation and
-   per-node/mean/cohort charts. Verify duplicates/replay, expiry, churn,
+   per-report/mean/cohort charts. The standalone group store and checked declared
+   resource totals are implemented; live acquisition and UI/chart wiring remain.
+   Verify duplicates/replay, expiry, churn,
    inconsistent/dishonest reports and partial visibility.
 5. **O5 Capacity estimates:** service-eligible storage with replica constraints;
    optional accepted historical throughput ceiling beside actual current rate.

@@ -33,6 +33,7 @@ add_executable(cybou-core-test
   cybou_observation_report_tests.cpp
   cybou_observation_cache_tests.cpp
   cybou_observation_exchange_tests.cpp
+  cybou_observation_groups_tests.cpp
   cybou_chunk_id_tests.cpp
   cybou_chunk_authorization_tests.cpp
   cybou_encrypted_chunk_tests.cpp

@@ -4,7 +4,8 @@ Status: Level 2 normative implementation target under DEC-289, 2026-10-08.
 Strict standalone request/reply payload codecs are implemented and tested.
 The narrow runtime-owned cache refreshes independently every five seconds.
 The runtime exchange guard and direct TLS request/reply transaction are implemented.
-Automatic polling, report grouping and remote display remain unimplemented;
+The standalone bounded address-group store and declared-resource totals are implemented.
+Automatic polling, store lifecycle wiring and remote display remain unimplemented;
 no observation exchange is deployed. The source P2P baseline ends at message 28;
 older deployed software remains on its stated baseline and must upgrade before polling.
 This document freezes the first direct-report contract, not a global census,
@@ -208,6 +209,19 @@ measurement truth or current global freshness. Unknown ceiling, usable replica
 capacity, unique logical content and whole-network coverage remain unknown.
 When selected sessions/contributors change, start a new aggregate chart segment;
 do not present membership changes as traffic growth or zero-filled history.
+
+Implemented component: `p2p::ObservationGroups` keeps at most 32 volatile slots,
+selects a connection before recording an exchange-accepted report, and preserves
+that selection against competing ports/sessions. Close/replacement clears the
+sample immediately; report receipt and metadata inactivity expire at 90 seconds.
+CPU mean age advances on read and expires independently. Local loopbacks collapse
+and are excluded from all remote totals. Snapshots contain no address/handle/
+challenge/binding/row ID; a volatile cohort revision marks selection and known-
+contributor changes for future charts. Checked sums, matched storage denominators,
+separate traffic directions and counted arithmetic CPU means follow the rules
+above; zero, missing and overflow remain distinct. The component does not verify
+measurement truth or perform network I/O. Runtime acquisition, close/expiry
+scheduling, UI labels and chart segmentation wiring remain to be connected.
 
 ## Acceptance and release gates
 
