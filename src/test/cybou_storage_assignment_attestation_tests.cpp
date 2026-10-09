@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/storage_assignment_attestation.h>
 #include <cybou/storage_assignment_observer.h>
+#include <cybou/storage_assignment_observation_store.h>
 #include <cybou/block_executor.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
+#include <future>
 
 namespace {
 struct Signer final : cybou::PoaSigner {
@@ -278,5 +280,111 @@ BOOST_AUTO_TEST_CASE(assigned_audit_uses_fresh_challenge_and_preserves_negative_
     BOOST_CHECK(!cybou::ObserveAssignedStorageReplica(transport, endpoint, f.service.definition,
         *signed_plan, 0, *receipt, 4, corrupt_local));
     BOOST_CHECK_EQUAL(transport.audits + transport.gets, requests);
+}
+BOOST_AUTO_TEST_CASE(observation_journal_retains_raw_audit_and_rechecks_after_reopen)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4));
+    BOOST_REQUIRE(receipt);
+    ObservedTransport transport;
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    const auto record = cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+        f.service.definition, *assignment, 0, *receipt, 4, 100, 100, f.ciphertext);
+    BOOST_REQUIRE(record); BOOST_REQUIRE(record->observation.challenge); BOOST_REQUIRE(record->observation.answer);
+    const auto original_nonce = record->observation.challenge->nonce;
+    BOOST_CHECK(!cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+        f.service.definition, *assignment, 0, *receipt, 4, 100, 100, f.ciphertext));
+    f.db.reset();
+    f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    const auto loaded = cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 100, f.ciphertext);
+    BOOST_REQUIRE(loaded); BOOST_REQUIRE(loaded->observation.challenge); BOOST_REQUIRE(loaded->observation.answer);
+    BOOST_CHECK(loaded->observation.challenge->nonce == original_nonce);
+    BOOST_CHECK(loaded->observation.answer->response_hash == record->observation.answer->response_hash);
+    BOOST_CHECK(loaded->observation.receipt == *receipt);
+    BOOST_CHECK_EQUAL(loaded->observed_at_utc, 100U);
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 101, f.ciphertext));
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 1, 100, f.ciphertext));
+    auto wrong = f.ciphertext; wrong[0] ^= 1;
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 100, wrong));
+    const auto prefix = "storage/assignment-observations/" +
+        cybou::Hash256{std::span<const unsigned char, 32>{f.plan.commitment}}.GetHex() + "/0";
+    auto raw = f.db->Get(prefix + "/100"); BOOST_REQUIRE(raw);
+    raw->back() ^= 1; BOOST_REQUIRE(f.db->Put(prefix + "/100", *raw));
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 100, f.ciphertext));
+    BOOST_CHECK(!cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+        f.service.definition, *assignment, 0, *receipt, 4, 100, 100, f.ciphertext));
+    BOOST_CHECK(f.db->Get(prefix + "/100") == raw);
+}
+
+BOOST_AUTO_TEST_CASE(observation_journal_full_get_is_atomic_idempotent_and_does_not_duplicate_body)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4));
+    BOOST_REQUIRE(receipt);
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    const auto collect = [&] {
+        ObservedTransport transport;
+        return cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+            f.service.definition, *assignment, 0, *receipt, 4, 200, 200, {}, true);
+    };
+    auto first = std::async(std::launch::async, collect);
+    auto second = std::async(std::launch::async, collect);
+    BOOST_REQUIRE(first.get()); BOOST_REQUIRE(second.get());
+    f.db.reset();
+    f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    const auto loaded = cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 200, f.ciphertext);
+    BOOST_REQUIRE(loaded);
+    BOOST_CHECK(loaded->observation.kind == cybou::StorageAssignmentObservationKind::FULL_GET);
+    BOOST_CHECK(loaded->observation.retrieved_bytes.empty());
+    BOOST_CHECK(!loaded->observation.challenge && !loaded->observation.answer);
+    BOOST_REQUIRE(collect());
+    const auto prefix = "storage/assignment-observations/" +
+        cybou::Hash256{std::span<const unsigned char, 32>{f.plan.commitment}}.GetHex() + "/0";
+    const auto index = f.db->Get(prefix + "/index"); BOOST_REQUIRE(index);
+    BOOST_CHECK_EQUAL(index->size(), 12U);
+    BOOST_CHECK_EQUAL((*index)[0], 1U);
+    BOOST_REQUIRE(f.db->Erase(prefix + "/200"));
+    BOOST_CHECK(!collect()); // Missing indexed record is corruption, not a new observation.
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 200, f.ciphertext));
+}
+
+BOOST_AUTO_TEST_CASE(observation_journal_rejects_invalid_time_nested_locked_and_corrupt_index)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4));
+    BOOST_REQUIRE(receipt);
+    ObservedTransport transport;
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    const auto collect = [&](std::uint64_t time, std::uint64_t through) {
+        return cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+            f.service.definition, *assignment, 0, *receipt, 4, time, through, {}, true);
+    };
+    BOOST_CHECK(!collect(0, 10)); BOOST_CHECK(!collect(11, 10));
+    {
+        cybou::PrivateApplicationStore::Batch enclosing{*f.db};
+        BOOST_CHECK(!collect(10, 10));
+    }
+    BOOST_CHECK_EQUAL(transport.gets, 0U);
+    const auto prefix = "storage/assignment-observations/" +
+        cybou::Hash256{std::span<const unsigned char, 32>{f.plan.commitment}}.GetHex() + "/0";
+    BOOST_REQUIRE(f.db->Put(prefix + "/index", std::vector<unsigned char>{1, 16, 0, 0})); // count 4097
+    BOOST_CHECK(!collect(10, 10));
+    BOOST_CHECK_EQUAL(transport.gets, 0U);
+    BOOST_REQUIRE(f.db->Erase(prefix + "/index"));
+    transport.unavailable = true; BOOST_CHECK(!collect(10, 10));
+    BOOST_CHECK(!f.db->Has(prefix + "/index"));
+    transport.unavailable = false; BOOST_REQUIRE(collect(10, 10));
+    f.payer->GetKeyStore().Clear();
+    BOOST_CHECK(!collect(11, 11));
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 10, f.ciphertext));
 }
 BOOST_AUTO_TEST_SUITE_END()

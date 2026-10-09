@@ -8,6 +8,29 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Durable assignment observation collector (2026-10-09)
+
+The new storage_assignment_observation_store calls assigned audit/GET and atomically
+stores successful observations and sorted UTC index in existing encrypted app.db.
+It requires the stored PoA attestation, releases the DB lock during network I/O,
+rechecks state before commit and rejects nested transactions. Records are immutable
+per assignment/slot/UTC second, with 4096 records maximum and no eviction. Exact
+retries reuse a record; conflicts and malformed indexes/targets fail closed.
+Reload checks receipt, scope and exact local chunk bytes; audit response is
+recomputed from retained raw challenge/answer. GET ciphertext is not duplicated.
+Its stored success/time remains a trusted local collector assertion, not signed
+proof of past remote custody. Canonical UTC/funded term validation, production
+dispatch/aggregation and interval/payout wiring remain open.
+
+Validation: core build passed; focused attestation/assignment, private store,
+storage service/economy, quotes and resource limits passed 72 cases / 122,800
+assertions; 234 other core cases were skipped. Regressions cover DB reopening,
+raw audit replay/tamper rejection, concurrent identical GET collection, UTC and
+nested-transaction rejection, missing indexed records, oversized index, locked
+Identity and failed transport without a successful journal entry. Evidence:
+`artifacts/economics-observation-store-core.txt`, baseline `1af0e171` plus this
+package. Controlled transport fixtures do not establish live funded acceptance.
+
 ### Assignment-scoped audit and full GET (2026-10-09)
 
 The new storage_assignment_observer uses existing StorageTransport after checking

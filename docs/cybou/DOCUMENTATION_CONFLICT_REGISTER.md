@@ -45,6 +45,12 @@ attested slot/receipt before random-offset audit or exact full GET. It returns
 instantaneous local observations, without interval credit, persistent raw evidence
 or production aggregation. DOC-005/006 remain open.
 
+Durable collector follow-up: assigned observations can now be retained/replayed
+in app.db with immutable records and an atomic bounded index. Receipt and raw
+audit response are rechecked against local ciphertext; GET success/time is a
+trusted local assertion. Production collection/aggregation, interval derivation
+and canonical settlement integration remain absent; DOC-005/006 remain open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

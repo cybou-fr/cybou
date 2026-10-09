@@ -104,6 +104,7 @@ add_library(cybou_node STATIC
   cybou/storage_assignment_evidence.cpp
   cybou/storage_assignment_attestation.cpp
   cybou/storage_assignment_observer.cpp
+  cybou/storage_assignment_observation_store.cpp
   cybou/application_service.cpp
   cybou/local_application_service.cpp
   cybou/local_content_stager.cpp

@@ -245,10 +245,46 @@ periodic full checks and runs this synchronous call outside the GUI thread.
 The returned audit answer is not a standalone provider-signed proof; it is a
 local observation tied to an authenticated transport request. The helper does not
 persist observations, append duration intervals, discover providers or dispatch
-production PoA work. Observation retention/replay, interval policy and aggregation
-remain open. A successful instantaneous check never establishes uninterrupted
+production PoA work. The durable collector below provides local retention/replay;
+interval policy and aggregation remain open. A successful instantaneous check never establishes uninterrupted
 service or authorizes a payout by itself. Tests exercise signed assignment/receipt
 fixtures through a controlled transport, not live remote funded leases.
+
+### Durable local observation collector
+
+`ObserveAndStoreAssignedStorageReplica` calls that transport boundary and retains
+successful observations under `storage/assignment-observations/<commitment>/<slot>`
+in existing encrypted app.db. The PoA-attested plan must already be durably stored.
+No database lock is held across network I/O; assignment/store state is checked
+again before atomic commit of the immutable observation and its sorted UTC index.
+The API rejects enclosing transactions so success means durable outermost commit.
+
+One record is allowed per assignment/slot/UTC second. Exact serialized retries are
+idempotent; different audit challenges at the same second conflict rather than
+overwrite. Each slot is limited to 4096 records, without automatic eviction.
+Malformed/oversized/unsorted indexes and missing indexed records fail closed.
+Locked stores, malformed target records and conflicting retries do not create a
+successful durable observation. New observations require nonzero caller-supplied
+UTC no later than the supplied verified-through boundary; neither value proves
+canonical time. PoA clock/term policy remains an independent validation gate.
+
+Record layout: observed UTC u64, stored size u32, assignment commitment 32,
+StorageId 32, slot u8, kind u8 (0 audit, 1 GET), receipt length u32 and exact receipt
+(maximum 8192). Audit then retains ChunkID 32, offset u64, nonce 32, held flag u8
+and response hash 32. Index is count u32 and strictly increasing nonzero u64 UTCs.
+Integers are LE and decoding consumes all bytes. This is a local off-chain codec,
+not a new P2P entity, block field or protocol version.
+
+`LoadAssignedStorageObservation` validates the stored assignment/slot, receipt,
+size and exact local ChunkID; audits recompute the response from retained challenge
+and local ciphertext. GET bodies are not duplicated into metadata: reload requires
+the chunk bytes from the existing content store and returns an empty GET body.
+The recorded GET success remains the trusted collector's assertion, not a
+provider-signed proof that remote data was held at the recorded time. These records
+do not themselves generate service intervals or survive as usable payable evidence
+when the exact local reference bytes are unavailable. Production dispatcher,
+collector authenticity/provenance aggregation, retention/compaction policy and
+evidence-to-interval-to-settlement wiring remain open.
 
 Before activating changes, define exact settlement/state serialization and
 vectors, assignment/evidence commitments and cumulative term accounting. Full
