@@ -7,6 +7,142 @@ reviewed protocol transition. This is not evidence of completed payouts.
 
 ## Delivery order
 
+### Integration control checkpoint (2026-10-09)
+
+Source audit baseline `05ca1fee`, followed by complete-term quote package
+`e190cbe6`. The next deliverable is the existing StorageService/PoA/canonical
+execution integration, not another standalone assignment helper. The complete
+term quote closes all-slot preparation only; it does not change production.
+Do not activate it behind the current settlement codec: current execution cannot
+validate the target inputs, and would still apply the obsolete daily cap.
+
+Current production path is
+`StorageService::SettlementEntries` -> desktop adapter/controller ->
+`CybouNodeRuntime::SubmitStorageSettlement` ->
+`PoaFinalizer::SignStorageSettlement` -> candidate/block execution ->
+`ApplyStorageSettlement`. It reads live payout bindings, ranks locally verified
+placement chunks, retains at most lease.replica_count recipients and distributes
+the old period cap. Current state has one extendable lease per publication and
+no independently funded term or per-provider cumulative paid ledger. On closure
+it refunds and erases the lease. These are protocol gaps, not missing GUI work.
+
+| Existing module | Production caller today | Owned/duplicated data | Integration disposition |
+|---|---|---|---|
+| storage_assignment | None outside module/test composition | Per-chunk context, full eligible and selected pairs; repeats eligible set | Keep deterministic selection; share eligible transcript per assignment batch after approved contract |
+| storage_assignment_attestation | None outside module/test composition | Per-chunk signature and all raw bindings; duplicates proofs across chunks | Reuse verification and existing PoA signer; batch commitment rather than thousands of signatures |
+| storage_assignment_observer | Observation-store helper only, no production dispatch | Transient receipt, audit challenge/answer or GET bytes | Run from existing storage I/O scheduling; use existing authenticated transport |
+| storage_assignment_observation_store | Tests only | Immutable observations/index; receipt repeated per observation | Integrate into existing EvidenceLedger ownership; retain proof references without another DB |
+| storage_assignment_evidence | Payout verifier and tests | Local intervals plus shared funded-slot claims repeat interval fields | Shared claims are the cross-epoch exclusion authority; local view can be derived after recovery/regression coverage |
+| storage_assignment_payout | Tests only | No records; caller supplies scopes/manifest/rate/paid/snapshots | Call within existing settlement preparation using canonical inputs, never live peers as paid history |
+| storage_evidence_ledger | StorageService placement/audit/verification/settlement | Receipts, latest replica timestamps and provider shadow totals | Keep diagnostics separate from payable service; reuse receipt storage and ownership, remove diagnostic payout input only at approved activation |
+
+This table identifies a consolidation direction, not permission to delete existing
+journals. Preserve raw evidence and exact operation jobs until verified replay is
+available. Neither latest-success timestamps nor shadow CYBOU totals are canonical
+entitlement. No new runtime, payment service, scheduler or provider registry is needed.
+
+#### Measured-layout scalability calculation
+
+Current serialized plan has 185 context bytes, two u32 list counts, 64 bytes per
+eligible pair and 64 per selected pair. With two replicas this is `321 + 64E`
+bytes; its separate PoA signature is 3373 bytes. Thus 1000 chunks with E=100
+repeat at least 10,094,000 bytes, or 69,230,000 with E=1024, before raw payout
+bindings, DB keys/encryption and evidence. They also require 1000 hybrid PoA
+signatures and repeated binding verification. These are layout calculations,
+not throughput measurements. Local/shared interval duplication costs 144 bytes
+per claim before headers; 4096 claims x 1000 chunks x two slots is 1,179,648,000
+bytes. The present fixed limits must not become a production accrual halt.
+
+Selected design for protocol review: one assignment batch per publication,
+funded term and epoch; one retained eligible transcript/binding set and one PoA
+signature over its scope, selected-assignment Merkle root and eligible/seed
+commitments. A leaf contains ChunkID, epoch and ordered storage/payout pairs
+(168 bytes for two slots, with common context outside the leaf). A 1000-leaf
+tree needs at most ten 32-byte siblings for an individual proof. This shares
+signatures and eligibility proofs while retaining chunk-specific membership.
+Verifier caches are local only and never substitute signature checks. Exact
+hash domains, leaf ordering, padding and byte codec require approval and vectors;
+no new wire entity or cryptographic domain is implemented by this checkpoint.
+
+#### Minimal protocol change proposal — not an adopted wire/state format
+
+The following proposal is inside this CURRENT implementation plan for review;
+it is not implementation authorization for consensus changes.
+
+1. Funding: key each immutable funded term by its finalized funding OperationID
+   (initial RootPublication or renewal StorageLease). Retain publication, payer,
+   units, replicas, start/end periods, UTC anchor, frozen rate, B/T and both escrow
+   origins separately. Renewal appends a term instead of rescaling prior rights.
+   State serialization and state-root vectors must cover these records.
+2. Assignment: bind the batch to the finalized publication authorization root
+   and a complete unique manifest with Merkle authorization. A locally frozen
+   eligible set alone cannot prove that it predates the seed. A reviewed canonical
+   commitment made before a later finalized seed is required; its placement in
+   the existing operation format and deterministic effective epoch boundaries
+   remain approval gates. Do not call the current caller-supplied seed verified.
+3. Accounting: retain canonical cumulative unit-seconds and finalized paid per
+   term/replica slot/StorageId/payout pair, plus slot aggregate usage and the accepted
+   assignment/evidence commitments. Aggregate service cannot exceed T; provider
+   cumulative floor uses the same B across all chunks and replacements. Raw audits
+   remain off-chain; PoA attests their bounded service totals. Full Nodes validate
+   the signed totals and arithmetic, not continuous physical custody.
+4. Settlement: extend the existing signed operation with explicit end UTC,
+   evidence commitment and term/slot/storage/payout/cumulative-service/amount
+   entries, ordered by the complete key. Repeated provider claims across slots
+   need distinct entries. Do not retain the old per-lease replica-count recipient
+   restriction: replacement can create more legitimate historical recipients.
+   Check bindings against the assignment's finalized historical keys, monotonic
+   totals, entitlement minus canonical paid, per-slot and term budgets, account
+   existence, no self payout, origin-preserving debit/credit and TotalCybou equality.
+   Validate the entire candidate before publishing any state mutation.
+5. Recovery: existing encrypted app.db exact-operation journaling retains the
+   prepared input snapshot, unsigned commitment and signed exact bytes/OperationID
+   before submission. Reconcile canonical finality before retry; never recompute
+   a different operation on lost ACK. A stale parent requires reconciliation, not
+   a second payout. Only finalized execution changes paid or the period cursor.
+6. Bounds: maintain the 1024-entry atomic failure rule until an approved bounded
+   period-batching contract exists. No successful empty settlement may bypass an
+   oversized obligation set. That contract must fix ordering, total batch root,
+   completion and refund timing before cursor advancement; it cannot be inferred
+   from the current wire. Quantify serialized/block limits before activation.
+
+UTC accrual policy, evidence retention and transition disposition are mandatory
+parts of approval. A candidate policy is interval credit only between two durable
+successful checks of the same active chunk/slot/provider, within the funded term,
+with explicit maximum gap/full-GET cadence and failure/replacement boundaries.
+No first-check credit, extrapolation or credit over a failed check. Split at period
+boundaries; replay derives the same disjoint claims from retained observations.
+Cadence/max-gap values are deliberately undecided: the diagnostic one-day bound
+does not authorize a payment policy. Retention must preserve all unsettled proof
+material, plus finalized term replay/dispute material for an agreed horizon.
+Compaction needs canonical paid checkpoints and atomic recoverable replacement;
+capacity pressure must produce an explicit retryable error before losing evidence.
+
+Activation also requires deterministic handling of already funded live leases
+and their absent historical service/paid data. Do not invent that history. Choose
+and review a boundary/closure policy and pre/post-boundary vectors, then authorize
+deployment separately. No genesis, NetworkID, keys, signing history or live nodes
+are changed here. No dual permanent codec/version path is prescribed.
+
+#### Required vectors and integration order
+
+First approve the above contract, byte layouts/domains, audit/time policy,
+bounded batches and existing-lease disposition. Then change existing
+storage_lease/state/block_executor and their tests together, wire StorageService
+and the existing finalizer/journal, and finally test isolated Full Node runtimes.
+Do not enable production assignment before the compatible payout validator.
+
+Vectors must include: U=1, P=30, S=86400, R=5, N=2 -> B=1, escrow=2,
+day-one entitlement=0 and full-term entitlement=1 per honest provider;
+the same slot split equally between two providers -> separate floors both 0,
+refund=1; one honest full-term slot and one without evidence -> payout=1,
+refund=1; replayed finalized operation -> no second transfer; renewal -> a new
+independent term. Extend these with multiple chunks, mixed origins, rotation,
+replacement, future/corrupt/overlapping evidence, exact restart before/after
+signing, 1024/1025 recipients and conservation. Signed helper fixtures already
+passing are not this runtime integration evidence. Live independent-host
+acceptance follows approved cutover and separate deployment authorization.
+
 ECONOMICS-P0-01 (accounting), P0-02 (assignment and evidence), P0-03
 (end-to-end settlement), then tariffs/Wallet and Beta hardening. New cosmetic,
 Network and Enterprise work is deferred. Data-loss, security, crashes and CI
