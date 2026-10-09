@@ -1025,6 +1025,7 @@ void CybouMainWindow::closeEvent(QCloseEvent* event)
     if (QSettings{}.value(QStringLiteral("desktop/run_in_background"), false).toBool() &&
         m_tray_icon && m_tray_icon->isVisible()) {
         // "Keep running in background": hide CYBOU, node continues, tray remains.
+        qInfo("CYBOU window hidden: keep-running-in-background setting is enabled");
         hide();
         event->ignore();
         return;

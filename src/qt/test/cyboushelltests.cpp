@@ -5941,7 +5941,7 @@ void CybouShellTests::networkSummaryPreservesFullMap()
     QCOMPARE(overlay->parentWidget(), page.mapWidget());
     QVERIFY(overlay->isVisibleTo(&page));
     QTRY_COMPARE(page.mapWidget()->height(), page.height());
-    QCOMPARE(rate->text(), QStringLiteral("—"));
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(5));
     model.setNodeStatus(true, 3, true);
     model.setSyncing(false);
     cybou::NodeDiagnosticsSnapshot snapshot;
@@ -5951,20 +5951,20 @@ void CybouShellTests::networkSummaryPreservesFullMap()
     snapshot.local_storage_used = 1048576;
     snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
     model.setNetworkDiagnostics(snapshot);
-    QTRY_COMPARE(rate->text(), QLocale{}.toString(5.0, 'f', 1));
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(5));
     // Local bytes are never passed off as network totals.
     QCOMPARE(capacity->text(), QStringLiteral("—"));
     QCOMPARE(hosted->text(), QStringLiteral("—"));
     model.setSyncing(true);
-    QTRY_COMPARE(rate->text(), QStringLiteral("—"));
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(5));
     model.setSyncing(false);
     snapshot.finalization.windows[0].observed_operations = 0;
     snapshot.finalization.peak_known = true;
     snapshot.finalization.peak_observed_minute = 8;
     model.setNetworkDiagnostics(snapshot);
-    QTRY_COMPARE(rate->text(), QLocale{}.toString(0.0, 'f', 1));
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(5));
     QTRY_COMPARE(page.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
-        QStringLiteral("Observed max: %1").arg(QLocale{}.toString(quint64{8})));
+        QStringLiteral("Current: %1 · Observed max: %2").arg(QLocale{}.toString(0.0, 'f', 1), QLocale{}.toString(quint64{8})));
     snapshot.network_storage = cybou::NetworkStorageUsage{.capacity_bytes = 128849018880ULL,
         .stored_bytes = 9876543210ULL, .nodes = 4, .responding_endpoints = 3, .known_endpoints = 3,
         .peak_capacity_bytes = 128849018880ULL, .peak_stored_bytes = 11000000000ULL};
@@ -5984,7 +5984,9 @@ void CybouShellTests::networkSummaryPreservesFullMap()
     QVERIFY(page.mapWidget()->rect().contains(overlay->geometry()));
     if (!capture.isEmpty()) QVERIFY(page.grab().save(capture + QStringLiteral(".narrow.png")));
     page.showAdvanced();
-    QVERIFY(!overlay->isVisibleTo(&page));
+    QVERIFY(overlay->isVisibleTo(&page));
+    QVERIFY(page.findChild<QScrollArea*>(QStringLiteral("networkAdvancedDrawer"))->y() > overlay->geometry().bottom());
+    if (!capture.isEmpty()) QVERIFY(page.grab().save(capture + QStringLiteral(".advanced.png")));
     QCOMPARE(page.mapWidget()->height(), page.height());
     page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
     QVERIFY(overlay->isVisibleTo(&page));

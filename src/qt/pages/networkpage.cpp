@@ -281,8 +281,7 @@ void SchematicFranceMap::paintEvent(QPaintEvent* /*event*/)
     painter.drawText(QPointF{16, 56}, m_summary + (m_peers.size() > connected ? tr(" · %1 known, disconnected (pale)").arg(m_peers.size() - connected) : QString{}));
 
     // Map drawing rect
-    const QRectF available = bounds.adjusted(24, 84, -24, -112);
-    const QRectF map_rect = available.adjusted(44, 0, -44, 0);
+    const QRectF map_rect = bounds.adjusted(24, 40, -24, -48);
     if (map_rect.width() < 100 || map_rect.height() < 100) return;
 
     // Compiled public-domain geometry, fitted without stretching its aspect ratio.
@@ -531,7 +530,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_network_summary->setStyleSheet(QStringLiteral(
         "QWidget#networkSummaryOverlay QLabel { background: transparent; border: none; }"
         "QWidget#networkSummaryOverlay QLabel[summaryCaption=true] { font-size: 12px; }"
-        "QWidget#networkSummaryOverlay QLabel[summaryValue=true] { font-size: 24px; font-weight: 600; }"));
+        "QWidget#networkSummaryOverlay QLabel[summaryValue=true] { font-size: 18px; font-weight: 600; }"));
     auto* network_summary_layout = new QGridLayout{m_network_summary};
     network_summary_layout->setContentsMargins(18, 10, 18, 10);
     network_summary_layout->setHorizontalSpacing(24);
@@ -567,8 +566,8 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
         network_summary_layout->setColumnStretch(summary_column++, 1);
         return value;
     };
-    m_network_rate = summary_value(tr("Network operations / min"), QStringLiteral("networkSummaryRate"));
-    m_network_rate->setToolTip(tr("Verified finalized operations observed over 60 complete seconds; history imports excluded."));
+    m_network_rate = summary_value(tr("Base operations / min"), QStringLiteral("networkSummaryRate"));
+    m_network_rate->setToolTip(tr("Operator-set base rate: 5 op/min. This is not measured traffic or a maximum; the current observation is shown separately."));
     m_network_capacity = summary_value(tr("Network storage capacity"), QStringLiteral("networkSummaryCapacity"));
     m_network_hosted = summary_value(tr("Data hosted by the network"), QStringLiteral("networkSummaryHosted"));
     m_network_rate_peak = peaks[0]; m_network_capacity_peak = peaks[1]; m_network_hosted_peak = peaks[2];
@@ -657,7 +656,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
             m_details_card->move(18, 94);
         }
         updateDetails();
-        m_network_summary->setVisible(!open);
+        m_network_summary->show();
         positionOverlays();
         m_advanced_button->raise();
     });
@@ -733,11 +732,19 @@ void NetworkPage::positionOverlays()
     m_advanced_button->adjustSize();
     m_advanced_button->move(width() - m_advanced_button->width() - 18, 16);
     const int panel_width = std::min(560, std::max(300, width() - 36));
-    m_advanced_scroll->setGeometry(width() - panel_width - 18, 70, panel_width, std::max(100, height() - 88));
     m_advanced_button->raise();
     m_network_summary->setFixedWidth(std::max(300, m_advanced_button->x() - 192));
-    m_network_summary->adjustSize();
+    const int summary_height = m_network_summary->layout()->heightForWidth(m_network_summary->width());
+    // Nested wrapping columns can under-report their minimum height before polish.
+    // Keep each numeric line visible in both the wide and narrow header.
+    const int minimum_height = m_network_summary->width() < 560 ? 172 : 132;
+    m_network_summary->setFixedHeight(std::max(minimum_height,
+        summary_height >= 0 ? summary_height : m_network_summary->sizeHint().height()));
     m_network_summary->move(180, 16);
+    const int drawer_top = std::max(70, m_network_summary->geometry().bottom() + 12);
+    m_advanced_scroll->setGeometry(width() - panel_width - 18, drawer_top, panel_width,
+        std::max(100, height() - drawer_top - 18));
+    m_network_summary->raise();
 
 }
 
@@ -803,9 +810,10 @@ void NetworkPage::refresh()
     m_metric_finalization_sub->setText(tr("1-minute local observation · history imports excluded · no global freshness proof"));
     const bool network_rate_ready = measured && diag.initialized && status.online && !status.syncing &&
         finalization.complete && finalization.window_ms == 60000;
-    m_network_rate->setText(network_rate_ready ? m_metric_finalization->text() : QStringLiteral("—"));
-    m_network_rate_peak->setText(tr("Observed max: %1").arg(measured && diag.finalization.peak_known ?
-        QLocale{}.toString(diag.finalization.peak_observed_minute) : QStringLiteral("—")));
+    m_network_rate->setText(QLocale{}.toString(5));
+    m_network_rate_peak->setText(tr("Current: %1 · Observed max: %2").arg(
+        network_rate_ready ? m_metric_finalization->text() : QStringLiteral("—"),
+        measured && diag.finalization.peak_known ? QLocale{}.toString(diag.finalization.peak_observed_minute) : QStringLiteral("—")));
     m_network_capacity->setText(measured && diag.network_storage ?
         tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->capacity_bytes)) : QStringLiteral("—"));
     m_network_hosted->setText(measured && diag.network_storage ?

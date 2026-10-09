@@ -177,6 +177,7 @@ CybouDesktopController::CybouDesktopController(CybouDesktopModel* model,
 
 CybouDesktopController::~CybouDesktopController()
 {
+    qInfo("CYBOU shutdown: waiting for operator worker");
     if (m_operator_worker.joinable()) m_operator_worker.join();
     stop();
 }
@@ -665,19 +666,23 @@ void CybouDesktopController::publishAuthority()
 
 void CybouDesktopController::stop()
 {
+    qInfo("CYBOU shutdown: waiting for settlement worker");
     if (m_settlement_worker.joinable()) m_settlement_worker.join();
     m_identity_signer_state.reset();
     m_poa_signer_state.reset();
+    qInfo("CYBOU shutdown: stopping network workers");
     if (m_node_service) m_node_service->StopNetwork();
     // The signer references the Identity key store; never let it outlive it.
     if (m_node_service) m_node_service->Runtime().SetIdentitySigner(nullptr);
     m_identity_signer_enabled = false;
     // Joins the application worker before the runtime goes away.
     if (m_model) m_model->setApplicationBackend(nullptr);
+    qInfo("CYBOU shutdown: stopping application worker");
     m_application.reset();
     if (m_model) {
         m_model->setNodeRuntime(nullptr);
         m_model->setIdentityService(nullptr);
         m_model->setWalletService(nullptr);
     }
+    qInfo("CYBOU shutdown: controller stopped");
 }
