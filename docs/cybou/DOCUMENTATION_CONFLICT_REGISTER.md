@@ -40,6 +40,11 @@ raw binding retention and assignment-scoped receipt verification now have tested
 primitives. Production eligibility/provenance validation, dispatch and assignment
 attestation in canonical settlement remain absent; DOC-005/006 are still open.
 
+Assignment-scoped observation follow-up: a transport boundary now verifies the
+attested slot/receipt before random-offset audit or exact full GET. It returns
+instantaneous local observations, without interval credit, persistent raw evidence
+or production aggregation. DOC-005/006 remain open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

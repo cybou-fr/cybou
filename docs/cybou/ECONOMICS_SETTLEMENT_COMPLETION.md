@@ -223,6 +223,33 @@ before issuance. Full audit/GET ingestion, cross-epoch exclusion, automatic PoA
 collection, settlement/state schema and live activation remain open. Synthetic
 fixture publications in cryptographic tests are not live leased publications.
 
+### Assigned replica observation boundary
+
+`ObserveAssignedStorageReplica` now calls the existing StorageTransport only after
+verifying the genesis-attested assignment, selected StorageId and exact signed
+receipt. Optional local reference bytes must match the assigned ChunkID/size;
+the stored size is bounded by the existing encrypted chunk maximum. Runtime
+transport authenticates the requested StorageId through its storage session.
+Custom transports must enforce that same condition: endpoint labels alone do not
+authenticate the provider.
+
+With reference bytes it generates a fresh OpenSSL nonce and random byte offset,
+compares held/response_hash to the exact issued challenge, and returns the raw
+challenge/answer and receipt scoped to assignment commitment/slot/provider.
+Missing audit support/response or RNG failure falls back to full GET. A negative
+or incorrect answer fails directly. Without reference bytes or with force_full,
+GET must return the exact size and BLAKE3 ChunkID; verified bytes are returned
+transiently, without creating another content database. The caller schedules
+periodic full checks and runs this synchronous call outside the GUI thread.
+
+The returned audit answer is not a standalone provider-signed proof; it is a
+local observation tied to an authenticated transport request. The helper does not
+persist observations, append duration intervals, discover providers or dispatch
+production PoA work. Observation retention/replay, interval policy and aggregation
+remain open. A successful instantaneous check never establishes uninterrupted
+service or authorizes a payout by itself. Tests exercise signed assignment/receipt
+fixtures through a controlled transport, not live remote funded leases.
+
 Before activating changes, define exact settlement/state serialization and
 vectors, assignment/evidence commitments and cumulative term accounting. Full
 Nodes validate PoA attestation, periods, assignment/economic identity constraints,

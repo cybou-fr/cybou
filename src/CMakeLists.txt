@@ -103,6 +103,7 @@ add_library(cybou_node STATIC
   cybou/storage_assignment.cpp
   cybou/storage_assignment_evidence.cpp
   cybou/storage_assignment_attestation.cpp
+  cybou/storage_assignment_observer.cpp
   cybou/application_service.cpp
   cybou/local_application_service.cpp
   cybou/local_content_stager.cpp

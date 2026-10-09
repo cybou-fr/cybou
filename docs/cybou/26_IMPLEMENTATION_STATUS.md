@@ -8,6 +8,26 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Assignment-scoped audit and full GET (2026-10-09)
+
+The new storage_assignment_observer uses existing StorageTransport after checking
+the PoA-attested slot, StorageId and signed receipt. Audit uses a fresh random
+nonce/offset and exact local ChunkID/size reference. Unavailable audit falls back
+to exact full GET; negative or incorrect audit responses fail. Returned data is a
+local instantaneous observation, including receipt and raw challenge/answer or
+verified GET bytes. No interval credit, persistent observation log, automatic
+production dispatch or payment is introduced. Existing runtime transport proves
+the requested StorageId; controlled transports in tests implement the interface.
+Live funded leases, raw evidence retention and PoA aggregation remain open.
+
+Validation: core build passed; focused attestation/assignment, private store,
+storage service/economy, quotes and resource limits passed 69 cases / 122,800
+assertions; 234 other core cases were skipped. Controlled transport tests cover
+fresh challenges, explicit negative/incorrect answers, absent-audit GET fallback,
+forced GET, corrupt/truncated/missing bytes and rejection before any network call.
+Evidence: `artifacts/economics-assigned-observer-core.txt`, baseline `fd6d45de`
+plus this package. No live network acceptance or deployment is claimed.
+
 ### Assignment attestation and binding/receipt verification (2026-10-09)
 
 New storage_assignment_attestation helpers check both payout-binding signatures,
