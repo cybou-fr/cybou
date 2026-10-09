@@ -221,6 +221,7 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     std::unique_ptr<cybou::LocalApplicationService> local;
     std::unique_ptr<cybou::NetworkSyncService> network;
     std::unique_ptr<cybou::LocalContentStager> stager;
+    std::atomic<std::uint64_t> files_delta_revision{0};
     std::jthread opening;
     IdentitySession(CybouCoreApplicationAdapter*, cybou::CybouNodeRuntime&, cybou::CybouKeyStore&,
         std::filesystem::path, int, cybou::StorageTransport*);
@@ -235,6 +236,12 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     {
         local->Post([this, task = std::move(task)] {
             try { task(*this); } catch (const std::exception&) { qWarning() << "CYBOU local command failed"; }
+        });
+    }
+    void PostStaging(std::function<void(IdentitySession&)> task)
+    {
+        stager->Post([this, task = std::move(task)] {
+            try { task(*this); } catch (const std::exception&) { qWarning() << "CYBOU content preparation failed"; }
         });
     }
     template <typename F>

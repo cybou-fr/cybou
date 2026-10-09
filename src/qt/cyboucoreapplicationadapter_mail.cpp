@@ -206,7 +206,7 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
     }
     m_pending_sends.insert(client_id, pending);
     if (!draft_id.isEmpty()) m_send_drafts.insert(client_id, draft_id);
-    m_session->PostLocal([client_id, message, draft_id, progress](IdentitySession& s) {
+    auto send = [client_id, message, draft_id, progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         const auto fail = [&](const QString& error) {
             s.StateToGui([owner = s.owner, client_id, progress, error] {
@@ -217,23 +217,6 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
             });
         };
         try {
-            // No UI acknowledgement precedes durable backup and job ownership.
-            if (!draft_id.isEmpty() && !s.local->SaveDraft(StoredDraft(message, draft_id))) {
-                fail(tr("The draft could not be saved. The message has not been sent."));
-                return;
-            }
-            if (!draft_id.isEmpty()) {
-                CybouMailItem backup = message;
-                backup.id = draft_id;
-                backup.draft = true;
-                backup.outgoing = false;
-                backup.folder = CybouMailFolder::Drafts;
-                s.StateToGui([owner = s.owner, backup] {
-                    owner->m_deleted_drafts.remove(backup.id);
-                    owner->m_known_drafts.insert(backup.id, backup);
-                    Q_EMIT owner->mailItemChanged(backup);
-                });
-            }
             auto message_id = cybou::NewPrivateItemId();
             if (message_id && !draft_id.isEmpty()) message_id = s.local->BindDraftToMessage(draft_id.toStdString(), *message_id);
             if (!message_id) {
@@ -258,7 +241,10 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
                 outgoing.id = QString::fromStdString(job_id);
                 outgoing.state = StateOf(job);
                 outgoing.operation_state = OperationOf(job);
-                const bool removed = !draft_id.isEmpty() && s.local->DeleteDraft(draft_id.toStdString(), true);
+                if (has_job && !draft_id.isEmpty()) (void)s.local->DeleteAcceptedDraft(draft_id.toStdString());
+                const auto drafts = s.local->ListDrafts();
+                const bool removed = !draft_id.isEmpty() && std::none_of(drafts.begin(), drafts.end(),
+                    [&](const auto& draft) { return draft.draft_id == draft_id.toStdString(); });
                 s.StateToGui([owner = s.owner, client_id, draft_id, removed, outgoing, progress] {
                     owner->m_pending_sends.remove(client_id);
                     owner->m_send_drafts.remove(client_id);
@@ -362,6 +348,37 @@ void CybouCoreApplicationAdapter::sendMail(const CybouMailItem& message, const Q
         } catch (const std::exception&) {
             fail(tr("Could not prepare the message. Your draft is kept."));
         }
+    };
+    const bool reads_local_files = std::any_of(message.attachments.begin(), message.attachments.end(),
+        [](const auto& attachment) { return !attachment.source_path.isEmpty(); });
+    // Persist the send snapshot in GUI request order before waiting behind any
+    // content task. Later draft edits must not be overwritten when staging starts.
+    m_session->PostLocal([send = std::move(send), message, draft_id, client_id, progress, reads_local_files](IdentitySession& s) mutable {
+        if (!draft_id.isEmpty() && !s.local->SaveDraft(StoredDraft(message, draft_id))) {
+            s.StateToGui([owner = s.owner, client_id, progress] {
+                if (auto pending = owner->m_pending_sends.find(client_id); pending != owner->m_pending_sends.end())
+                    pending->state = CybouContentState::NeedsAttention;
+                Q_EMIT owner->mailStateChanged(client_id, CybouContentState::NeedsAttention);
+                const auto error = tr("The draft could not be saved. The message has not been sent.");
+                if (progress) progress(CybouCommandState::Failed, error);
+                else Q_EMIT owner->commandFailed(error);
+            });
+            return;
+        }
+        if (!draft_id.isEmpty()) {
+            CybouMailItem backup = message;
+            backup.id = draft_id;
+            backup.draft = true;
+            backup.outgoing = false;
+            backup.folder = CybouMailFolder::Drafts;
+            s.StateToGui([owner = s.owner, backup] {
+                owner->m_deleted_drafts.remove(backup.id);
+                owner->m_known_drafts.insert(backup.id, backup);
+                Q_EMIT owner->mailItemChanged(backup);
+            });
+        }
+        if (reads_local_files) s.PostStaging(std::move(send));
+        else send(s);
     });
 }
 

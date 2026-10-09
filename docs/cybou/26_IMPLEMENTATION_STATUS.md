@@ -6,6 +6,33 @@ Scope: Classification only; dated evidence and pending requirements retain their
 Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Independent local content preparation (2026-10-09)
+
+Upload and new local Mail attachment preparation run on the LocalContentStager executor.
+Short local Mail/catalog commands retain their separate executor. The staging
+journal mutex no longer covers an entire encrypted stream; independent metadata
+preparation can progress while a file source waits. Shutdown requests cancellation
+between source reads/chunk writes and joins staging before stopping local commits.
+An OS read already in flight is not cancellable through this helper.
+
+Acceptance of a send preserves draft edits made during preparation. The same
+fingerprint check protects draft retirement during retry. Content commits advance
+the local snapshot revision so an older network snapshot cannot replace them.
+The draft snapshot is saved in short-command order before waiting for preparation;
+plain Mail and reused content references do not wait behind file encryption.
+
+Scoped tests hold a content source while 50 Mail moves, draft save and folder
+acceptance complete; verify preservation of newer draft edits; and stop an
+unbounded source before Outbox acceptance with staging ownership cleaned up.
+Updated local/application suites passed 21 cases / 421 assertions. Eight scoped
+Qt scenarios plus setup/cleanup passed (10 total, no failures/skips), including
+end-to-end Mail/Files, blocked transport, rotation, commit acknowledgement, Undo
+and offline retrieval. Evidence: artifacts/local-content-executor-core.txt and
+artifacts/local-content-executor-qt.txt (ignored). Desktop rebuilt; documentation
+and manifest structural checks pass. Older full-suite evidence retains its own
+revision scope; this update does not claim another full-suite run.
+This is not yet evidence for every physical-disk failure or process-kill boundary.
+
 ## Local/Network separation in progress (2026-10-09)
 
 DEC-291 is an accepted architecture target. The working implementation separates
@@ -48,8 +75,8 @@ protocol change was introduced.
 
 Remaining acceptance: actual process-kill/fault-injection boundaries, durable
 exact-job recovery after deliberate network-index rebuild, explicit cross-device
-Files conflict policy, cancellation/retry of local queued intents, large-file
-preparation that cannot monopolize the short local executor, and live unlocked
+Files conflict policy, cancellation/retry of local queued intents, live large-file and concurrent
+rotation/staging acceptance, and live unlocked
 mailbox/shutdown verification. Current app.db publication journals must be
 preserved; it is not yet safe to delete/rebuild the whole database. Restart tests
 alone do not prove every process-crash or disk-failure scenario. No peer deploy,

@@ -374,7 +374,9 @@ bool LocalApplicationService::SaveDraft(const MailDraft& draft)
         names.push_back(draft.draft_id);
         if (!WriteNames(m_application_db, DRAFT_INDEX_KEY, names)) return false;
     }
-    return batch.Commit();
+    if (!batch.Commit()) return false;
+    m_revision.fetch_add(2);
+    return true;
 }
 
 std::vector<MailDraft> LocalApplicationService::ListDrafts()
@@ -443,6 +445,16 @@ bool LocalApplicationService::DeleteDraft(std::string_view draft_id, bool keep_s
             m_application_db.Erase("mail/draft-send-content/" + std::string{draft_id}))) &&
         WriteNames(m_application_db, DRAFT_INDEX_KEY, names) &&
         batch.Commit();
+}
+
+bool LocalApplicationService::DeleteAcceptedDraft(std::string_view id)
+{
+    std::lock_guard lock{m_mutex};
+    const auto drafts = ListDrafts();
+    const auto current = std::find_if(drafts.begin(), drafts.end(), [&](const auto& draft) { return draft.draft_id == id; });
+    if (current == drafts.end() || !CheckDraftSendPayload(*current, false) || !DeleteDraft(id, true)) return false;
+    m_revision.fetch_add(2);
+    return true;
 }
 
 bool LocalApplicationService::CheckDraftSendPayload(const MailDraft& draft, bool replace)
@@ -681,7 +693,13 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
         record.read = true;
         record.folder = mail->recipient_account_id == record.sender ? MailFolder::INBOX : MailFolder::SENT;
         if (!SaveMail(record)) return false;
-        if (!draft_id.empty() && !DeleteDraft(draft_id, true)) return false;
+        if (!draft_id.empty()) {
+            const auto drafts = ListDrafts();
+            const auto current = std::find_if(drafts.begin(), drafts.end(), [&](const auto& draft) { return draft.draft_id == draft_id; });
+            // Editing remains available during staging. Only remove the exact
+            // draft payload accepted for this send, preserving subsequent edits.
+            if (current != drafts.end() && CheckDraftSendPayload(*current, false) && !DeleteDraft(draft_id, true)) return false;
+        }
     } else if (const auto* files = std::get_if<FilesMutationBatch>(&document)) {
         for (const auto& mutation : files->mutations) {
             FileRecord record;
@@ -692,7 +710,11 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
                 std::span{reinterpret_cast<const unsigned char*>(job.data()), job.size()})) return false;
         }
     }
-    return batch.Commit();
+    if (!batch.Commit()) return false;
+    // Content preparation can commit from its own executor. Keep the odd/even
+    // local-command marker unchanged while invalidating older GUI snapshots.
+    m_revision.fetch_add(2);
+    return true;
 }
 
 std::vector<PendingPublication> LocalApplicationService::Outbox()

@@ -20,6 +20,7 @@ CybouCoreApplicationAdapter::IdentitySession::IdentitySession(CybouCoreApplicati
 CybouCoreApplicationAdapter::IdentitySession::~IdentitySession()
 {
     if (opening.joinable()) opening.join();
+    if (stager) stager->Stop();
     if (local) local->Stop();
     if (network) network->Stop();
 }
@@ -144,9 +145,13 @@ void CybouCoreApplicationAdapter::IdentitySession::Snapshot(CybouRestoreStepStat
 
 void CybouCoreApplicationAdapter::IdentitySession::LocalFilesChanged()
 {
+    const auto delta_revision = ++files_delta_revision;
     const auto records = local->ListFiles();
     const auto outbox = local->Outbox();
-    StateToGui([owner = owner, generation = generation, records, outbox] {
+    StateToGui([owner = owner, generation = generation, delta_revision, records, outbox] {
+        // Staging and short commands may complete together. The latest complete
+        // local catalog supersedes any older delta still queued on the GUI.
+        if (owner->m_session->files_delta_revision.load() != delta_revision) return;
         const QPointer<CybouCoreApplicationAdapter> guard{owner};
         std::map<std::string, cybou::PublicationJobResult> status;
         for (const auto& pending : outbox) {

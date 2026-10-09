@@ -26,7 +26,22 @@ Files state and immutable Outbox intents. Its executor never calls transport,
 publication or finality. A local command acknowledges after its local durable
 transaction; a queued intent is not a submitted or finalized operation.
 LocalContentStager only encrypts, stores and retains local chunks. Content must
-be staged before the atomic local acceptance of its immutable intent.
+be staged before the atomic local acceptance of its immutable intent. Attachment
+and upload preparation uses the helper's independent local executor, never the
+short-command executor. The draft snapshot commits in short-command order before
+preparation is queued. Mail without new local file sources remains on the short
+executor. Journal locking is limited to ownership changes; a long content stream
+cannot hold it across encryption. Sources remain streamed through
+bounded encrypted chunks. Shutdown requests cancellation between source reads
+and chunk writes, rolls back unaccepted staging pins and joins preparation before
+destroying the local service. This cannot interrupt an OS read already in flight.
+
+A draft edited during preparation survives acceptance of the earlier send payload.
+Draft retirement compares the current payload with its durable send fingerprint
+under the local-service mutex; retries cannot delete later edits. Content-executor
+commits advance the local snapshot revision, rejecting older network snapshots.
+Local Files catalog deltas also carry an ordering marker, so a late GUI callback
+cannot erase a newer catalog delivered by the other local executor.
 
 NetworkSyncService independently advances publication jobs, history indexing,
 content recovery and remote durability. It releases local locks before network

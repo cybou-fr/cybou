@@ -4,6 +4,10 @@
 #define CYBOU_LOCAL_CONTENT_STAGER_H
 #include <cybou/publication_service.h>
 #include <cybou/chunk_retention.h>
+#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <thread>
 namespace cybou {
 class ChunkBlobStore;
 class PrivateApplicationStore;
@@ -16,6 +20,9 @@ class LocalContentStager final {
 public:
     LocalContentStager(ChunkBlobStore& blobs, ChunkRetentionRegistry& retention,
         const Hash256& binding, const AccountId& account, PrivateApplicationStore* local_db = nullptr);
+    ~LocalContentStager();
+    void Post(std::function<void()> task);
+    void Stop();
     using Metadata = std::function<std::optional<std::vector<unsigned char>>(std::span<const EncryptedTreeSummary>)>;
     std::optional<LocalPreparedContent> Prepare(std::string_view job, std::vector<NewContent>& children,
         const Metadata& metadata);
@@ -29,6 +36,11 @@ private:
     AccountId m_account;
     PrivateApplicationStore* m_local_db;
     std::recursive_mutex m_mutex;
+    std::mutex m_queue_mutex;
+    std::condition_variable_any m_wake;
+    std::deque<std::function<void()>> m_tasks;
+    std::atomic_bool m_stopping{false};
+    std::jthread m_worker;
 };
 }
 #endif

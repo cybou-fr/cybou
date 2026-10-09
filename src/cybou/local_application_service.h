@@ -37,6 +37,8 @@ public:
     bool SaveDraft(const MailDraft& draft);
     std::vector<MailDraft> ListDrafts();
     bool DeleteDraft(std::string_view id, bool keep_send_binding = false);
+    /// Remove only a draft still matching its durable send fingerprint.
+    bool DeleteAcceptedDraft(std::string_view id);
     std::optional<PrivateItemId> BindDraftToMessage(std::string_view id, const PrivateItemId& proposed);
     bool CheckDraftSendPayload(const MailDraft& draft, bool replace);
     bool ImportMail(const MailRecord& record);

@@ -13,6 +13,20 @@ LocalContentStager::LocalContentStager(ChunkBlobStore& blobs, ChunkRetentionRegi
     const Hash256& binding, const AccountId& account, PrivateApplicationStore* local_db)
     : m_blobs{blobs}, m_retention{retention}, m_binding{binding}, m_account{account}, m_local_db{local_db}
 {
+    m_worker = std::jthread{[this](std::stop_token stop) {
+        for (;;) {
+            std::function<void()> task;
+            {
+                std::unique_lock lock{m_queue_mutex};
+                m_wake.wait(lock, stop, [this] { return !m_tasks.empty(); });
+                if (m_tasks.empty() && stop.stop_requested()) break;
+                if (m_tasks.empty()) continue;
+                task = std::move(m_tasks.front());
+                m_tasks.pop_front();
+            }
+            task();
+        }
+    }};
     if (!m_local_db) return; // memory-only component fixtures
     const auto encoded = m_local_db->Get("staging/jobs");
     if (!encoded) {
@@ -29,8 +43,24 @@ LocalContentStager::LocalContentStager(ChunkBlobStore& blobs, ChunkRetentionRegi
             throw std::runtime_error{"cannot recover interrupted local staging"};
     }
 }
+LocalContentStager::~LocalContentStager() { Stop(); }
+void LocalContentStager::Stop()
+{
+    m_stopping.store(true);
+    m_worker.request_stop();
+    m_wake.notify_all();
+    if (m_worker.joinable()) m_worker.join();
+}
+void LocalContentStager::Post(std::function<void()> task)
+{
+    std::lock_guard lock{m_queue_mutex};
+    if (m_stopping.load()) return;
+    m_tasks.push_back(std::move(task));
+    m_wake.notify_all();
+}
 bool LocalContentStager::Journal(std::string_view job, bool add)
 {
+    std::lock_guard lock{m_mutex};
     if (!m_local_db) return true;
     PrivateApplicationStore::Batch batch{*m_local_db};
     const auto encoded = m_local_db->Get("staging/jobs");
@@ -67,7 +97,7 @@ bool LocalContentStager::Release(std::string_view job)
 std::optional<LocalPreparedContent> LocalContentStager::Prepare(std::string_view job,
     std::vector<NewContent>& children, const Metadata& metadata)
 {
-    std::lock_guard lock{m_mutex};
+    if (m_stopping.load()) return std::nullopt;
     if (job.empty() || job.size() > 128 || std::any_of(job.begin(), job.end(), [](unsigned char c) { return c < 33 || c > 126; }))
         return std::nullopt;
     if (m_local_db && m_local_db->Has("outbox/job/" + std::string{job})) return std::nullopt;
@@ -87,6 +117,7 @@ std::optional<LocalPreparedContent> LocalContentStager::Prepare(std::string_view
         ~Wipe() { for (auto& item : summaries) crypto::CleanseMemory(item.content_key.data(), item.content_key.size()); }
     } wipe{summaries};
     const auto sink = [&](std::uint32_t, const EncryptedChunk& chunk) {
+        if (m_stopping.load()) return false;
         if (result.leaves.size() >= MAX_PUBLICATION_CHUNKS || !unique.insert(chunk.id).second) return false;
         const std::array<ChunkId, 1> ids{chunk.id};
         if (!m_retention.Pin(Key(job), ids)) return false;
@@ -97,7 +128,10 @@ std::optional<LocalPreparedContent> LocalContentStager::Prepare(std::string_view
     };
     const auto network = std::span<const unsigned char, 32>{m_binding.begin(), 32};
     for (auto& child : children) {
-        const auto tree = BuildEncryptedChunkTree(network, child.source, sink);
+        const auto tree = BuildEncryptedChunkTree(network, [&](std::span<unsigned char> bytes) -> std::optional<std::size_t> {
+            if (m_stopping.load()) return std::nullopt;
+            return child.source(bytes);
+        }, sink);
         if (!tree) return std::nullopt;
         summaries.push_back(*tree);
     }

@@ -226,4 +226,119 @@ BOOST_AUTO_TEST_CASE(network_handoff_retains_content_and_reuses_exact_operation)
     BOOST_CHECK(local.Outbox().front().status.operation_id == first);
     BOOST_CHECK(local.Outbox().front().status.phase == cybou::PublicationJobPhase::SECURING);
 }
+BOOST_AUTO_TEST_CASE(short_local_commands_continue_during_content_preparation)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("local-preparation.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "preparation", "local.db", true};
+    cybou::LocalApplicationService local{db};
+    cybou::LocalContentStager stager{fixture.runtime->GetChunkBlobStore(), fixture.runtime->GetChunkRetention(),
+        fixture.runtime->GetNetworkBinding(), db.Account(), &db};
+    const auto mail = Mail(identity->GetKeyStore());
+    BOOST_REQUIRE(local.ImportMail(mail));
+    std::promise<void> entered, release;
+    auto gate = release.get_future().share();
+    std::promise<bool> prepared;
+    auto completion = prepared.get_future();
+    stager.Post([&] {
+        std::vector<cybou::NewContent> children{{[&](std::span<unsigned char>) -> std::optional<std::size_t> {
+            entered.set_value(); gate.wait(); return 0;
+        }}};
+        const auto result = stager.Prepare("slow-content", children, [&](std::span<const cybou::EncryptedTreeSummary>) {
+            return cybou::EncodePrivateApplicationDocument(mail.message);
+        });
+        prepared.set_value(result.has_value());
+    });
+    entered.get_future().wait();
+    std::promise<bool> saved;
+    auto local_completion = saved.get_future();
+    local.Post([&] {
+        bool ok{true};
+        for (int i = 0; i < 50; ++i)
+            ok = local.MoveMail(mail.message.message_id, i % 2 ? cybou::MailFolder::ARCHIVE : cybou::MailFolder::TRASH) && ok;
+        ok = local.SaveDraft({.draft_id = "unblocked", .body = "local"}) && ok;
+        cybou::FilesMutationBatch folder;
+        const auto id = *cybou::NewPrivateItemId();
+        folder.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, id,
+            cybou::FileItem{.item_id = id, .kind = cybou::FileItemKind::FOLDER, .name = "unblocked", .modified_ms = 1}});
+        std::vector<cybou::NewContent> children;
+        const auto content = stager.Prepare("short-folder", children, [&](std::span<const cybou::EncryptedTreeSummary>) {
+            return cybou::EncodePrivateApplicationDocument(folder);
+        });
+        ok = content && local.QueuePublication("short-folder", *content, folder) && ok;
+        saved.set_value(ok);
+    });
+    const bool independent = local_completion.wait_for(std::chrono::seconds{2}) == std::future_status::ready;
+    const bool content_still_blocked = completion.wait_for(std::chrono::milliseconds{0}) == std::future_status::timeout;
+    release.set_value();
+    BOOST_CHECK(independent);
+    BOOST_CHECK(content_still_blocked);
+    BOOST_REQUIRE(local_completion.get());
+    BOOST_REQUIRE(completion.get());
+    BOOST_CHECK(local.GetMail(mail.message.message_id)->folder == cybou::MailFolder::ARCHIVE);
+}
+BOOST_AUTO_TEST_CASE(accepting_prepared_mail_preserves_newer_draft_edits)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("local-edit-during-send.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "edit-send", "local.db", true};
+    cybou::LocalApplicationService local{db};
+    cybou::LocalContentStager stager{fixture.runtime->GetChunkBlobStore(), fixture.runtime->GetChunkRetention(),
+        fixture.runtime->GetNetworkBinding(), db.Account(), &db};
+    auto mail = Mail(identity->GetKeyStore());
+    cybou::MailDraft draft{.draft_id = "editing", .body = "accepted text"};
+    BOOST_REQUIRE(local.SaveDraft(draft));
+    BOOST_REQUIRE(local.BindDraftToMessage(draft.draft_id, mail.message.message_id));
+    BOOST_REQUIRE(local.CheckDraftSendPayload(draft, true));
+    mail.message.body = draft.body;
+    std::vector<cybou::NewContent> children;
+    const auto content = stager.Prepare("edit-send", children, [&](std::span<const cybou::EncryptedTreeSummary>) {
+        return cybou::EncodePrivateApplicationDocument(mail.message);
+    });
+    BOOST_REQUIRE(content);
+    draft.body = "newer local edit";
+    BOOST_REQUIRE(local.SaveDraft(draft));
+    BOOST_REQUIRE(local.QueuePublication("edit-send", *content, mail.message, std::nullopt, draft.draft_id));
+    BOOST_REQUIRE_EQUAL(local.ListDrafts().size(), 1U);
+    BOOST_CHECK_EQUAL(local.ListDrafts().front().body, draft.body);
+    BOOST_CHECK_EQUAL(local.GetMail(mail.message.message_id)->message.body, "accepted text");
+    BOOST_CHECK(!local.DeleteAcceptedDraft(draft.draft_id));
+    BOOST_CHECK_EQUAL(local.ListDrafts().front().body, "newer local edit");
+    draft.body = "accepted text";
+    BOOST_REQUIRE(local.SaveDraft(draft));
+    BOOST_CHECK(local.DeleteAcceptedDraft(draft.draft_id));
+    BOOST_CHECK(local.ListDrafts().empty());
+}
+BOOST_AUTO_TEST_CASE(stopping_content_preparation_cancels_before_local_acceptance)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("local-stop-staging.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "stop-staging", "local.db", true};
+    cybou::LocalContentStager stager{fixture.runtime->GetChunkBlobStore(), fixture.runtime->GetChunkRetention(),
+        fixture.runtime->GetNetworkBinding(), db.Account(), &db};
+    const auto mail = Mail(identity->GetKeyStore());
+    std::promise<void> entered;
+    auto started = entered.get_future();
+    std::promise<bool> result;
+    auto finished = result.get_future();
+    stager.Post([&] {
+        bool first{true};
+        std::vector<cybou::NewContent> children{{[&](std::span<unsigned char> bytes) -> std::optional<std::size_t> {
+            if (first) { first = false; entered.set_value(); }
+            std::fill(bytes.begin(), bytes.end(), 42);
+            return bytes.size(); // no EOF: only stopping can finish this source
+        }}};
+        result.set_value(stager.Prepare("stopped", children, [&](std::span<const cybou::EncryptedTreeSummary>) {
+            return cybou::EncodePrivateApplicationDocument(mail.message);
+        }).has_value());
+    });
+    started.wait();
+    const auto before = std::chrono::steady_clock::now();
+    stager.Stop();
+    BOOST_CHECK(std::chrono::steady_clock::now() - before < std::chrono::seconds{2});
+    BOOST_CHECK(!finished.get());
+    BOOST_CHECK(!db.Has("outbox/job/stopped"));
+    BOOST_REQUIRE(db.Get("staging/jobs"));
+    BOOST_CHECK(db.Get("staging/jobs")->empty());
+}
 BOOST_AUTO_TEST_SUITE_END()

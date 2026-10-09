@@ -215,7 +215,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
     shown.operation_state = CybouOperationState::Preparing;
     shown.available_offline = true;
     showPendingFile(shown);
-    m_session->PostLocal([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
+    m_session->PostStaging([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
                         path = source_path, hex = hex.toStdString()](IdentitySession& s) {
         auto file = std::make_shared<QFile>(path);
         if (!file->open(QIODevice::ReadOnly)) {
