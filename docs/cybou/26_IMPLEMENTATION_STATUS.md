@@ -8,6 +8,26 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Complete funded-term quote (2026-10-09)
+
+storage_assignment_payout now prepares all funded replica slots under one outer
+app.db snapshot with the same assignment/binding/evidence checks. Missing/mixed
+slots fail; finalized-paid/due totals cannot exceed total target escrow; the 1024
+entry/input limit applies globally. Shared claim streams reject overlapping use
+of the same StorageId or payout account across replica slots and epochs. Distinct
+identities do not establish independent hosts. The result is read-only target
+arithmetic, not an emitted settlement or current canonical state transition.
+Provenance, active epoch/time/audit policy and separately reviewed activation
+remain open.
+
+Validation: core build passed; focused assignment attestation/payout and private
+store suites passed 19 cases / 368 assertions; 293 other core cases were skipped.
+Regressions cover missing slots, complete two-slot totals, finalized-paid inputs,
+read-only retries, mixed scope, nested transactions, global input limits and
+overlapping economic/storage identity reuse across replacement epochs.
+Evidence: `artifacts/economics-term-payout-core.txt`, baseline `05ca1fee` plus this
+package. Synthetic signed component fixtures are not live funded acceptance.
+
 ### Read-only cumulative slot payout preparation (2026-10-09)
 
 New storage_assignment_payout joins the complete authorized chunk/epoch manifest,

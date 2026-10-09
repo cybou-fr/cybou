@@ -7,7 +7,8 @@
 #include <limits>
 
 namespace cybou {
-std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
+namespace {
+std::optional<StorageAssignmentSlotQuote> QuoteSlot(
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     const std::span<const StorageAssignmentEvidenceScope> assignments,
     const std::span<const ChunkId> authorized_chunks, const std::uint64_t rate,
@@ -15,8 +16,6 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
     const std::span<const StorageAssignmentRegistrySnapshot> registries)
 {
     if (assignments.empty() || authorized_chunks.empty()) return std::nullopt;
-    PrivateApplicationStore::Batch snapshot{db};
-    if (!snapshot.IsOutermost()) return std::nullopt;
     std::map<Hash256, const IdentityRegistry*> historical;
     for (const auto& registry : registries) {
         if (!registry.registry || !historical.emplace(registry.block_id, registry.registry).second) return std::nullopt;
@@ -81,6 +80,87 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
         if (!due || already_paid + *due > budget->per_replica - result.finalized_paid - result.payout) return std::nullopt;
         result.entries.push_back({provider, seconds, already_paid + *due, already_paid, *due});
         result.finalized_paid += already_paid; result.payout += *due;
+    }
+    return result;
+}
+}
+std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
+    PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
+    std::span<const StorageAssignmentEvidenceScope> assignments,
+    std::span<const ChunkId> chunks, std::uint64_t rate, std::uint64_t period,
+    std::span<const StorageAssignmentPaid> paid,
+    std::span<const StorageAssignmentRegistrySnapshot> registries)
+{
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost()) return std::nullopt;
+    return QuoteSlot(db, genesis, assignments, chunks, rate, period, paid, registries);
+}
+std::optional<StorageAssignmentTermQuote> PrepareStorageAssignmentTermPayouts(
+    PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
+    std::span<const StorageAssignmentEvidenceScope> assignments,
+    std::span<const ChunkId> chunks, std::uint64_t rate, std::uint64_t period,
+    std::span<const StorageAssignmentSlotPaid> paid,
+    std::span<const StorageAssignmentRegistrySnapshot> registries)
+{
+    if (assignments.empty() || paid.size() > 1024) return std::nullopt;
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost()) return std::nullopt;
+    const auto& base = assignments.front();
+    const auto& c = base.assignment.context;
+    if (!c.replicas || c.replicas > 2) return std::nullopt;
+    std::vector<std::vector<StorageAssignmentEvidenceScope>> scopes(c.replicas);
+    std::vector<std::vector<StorageAssignmentPaid>> payments(c.replicas);
+    for (const auto& scope : assignments) {
+        const auto& s = scope.assignment.context;
+        if (scope.replica_slot >= c.replicas || s.network_binding != c.network_binding ||
+            s.publication != c.publication || s.payer != c.payer || s.term_start != c.term_start ||
+            s.term_end != c.term_end || s.replicas != c.replicas ||
+            scope.term_start_utc != base.term_start_utc || scope.period_seconds != base.period_seconds) return std::nullopt;
+        scopes[scope.replica_slot].push_back(scope);
+    }
+    for (const auto& payment : paid) {
+        if (payment.replica_slot >= c.replicas) return std::nullopt;
+        payments[payment.replica_slot].push_back(payment.payment);
+    }
+    StorageAssignmentTermQuote result;
+    std::size_t entries{0};
+    for (std::uint8_t slot{0}; slot < c.replicas; ++slot) {
+        auto quote = QuoteSlot(db, genesis, scopes[slot], chunks, rate, period, payments[slot], registries);
+        if (!quote || quote->entries.size() > 1024 - entries) return std::nullopt;
+        entries += quote->entries.size();
+        if (slot == 0) result.budget = quote->budget;
+        if (quote->budget.per_replica != result.budget.per_replica || quote->budget.total != result.budget.total ||
+            quote->budget.contracted_unit_seconds != result.budget.contracted_unit_seconds ||
+            quote->finalized_paid > result.budget.total - result.finalized_paid - result.payout ||
+            quote->payout > result.budget.total - result.finalized_paid - result.payout - quote->finalized_paid) return std::nullopt;
+        result.finalized_paid += quote->finalized_paid; result.payout += quote->payout;
+        result.slots.push_back(std::move(*quote));
+    }
+    if (c.replicas == 2) {
+        std::map<StorageAssignmentId, const StorageAssignmentPlan*> plans;
+        std::map<ChunkId, std::array<const StorageAssignmentEvidenceScope*, 2>> representatives;
+        for (const auto& scope : assignments) {
+            plans.emplace(scope.assignment.commitment, &scope.assignment);
+            representatives[scope.assignment.context.chunk][scope.replica_slot] = &scope;
+        }
+        for (const auto& [chunk, slots] : representatives) {
+            if (!slots[0] || !slots[1]) return std::nullopt;
+            const auto left = LoadStorageFundedSlotClaims(db, *slots[0]);
+            const auto right = LoadStorageFundedSlotClaims(db, *slots[1]);
+            if (!left || !right) return std::nullopt;
+            std::size_t a{0}, b{0};
+            while (a < left->size() && b < right->size()) {
+                const auto& x = (*left)[a]; const auto& y = (*right)[b];
+                if (x.interval.start_utc < y.interval.end_utc && y.interval.start_utc < x.interval.end_utc) {
+                    const auto xp = plans.find(x.assignment), yp = plans.find(y.assignment);
+                    if (xp == plans.end() || yp == plans.end()) return std::nullopt;
+                    const auto& first = xp->second->selected[0]; const auto& second = yp->second->selected[1];
+                    if (first.storage_id == second.storage_id || first.payout_account == second.payout_account) return std::nullopt;
+                }
+                if (x.interval.end_utc <= y.interval.end_utc) ++a;
+                else ++b;
+            }
+        }
     }
     return result;
 }

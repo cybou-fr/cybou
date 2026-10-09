@@ -263,6 +263,21 @@ a quote is returned. The helper verifies cryptography and matching block IDs;
 callers still independently establish that the supplied registry really is the
 finalized state at that block. It does not substitute today's rotated keys.
 
+### Complete term payout preparation
+
+`PrepareStorageAssignmentTermPayouts` now prepares every funded replica slot in
+one outer app.db snapshot through the same internal slot verifier. Missing slots,
+mixed publication/network/payer/term/UTC scope, invalid paid slot or inconsistent
+budgets fail rather than returning a partial term. Canonical-paid and due totals
+are bounded by the term escrow; the 1024 provider-entry/payment-input limit applies
+to the whole result, not separately to each slot. Slots are returned in index order.
+Preparation remains read-only and cannot advance finality or paid state.
+Shared claim streams are also compared across the two replica slots for each
+chunk: overlapping service must use distinct StorageIds and payout accounts even
+when the claims refer to different assignment epochs. This checks necessary
+storage/economic identity separation, not independent machines/operators.
+Caller provenance, audit interval policy and canonical format/activation gates remain.
+
 ### Off-chain attestation and signed admission verification
 
 `storage_assignment_attestation` now verifies every eligible StoragePayoutBinding

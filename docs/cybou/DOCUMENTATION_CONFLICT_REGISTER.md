@@ -68,6 +68,11 @@ and Authorization signatures using the registry snapshot for each assignment see
 Snapshot finalized provenance is still caller-verified, and production/state
 activation is absent; DOC-005/006/020 remain open.
 
+Full-term quote follow-up: all funded slots now share one read-only preparation,
+global entry limit and escrow check; overlapping claims across slots cannot use
+the same storage/economic identity. Physical independence, production provenance,
+audit policy and canonical activation remain unproven; DOC-005/006/020 stay open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

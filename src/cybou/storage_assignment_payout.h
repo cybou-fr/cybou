@@ -24,6 +24,16 @@ struct StorageAssignmentSlotQuote {
     std::uint64_t verified_unit_seconds{0}, finalized_paid{0}, payout{0};
     std::vector<StorageAssignmentPayout> entries;
 };
+struct StorageAssignmentSlotPaid {
+    std::uint8_t replica_slot{0};
+    StorageAssignmentPaid payment;
+};
+struct StorageAssignmentTermQuote {
+    AssignedStorageBudget budget;
+    std::uint64_t finalized_paid{0}, payout{0};
+    // Indexed by funded replica slot; all slots must be present.
+    std::vector<StorageAssignmentSlotQuote> slots;
+};
 
 /// Read-only target quote for ONE funded replica slot across all chunks/epochs.
 /// Caller supplies the finalized authorized chunk manifest, immutable funded
@@ -41,6 +51,15 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
     std::span<const StorageAssignmentEvidenceScope> assignments,
     std::span<const ChunkId> authorized_chunks, std::uint64_t rate,
     std::uint64_t through_period, std::span<const StorageAssignmentPaid> paid,
+    std::span<const StorageAssignmentRegistrySnapshot> registries);
+/// Complete read-only term quote in one DB snapshot. Rejects missing/mixed slots,
+/// out-of-range paid slots and more than 1024 total provider entries across slots.
+/// Uses the same caller-proven provenance/time/policy inputs as slot preparation.
+std::optional<StorageAssignmentTermQuote> PrepareStorageAssignmentTermPayouts(
+    PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
+    std::span<const StorageAssignmentEvidenceScope> assignments,
+    std::span<const ChunkId> authorized_chunks, std::uint64_t rate,
+    std::uint64_t through_period, std::span<const StorageAssignmentSlotPaid> paid,
     std::span<const StorageAssignmentRegistrySnapshot> registries);
 }
 #endif
