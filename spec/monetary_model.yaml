@@ -1,85 +1,73 @@
-
+status: CURRENT
+scope: current_economic_flows_not_assignment_evidence_target_completion
+reviewed_revision: 787e18ca
+sources:
+  - docs/cybou/18_ECONOMICS_FEES.md
+  - src/cybou/official_networks.cpp
+  - src/cybou/protocol_params.h
+  - src/cybou/storage_lease.cpp
 asset:
   symbol: CYBOU
-  max_supply: absent  # genesis monetary base 100000000000, conserved (DEC-277)
   genesis_monetary_base: 100000000000
   decimals: 0
   minimum_unit: 1
   perpetual_emission: false
-
-genesis:  # storage economy (DEC-277); the deployed pre-M7 DEVNET still runs the superseded pool model
-  central_authority_genesis_allocation:
-    balance: 100000000000
-    authority: 10000001
-    name: cybou
-  bootstrap_genesis_allocation:
-    balance: 0
-    authority: 10000001
-    name: bootstrap
-  issued_supply: 100000000000
-  unissued_supply: 0
-  official_provisioning: new_devnet_at_m7
-
+  mint: false
+  burn: false
+genesis:
+  treasury_allocation: {label: cybou, balance: 100000000000}
+  bootstrap_role_allocation: absent
+  authority_unit: absent
+  current_devnet: existing_compiled_immutable_genesis
+  mainnet: unprovisioned
 onboarding_bonus:
-  onboarding_bonus: 20000
+  amount: 20000
   source: CentralTreasury
   destination: SystemBalance
+  treasury_claimant_bonus: false
   minted: false
-
 balances:
-  Balance:
-    unit: CYBOU
-    transferable: true
+  Balance: {unit: CYBOU, transferable: true}
   SystemBalance:
     unit: CYBOU
     transferable: false
     reversible_to_balance: false
     pays_protocol_services: true
-
 cybou_supply:
   conservation: exact_per_block
   includes: [Balance, SystemBalance, StorageEscrow, unclaimed_genesis_allocation_balances]
-
 fees:
   source: SystemBalance
-  destination: CentralAuthorityBalance
   recipient: unique_genesis_allocation_label_cybou
   before_claim: genesis_allocation_balance
   after_claim: claimant_account_balance
   percent: 100
-  onboarding_percent: 0
+  payment: 1
+  root_publication: 4_times_ceil_full_operation_bytes_over_1024_plus_4_times_chunk_count
   priority_fee: false
-  burn_fraction: 0
   batching: false
-  storage_rewards: false  # storage rent is not a fee: StorageEscrow -> providers
   atomic: true
-
-application_content:
-  mail_specific_consensus_fee_model: false
-  file_specific_consensus_fee_model: false
-  generic_root_publication_fee_model: true
-
-storage_economy_target:  # DEC-274..DEC-283; frozen target, not implemented
-  status: implemented_m5_active_from_m7_genesis
-  max_supply: absent
-  onboarding_pool: absent
-  mint: false
-  burn: false
-  genesis_monetary_base: 100000000000
-  genesis_monetary_base_holder: cybou_treasury_allocation
-  conservation: TotalCybou_parent_equals_candidate
-  total_cybou_includes: [unclaimed_genesis_allocation_balances, Balance, SystemBalance, StorageEscrow]
-  onboarding_bonus: 20000
-  onboarding_source: Treasury
-  onboarding_destination: SystemBalance
+storage_economy:
+  entitlement: active_funded_StorageLease
+  rent_destination: StorageEscrow_then_providers
+  provider_percent: 100
+  rate_cybou_per_gib_day_replica: 5
+  billing_unit_bytes: 524288
+  replica_target: 2
+  settlement_period_seconds: 86400
+  max_lease_periods: 3650
+  escrow_rounding: ceil
+  verified_interval_accrual: floor_with_carried_remainder
+  payout_onboarding_origin: provider_SystemBalance
+  payout_locked_origin: provider_Balance
+  lease_refund_destination: payer_SystemBalance
   onboarding_origin_transferable_via_storage: false
-  protocol_fees_destination: Treasury
-  storage_rent_destination: StorageEscrow_then_verified_providers
-  storage_rent_provider_percent: 100
-  storage_rate_cybou_per_gib_day_replica: 5
-  storage_billing_unit_bytes: 524288
-  storage_replica_target: 2
-  storage_settlement_period_seconds: 86400
-  lease_refund_destination: SystemBalance
   stake: false
   slashing: false
+  auction: false
+  accepted_assignment_attestation_gap: DEC_280
+  accepted_settlement_evidence_schema_gap: DEC_282
+application_content:
+  generic_root_publication_fee_model: true
+  mail_specific_consensus_fee_model: false
+  file_specific_consensus_fee_model: false

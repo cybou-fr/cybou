@@ -1,3 +1,10 @@
+status: CURRENT
+scope: Treasury_funded_account_creation_and_local_capacity
+reviewed_revision: 787e18ca
+sources:
+  - docs/cybou/18_ECONOMICS_FEES.md
+  - src/cybou/protocol_params.h
+  - src/cybou/state.cpp
 
 onboarding:
   automatic: true
@@ -27,5 +34,6 @@ storage_onboarding:
 anti_sybil:
   account_creation_work: true
   account_id_uniqueness: true
-  new_account_rate_limits: true
-  max_account_creates_per_block: protocol_parameter
+  per_identity_operation_tiers: absent
+  max_account_creates_per_block: 100
+  limit_scope: global_block_limit

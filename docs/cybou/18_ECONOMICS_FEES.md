@@ -1,7 +1,7 @@
 # CYBOU economics and fees
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Current economic flows and lease/settlement source audit at 787e18ca, 2026-10-09. Accepted assignment/evidence gaps remain explicit; no new live acceptance claim.
 
 ## Native asset
 
@@ -82,10 +82,10 @@ and therefore a new NetworkID, followed by a clean network-bound state reset.
 Current compiled DEVNET has its new NetworkID and immutable genesis; the
 former DEVNET is retired. MAINNET remains unprovisioned. Development uses DEVNET. Existing genesis is never re-signed or replaced.
 
-## Storage economy (implemented in M5; active from the M7 genesis)
+## Storage economy
 
-The code implements the rules below; they take effect on the network with the
-new DEVNET NetworkID and genesis (DEC-283).
+These flows operate under the existing compiled DEVNET genesis. MAINNET is
+unprovisioned. This document does not authorize provisioning or a reset.
 
 ### Monetary base
 
@@ -127,8 +127,15 @@ split periods sum exactly) and accrues shadow rewards from verified intervals.
 System Balance records an onboarding-origin portion consumed first by debits.
 Escrow keeps the origin split, and the onboarding-origin share of a payout
 credits provider System Balance; only SystemLock-origin rent becomes
-transferable Balance. Providers are assigned by the network from finalized
-randomness, never by the payer, so self-dealing cannot target one's own node.
+transferable Balance. Current provider selection uses local CSPRNG ordering and
+deduplicates proven StorageIds and payout identities; it excludes this machine.
+Settlement execution refuses payment to the lease payer. These checks do not
+prove independent operators or prevent one operator owning multiple Identities.
+
+DEC-280 retains the accepted target of assignment from finalized randomness with
+PoA attestation. Current selection does not implement that target. DEC-282
+evidence/assignment fields likewise remain an explicit design gap; the current
+wire below must not be confused with that accepted target.
 
 ### Equilibrium is an estimate
 
@@ -140,3 +147,54 @@ no foreign chunks are assigned.
 
 Transferable CYBOU earned for a service may fall under MiCA. Qualification is
 an open legal gate before MAINNET (`25_OPEN_QUESTIONS.md`).
+
+## Current lease and settlement wire
+
+All integers below are little-endian. These are operation payloads; the common
+operation envelope is separate. Hashes and AccountIDs retain their raw 32-byte order.
+
+`StorageLease` payload is exactly 36 bytes: publication OperationID (32), then
+periods (u32). Periods must be positive and respect the compiled maximum (3650).
+The author can extend the lease of a finalized publication. RootPublication may
+fund its initial lease atomically through `lease_periods`; zero means no initial
+lease, not free remote admission. A funded active lease is required for admission.
+Lease funding reserves rent rounded up; interval accrual rounds down with a
+carried remainder. Remaining escrow is refunded to the payer's System Balance.
+
+`StorageSettlement` has the following current layout:
+
+| Field | Bytes / encoding |
+|---|---|
+| period | u64, 8 |
+| period_start_utc | u64, 8; nonzero |
+| entry_count | u32, 4; 0–1024 |
+| entries | count × 72 |
+| poa_signature | Ed25519 64 followed by ML-DSA-65 3309 |
+
+Each entry is publication OperationID (32), payout AccountID (32), amount
+(u64, 8). Entries strictly increase by `(publication_id, payout_account)`;
+IDs and amount are nonzero. Exact payload size is `20 + 72*N + 3373` bytes;
+there is no signature length prefix and trailing bytes are rejected.
+The signed digest is SHA-256 of the exact concatenation
+`"CYBOU/STORAGE-SETTLEMENT" || NetworkBinding || unsigned settlement body`.
+
+Execution verifies the genesis-authorized hybrid PoA signature, next period,
+contiguous start after the first period, active lease, existing payout account,
+no payment to the payer, replica-count bound, period-rent/remaining-escrow bounds,
+and overflow-free balance transfers. Period end is derived from the signed start
+and immutable period length (86400 seconds in DEVNET). Nodes verify these rules;
+they do not independently verify off-chain audits through the settlement payload.
+There is no `evidence_root`, `StorageId`, assignment attestation or explicit
+`period_end_utc` field in the current payload.
+
+Defining sources: [storage_lease.h](../../src/cybou/storage_lease.h),
+[storage_lease.cpp](../../src/cybou/storage_lease.cpp),
+[protocol_params.h](../../src/cybou/protocol_params.h),
+[storage_provider_selector.cpp](../../src/cybou/storage_provider_selector.cpp).
+Regression sources: [resource limits tests](../../src/test/cybou_resource_limits_tests.cpp)
+(escrow/conservation, payout attacks, lease bounds, revocation),
+[storage economy tests](../../src/test/cybou_storage_economy_tests.cpp)
+(billing and carried remainder), and
+[state tests](../../src/test/cybou_state_tests.cpp) (Treasury and onboarding).
+These references identify existing tests; this documentation audit does not
+claim a new execution of those suites or new live payout acceptance.

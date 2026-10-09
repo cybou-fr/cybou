@@ -68,3 +68,10 @@ has been checked against the compiled Network Public Key. The verified genesis
 specification digest is the height-zero chain tip and signing-journal anchor.
 This is the existing domain-separated digest covered by the network signature;
 there is no separately synthesized genesis block identifier or profile digest pin.
+
+## Storage operations
+
+The current [lease and settlement layouts](18_ECONOMICS_FEES.md#current-lease-and-settlement-wire)
+are defined by [storage_lease.h](../../src/cybou/storage_lease.h) and
+[storage_lease.cpp](../../src/cybou/storage_lease.cpp). Accepted DEC-282 evidence
+fields are a target gap, not fields silently added to the current encoding.
