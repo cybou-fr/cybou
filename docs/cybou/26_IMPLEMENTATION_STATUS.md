@@ -8,6 +8,29 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Assignment-bound evidence accounting (2026-10-09)
+
+The new storage_assignment_evidence module persists interval references under
+frozen assignment commitment/replica slot in existing encrypted app.db. It validates
+period/UTC scope, rejects overlap or altered proof reuse, serializes concurrent
+appends, bounds records without truncation, and returns cumulative seconds through
+a specified period. Future intervals are excluded from earlier queries; reopen
+retains past service without requiring the provider to be online. Empty readable
+records return zero; corruption/lock/scope mismatch fail closed.
+Tests exercise idempotency, late arrival, partial/gapped intervals, future/period
+rejection, replica isolation, reopening, arithmetic integration, unavailable
+store access, corrupt bytes, time overflow, concurrency and 4096-entry bounds.
+The tests use synthetic proof references and do not verify actual storage audits
+or PoA signatures. Cross-epoch slot exclusion, raw-evidence verification/retention,
+signed assignments and live settlement integration remain open. See
+[the accounting contract](ECONOMICS_SETTLEMENT_COMPLETION.md).
+
+Win/MinGW scoped assignment/evidence, storage service/economy, quote and resource
+limit suites passed 58 cases / 123,189 assertions; 239 other core cases were
+skipped. Log: artifacts/economics-assignment-evidence-core.txt (ignored). Store
+reopening and concurrent calls are covered; process termination, power loss,
+actual provider proofs and production deployment are not claimed by this run.
+
 ### Deterministic assignment preparation (2026-10-09)
 
 New off-chain storage_assignment helpers accept a bounded canonical candidate

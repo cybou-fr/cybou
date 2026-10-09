@@ -135,6 +135,44 @@ Offline providers retain already established entitlement; failure never creates
 successful evidence. The current latest-timestamp placement helper is not this
 ledger and must not be advertised as completed economic aggregation.
 
+### Assignment-bound interval accounting
+
+`storage_assignment_evidence.h/.cpp` now persists previously verified service
+intervals under the frozen assignment commitment and replica slot in existing
+app.db. Term start/end are settlement-period indices, with a separately supplied
+verified UTC term anchor and immutable period duration. A selected slot binds
+the record to the plan's StorageId/payout AccountID, publication, chunk, network
+and epoch; no current endpoint/provider list is needed to read past service.
+
+Each interval records period u64, UTC start/end u64 and nonzero proof commitment
+(32 bytes). Half-open intervals must lie within their indexed period. Exact retry
+is idempotent; reused proof with changed fields, overlapping intervals, future
+end beyond caller's verified UTC boundary, wrong scope and overflow are rejected.
+Non-overlapping delayed intervals may be inserted in chronological order. A query
+through period K includes only intervals with period <= K: later service does not
+pay an earlier period. Each authorized chunk/slot contributes its own seconds;
+no implicit replica multiplier or credit for gaps/downtime is applied.
+
+The encrypted record contains assignment commitment (32), slot u8, UTC anchor
+u64, duration u64, count u32, then count exact 56-byte intervals, all integers LE.
+It is bounded to 4096 intervals per assignment/slot. Append rereads/validates the
+whole record inside the store batch; duplicate concurrent appends cannot double
+credit. Scope metadata cannot be silently replaced. Corrupt or inaccessible data
+returns failure, never fabricated zero service; a readable empty journal returns
+zero. A full journal rejects new intervals without truncation; future compaction
+must preserve unsettled evidence and finalized paid history under a separate plan.
+Restart/reopening retains credited intervals without an in-memory cursor.
+
+This API is an internal accounting boundary, not a raw-audit verifier or a PoA
+attestation. It accepts references to proofs verified by its caller. Signed
+assignment verification, retained raw evidence, transport-to-verifier ingestion,
+independent-host validation and global term/slot exclusion across replacement
+epochs remain integration gates. A commitment supplied by a peer is not verified
+service. Callers must validate UTC policy and completed periods before preparing
+settlement; this component has no clock or canonical period authority. Current
+production auditing, placement and settlement execution are not activated through
+this new journal by this package.
+
 Evidence foundation follow-up: existing provider diagnostics now commit record,
 index and bounded eviction atomically before changing memory. Failed persistence
 cannot produce a successful replica verification. Concurrent observations are
