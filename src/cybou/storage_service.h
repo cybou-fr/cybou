@@ -307,6 +307,7 @@ public:
         std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
 
 private:
+    friend struct StorageEvidenceLedgerTestAccess;
     struct Placement;
     class PlacementRepository;
     class EvidenceLedger;

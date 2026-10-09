@@ -49,6 +49,11 @@ bool AccrueStorageRent(StorageRentAccumulator& accumulator, std::uint64_t units,
 /// \return std::nullopt при переполнении.
 std::optional<std::uint64_t> StorageRentPerDay(std::uint64_t units, std::uint64_t replicas);
 
+/// Bounded interval between successful observations. Late/duplicate observations
+/// and gaps longer than the policy bound establish no credited service.
+std::uint64_t StorageVerifiedIntervalSeconds(std::int64_t previous_ms,
+    std::int64_t now_ms, std::int64_t maximum_gap_ms);
+
 /// Economics-P0-01 target arithmetic, not the deployed lease tariff. Each
 /// independently assigned replica receives its own whole-CYBOU funded share.
 /// Renewal funds a separate term; it must not rescale an existing entitlement.

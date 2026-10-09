@@ -8,6 +8,25 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Evidence persistence and interval safety (2026-10-09)
+
+Existing EvidenceLedger now writes provider record/index/eviction in one store
+batch before mutating memory. Failed writes and wrapped counters fail closed.
+Replica verification and receipt admission require successful evidence saves;
+failed saves close the volatile credited interval rather than report a verified
+replica. Serialized interval accounting ignores duplicates/late results without
+rewinding its cursor. A gap longer than 24 hours credits zero and establishes a
+new baseline; restart preserves already credited totals and excludes downtime.
+Tests exercise ordered/late/duplicate observations, failure boundaries, reopened
+ledger totals, unavailable encrypted-store access and counter overflow. They
+do not simulate disk-full, power loss, signed assignment or live PoA payouts.
+The bounded provider shadow counters remain diagnostics: no new payable evidence
+or settled balance is inferred, and assignment-bound durable intervals remain open.
+Scoped Win/MinGW core suites passed 51 cases / 121,802 assertions (storage
+service/economy, economics quotes and resource limits); 239 other cases were
+skipped. Log: artifacts/economics-evidence-safety-core.txt (ignored). No production
+desktop/VPS deployment or new live-provider acceptance was performed.
+
 ### ECONOMICS-P0-01 initial accounting package (2026-10-09)
 
 DEC-292 sets economics before Beta hardening. Pure target helpers compute funded

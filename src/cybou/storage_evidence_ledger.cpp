@@ -64,31 +64,34 @@ StorageService::EvidenceLedger::EvidenceLedger(PrivateApplicationStore& db)
     LoadEvidence();
 }
 
-void StorageService::EvidenceLedger::CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
+bool StorageService::EvidenceLedger::CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
     const std::uint64_t stored_bytes, const std::int64_t now_ms)
 {
     // Засчитываем только интервал между двумя успешными проверками и не длиннее суток:
     // долгий пропуск не доказывает непрерывное хранение.
-    std::int64_t previous{0};
-    {
-        std::lock_guard lock{m_evidence_mutex};
-        const auto key = std::pair{chunk_id, storage_id};
-        if (const auto it = m_replica_verified_ms.find(key); it != m_replica_verified_ms.end()) previous = it->second;
-        else if (m_replica_verified_ms.size() >= MAX_TRACKED_REPLICA_CHECKS) m_replica_verified_ms.clear();
-        m_replica_verified_ms[key] = now_ms;
-    }
-    if (previous == 0 || now_ms <= previous) return;
-    const auto seconds = static_cast<std::uint64_t>(std::min(now_ms - previous, STORAGE_MAX_CREDITED_GAP_MS) / 1000);
+    std::lock_guard lock{m_evidence_mutex};
+    if (now_ms <= 0 || !m_application_db.IsUnlocked()) return false;
+    const auto key = std::pair{chunk_id, storage_id};
+    const auto it = m_replica_verified_ms.find(key);
+    const auto previous = it == m_replica_verified_ms.end() ? 0 : it->second;
+    if (previous != 0 && now_ms <= previous) return true; // Never rewind a successful observation.
+    const auto seconds = StorageVerifiedIntervalSeconds(previous, now_ms, STORAGE_MAX_CREDITED_GAP_MS);
     const auto units = StorageBillingUnits(stored_bytes);
-    if (seconds == 0) return;
-    RecordEvidence(storage_id, [&](StorageProviderEvidence& e) {
+    if (seconds != 0) {
+        auto e = m_evidence.contains(storage_id) ? m_evidence.at(storage_id) : StorageProviderEvidence{};
         auto reward = e.shadow_reward;
         if (units > std::numeric_limits<std::uint64_t>::max() / seconds ||
             e.verified_unit_seconds > std::numeric_limits<std::uint64_t>::max() - units * seconds ||
-            !AccrueStorageRent(reward, units, seconds, 1)) return;
+            !AccrueStorageRent(reward, units, seconds, 1)) return false;
         e.verified_unit_seconds += units * seconds;
         e.shadow_reward = reward;
-    });
+        if (!SaveEvidenceLocked(storage_id, e)) return false;
+    }
+    if (it == m_replica_verified_ms.end() && m_replica_verified_ms.size() >= MAX_TRACKED_REPLICA_CHECKS) {
+        m_replica_verified_ms.clear();
+    }
+    m_replica_verified_ms[key] = now_ms;
+    return true;
 }
 
 void StorageService::EvidenceLedger::ForgetReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id)
@@ -97,35 +100,46 @@ void StorageService::EvidenceLedger::ForgetReplica(const std::array<unsigned cha
     m_replica_verified_ms.erase(std::pair{chunk_id, storage_id});
 }
 
-void StorageService::EvidenceLedger::RecordEvidence(const std::array<unsigned char, 32>& storage_id,
+bool StorageService::EvidenceLedger::RecordEvidence(const std::array<unsigned char, 32>& storage_id,
     const std::function<void(StorageProviderEvidence&)>& update)
 {
     std::lock_guard lock{m_evidence_mutex};
-    auto it = m_evidence.find(storage_id);
-    if (it == m_evidence.end()) {
+    const auto prior = m_evidence.contains(storage_id) ? m_evidence.at(storage_id) : StorageProviderEvidence{};
+    auto updated = prior;
+    update(updated);
+    if (updated.receipts < prior.receipts || updated.successes < prior.successes ||
+        updated.failures < prior.failures || updated.full_verifications < prior.full_verifications ||
+        updated.verified_unit_seconds < prior.verified_unit_seconds ||
+        updated.shadow_reward.cybou < prior.shadow_reward.cybou ||
+        updated.shadow_reward.remainder >= STORAGE_RENT_DENOMINATOR) return false;
+    return SaveEvidenceLocked(storage_id, updated);
+}
+
+bool StorageService::EvidenceLedger::SaveEvidenceLocked(const std::array<unsigned char, 32>& storage_id,
+    const StorageProviderEvidence& evidence)
+{
+    PrivateApplicationStore::Batch batch{m_application_db};
+    auto evicted = m_evidence.end();
+    if (!m_evidence.contains(storage_id)) {
         if (m_evidence.size() >= MAX_TRACKED_STORAGE_PROVIDERS) {
-            // Вытесняем provider с самой старой активностью: evidence ограничена и не является state.
-            const auto oldest = std::min_element(m_evidence.begin(), m_evidence.end(), [](const auto& a, const auto& b) {
+            evicted = std::min_element(m_evidence.begin(), m_evidence.end(), [](const auto& a, const auto& b) {
                 return std::max(a.second.last_success_ms, a.second.last_failure_ms) <
                     std::max(b.second.last_success_ms, b.second.last_failure_ms);
             });
-            (void)m_application_db.Erase(EvidenceKey(oldest->first));
-            m_evidence.erase(oldest);
+            if (!m_application_db.Erase(EvidenceKey(evicted->first))) return false;
         }
-        it = m_evidence.emplace(storage_id, StorageProviderEvidence{}).first;
-        SaveEvidenceIndex();
+        std::vector<unsigned char> index;
+        index.reserve((m_evidence.size() + 1) * 32);
+        for (auto entry = m_evidence.begin(); entry != m_evidence.end(); ++entry) {
+            if (entry != evicted) index.insert(index.end(), entry->first.begin(), entry->first.end());
+        }
+        index.insert(index.end(), storage_id.begin(), storage_id.end());
+        if (!m_application_db.Put(EVIDENCE_INDEX_KEY, index)) return false;
     }
-    update(it->second);
-    // Evidence переживает рестарт, чтобы shadow accounting копил реальные интервалы (M4).
-    (void)m_application_db.Put(EvidenceKey(storage_id), EncodeEvidence(it->second));
-}
-
-void StorageService::EvidenceLedger::SaveEvidenceIndex()
-{
-    std::vector<unsigned char> index;
-    index.reserve(m_evidence.size() * 32);
-    for (const auto& [storage_id, _] : m_evidence) index.insert(index.end(), storage_id.begin(), storage_id.end());
-    (void)m_application_db.Put(EVIDENCE_INDEX_KEY, index);
+    if (!m_application_db.Put(EvidenceKey(storage_id), EncodeEvidence(evidence)) || !batch.Commit()) return false;
+    if (evicted != m_evidence.end()) m_evidence.erase(evicted);
+    m_evidence[storage_id] = evidence;
+    return true;
 }
 
 void StorageService::EvidenceLedger::LoadEvidence()

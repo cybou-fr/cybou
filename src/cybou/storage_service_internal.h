@@ -87,9 +87,9 @@ private:
 class StorageService::EvidenceLedger {
 public:
     explicit EvidenceLedger(PrivateApplicationStore& db);
-    void RecordEvidence(const std::array<unsigned char, 32>& storage_id,
+    bool RecordEvidence(const std::array<unsigned char, 32>& storage_id,
         const std::function<void(StorageProviderEvidence&)>& update);
-    void CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
+    bool CreditReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id,
         std::uint64_t stored_bytes, std::int64_t now_ms);
     void ForgetReplica(const std::array<unsigned char, 32>& storage_id, const ChunkId& chunk_id);
     std::map<std::array<unsigned char, 32>, StorageProviderEvidence> ProviderEvidence();
@@ -101,7 +101,8 @@ public:
         const AccountId& payer, std::int64_t verified_since_ms);
 private:
     void LoadEvidence();
-    void SaveEvidenceIndex(); // Requires m_evidence_mutex.
+    bool SaveEvidenceLocked(const std::array<unsigned char, 32>& storage_id,
+        const StorageProviderEvidence& evidence); // Requires m_evidence_mutex.
     PrivateApplicationStore& m_application_db;
     std::mutex m_evidence_mutex;
     std::map<std::array<unsigned char, 32>, StorageProviderEvidence> m_evidence;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cybou/storage_service.h>
+#include <cybou/storage_service_internal.h>
 #include <cybou/hex.h>
 #include <cybou/storage_io_scheduler.h>
 #include <cybou/p2p/storage_session_pool.h>
@@ -17,6 +18,12 @@
 #include <test/cybou_storage_test_network.h>
 
 #include <boost/asio.hpp>
+
+namespace cybou {
+struct StorageEvidenceLedgerTestAccess {
+    using Ledger = StorageService::EvidenceLedger;
+};
+}
 #include <boost/test/unit_test.hpp>
 
 #include <array>
@@ -76,6 +83,63 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
+
+BOOST_AUTO_TEST_CASE(evidence_intervals_do_not_rewind_duplicate_or_credit_long_gaps)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("evidence-owner.cybou");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "intervals"};
+    cybou::StorageEvidenceLedgerTestAccess::Ledger ledger{db};
+    std::array<unsigned char, 32> provider{};
+    provider.fill(1);
+    cybou::ChunkId chunk{};
+    chunk.fill(2);
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, 1000));
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, 2000));
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, 1500));
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, 3000));
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, 3000));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(provider).verified_unit_seconds, 2U);
+    const auto after_gap = 3000 + cybou::STORAGE_MAX_CREDITED_GAP_MS + 1000;
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, after_gap));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(provider).verified_unit_seconds, 2U);
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, after_gap + 1000));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(provider).verified_unit_seconds, 3U);
+    ledger.ForgetReplica(provider, chunk);
+    BOOST_REQUIRE(ledger.CreditReplica(provider, chunk, 512 * 1024, after_gap + 2000));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(provider).verified_unit_seconds, 3U);
+    // Reopening retains already credited service, but never credits downtime.
+    cybou::StorageEvidenceLedgerTestAccess::Ledger reopened{db};
+    BOOST_CHECK_EQUAL(reopened.ProviderEvidence().at(provider).verified_unit_seconds, 3U);
+    BOOST_REQUIRE(reopened.CreditReplica(provider, chunk, 512 * 1024, after_gap + 3000));
+    BOOST_CHECK_EQUAL(reopened.ProviderEvidence().at(provider).verified_unit_seconds, 3U);
+}
+
+BOOST_AUTO_TEST_CASE(evidence_failed_persistence_and_overflow_do_not_change_memory_or_index)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("evidence-owner.cybou");
+    auto& keys = identity->GetKeyStore();
+    const auto vault = fixture.directory / "evidence-test.vault";
+    BOOST_REQUIRE(keys.SaveToFile(vault, "evidence-test-password"));
+    cybou::PrivateApplicationStore db{keys, fixture.directory / "failed-evidence"};
+    cybou::StorageEvidenceLedgerTestAccess::Ledger ledger{db};
+    std::array<unsigned char, 32> first{}, second{};
+    first.fill(1); second.fill(2);
+    BOOST_REQUIRE(ledger.RecordEvidence(first, [](auto& e) { e.receipts = 7; }));
+    keys.Clear();
+    BOOST_CHECK(!ledger.RecordEvidence(first, [](auto& e) { ++e.receipts; }));
+    BOOST_CHECK(!ledger.RecordEvidence(second, [](auto& e) { ++e.receipts; }));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(first).receipts, 7U);
+    BOOST_CHECK(!ledger.ProviderEvidence().contains(second));
+    BOOST_REQUIRE(keys.LoadFromFile(vault, "evidence-test-password"));
+    cybou::StorageEvidenceLedgerTestAccess::Ledger reopened{db};
+    BOOST_CHECK_EQUAL(reopened.ProviderEvidence().size(), 1U);
+    BOOST_CHECK_EQUAL(reopened.ProviderEvidence().at(first).receipts, 7U);
+    BOOST_REQUIRE(ledger.RecordEvidence(first, [](auto& e) { e.receipts = std::numeric_limits<std::uint64_t>::max(); }));
+    BOOST_CHECK(!ledger.RecordEvidence(first, [](auto& e) { ++e.receipts; }));
+    BOOST_CHECK_EQUAL(ledger.ProviderEvidence().at(first).receipts, std::numeric_limits<std::uint64_t>::max());
+}
 
 BOOST_AUTO_TEST_CASE(payload_counters_require_completed_transfers_and_preserve_other_transactions)
 {

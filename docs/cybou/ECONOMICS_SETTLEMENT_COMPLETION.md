@@ -83,6 +83,15 @@ Offline providers retain already established entitlement; failure never creates
 successful evidence. The current latest-timestamp placement helper is not this
 ledger and must not be advertised as completed economic aggregation.
 
+Evidence foundation follow-up: existing provider diagnostics now commit record,
+index and bounded eviction atomically before changing memory. Failed persistence
+cannot produce a successful replica verification. Concurrent observations are
+serialized; duplicates/older timestamps never rewind the interval cursor, and
+gaps beyond the one-day policy bound credit no service. Restart preserves prior
+credited totals but starts a fresh observation interval, excluding downtime.
+This hardens the existing shadow ledger; it does not create assignment-bound
+payable evidence, PoA aggregation or canonical entitlement.
+
 ## P0-03: protocol and recoverable execution gate
 
 Before activating changes, define exact settlement/state serialization and

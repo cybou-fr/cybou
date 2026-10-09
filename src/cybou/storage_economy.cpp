@@ -61,6 +61,15 @@ std::optional<AssignedStorageBudget> ComputeAssignedStorageBudget(const std::uin
     return budget;
 }
 
+std::uint64_t StorageVerifiedIntervalSeconds(const std::int64_t previous_ms,
+    const std::int64_t now_ms, const std::int64_t maximum_gap_ms)
+{
+    if (previous_ms <= 0 || now_ms <= previous_ms || maximum_gap_ms <= 0) return 0;
+    // Both timestamps are positive, so subtraction cannot overflow int64.
+    const auto gap = now_ms - previous_ms;
+    return gap <= maximum_gap_ms ? static_cast<std::uint64_t>(gap / 1000) : 0;
+}
+
 std::optional<std::uint64_t> ComputeAssignedStoragePayout(const AssignedStorageBudget& budget,
     const std::uint64_t verified_unit_seconds, const std::uint64_t finalized_paid)
 {

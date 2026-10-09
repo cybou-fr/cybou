@@ -137,9 +137,13 @@ PublicationDurability StorageService::Place(std::unique_lock<std::mutex>& lock, 
                         " returned no valid storage receipt";
                     continue;
                 }
-                m_evidence->RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; });
+                if (!m_evidence->RecordEvidence(provider.storage_id, [](StorageProviderEvidence& e) { ++e.receipts; }) ||
+                    !m_evidence->CreditReplica(provider.storage_id, chunk_id, bytes->size(), StorageEvidenceNowMs())) {
+                    m_evidence->ForgetReplica(provider.storage_id, chunk_id);
+                    admission_error = "Cannot save storage evidence";
+                    continue;
+                }
                 // Receipt открывает интервал хранения; следующая успешная проверка его засчитывает.
-                m_evidence->CreditReplica(provider.storage_id, chunk_id, bytes->size(), StorageEvidenceNowMs());
                 if (!HasProvider(replicas, provider)) {
                     if (!m_evidence->SaveReceipt(op_id, chunk_id, provider, admitted->receipt)) {
                         admission_error = "Cannot save storage receipt";

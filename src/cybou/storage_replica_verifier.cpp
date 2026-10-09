@@ -27,26 +27,26 @@ bool StorageService::ReplicaVerifier::CheckReplica(const StorageEndpoint& provid
         if (const auto answer = m_transport.Audit(provider, challenge)) {
             const bool ok = expected && answer->held && answer->response_hash == *expected;
             const auto now = StorageEvidenceNowMs();
-            m_evidence.RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
+            const bool saved = m_evidence.RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
                 if (ok) { ++e.successes; e.last_success_ms = now; }
                 else { ++e.failures; e.last_failure_ms = now; }
             });
-            if (ok) m_evidence.CreditReplica(provider.storage_id, chunk_id, local_bytes->size(), now);
-            else m_evidence.ForgetReplica(provider.storage_id, chunk_id);
-            return ok;
+            if (ok && saved && m_evidence.CreditReplica(provider.storage_id, chunk_id, local_bytes->size(), now)) return true;
+            m_evidence.ForgetReplica(provider.storage_id, chunk_id);
+            return false;
         }
         // Transport без audit или без ответа: проверяем exact bytes полным GET.
     }
     const auto bytes = m_transport.Get(provider, chunk_id);
     const bool ok = bytes && ComputeChunkId(*bytes) == chunk_id;
     const auto now = StorageEvidenceNowMs();
-    m_evidence.RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
+    const bool saved = m_evidence.RecordEvidence(provider.storage_id, [&](StorageProviderEvidence& e) {
         if (ok) { ++e.successes; ++e.full_verifications; e.last_success_ms = now; e.last_full_verification_ms = now; }
         else { ++e.failures; e.last_failure_ms = now; }
     });
-    if (ok) m_evidence.CreditReplica(provider.storage_id, chunk_id, bytes->size(), now);
-    else m_evidence.ForgetReplica(provider.storage_id, chunk_id);
-    return ok;
+    if (ok && saved && m_evidence.CreditReplica(provider.storage_id, chunk_id, bytes->size(), now)) return true;
+    m_evidence.ForgetReplica(provider.storage_id, chunk_id);
+    return false;
 }
 
 } // namespace cybou
