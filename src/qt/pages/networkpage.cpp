@@ -390,6 +390,33 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(16);
 
+    auto* summary = new QWidget{this};
+    summary->setObjectName(QStringLiteral("networkLocalOverview"));
+    auto* summary_layout = new QVBoxLayout{summary};
+    summary_layout->setContentsMargins(0, 0, 0, 0);
+    summary_layout->setSpacing(8);
+    auto* summary_header = new QHBoxLayout;
+    summary_header->addWidget(SectionTitle(tr("Local overview"), summary), 1);
+    summary_header->setContentsMargins(0, 8, 18, 0);
+    summary_layout->addLayout(summary_header);
+    auto* summary_grid = new QGridLayout;
+    summary_grid->setSpacing(12);
+    auto [progress_val, progress_sub] = MetricTile(summary_grid, 0, 0, tr("Node and chain"), summary);
+    m_overview_progress = progress_val; m_overview_progress_detail = progress_sub;
+    m_overview_progress->setObjectName(QStringLiteral("networkOverviewProgress"));
+    auto [storage_val, storage_sub] = MetricTile(summary_grid, 0, 1, tr("Local encrypted storage"), summary);
+    m_overview_storage = storage_val; m_overview_storage_detail = storage_sub;
+    m_overview_storage->setObjectName(QStringLiteral("networkOverviewStorage"));
+    auto [transfer_val, transfer_sub] = MetricTile(summary_grid, 0, 2, tr("Completed PUT/GET"), summary);
+    m_overview_transfers = transfer_val; m_overview_transfers_detail = transfer_sub;
+    m_overview_transfers->setObjectName(QStringLiteral("networkOverviewTransfers"));
+    for (int column = 0; column < 3; ++column) summary_grid->setColumnStretch(column, 1);
+    summary_layout->addLayout(summary_grid);
+    m_overview_sample = MutedText({}, summary);
+    m_overview_sample->setObjectName(QStringLiteral("networkOverviewSample"));
+    summary_layout->addWidget(m_overview_sample);
+    root->addWidget(summary);
+
     // Scope and honest provenance note
     m_scope_note = new QLabel{this};
     m_scope_note->setObjectName(QStringLiteral("cardLabel"));
@@ -520,7 +547,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     middle->setSpacing(16);
 
     m_map = new SchematicFranceMap{this};
-    m_map->setMinimumHeight(320);
+    m_map->setMinimumHeight(240);
     m_map->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     middle->addWidget(m_map, 1);
 
@@ -600,6 +627,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_advanced_button->setIcon(QIcon{glyphPixmap(Glyph::Sliders, {16, 16}, CybouTheme::color(CybouTheme::TEXT_SECONDARY))});
     m_advanced_button->setObjectName(QStringLiteral("networkAdvancedButton"));
     m_advanced_button->setCheckable(true);
+    summary_header->addWidget(m_advanced_button);
     m_advanced_scroll = new QScrollArea{this};
     m_advanced_scroll->setObjectName(QStringLiteral("networkAdvancedDrawer"));
     m_advanced_scroll->setWidgetResizable(true);
@@ -699,24 +727,24 @@ void NetworkPage::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     positionOverlays();
+    QTimer::singleShot(0, this, [this] { positionOverlays(); });
 }
 
 void NetworkPage::positionOverlays()
 {
-    m_advanced_button->adjustSize();
-    m_advanced_button->move(width() - m_advanced_button->width() - 18, 16);
     const int panel_width = std::min(560, std::max(300, width() - 36));
     m_advanced_scroll->setGeometry(width() - panel_width - 18, 70, panel_width, std::max(100, height() - 88));
     m_advanced_button->raise();
     m_benchmark_card->adjustSize();
-    m_benchmark_card->move(std::max(18, width() - m_benchmark_card->width() - 24),
-        std::max(84, height() - m_benchmark_card->height() - 30));
+    m_benchmark_card->move(std::max(18, m_map->width() - m_benchmark_card->width() - 24),
+        std::max(84, m_map->height() - m_benchmark_card->height() - 30));
 }
 
 void NetworkPage::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
     if (m_stale) refresh();
+    QTimer::singleShot(0, this, [this] { positionOverlays(); });
 }
 
 void NetworkPage::scheduleRefresh()
@@ -848,6 +876,24 @@ void NetworkPage::refresh()
     }
     m_metric_protection->setText(tr("%1/%2 protected").arg(protected_count).arg(total_count));
     m_metric_protection_sub->setText(securing_count ? tr("%1 securing").arg(securing_count) : tr("Own encrypted publications"));
+
+    // Compact primary view of the same local snapshot; detailed semantics stay in Advanced.
+    m_overview_progress->setText(cybouConnectionText(status));
+    m_overview_progress_detail->setText(tr("Finalized height: %1 · peers: %2\n%3 op/min · local observation")
+        .arg(m_metric_height->text(), m_metric_peers->text(), m_metric_finalization->text()));
+    m_overview_storage->setText(m_metric_storage->text());
+    m_overview_storage_detail->setText(tr("Provider bytes: %1 / %2\nDisk available: %3 · content: %4")
+        .arg(measured && diag.storage_capacity ? CybouProduct::sizeText(diag.storage_used) : tr("Unknown"),
+             measured && diag.storage_capacity ? CybouProduct::sizeText(diag.storage_capacity) : tr("Unknown"),
+             m_metric_disk->text(), m_metric_protection->text()));
+    const auto& put = diag.storage_transfers.put;
+    const auto& get = diag.storage_transfers.get;
+    const bool transfers_ready = measured && put.window_ms == 60000 && get.window_ms == 60000;
+    m_overview_transfers->setText(transfers_ready ? tr("↓ %1 B/s · ↑ %2 B/s")
+        .arg(QLocale{}.toString((put.window_received_bytes / 60.0) + (get.window_received_bytes / 60.0), 'f', 1),
+             QLocale{}.toString((put.window_sent_bytes / 60.0) + (get.window_sent_bytes / 60.0), 'f', 1)) : tr("Unknown"));
+    m_overview_transfers_detail->setText(tr("Local completed encrypted payload · 60 complete seconds · repeats included"));
+    m_overview_sample->setText(m_metric_uptime_sub->text());
 
     m_map->setOverview(status.network_name, tr("%1 · %2 connections · %3/%4 protected")
         .arg(cybouConnectionText(status)).arg(status.peer_count).arg(protected_count).arg(total_count));

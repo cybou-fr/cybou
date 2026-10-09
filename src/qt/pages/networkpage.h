@@ -116,6 +116,13 @@ private:
     QVBoxLayout* m_technical_layout{nullptr};
 
     // Header & summary
+    QLabel* m_overview_progress{nullptr};
+    QLabel* m_overview_progress_detail{nullptr};
+    QLabel* m_overview_storage{nullptr};
+    QLabel* m_overview_storage_detail{nullptr};
+    QLabel* m_overview_transfers{nullptr};
+    QLabel* m_overview_transfers_detail{nullptr};
+    QLabel* m_overview_sample{nullptr};
     QLabel* m_scope_note{nullptr};
     QLabel* m_benchmark_reference{nullptr};
     QWidget* m_benchmark_card{nullptr};

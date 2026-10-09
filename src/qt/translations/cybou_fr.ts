@@ -4858,6 +4858,17 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Local overview</source><translation>Vue locale</translation></message>
+    <message><source>Node and chain</source><translation>Nœud et chaîne</translation></message>
+    <message><source>Local encrypted storage</source><translation>Stockage chiffré local</translation></message>
+    <message><source>Completed PUT/GET</source><translation>PUT/GET terminés</translation></message>
+    <message><source>Finalized height: %1 · peers: %2
+%3 op/min · local observation</source><translation>Hauteur finalisée : %1 · pairs : %2
+%3 op/min · observation locale</translation></message>
+    <message><source>Provider bytes: %1 / %2
+Disk available: %3 · content: %4</source><translation>Octets de répliques : %1 / %2
+Disque disponible : %3 · contenu : %4</translation></message>
+    <message><source>Local completed encrypted payload · 60 complete seconds · repeats included</source><translation>Transferts chiffrés locaux terminés · 60 secondes complètes · répétitions incluses</translation></message>
     <message><source>Available disk space</source><translation>Espace disque disponible</translation></message>
     <message><source>OS available bytes on the chunk filesystem · shared with other applications · before admission reserve</source><translation>Octets disponibles sur le disque des chunks · partagé avec d'autres applications · avant la réserve d'admission</translation></message>
     <message><source>Stored encrypted bytes: %1 % of V · policy headroom: %2 · admitted provider bytes: %3 / %4</source><translation>Octets chiffrés stockés : %1 % de V · marge du plafond : %2 · octets admis pour les répliques : %3 / %4</translation></message>
