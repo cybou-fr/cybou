@@ -19,6 +19,16 @@ struct AttestedStorageAssignment {
     friend bool operator==(const AttestedStorageAssignment&, const AttestedStorageAssignment&) = default;
 };
 
+/// Exact portable attestation bytes: context (185), eligible count (4),
+/// canonical eligible pairs (64 each), Ed25519 (64), ML-DSA-65 (3309).
+/// Selected providers and commitment are deterministically reconstructed.
+/// Decoding is structural only: callers MUST verify signature, bindings and
+/// independently finalized seed provenance before accepting any obligation.
+std::optional<std::vector<unsigned char>> EncodeStorageAssignmentAttestation(
+    const AttestedStorageAssignment& assignment);
+std::optional<AttestedStorageAssignment> DecodeStorageAssignmentAttestation(
+    std::span<const unsigned char> bytes);
+
 /// Caller supplies the independently finalized registry at snapshot_id. Binding
 /// verification is cryptographic; availability, budget, seed provenance, active
 /// publication/lease and host independence remain caller validation requirements.

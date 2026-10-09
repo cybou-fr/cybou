@@ -5,6 +5,7 @@
 #include <cybou/storage_assignment_observation_store.h>
 #include <cybou/storage_assignment_payout.h>
 #include <cybou/block_executor.h>
+#include <cybou/protocol_limits.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
@@ -115,6 +116,71 @@ BOOST_AUTO_TEST_CASE(bindings_require_both_keys_and_the_matching_snapshot)
     BOOST_CHECK(!cybou::VerifyStorageAssignmentBindings(f.plan, {}, *f.service.runtime->GetFinalizedTip(), f.proofs));
     BOOST_CHECK(!cybou::VerifyStorageAssignmentBindings(f.plan, f.registry, cybou::Hash256{1}, f.proofs));
     BOOST_CHECK(!verify(std::vector<cybou::StorageAssignmentBindingProof>{}));
+    bad = f.proofs; bad.push_back(bad.front());
+    BOOST_CHECK(!verify(bad));
+}
+
+BOOST_AUTO_TEST_CASE(portable_attestation_codec_is_exact_bounded_and_requires_verification)
+{
+    Fixture f;
+    const auto attested = f.Attest(); BOOST_REQUIRE(attested);
+    const auto encoded = cybou::EncodeStorageAssignmentAttestation(*attested); BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 3562U + 64U * f.plan.eligible.size());
+    const auto decoded = cybou::DecodeStorageAssignmentAttestation(*encoded); BOOST_REQUIRE(decoded);
+    BOOST_CHECK(*decoded == *attested);
+    BOOST_CHECK(cybou::VerifyStorageAssignmentAttestation(f.service.definition, *decoded));
+    BOOST_CHECK(cybou::VerifyStorageAssignmentBindings(decoded->plan, f.registry,
+        *f.service.runtime->GetFinalizedTip(), f.proofs));
+    BOOST_CHECK(cybou::EncodeStorageAssignmentAttestation(*decoded) == encoded);
+    for (const auto size : {0U, 184U, 188U, 189U, 3561U, 3625U}) {
+        BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(std::span{*encoded}.first(size)));
+    }
+    auto bad = *encoded; bad.push_back(0);
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    bad = *encoded;
+    for (unsigned i{0}; i < 4; ++i) bad[185 + i] = 255;
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    bad = *encoded; std::fill_n(bad.begin() + 185, 4, 0);
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    // Structurally valid bytes never stand in for a signature check.
+    bad = *encoded; bad.back() ^= 1;
+    const auto tampered = cybou::DecodeStorageAssignmentAttestation(bad); BOOST_REQUIRE(tampered);
+    BOOST_CHECK(!cybou::VerifyStorageAssignmentAttestation(f.service.definition, *tampered));
+    auto invalid = *attested; invalid.signature.ml_dsa.pop_back();
+    BOOST_CHECK(!cybou::EncodeStorageAssignmentAttestation(invalid));
+    invalid = *attested; invalid.plan.commitment[0] ^= 1;
+    BOOST_CHECK(!cybou::EncodeStorageAssignmentAttestation(invalid));
+    std::vector<unsigned char> oversized(cybou::MAX_OPERATION_PAYLOAD_BYTES + 1);
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(oversized));
+}
+
+BOOST_AUTO_TEST_CASE(portable_attestation_rejects_duplicate_unsorted_and_oversized_eligible_sets)
+{
+    Fixture f;
+    std::vector<cybou::StorageAssignmentProvider> eligible;
+    for (unsigned i{1}; i <= cybou::MAX_STORAGE_ASSIGNMENT_CANDIDATES; ++i) {
+        cybou::StorageAssignmentProvider p;
+        p.storage_id[0] = static_cast<unsigned char>(i >> 8);
+        p.storage_id[1] = static_cast<unsigned char>(i);
+        p.payout_account = p.storage_id;
+        eligible.push_back(p);
+    }
+    const auto plan = cybou::PrepareStorageAssignment(f.plan.context, eligible); BOOST_REQUIRE(plan);
+    cybou::AttestedStorageAssignment attested{*plan, {.ml_dsa = std::vector<unsigned char>(3309)}};
+    const auto encoded = cybou::EncodeStorageAssignmentAttestation(attested); BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 69098U);
+    const auto decoded = cybou::DecodeStorageAssignmentAttestation(*encoded); BOOST_REQUIRE(decoded);
+    BOOST_CHECK(*decoded == attested);
+    auto bad = *encoded;
+    std::copy_n(bad.begin() + 189, 64, bad.begin() + 253);
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    bad = *encoded;
+    std::swap_ranges(bad.begin() + 189, bad.begin() + 253, bad.begin() + 253);
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    bad = *encoded; bad[185] = 1; bad[186] = 4; // 1025, reject before allocation.
+    BOOST_CHECK(!cybou::DecodeStorageAssignmentAttestation(bad));
+    attested.plan.eligible.push_back(eligible.back());
+    BOOST_CHECK(!cybou::EncodeStorageAssignmentAttestation(attested));
 }
 
 BOOST_AUTO_TEST_CASE(attestation_is_self_verified_durable_and_reused_without_resigning)

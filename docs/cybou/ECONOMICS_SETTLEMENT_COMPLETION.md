@@ -12,6 +12,32 @@ deployable while funding and cumulative settlement rules remain inconsistent.
 
 ### Re-audit reconciliation (2026-10-10)
 
+The latest supplied audit reviews `5d10a355` and requires a completed canonical
+cumulative settlement slice. Its P0 findings remain valid: paid-origin debits
+are not provider entitlement; live Providers() is not historical assignment;
+the daily cap, missing canonical service/paid, full witness resolution, batches
+and exact-operation recovery remain open. DOC-020 is not closed.
+
+The existing assignment-attestation module now defines a portable structural
+encoding: five raw32 context identifiers, three LE u64 values and replica u8
+(185 bytes), LE u32 eligible count, strictly sorted unique 64-byte provider
+pairs, then Ed25519 64 and ML-DSA-65 3309. Selected providers and commitment
+are reconstructed by the existing deterministic assignment algorithm; existing
+hash/signature domains are unchanged. Total size is `3562 + 64 * eligible_count`
+(69,098 at 1024). Decode checks the exact count/size before allocation and rejects
+trailing, truncated, duplicate and unsorted inputs. Binding verification rejects
+duplicate proof records instead of normalizing them away.
+
+This is only an attestation encoding component, not an adopted settlement
+witness envelope or completed vertical slice. Decode does not establish a valid
+signature, historical keys, finalized seed provenance, pre-seed eligibility,
+Merkle authorization or service. Those checks remain required at execution.
+The 128 KiB operation limit includes ALL entries, witnesses and operation bytes;
+the component limit is not a promise that it fits alongside those fields.
+No new database, service, state fields, operation format or live deployment is
+introduced by this component. Do not treat its round-trip tests as DOC-020
+acceptance or substitute it for the next canonical integration deliverable.
+
 The supplied repeat audit reviewed `43220316`. Current local baseline `2969c1f7`
 also has active-term debit accounting and 112-byte funded-term records, with
 finalized paid onboarding/locked totals and exact residual reconciliation.

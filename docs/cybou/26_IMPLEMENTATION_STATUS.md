@@ -8,6 +8,27 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Portable assignment-attestation encoding (2026-10-10)
+
+The audit at `5d10a355` still correctly identifies the missing cumulative
+settlement vertical slice. The existing attestation module now has exact bounded
+structural encoding/decoding (3562 + 64 bytes per eligible pair), with canonical
+order, exact byte consumption and count checks before allocation. Full eligible
+sets of 1024 encode to 69,098 bytes. Selected pairs/commitment use the existing
+assignment algorithm and domains. Binding verification now rejects duplicated
+proofs. This component has no new database or production settlement caller;
+decode is not cryptographic or finalized-seed verification. The complete
+settlement witness envelope, canonical service/paid and removal of the daily cap
+remain unfinished; DOC-020 remains open. No deployment or live state changed.
+
+Native Windows core target build passed. The full attestation suite passed
+16 cases / 323 assertions (300 other cases skipped), including two new codec
+cases and existing binding, journal/reopen, observation and payout-quote coverage.
+The assignment suite separately passed 8 cases / 405 assertions (308 skipped).
+Logs: `artifacts/economics-attestation-codec.txt` and
+`artifacts/economics-assignment-codec-regression.txt`. This is focused component
+regression, not a full core run, interoperability test or settlement acceptance.
+
 ### Repeat-audit CI lifetime follow-up (2026-10-10)
 
 The repeat audit reviewed `43220316`; active-term debit protection at `2969c1f7`

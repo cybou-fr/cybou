@@ -3,6 +3,7 @@
 #include <cybou/storage_assignment_attestation.h>
 #include <cybou/binary_codec.h>
 #include <cybou/crypto/sha256.h>
+#include <cybou/protocol_limits.h>
 #include <algorithm>
 
 namespace cybou {
@@ -40,10 +41,66 @@ std::optional<AttestedStorageAssignment> Read(PrivateApplicationStore& db,
 }
 }
 
+std::optional<std::vector<unsigned char>> EncodeStorageAssignmentAttestation(
+    const AttestedStorageAssignment& assignment)
+{
+    const auto& plan = assignment.plan;
+    if (PrepareStorageAssignment(plan.context, plan.eligible) != plan ||
+        assignment.signature.ml_dsa.size() != 3309) return std::nullopt;
+    try {
+        BinaryWriter out{MAX_OPERATION_PAYLOAD_BYTES};
+        const auto& c = plan.context;
+        out.Fixed(c.network_binding); out.Fixed(c.publication); out.Fixed(c.chunk);
+        out.Fixed(c.finalized_seed); out.Fixed(c.payer);
+        out.U64(c.epoch); out.U64(c.term_start); out.U64(c.term_end); out.U8(c.replicas);
+        out.U32(static_cast<std::uint32_t>(plan.eligible.size()));
+        for (const auto& provider : plan.eligible) {
+            out.Fixed(provider.storage_id); out.Fixed(provider.payout_account);
+        }
+        out.Fixed(assignment.signature.ed25519); out.Fixed(assignment.signature.ml_dsa);
+        return out.Take();
+    } catch (const std::length_error&) { return std::nullopt; }
+}
+
+std::optional<AttestedStorageAssignment> DecodeStorageAssignmentAttestation(
+    const std::span<const unsigned char> bytes)
+{
+    constexpr std::size_t fixed_size{185 + 4 + 64 + 3309};
+    if (bytes.size() < fixed_size || bytes.size() > MAX_OPERATION_PAYLOAD_BYTES) return std::nullopt;
+    try {
+        BinaryReader in{bytes, MAX_OPERATION_PAYLOAD_BYTES};
+        StorageAssignmentContext c;
+        c.network_binding = in.Fixed<StorageAssignmentId>(); c.publication = in.Fixed<StorageAssignmentId>();
+        c.chunk = in.Fixed<StorageAssignmentId>(); c.finalized_seed = in.Fixed<StorageAssignmentId>();
+        c.payer = in.Fixed<StorageAssignmentId>(); c.epoch = in.U64(); c.term_start = in.U64();
+        c.term_end = in.U64(); c.replicas = in.U8();
+        const auto count = in.U32();
+        // Check the exact size BEFORE allocation or any deterministic draw.
+        if (!count || count > MAX_STORAGE_ASSIGNMENT_CANDIDATES ||
+            bytes.size() != fixed_size + std::size_t{count} * 64) return std::nullopt;
+        std::vector<StorageAssignmentProvider> eligible;
+        eligible.reserve(count);
+        for (std::uint32_t i{0}; i < count; ++i) {
+            StorageAssignmentProvider provider{in.Fixed<StorageAssignmentId>(), in.Fixed<StorageAssignmentId>()};
+            if (!eligible.empty() && !(eligible.back() < provider)) return std::nullopt;
+            eligible.push_back(provider);
+        }
+        const auto plan = PrepareStorageAssignment(c, std::move(eligible));
+        if (!plan) return std::nullopt;
+        AttestedStorageAssignment result{*plan};
+        result.signature.ed25519 = in.Fixed<std::array<unsigned char, 64>>();
+        const auto ml = in.Fixed(3309);
+        result.signature.ml_dsa.assign(ml.begin(), ml.end());
+        in.Finish();
+        return result;
+    } catch (const std::invalid_argument&) { return std::nullopt;
+    } catch (const std::length_error&) { return std::nullopt; }
+}
+
 bool VerifyStorageAssignmentBindings(const StorageAssignmentPlan& plan, const IdentityRegistry& registry,
     const Hash256& snapshot_id, const std::span<const StorageAssignmentBindingProof> proofs)
 {
-    if (Hash(plan.context.finalized_seed) != snapshot_id || proofs.empty() ||
+    if (Hash(plan.context.finalized_seed) != snapshot_id || proofs.empty() || proofs.size() != plan.eligible.size() ||
         proofs.size() > MAX_STORAGE_ASSIGNMENT_CANDIDATES ||
         PrepareStorageAssignment(plan.context, plan.eligible) != plan) return false;
     std::vector<StorageAssignmentProvider> providers;
@@ -58,7 +115,6 @@ bool VerifyStorageAssignmentBindings(const StorageAssignmentPlan& plan, const Id
         providers.push_back(provider);
     }
     std::sort(providers.begin(), providers.end());
-    providers.erase(std::unique(providers.begin(), providers.end()), providers.end());
     return providers == plan.eligible;
 }
 
