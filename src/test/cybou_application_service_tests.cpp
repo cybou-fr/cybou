@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cybou/application_service.h>
+#include <cybou/local_application_service.h>
 
 #include <cybou/crypto/cleanse.h>
 #include <cybou/encrypted_chunk_tree.h>
@@ -28,6 +29,7 @@ struct Party {
     std::unique_ptr<cybou::StorageService> storage;
     std::unique_ptr<cybou::PublicationService> publication;
     std::unique_ptr<cybou::ApplicationService> application;
+    std::unique_ptr<cybou::LocalApplicationService> local;
 
     Party(CybouServiceTestFixture& fixture, ProviderNetwork& network, const std::string& name)
         : identity{fixture.CreateIdentity(name + ".vault")}, root{fixture.directory / name}
@@ -40,6 +42,7 @@ struct Party {
     /** (Re)opens the Application DB and the services over it. */
     void Open(CybouServiceTestFixture& fixture, ProviderNetwork& network)
     {
+        local.reset();
         application.reset();
         publication.reset();
         storage.reset();
@@ -52,11 +55,13 @@ struct Party {
             *db, *coordinator);
         application = std::make_unique<cybou::ApplicationService>(*fixture.runtime, identity->GetKeyStore(),
             *db, *storage);
+        local = std::make_unique<cybou::LocalApplicationService>(*db);
     }
 
     /** Deletes the local Application DB entirely, then rebuilds services. */
     void DestroyApplicationDb(CybouServiceTestFixture& fixture, ProviderNetwork& network)
     {
+        local.reset();
         application.reset();
         publication.reset();
         storage.reset();
@@ -176,15 +181,15 @@ BOOST_AUTO_TEST_CASE(text_mail_reaches_offline_recipient_and_rebuilds_sent)
     bob.application->Scan();
     BOOST_CHECK_EQUAL(bob.application->ListMail().size(), 1U);
     // Local mailbox state.
-    BOOST_CHECK(bob.application->SetMailRead(hello.message_id, true));
+    BOOST_CHECK(bob.local->SetMailRead(hello.message_id, true));
     BOOST_CHECK(bob.application->GetMail(hello.message_id)->read);
-    BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::SENT));
+    BOOST_CHECK(!bob.local->MoveMail(hello.message_id, cybou::MailFolder::SENT));
     // Delete forever: only from Trash, final, and it survives a rescan.
-    BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
-    BOOST_REQUIRE(bob.application->MoveMail(hello.message_id, cybou::MailFolder::TRASH));
-    BOOST_REQUIRE(bob.application->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
+    BOOST_CHECK(!bob.local->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
+    BOOST_REQUIRE(bob.local->MoveMail(hello.message_id, cybou::MailFolder::TRASH));
+    BOOST_REQUIRE(bob.local->MoveMail(hello.message_id, cybou::MailFolder::DELETED));
     BOOST_CHECK(bob.application->ListMail().empty());
-    BOOST_CHECK(!bob.application->MoveMail(hello.message_id, cybou::MailFolder::INBOX));
+    BOOST_CHECK(!bob.local->MoveMail(hello.message_id, cybou::MailFolder::INBOX));
     bob.application->Scan();
     BOOST_CHECK(bob.application->ListMail().empty());
 
@@ -270,8 +275,8 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
 
     // Star is local encrypted Identity state: it survives reopen and later re-indexing.
     BOOST_CHECK(!uploaded->starred);
-    BOOST_CHECK(owner.application->SetFileStarred(report_id, true));
-    BOOST_CHECK(!owner.application->SetFileStarred(*cybou::NewPrivateItemId(), true));
+    BOOST_CHECK(owner.local->SetFileStarred(report_id, true));
+    BOOST_CHECK(!owner.local->SetFileStarred(*cybou::NewPrivateItemId(), true));
     owner.Open(fixture, network);
     BOOST_CHECK(owner.application->GetFile(report_id)->starred);
 
@@ -307,7 +312,7 @@ BOOST_AUTO_TEST_CASE(files_catalog_and_content_survive_rebuild)
     }
 
     BOOST_CHECK(owner.application->GetFile(report_id)->starred); // not reset by the rename
-    BOOST_CHECK(owner.application->SetFileStarred(report_id, false));
+    BOOST_CHECK(owner.local->SetFileStarred(report_id, false));
     BOOST_CHECK(!owner.application->GetFile(report_id)->starred);
 
     const auto check_catalog = [&] {
@@ -608,50 +613,50 @@ BOOST_AUTO_TEST_CASE(drafts_persist_locally_and_are_never_published)
         .body = "Half-written message", .updated_ms = 10,
         .attachments = {{.name = "notes.txt", .logical_size = 12, .source_path = "C:/tmp/notes.txt"},
             {.name = "report.pdf", .logical_size = 99, .reference_id = "ref-abc"}}};
-    BOOST_REQUIRE(owner.application->SaveDraft(draft));
+    BOOST_REQUIRE(owner.local->SaveDraft(draft));
     cybou::MailDraft newer{.draft_id = "draft-2", .body = "Newer", .updated_ms = 20};
-    BOOST_REQUIRE(owner.application->SaveDraft(newer));
-    BOOST_CHECK(!owner.application->SaveDraft({.draft_id = "Bad/Id"}));
+    BOOST_REQUIRE(owner.local->SaveDraft(newer));
+    BOOST_CHECK(!owner.local->SaveDraft({.draft_id = "Bad/Id"}));
     const auto height = fixture.runtime->GetFinalizedHeight();
     const auto outgoing = cybou::NewPrivateItemId();
     const auto other = cybou::NewPrivateItemId();
     BOOST_REQUIRE(outgoing && other);
-    BOOST_CHECK(!owner.application->BindDraftToMessage("missing", *outgoing));
-    BOOST_REQUIRE(owner.application->BindDraftToMessage(draft.draft_id, *outgoing) == outgoing);
-    BOOST_REQUIRE(owner.application->CheckDraftSendPayload(draft, true));
+    BOOST_CHECK(!owner.local->BindDraftToMessage("missing", *outgoing));
+    BOOST_REQUIRE(owner.local->BindDraftToMessage(draft.draft_id, *outgoing) == outgoing);
+    BOOST_REQUIRE(owner.local->CheckDraftSendPayload(draft, true));
     auto same_content = draft;
     ++same_content.updated_ms;
-    BOOST_CHECK(owner.application->CheckDraftSendPayload(same_content, false));
+    BOOST_CHECK(owner.local->CheckDraftSendPayload(same_content, false));
     same_content.attachments.front().source_path = "C:/tmp/other.txt";
-    BOOST_CHECK(!owner.application->CheckDraftSendPayload(same_content, false));
+    BOOST_CHECK(!owner.local->CheckDraftSendPayload(same_content, false));
 
     // Survives reopening the Application DB (a restart).
     owner.Open(fixture, network);
-    auto drafts = owner.application->ListDrafts();
+    auto drafts = owner.local->ListDrafts();
     BOOST_REQUIRE_EQUAL(drafts.size(), 2U);
     BOOST_CHECK(drafts[0] == newer); // newest first
     BOOST_CHECK(drafts[1] == draft);
-    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
-    BOOST_CHECK(owner.application->CheckDraftSendPayload(draft, false));
+    BOOST_CHECK(owner.local->BindDraftToMessage(draft.draft_id, *other) == outgoing);
+    BOOST_CHECK(owner.local->CheckDraftSendPayload(draft, false));
     draft.body = "Edited";
-    BOOST_CHECK(!owner.application->CheckDraftSendPayload(draft, false));
-    BOOST_REQUIRE(owner.application->CheckDraftSendPayload(draft, true));
-    BOOST_REQUIRE(owner.application->SaveDraft(draft));
-    BOOST_CHECK_EQUAL(owner.application->ListDrafts().size(), 2U);
-    BOOST_REQUIRE(owner.application->DeleteDraft("draft-2"));
-    drafts = owner.application->ListDrafts();
+    BOOST_CHECK(!owner.local->CheckDraftSendPayload(draft, false));
+    BOOST_REQUIRE(owner.local->CheckDraftSendPayload(draft, true));
+    BOOST_REQUIRE(owner.local->SaveDraft(draft));
+    BOOST_CHECK_EQUAL(owner.local->ListDrafts().size(), 2U);
+    BOOST_REQUIRE(owner.local->DeleteDraft("draft-2"));
+    drafts = owner.local->ListDrafts();
     BOOST_REQUIRE_EQUAL(drafts.size(), 1U);
     BOOST_CHECK_EQUAL(drafts[0].body, "Edited");
     // Durable handoff tombstone survives draft removal and a stale compose replay.
-    BOOST_REQUIRE(owner.application->DeleteDraft(draft.draft_id, true));
+    BOOST_REQUIRE(owner.local->DeleteDraft(draft.draft_id, true));
     owner.Open(fixture, network);
-    BOOST_REQUIRE(owner.application->SaveDraft(draft));
-    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == outgoing);
-    BOOST_CHECK(owner.application->CheckDraftSendPayload(draft, false));
-    BOOST_REQUIRE(owner.application->DeleteDraft(draft.draft_id));
-    BOOST_REQUIRE(owner.application->SaveDraft(draft));
-    BOOST_CHECK(owner.application->BindDraftToMessage(draft.draft_id, *other) == other);
-    BOOST_CHECK(!owner.application->CheckDraftSendPayload(draft, false));
+    BOOST_REQUIRE(owner.local->SaveDraft(draft));
+    BOOST_CHECK(owner.local->BindDraftToMessage(draft.draft_id, *other) == outgoing);
+    BOOST_CHECK(owner.local->CheckDraftSendPayload(draft, false));
+    BOOST_REQUIRE(owner.local->DeleteDraft(draft.draft_id));
+    BOOST_REQUIRE(owner.local->SaveDraft(draft));
+    BOOST_CHECK(owner.local->BindDraftToMessage(draft.draft_id, *other) == other);
+    BOOST_CHECK(!owner.local->CheckDraftSendPayload(draft, false));
     // Never published: no operation was submitted and no chunk left the device.
     BOOST_CHECK(fixture.runtime->GetFinalizedHeight() == height);
     BOOST_CHECK(!fixture.runtime->ProduceBlock() || fixture.runtime->GetBlockAtHeight(*height + 1)->block.operations.empty());

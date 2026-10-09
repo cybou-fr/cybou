@@ -81,19 +81,47 @@ std::filesystem::path IdentityDataDirectory(const std::filesystem::path& data_di
     return data_dir / "identities" / Hex(std::span<const unsigned char>{account.Value().begin(), AccountId::SIZE});
 }
 
-PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir)
-    : m_identity{identity}, m_account{identity.GetAccountId().value_or(AccountId{})}
+PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir,
+    std::string_view filename, bool preserve_data_key)
+    : m_identity{identity}, m_account{identity.GetAccountId().value_or(AccountId{})}, m_preserve_data_key{preserve_data_key}
 {
     if (m_account.IsNull() || identity_dir.empty()) {
         throw std::invalid_argument{"private application store needs an unlocked Identity and data directory"};
     }
     auto key = m_identity.DeriveApplicationStoreKey();
     KeyCleaner cleanse{key};
-    if (!key || !Mac(*key, Bytes(KEY_CHECK_DOMAIN), m_key_check)) {
+    if (!key) {
         throw std::runtime_error{"cannot derive private application store key"};
     }
-    m_path = identity_dir / "app.db";
+    if (filename != "app.db" && filename != "local.db") throw std::invalid_argument{"invalid application store filename"};
+    m_path = identity_dir / filename;
     m_db = std::make_unique<KVStore>(KVStoreOptions{.path = m_path, .cache_bytes = 4 << 20});
+
+    if (m_preserve_data_key) {
+        auto data_key = UnwrapKey(*key);
+        KeyCleaner wipe_data{data_key};
+        if (m_db->Exists(std::string{"app/data-key-present"})) {
+            if (!data_key) throw PrivateApplicationStoreKeyMismatch{"local data key cannot be opened; data preserved"};
+        } else {
+            // Existing app.db keeps its exact encryption key. A new local.db
+            // gets a random data key independent of future recovery phrases.
+            data_key = *key;
+            if (filename == "local.db" && RAND_bytes(data_key->data(), data_key->size()) != 1)
+                throw std::runtime_error{"cannot generate local data key"};
+            // Authenticate an existing store before adding access material.
+            std::vector<unsigned char> old_check;
+            if (m_db->Read(std::string{CHECK_DB_KEY}, old_check)) {
+                auto decoded = Decrypt(*data_key, CHECK_NAME, old_check);
+                if (!decoded || !std::equal(decoded->begin(), decoded->end(), CHECK_VALUE.begin(), CHECK_VALUE.end()))
+                    throw PrivateApplicationStoreKeyMismatch{"existing application data cannot be authenticated"};
+                crypto::CleanseMemory(decoded->data(), decoded->size());
+            }
+            if (!WrapKey(*key, *data_key)) throw std::runtime_error{"cannot persist local data key"};
+        }
+        crypto::CleanseMemory(key->data(), key->size());
+        *key = *data_key;
+    }
+    if (!Mac(*key, Bytes(KEY_CHECK_DOMAIN), m_key_check)) throw std::runtime_error{"cannot authenticate data key"};
 
     std::vector<unsigned char> check;
     if (m_db->Read(std::string{CHECK_DB_KEY}, check)) {
@@ -116,6 +144,23 @@ PrivateApplicationStore::PrivateApplicationStore(CybouKeyStore& identity, const 
         if (!encoded) throw std::runtime_error{"cannot encrypt private application store key check"};
         m_db->Write(std::string{CHECK_DB_KEY}, *encoded, true);
     }
+    if (m_preserve_data_key) {
+        auto active = m_identity.DeriveApplicationStoreKey();
+        KeyCleaner wipe_active{active};
+        std::array<unsigned char, 32> digest{};
+        std::vector<unsigned char> target;
+        if (active && Mac(*active, Bytes(KEY_CHECK_DOMAIN), digest) &&
+            m_db->Read(std::string{"app/rotation-access"}, target) && target == std::vector<unsigned char>{digest.begin(), digest.end()}) {
+            // Only promotion to the prepared phrase retires old access. An
+            // interrupted rotation reopened with the old vault keeps both.
+            const auto keep = "app/access/" + Hex(digest);
+            KVStore::Batch batch;
+            m_db->ForEachStringPrefix("app/access/", std::string{"app/access/"}.size() + 64,
+                [&](const std::string& name, const std::string&) { if (name != keep) batch.Erase(name); });
+            batch.Erase(std::string{"app/rotation-access"});
+            m_db->WriteBatch(batch, true);
+        }
+    }
 }
 
 PrivateApplicationStore::~PrivateApplicationStore() = default;
@@ -125,6 +170,13 @@ std::optional<std::array<unsigned char, 32>> PrivateApplicationStore::AccessKey(
     if (m_identity.GetAccountId() != std::optional<AccountId>{m_account}) return std::nullopt;
     auto key = m_identity.DeriveApplicationStoreKey();
     if (!key) return std::nullopt;
+    if (m_preserve_data_key) {
+        auto unwrapped = UnwrapKey(*key);
+        crypto::CleanseMemory(key->data(), key->size());
+        key = unwrapped;
+        if (unwrapped) crypto::CleanseMemory(unwrapped->data(), unwrapped->size());
+        if (!key) return std::nullopt;
+    }
     std::array<unsigned char, 32> check{};
     const bool valid = Mac(*key, Bytes(KEY_CHECK_DOMAIN), check) &&
         CRYPTO_memcmp(check.data(), m_key_check.data(), check.size()) == 0;
@@ -136,6 +188,49 @@ std::optional<std::array<unsigned char, 32>> PrivateApplicationStore::AccessKey(
         return std::nullopt;
     }
     return key;
+}
+
+std::optional<std::array<unsigned char, 32>> PrivateApplicationStore::UnwrapKey(
+    std::span<const unsigned char, 32> wrapping_key) const
+{
+    std::array<unsigned char, 32> digest{};
+    if (!Mac(wrapping_key, Bytes(KEY_CHECK_DOMAIN), digest)) return std::nullopt;
+    std::vector<unsigned char> encoded;
+    if (!m_db->Read("app/access/" + Hex(digest), encoded)) return std::nullopt;
+    auto decoded = Decrypt(wrapping_key, "__application_data_key__", encoded);
+    if (!decoded || decoded->size() != 32) return std::nullopt;
+    std::array<unsigned char, 32> result;
+    std::copy(decoded->begin(), decoded->end(), result.begin());
+    crypto::CleanseMemory(decoded->data(), decoded->size());
+    return result;
+}
+
+bool PrivateApplicationStore::WrapKey(std::span<const unsigned char, 32> wrapping_key,
+    std::span<const unsigned char, 32> data_key, bool prepared_rotation)
+{
+    std::array<unsigned char, 32> digest{};
+    if (!Mac(wrapping_key, Bytes(KEY_CHECK_DOMAIN), digest)) return false;
+    const auto encoded = Encrypt(wrapping_key, "__application_data_key__", data_key);
+    if (!encoded) return false;
+    KVStore::Batch batch;
+    batch.Write("app/access/" + Hex(digest), *encoded);
+    batch.Write(std::string{"app/data-key-present"}, std::vector<unsigned char>{1});
+    if (prepared_rotation) batch.Write(std::string{"app/rotation-access"}, std::vector<unsigned char>{digest.begin(), digest.end()});
+    try { m_db->WriteBatch(batch, true); return true; } catch (...) { return false; }
+}
+
+bool PrivateApplicationStore::PrepareKeyRotation(std::span<const unsigned char, 32> entropy)
+{
+    std::lock_guard lock{m_mutex};
+    if (!m_preserve_data_key) return false;
+    auto data_key = AccessKey();
+    KeyCleaner wipe_data{data_key};
+    auto material = m_identity.CreateIdentityRotationMaterial(entropy);
+    CybouKeyStore candidate;
+    if (!data_key || !material || !candidate.LoadMaterial(std::move(*material))) return false;
+    auto key = candidate.DeriveApplicationStoreKey();
+    KeyCleaner wipe_key{key};
+    return key && WrapKey(*key, *data_key, true);
 }
 
 std::optional<std::string> PrivateApplicationStore::RecordKey(

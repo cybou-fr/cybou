@@ -120,6 +120,7 @@ private:
     QVector<CybouFileItem> m_last_files;
     /** Items shown before the worker's snapshot includes them. */
     QHash<QString, CybouFileItem> m_pending_files;
+    QHash<QString, CybouMailItem> m_last_mail;
     void showPendingFile(const CybouFileItem& item);
     void emitFiles();
 

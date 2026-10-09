@@ -49,7 +49,6 @@ add_library(cybou_qt STATIC
   cybouapplicationbackend.h
   cyboucoreapplicationadapter.cpp
   cyboucoreapplicationadapter_identity_session.cpp
-  cyboucoreapplicationadapter_session_scheduler.cpp
   cyboucoreapplicationadapter_mail.cpp
   cyboucoreapplicationadapter_files.cpp
   cyboucoreapplicationadapter_storage.cpp

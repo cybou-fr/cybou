@@ -36,7 +36,7 @@ void CybouCoreApplicationAdapter::openIdentity()
             tr("Your Identity is not available. Return to unlock and try again."));
         return;
     }
-    // One encrypted, rebuildable Application DB per Identity.
+    // Separate durable local state and network index/journal per Identity.
     const auto root = cybou::IdentityDataDirectory(m_data_directory, *account);
     ++m_session_generation;
     m_session = std::make_unique<IdentitySession>(this, m_runtime, m_identity.GetKeyStore(), root, m_refresh_ms,
@@ -59,15 +59,12 @@ void CybouCoreApplicationAdapter::identityKeysChanged()
 {
     if (!m_session || m_reopening) return;
     m_reopening = true;
-    // Drafts exist only on this device: keep the latest ones across the reopen.
-    auto drafts = m_known_drafts;
-    for (const auto& pending : std::as_const(m_pending_drafts)) drafts.insert(pending.id, pending);
+    // Closing drains accepted local commits. Drafts survive in local.db under
+    // the preserved data key; do not re-enqueue into an opening session whose
+    // local executor has not been constructed yet.
     m_session.reset();
     setReady(false);
     openIdentity();
-    for (const auto& draft : std::as_const(drafts)) {
-        if (!m_deleted_drafts.contains(draft.id)) saveMailDraft(draft);
-    }
     m_reopening = false;
 }
 
@@ -81,6 +78,7 @@ void CybouCoreApplicationAdapter::closeIdentity()
     m_deleted_mail.clear();
     m_pending_sends.clear();
     m_send_drafts.clear();
+    m_last_mail.clear();
     m_last_files.clear();
     m_pending_files.clear();
     m_pending_stars.clear();
@@ -148,6 +146,8 @@ void CybouCoreApplicationAdapter::applySnapshot(QVector<CybouMailItem> items, QV
     }
     setReady(ready);
     for (const auto& draft : std::as_const(lost)) items.append(draft);
+    m_last_mail.clear();
+    for (const auto& item : items) m_last_mail.insert(item.id, item);
     Q_EMIT mailSnapshot(items);
     for (const auto& draft : std::as_const(lost)) saveMailDraft(draft);
     m_last_files = std::move(files);
@@ -229,6 +229,10 @@ void CybouCoreApplicationAdapter::prepareIdentityRotation(const QStringList& new
         prep->job_id = job_id;
         prep->entropy = *entropy;
         cybou::crypto::CleanseMemory(entropy->data(), entropy->size());
+        if (!s.local_db->PrepareKeyRotation(prep->entropy) || !s.db->PrepareKeyRotation(prep->entropy)) {
+            s.ToGui([owner = s.owner] { owner->finishRotation(false, tr("Local data could not be secured for rotation. Existing keys remain active.")); });
+            return;
+        }
         const auto result = s.publication->PublishRecoveryBridge(job_id,
             std::span<const unsigned char, 32>{prep->entropy.data(), 32});
         s.storage_projection.jobs[job_id] = result;

@@ -39,6 +39,7 @@ add_executable(cybou-core-test
   cybou_finalized_chunk_store_tests.cpp
   cybou_kv_store_tests.cpp
   cybou_private_application_store_tests.cpp
+  cybou_local_application_service_tests.cpp
   cybou_private_application_schema_tests.cpp
   cybou_publication_service_tests.cpp
   cybou_storage_economy_tests.cpp

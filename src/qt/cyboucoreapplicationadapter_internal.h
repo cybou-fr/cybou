@@ -7,6 +7,8 @@
 #include <qt/cyboucoreapplicationadapter.h>
 
 #include <cybou/application_service.h>
+#include <cybou/local_application_service.h>
+#include <cybou/network_sync_service.h>
 #include <cybou/crypto/cleanse.h>
 #include <cybou/node_runtime.h>
 #include <cybou/private_application_store.h>
@@ -186,29 +188,6 @@ struct CybouCoreApplicationAdapter::IdentitySession {
         void RevokeUnreferenced();
         std::vector<cybou::StorageSettlementEntry> Settlement(std::uint64_t period, std::int64_t verified_since_ms);
     };
-    /** Owns the sole worker; stopping joins before any session service is destroyed. */
-    struct SessionScheduler {
-        using Task = std::function<void(IdentitySession&)>;
-
-        std::mutex mutex;
-        std::condition_variable_any wake;
-        std::deque<Task> interactive_tasks;
-        std::deque<Task> background_tasks;
-        std::jthread worker;
-
-        ~SessionScheduler();
-        void Start(IdentitySession& session);
-        void Stop();
-
-        // Обычные фоновые или потенциально долгие команды.
-        void Post(Task task);
-
-        // Короткие локальные действия пользователя.
-        void PostInteractive(Task task);
-
-        std::deque<Task> Take(std::stop_token stop, int interval);
-        std::deque<Task> Drain();
-    };
     CybouCoreApplicationAdapter* owner;
     /** Snapshots of a replaced session (lock, rotation reopen) never reach the GUI. */
     std::uint64_t generation;
@@ -218,6 +197,7 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     int refresh_ms;
     /** The private index is still behind finalized history. */
     bool catching_up{false};
+    std::optional<cybou::IdentityHybridPublicKey> opened_recovery_key;
 
     std::unique_ptr<cybou::PrivateApplicationStore> db;
     std::unique_ptr<cybou::RuntimeStorageTransport> transport;
@@ -237,14 +217,25 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     MailProjection mail{*this};
     FilesProjection files{*this};
     StorageProjection storage_projection{*this};
-    SessionScheduler scheduler;
+    std::unique_ptr<cybou::PrivateApplicationStore> local_db;
+    std::unique_ptr<cybou::LocalApplicationService> local;
+    std::unique_ptr<cybou::NetworkSyncService> network;
+    std::unique_ptr<cybou::LocalContentStager> stager;
+    std::jthread opening;
     IdentitySession(CybouCoreApplicationAdapter*, cybou::CybouNodeRuntime&, cybou::CybouKeyStore&,
         std::filesystem::path, int, cybou::StorageTransport*);
     ~IdentitySession();
-    void Post(std::function<void(IdentitySession&)> task) { scheduler.Post(std::move(task)); }
-    void PostInteractive(std::function<void(IdentitySession&)> task)
+    void Post(std::function<void(IdentitySession&)> task)
     {
-        scheduler.PostInteractive(std::move(task));
+        network->Post([this, task = std::move(task)] {
+            try { task(*this); } catch (const std::exception&) { qWarning() << "CYBOU network command failed"; }
+        });
+    }
+    void PostLocal(std::function<void(IdentitySession&)> task)
+    {
+        local->Post([this, task = std::move(task)] {
+            try { task(*this); } catch (const std::exception&) { qWarning() << "CYBOU local command failed"; }
+        });
     }
     template <typename F>
     void ToGui(F&& f)
@@ -265,6 +256,8 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     void Run(std::stop_token stop);
     void Refresh();
     void AdvanceRotation();
+    void LocalFilesChanged();
+    void LocalMailChanged();
     void Snapshot(CybouRestoreStepState restore, bool initial_complete = false);
 };
 

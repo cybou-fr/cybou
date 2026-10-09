@@ -166,46 +166,16 @@ public:
 
     /// Возвращает локально доступные письма.
     /// \return Копия локально проиндексированных писем.
-    std::vector<MailRecord> ListMail();
+    std::vector<MailRecord> ListMail(bool include_deleted = false);
     /// Возвращает письмо по его PrivateItemId.
     /// \return Письмо либо `std::nullopt`, если запись отсутствует или повреждена.
     std::optional<MailRecord> GetMail(const PrivateItemId& message_id);
-    /// Обновляет локальный флаг прочтения письма.
-    /// \return `true`, если запись письма найдена и сохранена в локальной Application DB.
-    bool SetMailRead(const PrivateItemId& message_id, bool read);
-    /// Обновляет локальный флаг звезды письма.
-    /// \return `true`, если запись письма найдена и сохранена.
-    bool SetMailStarred(const PrivateItemId& message_id, bool starred);
-    /// Сохраняет локальный флаг звезды существующего объекта Files.
-    /// \return `true`, если запись Files найдена и сохранена.
-    bool SetFileStarred(const PrivateItemId& item_id, bool starred);
-    /// Перемещает письмо между локальными папками.
-    /// \return `true`, если письмо найдено и новая папка сохранена локально.
-    bool MoveMail(const PrivateItemId& message_id, MailFolder folder);
-
-    /// Возвращает текущий каталог Files без удалённых элементов.
+    /// Возвращает подтверждённый сетевой каталог, при необходимости с tombstones.
     /// \return Копия локально проиндексированных элементов Files.
-    std::vector<FileRecord> ListFiles();
+    std::vector<FileRecord> ListFiles(bool include_deleted = false);
     /// Возвращает один объект Files по его PrivateItemId.
     /// \return Запись либо `std::nullopt`, если объект отсутствует или удалён из индекса.
     std::optional<FileRecord> GetFile(const PrivateItemId& item_id);
-
-    /// Сохраняет локальный черновик письма.
-    /// \return `true`, если черновик принят локальной Application DB.
-    bool SaveDraft(const MailDraft& draft);
-    /// Возвращает локальные черновики, начиная с самых новых.
-    /// \return Копия локальных черновиков, отсортированная по `updated_ms`.
-    std::vector<MailDraft> ListDrafts();
-    /// Удаляет локальный черновик по `draft_id`.
-    /// \return `true`, если черновик удалён или отсутствовал.
-    bool DeleteDraft(std::string_view draft_id, bool keep_send_binding = false);
-    /// Persist a stable outgoing message ID before publishing a saved draft.
-    /// A retry/restart returns the same ID, never a second publication.
-    std::optional<PrivateItemId> BindDraftToMessage(std::string_view draft_id,
-        const PrivateItemId& proposed_id);
-    /// Save (before creating a job) or check (when resuming a job) its private
-    /// recipient/text/attachment fingerprint. Save timestamps are excluded.
-    bool CheckDraftSendPayload(const MailDraft& draft, bool replace);
 
     /// Возвращает собственные RecoveryBridge в каноническом порядке.
     /// \return Список мостов, пригодных для восстановления исторических KEM epoch.

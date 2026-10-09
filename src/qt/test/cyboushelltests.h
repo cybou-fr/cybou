@@ -96,6 +96,7 @@ private Q_SLOTS:
     void lockHidesPrivateContent();
     void restoreFillsInProgressively();
     void liveMailAndFilesThroughCoreAdapter();
+    void localApplicationContinuesDuringBlockedNetwork();
     void rotationKeepsLiveSessionWorking();
     void searchScopeAndIncrementalIndex();
     void walletAndAuthorityPreserveRowsWithoutChurn();

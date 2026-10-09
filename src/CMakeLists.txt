@@ -100,6 +100,9 @@ add_library(cybou_node STATIC
   cybou/storage_replica_verifier.cpp
   cybou/storage_provider_selector.cpp
   cybou/application_service.cpp
+  cybou/local_application_service.cpp
+  cybou/local_content_stager.cpp
+  cybou/network_sync_service.cpp
   cybou/secret_file.cpp
   cybou/poa_conflict_detector.cpp
   cybou/poa_signing_journal.cpp

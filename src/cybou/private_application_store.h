@@ -45,7 +45,10 @@ public:
     /// \throws std::invalid_argument Если Identity заблокирована или путь пуст.
     /// \throws PrivateApplicationStoreKeyMismatch Если `app.db` зашифрована ключом другой Identity.
     /// \post Key-check либо проверен, либо создан fail-closed до первой пользовательской записи.
-    PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir);
+    PrivateApplicationStore(CybouKeyStore& identity, const std::filesystem::path& identity_dir,
+        std::string_view filename = "app.db", bool preserve_data_key = false);
+    /// Durably wrap the same data key for a prepared rotation before submitting it.
+    bool PrepareKeyRotation(std::span<const unsigned char, 32> new_recovery_entropy);
     ~PrivateApplicationStore();
 
     PrivateApplicationStore(const PrivateApplicationStore&) = delete;
@@ -108,6 +111,9 @@ public:
 
 private:
     std::optional<std::array<unsigned char, 32>> AccessKey() const;
+    std::optional<std::array<unsigned char, 32>> UnwrapKey(std::span<const unsigned char, 32> wrapping_key) const;
+    bool WrapKey(std::span<const unsigned char, 32> wrapping_key, std::span<const unsigned char, 32> data_key,
+        bool prepared_rotation = false);
     std::optional<std::string> RecordKey(std::span<const unsigned char, 32> key, std::string_view name) const;
     std::optional<std::vector<unsigned char>> Encrypt(std::span<const unsigned char, 32> key,
         std::string_view name, std::span<const unsigned char> plaintext) const;
@@ -119,6 +125,7 @@ private:
     std::filesystem::path m_path;
     std::array<unsigned char, 32> m_key_check{};
     std::unique_ptr<KVStore> m_db;
+    bool m_preserve_data_key{false};
     mutable std::recursive_mutex m_mutex;
     /// Изменения открытого batch, индексированные по имени записи; plaintext живёт только до Commit/RollBack/деструктора.
     std::optional<std::map<std::string, std::optional<std::vector<unsigned char>>>> m_staged;

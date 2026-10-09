@@ -5,6 +5,7 @@
 
 #include <exception>
 #include <QElapsedTimer>
+#include <QPointer>
 
 using namespace cybou::qt_detail;
 
@@ -13,26 +14,26 @@ CybouCoreApplicationAdapter::IdentitySession::IdentitySession(CybouCoreApplicati
     : owner{adapter}, generation{adapter->m_session_generation}, runtime{rt}, keystore{ks}, root{std::move(identity_root)}, refresh_ms{interval},
       transport_override{override_transport}
 {
-    scheduler.Start(*this);
+    opening = std::jthread{[this](std::stop_token stop) { Run(stop); }};
 }
 
 CybouCoreApplicationAdapter::IdentitySession::~IdentitySession()
 {
-    scheduler.Stop();
+    if (opening.joinable()) opening.join();
+    if (local) local->Stop();
+    if (network) network->Stop();
 }
 
 bool CybouCoreApplicationAdapter::IdentitySession::Open()
 {
     try {
         std::filesystem::create_directories(root);
-        try {
-            db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
-        } catch (const cybou::PrivateApplicationStoreKeyMismatch&) {
-            // Encrypted under keys replaced by IdentityRotate: the projection
-            // is rebuilt from finalized history (RecoveryBridge included).
-            std::filesystem::remove_all(root / "app.db");
-            db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root);
-        }
+        db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root, "app.db", true);
+        local_db = std::make_unique<cybou::PrivateApplicationStore>(keystore, root, "local.db", true);
+        local = std::make_unique<cybou::LocalApplicationService>(*local_db);
+        if (!local->MigrateFrom(*db)) throw std::runtime_error{"local application migration failed; source preserved"};
+        stager = std::make_unique<cybou::LocalContentStager>(runtime.GetChunkBlobStore(), runtime.GetChunkRetention(),
+            runtime.GetNetworkBinding(), local_db->Account(), local_db.get());
         transport = std::make_unique<cybou::RuntimeStorageTransport>(runtime);
         // Place as many remote replicas as the lease pays for (the network's storage_replica_target).
         storage = std::make_unique<cybou::StorageService>(runtime,
@@ -41,6 +42,7 @@ bool CybouCoreApplicationAdapter::IdentitySession::Open()
         publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
             runtime.GetIdentityOperationCoordinator(keystore));
         application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);
+        opened_recovery_key = keystore.GetRecoveryPublicKey();
         return true;
     } catch (const std::exception&) {
         return false;
@@ -49,58 +51,44 @@ bool CybouCoreApplicationAdapter::IdentitySession::Open()
 
 void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
 {
-    const bool ready = Open();
+    const bool ready = !stop.stop_requested() && Open();
+    if (ready) {
+        network = std::make_unique<cybou::NetworkSyncService>([this] {
+            try { Refresh(); }
+            catch (const std::exception& e) {
+                catching_up = false;
+                qWarning() << "CYBOU network sync failed:" << e.what();
+            }
+        }, refresh_ms);
+    }
     StateToGui([owner = owner, ready] {
         owner->setReady(ready);
         Q_EMIT owner->applicationLoadChanged(ready ? CybouApplicationLoadState::Loading : CybouApplicationLoadState::Failed,
-            0, 0, ready ? QString{} : tr("Your encrypted data could not be opened. Lock your Identity and try again."));
+            0, 0, ready ? QString{} : tr("Your encrypted data could not be opened. Existing data was preserved."));
     });
-    if (!ready) return;
-    while (!stop.stop_requested()) {
-        // Recovery scans back to back; caught-up sessions wait for commands or the tick.
-        auto pending = scheduler.Take(stop, catching_up ? 0 : refresh_ms);
-        // One failing command must not drop the rest of an already dequeued batch.
-        for (auto& task : pending) {
-            try { task(*this); }
-            catch (const std::exception&) { qWarning() << "CYBOU application command failed"; }
-        }
-
-        // После выполнения команды сразу возвращаемся к очередям.
-        // Refresh запускается только тогда, когда Take() не нашёл команд.
-        if (!pending.empty()) continue;
-
-        try {
-            if (!stop.stop_requested()) Refresh();
-        } catch (const std::exception& e) {
-            // A failed refresh leaves the last snapshot in place; the next tick retries.
-            // Never silently: a refresh that always fails freezes Mail and Files.
-            catching_up = false; // Retry at the normal interval, never spin after a failed scan.
-            qWarning() << "CYBOU application refresh failed:" << e.what();
-            StateToGui([owner = owner] {
-                if (!owner->m_initial_projection_ready)
-                    Q_EMIT owner->applicationLoadChanged(CybouApplicationLoadState::Failed, 0, 0,
-                        tr("Your data could not be prepared yet. CYBOU will retry automatically."));
-            });
-        }
-    }
-    // Commands issued just before locking (a saved draft, a send) still run.
-    auto remaining = scheduler.Drain();
-    for (auto& task : remaining) {
-        try { task(*this); }
-        catch (const std::exception&) { qWarning() << "CYBOU application command failed during shutdown"; }
-    }
 }
 
 void CybouCoreApplicationAdapter::IdentitySession::Refresh()
 {
     QElapsedTimer stage;
     stage.start();
+    // Existing local data is usable before any network I/O on this pass.
+    Snapshot(CybouRestoreStepState::Running, false);
     // Same Identity, new key material (IdentityRotate finalized elsewhere): reopen.
-    if (!db->IsUnlocked() && keystore.HasKey() && keystore.GetAccountId() == std::optional{db->Account()}) {
+    if (keystore.HasKey() && keystore.GetAccountId() == std::optional{db->Account()} &&
+        (keystore.GetRecoveryPublicKey() != opened_recovery_key || !db->IsUnlocked())) {
         StateToGui([owner = owner] { owner->identityKeysChanged(); });
         return;
     }
+    cybou::NetworkSyncService::ProcessOutbox(*local, *publication, *db);
     const auto progress = application->Scan(16, 1);
+    // Network DB locks have been released before importing semantic records.
+    // Each import is a short local transaction; disk-only commands use no
+    // network service mutex and never wait for subsequent durability I/O.
+    for (const auto& record : application->ListMail(true))
+        if (!local->ImportMail(record)) throw std::runtime_error{"cannot import local Mail"};
+    for (const auto& record : application->ListFiles(true))
+        if (!local->ImportFile(record)) throw std::runtime_error{"cannot import local Files"};
     const auto scan_ms = stage.restart();
     StateToGui([owner = owner, scanned = progress.scanned_height, total = progress.finalized_height, unavailable = progress.unavailable_roots] {
         if (!owner->m_initial_projection_ready)
@@ -143,9 +131,132 @@ void CybouCoreApplicationAdapter::IdentitySession::AdvanceRotation()
 
 void CybouCoreApplicationAdapter::IdentitySession::Snapshot(CybouRestoreStepState restore, bool initial_complete)
 {
+    const auto revision = local->Revision();
+    if (revision % 2 != 0) return;
     auto items = mail.Snapshot();
     auto file_items = files.FilesSnapshot();
-    StateToGui([owner = owner, items = std::move(items), file_items = std::move(file_items), restore, initial_complete]() mutable {
+    if (local->Revision() != revision) return;
+    StateToGui([owner = owner, revision, items = std::move(items), file_items = std::move(file_items), restore, initial_complete]() mutable {
+        if (owner->m_session->local->Revision() != revision) return;
         owner->applySnapshot(std::move(items), std::move(file_items), true, restore, initial_complete);
+    });
+}
+
+void CybouCoreApplicationAdapter::IdentitySession::LocalFilesChanged()
+{
+    const auto records = local->ListFiles();
+    const auto outbox = local->Outbox();
+    StateToGui([owner = owner, generation = generation, records, outbox] {
+        const QPointer<CybouCoreApplicationAdapter> guard{owner};
+        std::map<std::string, cybou::PublicationJobResult> status;
+        for (const auto& pending : outbox) {
+            if (const auto* batch = std::get_if<cybou::FilesMutationBatch>(&pending.document))
+                for (const auto& change : batch->mutations) status[ToHex(change.item_id)] = pending.status;
+        }
+        QVector<CybouFileItem> updated;
+        QStringList removed;
+        std::set<QString> present;
+        const auto trash = cybou::FilesTrashParent();
+        for (const auto& record : records) {
+            const auto& source = record.item;
+            const auto id = QString::fromStdString(ToHex(source.item_id));
+            present.insert(id);
+            const auto old = std::find_if(owner->m_last_files.begin(), owner->m_last_files.end(), [&](const auto& item) { return item.id == id; });
+            CybouFileItem item = old != owner->m_last_files.end() ? *old : CybouFileItem{};
+            item.id = id;
+            item.name = QString::fromStdString(source.name);
+            item.folder = source.kind == cybou::FileItemKind::FOLDER;
+            item.parent_id = source.parent_id && *source.parent_id != trash ? QString::fromStdString(ToHex(*source.parent_id)) : QString{};
+            item.trashed = source.parent_id == std::optional{trash};
+            auto parent = source.parent_id;
+            for (std::size_t depth = 0; parent && depth < 64 && !item.trashed; ++depth) {
+                if (*parent == trash) { item.trashed = true; break; }
+                const auto ancestor = std::find_if(records.begin(), records.end(), [&](const auto& r) { return r.item.item_id == *parent; });
+                parent = ancestor != records.end() ? ancestor->item.parent_id : std::nullopt;
+            }
+            item.logical_size = source.logical_size;
+            item.modified = QDateTime::fromMSecsSinceEpoch(source.modified_ms);
+            item.starred = record.starred;
+            if (source.root_chunk_id) item.content_root_id = ChunkHex(*source.root_chunk_id);
+            if (const auto pending = status.find(ToHex(source.item_id)); pending != status.end()) {
+                item.state = StateOf(pending->second);
+                item.operation_state = OperationOf(pending->second);
+                item.operation_id = pending->second.operation_id.IsNull() ? QString{} : QString::fromStdString(pending->second.operation_id.GetHex());
+                item.finalized_height = pending->second.finalized_height;
+            }
+            owner->m_pending_files.remove(id);
+            updated.push_back(item);
+        }
+        for (const auto& old : owner->m_last_files) if (!present.contains(old.id)) removed.push_back(old.id);
+        const auto previous = owner->m_last_files;
+        owner->m_last_files = updated;
+        // Semantic row deltas, never a network scan or a full model reset.
+        for (const auto& item : updated) {
+            const auto old = std::find_if(previous.begin(), previous.end(), [&](const auto& value) { return value.id == item.id; });
+            if (old == previous.end() || *old != item) Q_EMIT owner->fileItemChanged(item);
+            if (!guard || owner->m_session_generation != generation) return;
+        }
+        if (!removed.empty()) Q_EMIT owner->fileItemsRemoved(removed);
+    });
+}
+
+void CybouCoreApplicationAdapter::IdentitySession::LocalMailChanged()
+{
+    const auto records = local->ListMail();
+    const auto drafts = local->ListDrafts();
+    const auto outbox = local->Outbox();
+    StateToGui([owner = owner, generation = generation, records, drafts, outbox] {
+        const QPointer<CybouCoreApplicationAdapter> guard{owner};
+        QSet<QString> present;
+        for (const auto& record : records) {
+            const auto id = QString::fromStdString(ToHex(record.message.message_id));
+            present.insert(id);
+            auto item = owner->m_last_mail.value(id);
+            item.id = id;
+            item.folder = FolderOf(record.folder);
+            item.outgoing = record.outgoing;
+            item.unread = !record.read;
+            item.starred = record.starred;
+            item.subject = QString::fromStdString(record.message.subject);
+            item.body = QString::fromStdString(record.message.body);
+            item.preview = item.body.simplified().left(90);
+            item.time = QDateTime::fromMSecsSinceEpoch(record.message.client_timestamp_ms);
+            item.from_address = QString::fromStdString(record.sender.Value().GetHex());
+            item.to_address = QString::fromStdString(record.message.recipient_account_id.Value().GetHex());
+            if (item.from_name.isEmpty()) item.from_name = CybouProduct::shortId(item.from_address);
+            if (item.to_name.isEmpty()) item.to_name = CybouProduct::shortId(item.to_address);
+            for (const auto& pending : outbox) if (pending.job_id == id) {
+                item.state = StateOf(pending.status);
+                item.operation_state = OperationOf(pending.status);
+            }
+            const auto previous = owner->m_last_mail.constFind(id);
+            const bool changed = previous == owner->m_last_mail.cend() || *previous != item;
+            owner->m_last_mail.insert(id, item);
+            if (changed) Q_EMIT owner->mailItemChanged(item);
+            if (!guard || owner->m_session_generation != generation) return;
+        }
+        for (const auto& draft : drafts) {
+            const auto id = QString::fromStdString(draft.draft_id);
+            present.insert(id);
+            auto item = owner->m_last_mail.value(id);
+            item.id = id;
+            item.draft = true;
+            item.folder = CybouMailFolder::Drafts;
+            item.to_name = QString::fromStdString(draft.to);
+            item.subject = QString::fromStdString(draft.subject);
+            item.body = QString::fromStdString(draft.body);
+            item.time = QDateTime::fromMSecsSinceEpoch(draft.updated_ms);
+            const auto previous = owner->m_last_mail.constFind(id);
+            const bool changed = previous == owner->m_last_mail.cend() || *previous != item;
+            owner->m_last_mail.insert(id, item);
+            if (changed) Q_EMIT owner->mailItemChanged(item);
+            if (!guard || owner->m_session_generation != generation) return;
+        }
+        const auto old_ids = owner->m_last_mail.keys();
+        for (const auto& id : old_ids) if (!present.contains(id)) {
+            owner->m_last_mail.remove(id);
+            Q_EMIT owner->mailItemRemoved(id);
+            if (!guard || owner->m_session_generation != generation) return;
+        }
     });
 }

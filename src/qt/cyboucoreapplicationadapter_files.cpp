@@ -18,7 +18,7 @@ void CybouCoreApplicationAdapter::IdentitySession::FilesProjection::ReportChange
         if (progress) progress(saved ? CybouCommandState::Committed : CybouCommandState::Failed, saved ? QString{} : error);
         else if (!saved) Q_EMIT owner->commandFailed(error);
     });
-    session.Refresh();
+    session.LocalFilesChanged();
 }
 
 bool CybouCoreApplicationAdapter::IdentitySession::FilesProjection::AvailableOffline(const cybou::FileItem& item)
@@ -42,13 +42,9 @@ bool CybouCoreApplicationAdapter::IdentitySession::FilesProjection::AvailableOff
 
 std::optional<cybou::FileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjection::CurrentFile(const std::string& hex)
 {
-    if (const auto pending = file_overlay.find(hex); pending != file_overlay.end()) {
-        if (pending->second.deleted) return std::nullopt;
-        return pending->second.item;
-    }
     const auto id = FromHex(QString::fromStdString(hex));
     if (!id) return std::nullopt;
-    const auto record = session.application->GetFile(*id);
+    const auto record = session.local->GetFile(*id);
     return record ? std::optional{record->item} : std::nullopt;
 }
 
@@ -64,11 +60,7 @@ std::optional<std::pair<cybou::ChunkId, std::pair<cybou::ContentKey, std::uint64
 std::map<std::string, cybou::FileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjection::Catalog()
 {
     std::map<std::string, cybou::FileItem> catalog;
-    for (const auto& record : session.application->ListFiles()) catalog[ToHex(record.item.item_id)] = record.item;
-    for (const auto& [hex, pending] : file_overlay) {
-        if (pending.deleted) catalog.erase(hex);
-        else catalog[hex] = pending.item;
-    }
+    for (const auto& record : session.local->ListFiles()) catalog[ToHex(record.item.item_id)] = record.item;
     return catalog;
 }
 
@@ -77,46 +69,43 @@ try
 {
     const auto job_id = RandomJobId("files-");
     if (job_id.empty()) return false;
-    std::vector<std::pair<std::size_t, cybou::NewContent>> contents;
-    if (content) contents.push_back(std::move(*content));
-    const auto touched = batch.mutations;
-    const auto result = session.publication->PublishFiles(job_id, std::move(batch), std::move(contents));
-    session.storage_projection.jobs[job_id] = result;
-    if (result.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION) return false;
-    const auto now = QDateTime::currentDateTime();
-    for (const auto& mutation : touched) {
-        const auto hex = ToHex(mutation.item_id);
-        PendingFile pending{.job_id = job_id, .deleted = mutation.kind == cybou::FileMutationKind::DELETE_ITEM,
-            .modified = now};
-        if (mutation.item) pending.item = *mutation.item;
-        file_overlay[hex] = pending;
-        item_jobs[hex] = job_id;
-        file_modified[hex] = now;
+    std::vector<cybou::NewContent> children;
+    std::optional<std::size_t> target;
+    if (content) { target = content->first; children.push_back(std::move(content->second)); }
+    for (auto& mutation : batch.mutations)
+        if (mutation.item) mutation.item->modified_ms = static_cast<std::uint64_t>(QDateTime::currentMSecsSinceEpoch());
+    const auto prepared = session.stager->Prepare(job_id, children,
+        [&](std::span<const cybou::EncryptedTreeSummary> summaries) {
+            if (target) {
+                if (*target >= batch.mutations.size() || !batch.mutations[*target].item || summaries.size() != 1)
+                    return std::optional<std::vector<unsigned char>>{};
+                auto& item = *batch.mutations[*target].item;
+                item.root_chunk_id = summaries[0].root_chunk_id;
+                item.content_key = summaries[0].content_key;
+                item.logical_size = summaries[0].plaintext_bytes;
+            }
+            return cybou::EncodePrivateApplicationDocument(batch);
+        });
+    if (!prepared || !session.local->QueuePublication(job_id, *prepared, batch)) {
+        (void)session.stager->Release(job_id);
+        return false;
     }
+    session.LocalFilesChanged();
     return true;
 }
 catch (const std::exception&) { return false; }
 
 QVector<CybouFileItem> CybouCoreApplicationAdapter::IdentitySession::FilesProjection::FilesSnapshot()
 {
-    // A pending change is dropped only once history reflects that exact publication.
-    for (auto it = file_overlay.begin(); it != file_overlay.end();) {
-        const auto job = session.storage_projection.jobs.find(it->second.job_id);
-        const bool finalized = job != session.storage_projection.jobs.end() && !job->second.operation_id.IsNull() &&
-            (job->second.phase == cybou::PublicationJobPhase::SECURING ||
-                job->second.phase == cybou::PublicationJobPhase::PROTECTED);
-        bool indexed{false};
-        if (finalized) {
-            const auto id = FromHex(QString::fromStdString(it->first));
-            const auto current = id ? session.application->GetFile(*id) : std::nullopt;
-            indexed = it->second.deleted ? !current
-                : current && current->operation_id == job->second.operation_id;
-        }
-        it = indexed ? file_overlay.erase(it) : std::next(it);
+    item_jobs.clear();
+    for (const auto& pending : session.local->Outbox()) {
+        session.storage_projection.jobs[pending.job_id] = pending.status;
+        if (const auto* batch = std::get_if<cybou::FilesMutationBatch>(&pending.document))
+            for (const auto& mutation : batch->mutations) item_jobs[ToHex(mutation.item_id)] = pending.job_id;
     }
     std::map<std::string, cybou::Hash256> operations;
     std::set<std::string> starred;
-    for (const auto& record : session.application->ListFiles()) {
+    for (const auto& record : session.local->ListFiles()) {
         operations[ToHex(record.item.item_id)] = record.operation_id;
         if (record.starred) starred.insert(ToHex(record.item.item_id));
     }
@@ -226,7 +215,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
     shown.operation_state = CybouOperationState::Preparing;
     shown.available_offline = true;
     showPendingFile(shown);
-    m_session->Post([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
+    m_session->PostLocal([item_id = *item_id, name = shown.name.toStdString(), parent = ParentId(shown.parent_id),
                         path = source_path, hex = hex.toStdString()](IdentitySession& s) {
         auto file = std::make_shared<QFile>(path);
         if (!file->open(QIODevice::ReadOnly)) {
@@ -249,10 +238,7 @@ void CybouCoreApplicationAdapter::uploadFile(const QString& file_id, const QStri
             return static_cast<std::size_t>(n);
         }};
         const bool ok = s.files.PublishFileChange(std::move(batch), std::pair{std::size_t{0}, std::move(content)});
-        if (ok) {
-            // The staged size is authoritative once indexed; show the source size meanwhile.
-            s.files.file_overlay[hex].item.logical_size = static_cast<std::uint64_t>(file->size());
-        } else {
+        if (!ok) {
             s.ToGui([owner = s.owner, id = QString::fromStdString(hex)] {
                 if (auto it = owner->m_pending_files.find(id); it != owner->m_pending_files.end()) {
                     it->state = CybouContentState::NeedsAttention;
@@ -303,7 +289,7 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
     shown.state = CybouContentState::Local;
     shown.operation_state = CybouOperationState::Preparing;
     showPendingFile(shown);
-    m_session->Post([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id), progress](IdentitySession& s) {
+    m_session->PostLocal([item_id = *item_id, name = name.toStdString(), parent = ParentId(shown.parent_id), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         cybou::FilesMutationBatch batch;
         batch.mutations.push_back({cybou::FileMutationKind::UPSERT_ITEM, item_id,
@@ -323,7 +309,7 @@ void CybouCoreApplicationAdapter::createFolder(const QString& folder_id, const Q
 void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& name, CommandProgress progress)
 {
     if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
-    m_session->Post([hex = id.toStdString(), name = name.toStdString(), progress](IdentitySession& s) {
+    m_session->PostLocal([hex = id.toStdString(), name = name.toStdString(), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
         if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
@@ -338,7 +324,7 @@ void CybouCoreApplicationAdapter::renameFile(const QString& id, const QString& n
 void CybouCoreApplicationAdapter::moveFile(const QString& id, const QString& parent_id, CommandProgress progress)
 {
     if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
-    m_session->Post([hex = id.toStdString(), parent = ParentId(parent_id), progress](IdentitySession& s) {
+    m_session->PostLocal([hex = id.toStdString(), parent = ParentId(parent_id), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
         if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
@@ -360,7 +346,7 @@ void CybouCoreApplicationAdapter::copyFile(const QString& id, const QString& cop
 {
     const auto new_id = FromHex(copy_id);
     if (!m_session || !new_id) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
-    m_session->Post([hex = id.toStdString(), new_id = *new_id,
+    m_session->PostLocal([hex = id.toStdString(), new_id = *new_id,
                         parent = ParentId(parent_id), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
@@ -390,13 +376,13 @@ void CybouCoreApplicationAdapter::postFileStar(const QString& hex, bool starred)
 {
     const auto item_id = FromHex(hex);
     if (!m_session || !item_id) return;
-    m_session->Post([item_id = *item_id, starred](IdentitySession& s) { (void)s.application->SetFileStarred(item_id, starred); });
+    m_session->PostLocal([item_id = *item_id, starred](IdentitySession& s) { (void)s.local->SetFileStarred(item_id, starred); });
 }
 
 void CybouCoreApplicationAdapter::trashFile(const QString& id, CommandProgress progress)
 {
     if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
-    m_session->Post([hex = id.toStdString(), progress](IdentitySession& s) {
+    m_session->PostLocal([hex = id.toStdString(), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
         if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
@@ -412,7 +398,7 @@ void CybouCoreApplicationAdapter::trashFile(const QString& id, CommandProgress p
 void CybouCoreApplicationAdapter::restoreFile(const QString& id, CommandProgress progress)
 {
     if (!m_session) { if (progress) progress(CybouCommandState::Failed, tr("Files are unavailable.")); return; }
-    m_session->Post([hex = id.toStdString(), progress](IdentitySession& s) {
+    m_session->PostLocal([hex = id.toStdString(), progress](IdentitySession& s) {
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         auto item = s.files.CurrentFile(hex);
         if (!item) { s.files.ReportChange(progress, false, tr("This item is unavailable.")); return; }
@@ -430,7 +416,7 @@ void CybouCoreApplicationAdapter::deleteFiles(const QStringList& ids)
     std::vector<std::string> roots;
     for (const auto& id : ids) roots.push_back(id.toStdString());
     // One publication for the whole set: Empty Trash costs one network fee.
-    m_session->Post([roots = std::move(roots)](IdentitySession& s) {
+    m_session->PostLocal([roots = std::move(roots)](IdentitySession& s) {
         const auto catalog = s.files.Catalog();
         std::vector<cybou::PrivateItemId> doomed;
         for (const auto& hex : roots) {
@@ -501,7 +487,7 @@ void CybouCoreApplicationAdapter::discardFile(const QString& id)
 void CybouCoreApplicationAdapter::deleteFile(const QString& id)
 {
     if (!m_session) return;
-    m_session->Post([hex = id.toStdString()](IdentitySession& s) {
+    m_session->PostLocal([hex = id.toStdString()](IdentitySession& s) {
         const auto root = FromHex(QString::fromStdString(hex));
         if (!root || !s.files.CurrentFile(hex)) return;
         const auto catalog = s.files.Catalog();
@@ -529,7 +515,7 @@ CybouFileChunkDiagnostics CybouCoreApplicationAdapter::inspectFileChunks(const Q
     const auto id = FromHex(file_id);
     if (!id) return diag;
 
-    const auto record = m_session->application->GetFile(*id);
+    const auto record = m_session->local->GetFile(*id);
     if (!record || !record->item.root_chunk_id || !record->item.content_key) return diag;
 
     const auto& item = record->item;

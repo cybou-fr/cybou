@@ -45,11 +45,11 @@ void CybouCoreApplicationAdapter::IdentitySession::StorageProjection::RevokeUnre
 {
     std::set<cybou::Hash256> catalog_sources, live_messages;
     std::set<cybou::ChunkId> live_roots;
-    for (const auto& record : session.application->ListFiles()) {
+    for (const auto& record : session.local->ListFiles()) {
         catalog_sources.insert(record.operation_id);
         if (!record.deleted && record.item.root_chunk_id) live_roots.insert(*record.item.root_chunk_id);
     }
-    for (const auto& record : session.application->ListMail()) {
+    for (const auto& record : session.local->ListMail()) {
         if (record.folder == cybou::MailFolder::DELETED) continue;
         live_messages.insert(record.operation_id);
         for (const auto& attachment : record.message.attachments) live_roots.insert(attachment.root_chunk_id);
@@ -70,7 +70,15 @@ void CybouCoreApplicationAdapter::IdentitySession::StorageProjection::Refresh(bo
             QDateTime::currentMSecsSinceEpoch()));
         session.files.locally_complete.clear(); // eviction or outside changes
     }
-    for (const auto& [id, status] : session.publication->ProcessDurability(*session.storage, 1)) jobs[id] = status;
+    for (const auto& [id, status] : session.publication->ProcessDurability(*session.storage, 1)) {
+        jobs[id] = status;
+        for (const auto& pending : session.local->Outbox()) {
+            if (pending.job_id != id) continue;
+            if (!session.local->SetPublicationStatus(id, status)) throw std::runtime_error{"cannot save Outbox durability"};
+            if (status.phase == cybou::PublicationJobPhase::PROTECTED) (void)session.stager->Release(id);
+            break;
+        }
+    }
     // Only a complete index knows every reference to an own publication.
     if (index_complete && ticks % REVOKE_EVERY_TICKS == 0) RevokeUnreferenced();
 }

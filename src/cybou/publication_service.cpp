@@ -252,6 +252,13 @@ PublicationJobResult PublicationService::SubmitPreparedLocked(const std::string_
         return Failure("Prepared publication or unlocked Identity is invalid");
     }
     const Intent intent{.bundle = bundle, .recipient = recipient, .future_self = future_self};
+    // A locally prepared Outbox transfers retention to the ordinary publication
+    // job before its pins may be released. Finality/durability does not make the
+    // user's local copy an evictable cache; normal cancellation/revocation owns
+    // release of this reference.
+    if (const auto leaves = LoadLeaves(local_job_id); leaves &&
+        !m_runtime.GetChunkRetention().Pin(JobRetention(*account, local_job_id), *leaves))
+        return Failure("Cannot retain prepared publication content");
     if (!SaveIntent(local_job_id, intent)) return Failure("Cannot save private publication intent");
     return BuildAndSubmit(local_job_id, intent);
 }

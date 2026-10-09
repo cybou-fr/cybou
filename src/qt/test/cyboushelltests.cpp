@@ -6,6 +6,8 @@
 
 #include <qt/cybouapplicationbackend.h>
 #include <qt/cyboucoreapplicationadapter.h>
+#include <cybou/local_application_service.h>
+#include <condition_variable>
 #include <qt/cyboudesktopcontroller.h>
 #include <qt/cyboufixturebackend.h>
 #include <qt/cyboudesktopmodel.h>
@@ -4575,6 +4577,127 @@ void CybouShellTests::liveMailAndFilesThroughCoreAdapter()
 
 
 
+
+void CybouShellTests::localApplicationContinuesDuringBlockedNetwork()
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("blocked-network-local.vault");
+    const auto data = fixture.directory / "desktop-independent";
+    const auto root = cybou::IdentityDataDirectory(data, *identity->GetAccountId());
+    const auto message_id = *cybou::NewPrivateItemId();
+    const auto attachment_id = *cybou::NewPrivateItemId();
+    cybou::MailRecord message;
+    message.sender = *identity->GetAccountId();
+    message.message.message_id = message_id;
+    message.message.recipient_account_id = message.sender;
+    message.message.subject = "Move while offline";
+    message.message.client_timestamp_ms = 1;
+    message.folder = cybou::MailFolder::INBOX;
+    cybou::MailAttachment attachment{.attachment_id = attachment_id, .filename = "missing.bin", .logical_size = 1};
+    attachment.root_chunk_id.fill(41);
+    attachment.content_key.fill(42);
+    message.message.attachments.push_back(attachment);
+    {
+        cybou::PrivateApplicationStore db{identity->GetKeyStore(), root, "local.db", true};
+        cybou::LocalApplicationService local{db};
+        QVERIFY(local.ImportMail(message));
+    }
+    class BlockedTransport final : public cybou::StorageTransport {
+    public:
+        ProviderNetwork delegate;
+        std::mutex mutex;
+        std::condition_variable wake;
+        std::atomic_bool armed{false}, entered{false};
+        bool released{false};
+        explicit BlockedTransport(CybouServiceTestFixture& fixture) : delegate{fixture, 2} {}
+        void Release() { std::lock_guard lock{mutex}; released = true; wake.notify_all(); }
+        std::vector<cybou::StorageEndpoint> Providers() override {
+            if (armed.exchange(false)) {
+                std::unique_lock lock{mutex};
+                entered = true;
+                wake.wait(lock, [&] { return released; });
+            }
+            return delegate.Providers();
+        }
+        std::optional<cybou::ChunkAdmissionResult> Put(const cybou::StorageEndpoint& peer,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk, std::span<const unsigned char> bytes,
+            const cybou::ChunkAuthorizationProof& proof) override { return delegate.Put(peer, op, chunk, bytes, proof); }
+        std::optional<std::vector<unsigned char>> Get(const cybou::StorageEndpoint& peer, const cybou::ChunkId& chunk) override {
+            return delegate.Get(peer, chunk);
+        }
+        std::optional<cybou::ChunkAuthorizationProof> GetProof(const cybou::StorageEndpoint& peer,
+            const cybou::Hash256& op, const cybou::ChunkId& chunk) override { return delegate.GetProof(peer, op, chunk); }
+    } network{fixture};
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    CybouCoreApplicationAdapter adapter{*fixture.runtime, *identity, data};
+    adapter.setRefreshInterval(20);
+    adapter.setStorageTransport(&network);
+    // Always release I/O before adapter destruction, including failed assertions.
+    struct ReleaseOnExit { BlockedTransport& network; ~ReleaseOnExit() { network.Release(); } } release{network};
+    model.setApplicationBackend(&adapter);
+    model.requestApplicationFeatureAvailability(true, true);
+    const auto account = QString::fromStdString(identity->GetAccountId()->Value().GetHex());
+    const auto id = QString::fromStdString(cybou::Hash256{message_id}.GetHex());
+    model.setIdentityState(CybouIdentityState::Active, account, 1);
+    QTRY_COMPARE(model.applicationLoadState(), CybouApplicationLoadState::Ready);
+    QTRY_VERIFY(model.mailItem(id));
+    QTemporaryDir destination;
+    network.armed = true;
+    model.requestAttachmentDownload(id, QString::fromStdString(cybou::Hash256{attachment_id}.GetHex()), destination.filePath("missing.bin"));
+    QTRY_VERIFY(network.entered.load());
+    int heartbeat{0};
+    QTimer timer;
+    connect(&timer, &QTimer::timeout, &model, [&] { ++heartbeat; });
+    timer.start(10);
+    int moves{0};
+    for (int i = 0; i < 50; ++i) {
+        const auto folder = i % 2 ? CybouMailFolder::Archive : CybouMailFolder::Trash;
+        model.requestMoveMail(id, folder, [&](bool ok, const QString& error) { QVERIFY2(ok, qPrintable(error)); ++moves; });
+        QTRY_COMPARE_WITH_TIMEOUT(moves, i + 1, 2000);
+        QCOMPARE(model.mailItem(id)->folder, folder);
+    }
+    QVERIFY(heartbeat > 0);
+    bool draft_saved{false};
+    CybouMailItem draft;
+    draft.body = QStringLiteral("Kept while network is blocked");
+    const auto draft_id = model.requestSaveMailDraft(draft, [&](bool ok, const QString& error) {
+        QVERIFY2(ok, qPrintable(error)); draft_saved = true;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(draft_saved, 2000);
+    bool folder_saved{false};
+    const auto folder_id = model.requestCreateFolder(QStringLiteral("Offline folder"), {}, [&](bool ok, const QString& error) {
+        QVERIFY2(ok, qPrintable(error)); folder_saved = true;
+    });
+    QTRY_VERIFY_WITH_TIMEOUT(folder_saved, 2000);
+    QTRY_VERIFY(model.fileItem(folder_id));
+    QCOMPARE(model.fileItem(folder_id)->name, QStringLiteral("Offline folder"));
+    QCOMPARE(model.fileItem(folder_id)->state, CybouContentState::Local);
+    QVERIFY(!model.fileItem(folder_id)->finalized_height);
+    CybouMailItem outgoing;
+    outgoing.to_name = account;
+    outgoing.subject = QStringLiteral("Durable offline Outbox");
+    QVERIFY(!model.requestSendMail(outgoing).isEmpty());
+    const auto sent = [&]() -> const CybouMailItem* {
+        for (const auto& item : model.mailItems()) if (item.subject == outgoing.subject) return model.mailItem(item.id);
+        return nullptr;
+    };
+    QTRY_VERIFY_WITH_TIMEOUT(sent() && sent()->id.size() == 64, 2000);
+    const auto outgoing_id = sent()->id;
+    QCOMPARE(sent()->state, CybouContentState::Local);
+    network.Release();
+    // No PoA block is produced after local acceptance. Restart resumes disk
+    // ownership and the existing publication, rather than manufacturing Sent.
+    model.setIdentityState(CybouIdentityState::Locked, account, 1);
+    model.setIdentityState(CybouIdentityState::Active, account, 1);
+    QTRY_VERIFY(model.mailItem(outgoing_id));
+    QTRY_VERIFY(model.mailItem(draft_id));
+    QCOMPARE(model.mailItem(draft_id)->body, draft.body);
+    QTRY_VERIFY(model.mailItem(id));
+    QCOMPARE(model.mailItem(id)->folder, CybouMailFolder::Archive);
+    QTRY_VERIFY(model.fileItem(folder_id));
+    QCOMPARE(model.fileItem(folder_id)->name, QStringLiteral("Offline folder"));
+    model.setApplicationBackend(nullptr);
+}
 
 void CybouShellTests::rotationKeepsLiveSessionWorking()
 {
