@@ -46,10 +46,6 @@ existing content protection. Local CPU/RAM, uptime, candidate pool, frame traffi
 peer table, StorageIds, state root and NetworkBinding belong in Advanced/Technical
 or Console. The illustrative France map is an observed-connection view only.
 
-The primary Network page exposes these existing local readings above the map,
-with sample UTC, completed-window labels and Unknown states. Opening Advanced
-preserves that layout and supplies detailed scope and the two existing charts.
-
 Keep at most two local bounded charts: finalized operations and completed PUT/GET
 payload receive/send. Both use completed five-second intervals, at most 180 points
 (15 minutes) in volatile RAM. No network CPU, frame-traffic or capacity chart.

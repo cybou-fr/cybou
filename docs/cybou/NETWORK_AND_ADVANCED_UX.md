@@ -1,7 +1,7 @@
 # Network and Advanced product contract
 
 Status: Level 5 product target, reviewed against desktop/core source on
-2026-10-09. New surfaces described here are not implemented merely because
+2026-10-08. New surfaces described here are not implemented merely because
 this contract exists. Delivery order and source evidence are in
 [`DESKTOP_BETA_ACCEPTANCE_PLAN.md`](DESKTOP_BETA_ACCEPTANCE_PLAN.md) and
 [`NETWORK_OBSERVABILITY_PLAN.md`](NETWORK_OBSERVABILITY_PLAN.md).
@@ -21,14 +21,6 @@ boundaries. No new canonical task queue, network role or format version is
 introduced by these product features.
 
 ## Network overview
-
-The primary page exposes a compact local snapshot without opening Advanced:
-connection/sync status, verified finalized height, local peer count, observed
-finalized op/min, encrypted stored bytes / V, admitted provider bytes / budget,
-available shared disk, Identity-scoped content protection and combined completed
-PUT/GET receive/send rates. It reuses the existing diagnostics and semantic
-content model. The sample UTC and completed-window scope remain visible;
-missing or partial measurements stay Unknown. No new collector is introduced.
 
 DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local passive
 metrics plus ordinary chain/P2P/storage evidence. Remote telemetry, resource
@@ -97,7 +89,7 @@ is not a freshness proof or a condition for Identity creation.
 
 ## France map
 
-The map occupies the remaining Network page below the compact local overview. Peer details
+The map occupies the complete Network page below the global header. Peer details
 and the scrollable Advanced drawer overlay it; opening Advanced does not shrink
 the map or grow the page. Network presentation coalesces status signals and pauses
 while hidden. Diagnostic rows are retained and only their values are updated.

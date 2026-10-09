@@ -109,7 +109,6 @@ private Q_SLOTS:
     void filesSelectionToolbarFollowsView();
     void networkRefreshCoalescesStatusBurst();
     void networkReferenceAndAdvancedScopes();
-    void networkLocalOverviewWithoutAdvanced();
     void authorityExplorerAndEvidenceWorkspace();
     void authorityReviewsRejectStaleSessions();
     void ownContentInspectorAndBoundedConsole();

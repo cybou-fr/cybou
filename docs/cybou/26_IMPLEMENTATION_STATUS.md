@@ -3,30 +3,6 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
-## Primary Network local overview (2026-10-09)
-
-Network now shows existing local diagnostics above the map without requiring
-Advanced: connection/sync, verified height, connected peers, finalized op/min,
-encrypted stored bytes / V, admitted provider bytes / budget, available shared
-disk, content protection and combined completed PUT/GET receive/send rates.
-The local sample UTC and complete-window scope are visible. Partial/missing
-measurements remain Unknown; a complete quiet window is zero. These readings
-reuse the existing sampler and Identity-scoped semantic content model, with no
-new collector, remote telemetry or metric. Detailed scope, the two bounded
-charts and Technical/Console remain in Advanced. EN/FR labels are provided.
-
-The illustrative map occupies the remaining page area. Advanced still overlays
-it without resizing it; its button participates in the summary header layout.
-The historical reference stays within the map's bounds after the summary is
-added. No runtime, protocol, signer or deployment change is required.
-
-Validation: desktop and native Qt targets rebuilt; full native Windows Qt
-passed 93 cases with zero failures/skips. A local overview regression covers
-visibility without Advanced, missing/partial versus measured-zero transfers,
-combined PUT/GET rates and layout bounds. The coalesced-refresh regression
-checks that opening Advanced preserves map height. A 1040 × 720 fixture image
-was inspected. Evidence: `artifacts/network-overview-20261009/` (ignored).
-
 ## Beta monitoring simplification (2026-10-09)
 
 Remote telemetry has been removed from production source and active documents:

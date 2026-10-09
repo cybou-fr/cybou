@@ -5944,63 +5944,6 @@ void CybouShellTests::networkReferenceAndAdvancedScopes()
     QTRY_COMPARE(page.selectedPeerIndex(), -1);
 }
 
-void CybouShellTests::networkLocalOverviewWithoutAdvanced()
-{
-    CybouDesktopModel model{QStringLiteral("DEVNET")};
-    NetworkPage page{&model};
-    page.resize(1040, 720);
-    page.show();
-    auto* overview = page.findChild<QWidget*>(QStringLiteral("networkLocalOverview"));
-    auto* progress = page.findChild<QLabel*>(QStringLiteral("networkOverviewProgress"));
-    auto* storage = page.findChild<QLabel*>(QStringLiteral("networkOverviewStorage"));
-    auto* transfers = page.findChild<QLabel*>(QStringLiteral("networkOverviewTransfers"));
-    auto* sample = page.findChild<QLabel*>(QStringLiteral("networkOverviewSample"));
-    auto* drawer = page.findChild<QScrollArea*>(QStringLiteral("networkAdvancedDrawer"));
-    QVERIFY(overview && progress && storage && transfers && sample && drawer);
-    QVERIFY(overview->isVisibleTo(&page));
-    QVERIFY(drawer->isHidden());
-    QTRY_COMPARE(storage->text(), QStringLiteral("Unknown"));
-    QCOMPARE(transfers->text(), QStringLiteral("Unknown"));
-    model.setNodeStatus(true, 3, true);
-    model.setSyncing(false);
-    model.setFinalizedHeight(42);
-    cybou::NodeDiagnosticsSnapshot snapshot;
-    snapshot.observed_unix_ms = 1791460800000ULL;
-    snapshot.initialized = true;
-    snapshot.local_storage_used = 1024;
-    snapshot.local_storage_capacity = 16106127360ULL;
-    snapshot.storage_capacity = 10737418240ULL;
-    snapshot.storage_disk_available = 0;
-    snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
-    snapshot.storage_transfers.put = {.window_received_bytes = 60, .window_sent_bytes = 120, .window_ms = 60000};
-    snapshot.storage_transfers.get = {.window_received_bytes = 180, .window_sent_bytes = 240, .window_ms = 60000};
-    model.setNetworkDiagnostics(snapshot);
-    QTRY_COMPARE(progress->text(), cybouConnectionText(model.status()));
-    QTRY_COMPARE(storage->text(), QStringLiteral("%1 / %2").arg(
-        CybouProduct::sizeText(1024), CybouProduct::sizeText(16106127360ULL)));
-    QTRY_COMPARE(transfers->text(), QStringLiteral("↓ %1 B/s · ↑ %2 B/s").arg(
-        QLocale{}.toString(4.0, 'f', 1), QLocale{}.toString(6.0, 'f', 1)));
-    QVERIFY(sample->text().contains(QStringLiteral("UTC")));
-    QVERIFY(drawer->isHidden());
-    auto* benchmark = page.findChild<QLabel*>(QStringLiteral("networkBenchmarkSummary"));
-    QVERIFY(benchmark);
-    auto* advanced = page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"));
-    QVERIFY(advanced);
-    QVERIFY(advanced->mapTo(&page, QPoint(0, advanced->height())).y() <=
-        progress->parentWidget()->mapTo(&page, QPoint()).y());
-    QTRY_VERIFY(page.mapWidget()->rect().contains(benchmark->parentWidget()->geometry()));
-    const auto capture = qEnvironmentVariable("CYBOU_NETWORK_OVERVIEW_CAPTURE");
-    if (!capture.isEmpty()) QVERIFY(page.grab().save(capture));
-    // Partial windows stay unknown; a complete quiet window is measured zero.
-    snapshot.storage_transfers.get.window_ms = 0;
-    model.setNetworkDiagnostics(snapshot);
-    QTRY_COMPARE(transfers->text(), QStringLiteral("Unknown"));
-    snapshot.storage_transfers.put = {.window_ms = 60000};
-    snapshot.storage_transfers.get = {.window_ms = 60000};
-    model.setNetworkDiagnostics(snapshot);
-    QTRY_COMPARE(transfers->text(), QStringLiteral("↓ %1 B/s · ↑ %1 B/s").arg(QLocale{}.toString(0.0, 'f', 1)));
-}
-
 void CybouShellTests::networkRefreshCoalescesStatusBurst()
 {
     CybouDesktopModel model{QStringLiteral("DEVNET")};
@@ -6022,13 +5965,11 @@ void CybouShellTests::networkRefreshCoalescesStatusBurst()
     QCOMPARE(page.findChildren<QLabel*>().size(), label_count);
     const auto* drawer = page.findChild<QScrollArea*>(QStringLiteral("networkAdvancedDrawer"));
     QVERIFY(drawer && drawer->isHidden());
-    const auto map_height = page.mapWidget()->height();
-    QVERIFY(map_height >= 240);
-    QVERIFY(map_height < page.height());
+    QVERIFY(page.mapWidget()->height() >= page.height() - 4);
     page.showAdvanced();
     QTest::qWait(350);
     QVERIFY(!drawer->isHidden());
-    QCOMPARE(page.mapWidget()->height(), map_height);
+    QVERIFY(page.mapWidget()->height() >= page.height() - 4);
     const auto visible_labels = page.findChildren<QLabel*>().size();
     for (int i = 1001; i <= 2000; ++i) model.setFinalizedHeight(i);
     QTRY_COMPARE(height->text(), QLocale{}.toString(quint64{2000}));
