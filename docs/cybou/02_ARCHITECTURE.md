@@ -26,10 +26,11 @@ content-addressed encrypted P2P substrate.
 Qt GUI
   |
   v
-Identity Application DB / product model
-  |
+LocalApplicationService: local.db + encrypted local content
+  | immutable durable Outbox / semantic import
   v
-ApplicationService / PublicationService / StorageService
+NetworkSyncService: app.db
+  + ApplicationService / PublicationService / StorageService
   |
   v
 native CYBOU NodeRuntime
@@ -39,6 +40,11 @@ native CYBOU NodeRuntime
   + RootPublication
   + common encrypted ChunkStore
 ```
+
+Local user actions commit independently of the network executor. The local
+store owns indispensable drafts and desired state; the network store owns
+finalized indexes and exact publication jobs. Their implementation and remaining
+acceptance work are recorded separately from this accepted architecture target.
 
 `APPLICATION_DATA_PLANE.md` defines the local/network data boundary.
 `04_NETWORK_LIFECYCLE.md` defines official network trust, creation, joining,

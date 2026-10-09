@@ -14,7 +14,9 @@ record development history; runtime embodies only the current supported form.
 
 - C++20 native Full Node and Qt desktop share the same core; no REST/JSON-RPC
   boundary between desktop and runtime. Core services are ApplicationService,
-  PublicationService and StorageService.
+  PublicationService and StorageService. The application data plane separates
+  LocalApplicationService (durable local semantics) from NetworkSyncService
+  (background publication/index/storage execution); no extra node or protocol.
 - Exactly one node type: Full Node. Every node implements blocks, announcements,
   discovery, candidate relay and encrypted storage. Storage is intrinsic; capacity
   is local policy. No capability bitmap, node-role announcement, provider registry,
@@ -74,7 +76,12 @@ only during explicitly coordinated pre-MAINNET network genesis resets.
   stay encrypted. ChunkID is full BLAKE3-256 of exact stored encrypted bytes.
   Remote admission requires finalized publication/Merkle authorization and funded
   lease; no provisional admission. Bundled trees create no new wire entity.
-- Mail/Files use separate per-Identity encrypted rebuildable Application DBs.
+- Per-Identity encrypted local.db preserves Mail/drafts/flags, Files desired state
+  and immutable durable Outbox. app.db holds network indexes and publication jobs;
+  never discard its exact-operation journal until verified recovery is available.
+  Local commits acknowledge without P2P, PoA or durability waits. Network results
+  cannot overwrite newer desired state. Rotation wraps the same local data key
+  before publication; key mismatch never authorizes deleting application data.
   Index only capsules the Identity can open. GUI consumes semantic projections,
   never enumerates common ChunkStore/provider objects. Publisher recovery needs
   an application self capsule. Direct pinned staging and one encrypted ordered

@@ -6,6 +6,55 @@ Scope: Classification only; dated evidence and pending requirements retain their
 Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Local/Network separation in progress (2026-10-09)
+
+DEC-291 is an accepted architecture target. The working implementation separates
+the local executor and encrypted local.db from the network executor and app.db.
+Mail folders/flags/drafts and Files desired mutations commit locally; publication
+runs from immutable Outbox with stable jobs. SessionScheduler is removed.
+Destination migration is atomic and leaves app.db untouched. Key mismatch no
+longer deletes app.db. Wrapped key access is prepared before IdentityRotate.
+Staging records ownership before pinning; reopening releases interrupted staging
+without a durable intent and preserves pins owned by accepted Outbox entries.
+Publication takes its ordinary retention reference before local Outbox pins are
+released; local content remains pinned until normal cancellation/revocation.
+Retry reuses the same exact OperationID, including after finalization.
+
+Scoped Windows Qt evidence: with the real adapter and deliberately blocked
+StorageTransport, 50 Mail moves, draft save, folder creation and local send
+acceptance completed before releasing transport; reopening preserved local data.
+Move logs: queue 0 ms, local save 1–2 ms, GUI acknowledgement 7–20 ms on this
+fixture, not a claim about the operator's full live mailbox. Existing end-to-end
+Mail/Files integration passed. Core tests cover atomic migration rollback/retry,
+source preservation, rotation access, Outbox restart, source-file removal and
+older confirmation preserving a newer desired name.
+
+Validation: full core run passed 274 cases / 98,441 assertions before the final
+retention handoff change; the updated local/publication suites passed 14 cases /
+143 assertions including immutable bundle identity and exact-operation reuse.
+Desktop and native Qt targets rebuilt. Initial full Qt run failed with SIGSEGV
+in rotation (debug evidence: artifacts/local-network-rotation-gdb.txt, ignored).
+The old draft replay called a not-yet-created local executor during session reopen;
+that replay is removed because durable local.db retains drafts. The rotation
+regression then passed. This failed run remains evidence, not Beta acceptance.
+The subsequent complete native Windows Qt run passed 95 cases, zero failures or
+skips (artifacts/local-network-full-qt.txt, ignored), including blocked transport,
+rotation and end-to-end Mail/Files. Documentation structural checks pass.
+
+The reported P2P listener lifetime issue was not reproduced in this core run.
+Current NetworkListener owns io_context before its server, so reverse destruction
+keeps the context alive through server destruction. No speculative listener or
+protocol change was introduced.
+
+Remaining acceptance: actual process-kill/fault-injection boundaries, durable
+exact-job recovery after deliberate network-index rebuild, explicit cross-device
+Files conflict policy, cancellation/retry of local queued intents, large-file
+preparation that cannot monopolize the short local executor, and live unlocked
+mailbox/shutdown verification. Current app.db publication journals must be
+preserved; it is not yet safe to delete/rebuild the whole database. Restart tests
+alone do not prove every process-crash or disk-failure scenario. No peer deploy,
+network reset, key replacement or second signer is part of this change.
+
 ## Network layout correction and shutdown investigation (2026-10-09)
 
 Operator-confirmed base 5 op/min is a labelled GUI reference; current measured

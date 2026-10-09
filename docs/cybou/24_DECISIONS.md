@@ -184,6 +184,12 @@ remain immutable.
 ---
 
 
+## Local and Network application execution
+
+| ID | Decision | Status |
+|---|---|---|
+| DEC-291 | LocalApplicationService owns indispensable encrypted local.db and commits Mail, drafts, Files desired state and immutable Outbox independently of network I/O. NetworkSyncService owns independent background execution through existing ApplicationService, PublicationService and StorageService and encrypted app.db. Preserve exact JobID/OperationID, canonical ordering, newer desired state and existing journals; no automatic DB deletion. Prepare wrapped access to the same data key before IdentityRotate. One Full Node, one process, unchanged protocol/consensus/cryptography. | Accepted operator plan, 2026-10-09; implementation acceptance remains scoped |
+
 ## Conflict handling
 
 See [documentation conflict register](DOCUMENTATION_CONFLICT_REGISTER.md).

@@ -1,43 +1,55 @@
 # CYBOU application data plane
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Accepted Local/Network boundary and application storage requirements; implementation evidence is recorded separately.
 
 Recorded status: architecture target for Mail, Files, local indexing and content access.
 
 This document defines the boundary between the network's encrypted physical
 storage and the decrypted virtual user experience.
 
-## 1. Four layers
+## 1. Independent Local and Network execution
 
 ```text
-Qt GUI
-  |
-  v
-Identity Application DB / product model
-  |
-  v
-ApplicationService / PublicationService / StorageService
-  |
-  v
-NodeRuntime: finalized state, PoA, P2P
-  |
-  v
-common encrypted ChunkStore
+Qt GUI -> LocalApplicationService -> encrypted local.db
+                 | LocalContentStager -> common encrypted ChunkBlobStore
+                 | immutable durable Outbox / confirmed semantic import
+                 v
+           NetworkSyncService -> encrypted app.db
+                 | ApplicationService / PublicationService / StorageService
+                 v
+           NodeRuntime: finalized state, PoA, P2P
 ```
 
-The number of architectural services is intentionally small.
+LocalApplicationService owns local Mail folders/read/star flags, drafts, desired
+Files state and immutable Outbox intents. Its executor never calls transport,
+publication or finality. A local command acknowledges after its local durable
+transaction; a queued intent is not a submitted or finalized operation.
+LocalContentStager only encrypts, stores and retains local chunks. Content must
+be staged before the atomic local acceptance of its immutable intent.
 
-The Qt adapter owns one `IdentitySession` with one `SessionScheduler` worker.
-Its private `MailProjection` builds semantic Mail snapshots and tracks outgoing
-messages until indexed; `FilesProjection` owns the intended catalog, pending
-file mutations and local-content availability; `StorageProjection` advances
-publication durability, audits, cache maintenance, reference revocation and
-settlement preparation. These are Qt implementation components, not additional
-core services. The adapter reconciles GUI edits on the GUI thread. Queued state
-results carry a session generation, and closing/replacing a session joins its
-worker before destroying the private DB and services. Existing queued commands
-are drained at shutdown; an obsolete session cannot publish a new GUI snapshot.
+NetworkSyncService independently advances publication jobs, history indexing,
+content recovery and remote durability. It releases local locks before network
+calls. Stable JobID and exact recorded OperationID survive retries/restarts.
+Finalized Files ordering stays canonical; an older acknowledgement cannot clear
+newer desired state. Another device is ordinary Identity use, not a protocol
+Device registry; conflicts require an explicit product policy.
+
+The Qt adapter bridges semantic snapshots and row changes with session generation
+checks. The former shared SessionScheduler is removed. Shutdown drains accepted
+local commands before destroying stores; queued network work does not initiate
+new I/O during shutdown. Active transport calls still obey transport timeouts.
+
+local.db is indispensable, not a rebuildable network cache. app.db contains exact
+publication journals as well as rebuildable indexes: index recovery must preserve
+those journals until verified restoration exists. Migration commits destination
+records and completion marker atomically, leaves source intact, and fails closed
+on missing required rows. Key mismatch never authorizes automatic deletion.
+A prepared IdentityRotate durably wraps the same data key for the future keys;
+reopening with promoted keys retires old access. Losing access preserves data.
+
+These are accepted requirements, not a claim that all crash, conflict, large-file
+and recovery scenarios have passed; see implementation status for scoped evidence.
 
 The Full Node maintains a rebuildable local finalized-event index. It records
 public operation coordinates, publication-bearing block heights and KEM package
