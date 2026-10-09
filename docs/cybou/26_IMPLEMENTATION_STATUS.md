@@ -6,6 +6,29 @@ Scope: Classification only; dated evidence and pending requirements retain their
 Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Forced process termination and disk recovery (2026-10-09)
+
+A BUILD_TESTS-only child executable and Python supervisor now exercise actual
+process termination (Windows TerminateProcess / POSIX SIGKILL), without destructor
+or normal shutdown assistance. Each isolated synthetic fixture uses disk-backed
+runtime, signing/coordinator journals, vault, local.db, app.db and encrypted blobs.
+The recovery phase opens these in a fresh process without wiping runtime data.
+No official DEVNET state, transport connection or operator signer is involved.
+
+Three scenarios pass: after staging before local acceptance (no sent Mail and
+orphan retention released); after acknowledged local commit (draft, Mail, Outbox
+and encrypted content survive); after submission before local status persistence
+(same OperationID restored, finalized once, retries do not advance the account
+nonce a second time). The third scenario additionally removes the network job
+record after reopening to exercise the independent local recovery copy.
+
+The CTest entry cybou_local_crash_recovery passed all three checkpoints on
+Windows/MinGW in 2.16 seconds. Evidence: artifacts/local-process-crash-first.txt
+and artifacts/local-process-crash-ctest.txt (ignored). These checkpoints do not
+establish power-loss durability, arbitrary instruction-boundary crash safety,
+crash during key rotation, concurrent shutdown or large-file desktop acceptance.
+The production executable and running desktop are unchanged by this test package.
+
 ## Active Outbox indexing (2026-10-09)
 
 Follow-up exact-job recovery: PublicationService mirrors Outbox-owned prepared

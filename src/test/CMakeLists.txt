@@ -64,6 +64,16 @@ target_link_libraries(cybou-core-test
 )
 
 # Multi-process PoA + storage provider smoke and soak clients.
+add_executable(cybou-local-crash-test cybou_local_crash_test.cpp)
+target_link_libraries(cybou-local-crash-test cybou_node core_interface Boost::headers)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+  add_test(NAME cybou_local_crash_recovery
+    COMMAND ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/tools/check_local_crash_recovery.py
+      $<TARGET_FILE:cybou-local-crash-test>)
+  set_tests_properties(cybou_local_crash_recovery PROPERTIES TIMEOUT 360 RUN_SERIAL TRUE)
+endif()
+
 add_executable(cybou-storage-smoke cybou_storage_smoke.cpp)
 target_link_libraries(cybou-storage-smoke
   cybou_node

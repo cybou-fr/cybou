@@ -31,6 +31,10 @@ The independent stager already exists in 06d8d7d; its scoped tests are not
 10 GiB real-disk acceptance. Outbox active indexing is the first incremental
 implementation; crash recovery, active-pass scheduling and the remaining
 packages retain separate acceptance gates.
+Three real child-process termination/restart checkpoints now cover staging,
+acknowledged local commit and submission before status persistence on disk-backed
+fixtures. See implementation status; rotation faults, arbitrary crash boundaries,
+large imports and native desktop acceptance remain open.
 
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 
