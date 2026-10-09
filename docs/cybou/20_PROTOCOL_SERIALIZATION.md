@@ -1,7 +1,7 @@
 # 20 — Protocol serialization
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Block/state/PoA and storage serialization reviewed at ee9d721a, 2026-10-09. Identity/encrypted-content details remain under separate review.
 
 ## Canonical bytes
 
@@ -12,7 +12,8 @@ before allocation. Typed layouts have no recursive generic value parser.
 
 The active formats are defined by their protocol authorities:
 
-- block and PoA finality: `POA_FINALITY.md`;
+- [block and PoA finality](POA_FINALITY.md#current-block-bytes-and-commitments);
+- [canonical state snapshot](05_CHAIN_STATE.md#current-state-snapshot-layout);
 - deterministic application encoding: `ROOT_PUBLICATION.md`;
 - encrypted payload and chunk tree: `ENCRYPTED_CHUNK_TREE.md`;
 - provider admission proofs: `STORAGE_ADMISSION.md`;

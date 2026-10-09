@@ -1,7 +1,7 @@
 status: CURRENT
-scope: P2P_storage_economics_review_with_explicit_accepted_target_gaps
-remaining_review: chain_finality_crypto_tree_and_recovery_integration
-reviewed_revision: 787e18ca
+scope: P2P_storage_economics_chain_PoA_source_review_with_explicit_gaps
+remaining_review: identity_crypto_tree_and_recovery_integration
+reviewed_revision: ee9d721a
 sources:
   - docs/cybou/24_DECISIONS.md
   - docs/cybou/P2P_TRANSPORT.md
@@ -11,6 +11,10 @@ sources:
   - src/cybou/root_publication.h
   - src/cybou/storage_lease.h
   - src/cybou/protocol_params.h
+  - src/cybou/block.cpp
+  - src/cybou/state.cpp
+  - src/cybou/poa_finality.cpp
+  - src/cybou/state_store.cpp
 full_node:
   type: Full_Node
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce, listen_port]
@@ -46,7 +50,7 @@ consensus:
     same_protocol: CYBOU P2P
     auth_from_role: false
     special_consensus_role: absent
-  unfinalized_operations: local_origin_bounded_volatile_peer_relay
+  unfinalized_operations: bounded_volatile_pool_of_locally_executed_candidates_and_peer_relay
   full_nodes_recompute_state: true
   finality_is_BFT: false
   poa_signature:
@@ -57,10 +61,14 @@ consensus:
   anti_equivocation_journal:
     durable_before_signing: true
     stores_private_key: false
-  open_cutover_gates:
-    - deterministic_conflicting_signature_and_fork_handling
-    - journal_rollback_and_operator_recovery
-    - canonical_signature_and_genesis_vectors
+  component_evidence:
+    - finality_digest_key_and_encoding_golden_vectors
+    - same_intent_restart_and_parent_history_mismatch
+    - durable_conflict_evidence_and_current_head_replacement
+  remaining_acceptance:
+    - historical_conflict_recovery_below_current_head
+    - complete_valid_journal_database_rollback_and_operator_recovery
+    - independent_canonical_signature_and_genesis_interoperability
 operations:
   application_operation_types: absent
   generic_publication: RootPublication
@@ -268,3 +276,39 @@ storage_settlement_wire:
   storage_id: absent
   period_end_utc: derived_from_signed_start_and_genesis_period_length
   target_gap: DEC_282_evidence_assignment_design_requires_explicit_resolution
+
+block_wire:
+  integer_encoding: little_endian
+  fields: [parent_block_id_32, height_u64, resulting_state_root_32, operation_count_u32, length_prefixed_operations]
+  fixed_bytes: 76
+  operation_prefix: byte_length_u32_le
+  block_timestamp: absent
+  serialized_operations_root: absent
+  relay_work_nonce: absent
+  operation_hash_for_root: SHA256_exact_canonical_operation_bytes
+  operations_root: SHA256_domain_CYBOU_OPS_ROOT_then_count_u32le_then_ordered_operation_hashes
+  operations_root_is_merkle_tree: false
+  operations_root_uses_domain_separated_OperationID: false
+  block_id: SHA256_domain_CYBOU_BLOCK_then_parent_then_height_u64le_then_operations_root_then_state_root
+  finalized_envelope: block_length_u32le_then_block_then_certificate_length_u32le_then_certificate
+  local_finalizer_max_serialized_block_bytes: 33554432
+poa_certificate_wire:
+  fields: [network_binding_32, block_id_32, height_u64_le, parent_block_id_32, ed25519_signature_64, ml_dsa_65_signature_3309]
+  bytes: 3477
+  digest: SHA256_domain_CYBOU_POA_FINALITY_then_NetworkBinding_then_BlockID_then_height_u64le_then_parent
+  independent_transition_execution_required: true
+  current_conflict_replacement: same_parent_competitor_at_current_head_only
+  arbitrary_depth_descendant_replay: unimplemented
+state_snapshot_wire:
+  sections: [accounts, identities, names, allocations, publications, settlement_cursor, leases]
+  integer_encoding: little_endian
+  maps: strict_raw_key_order
+  account_entry_bytes: 72
+  publication_entry_bytes: 108
+  lease_entry_bytes: 101
+  lease_record_fields: [payer, units, replicas, first_period, end_period, escrow_onboarding, escrow_locked]
+  lease_status_enum: absent
+  lease_accrual_remainder: absent
+  usage_section: absent
+  parameters: supplied_by_verified_genesis_not_snapshot
+  state_root: SHA256_domain_CYBOU_STATE_then_canonical_snapshot_bytes

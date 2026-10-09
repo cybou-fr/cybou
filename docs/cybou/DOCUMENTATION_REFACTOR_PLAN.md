@@ -11,7 +11,7 @@ GUI fixes are a separate code package, never an implicit documentation change.
 | Package | Result | State |
 |---|---|---|
 | 01 authority | Mandatory AGENTS, one classified index, cancelled decisions archived, conflict register, historical plan/cutover redirects | Implemented; structural checks pass (86 classified/indexed documents), manifest/diff checks pass |
-| 02 protocol | Exact P2P/HELLO, chain/PoA and chunk layouts, off-chain audit, actual settlement wire | P2P/HELLO, off-chain audit and current settlement layout reviewed; chain/PoA/chunk-tree audit remains. DOC-005/006 accepted gaps remain open |
+| 02 protocol | Exact P2P/HELLO, chain/PoA and chunk layouts, off-chain audit, actual settlement wire | P2P/HELLO, audit, settlement, block/state/PoA source layouts reviewed; encrypted chunk-tree audit remains. DOC-005/006/015 gaps stay open |
 | 03 economics | Current Treasury/System Balance/lease/settlement rules and YAML mirrors | Current flows, lease/settlement wire and YAML mirrors reviewed; DOC-009 corrected. DOC-005/006 accepted design gaps remain open |
 | 04 identity/crypto | Actual KEM publication/recovery integration, source/vector limits, privacy | Pending; DOC-007 |
 | 05 product | One latest Network contract; current Mail/Files versus future multi-recipient/Backup | Pending; DOC-010/012 |

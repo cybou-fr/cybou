@@ -1,7 +1,7 @@
 # Documentation conflict register
 
 Status: CURRENT
-Scope: Foundation audit at 1f08f8c5; P2P/storage/economics audit at 787e18ca, 2026-10-09. Remaining domains are tracked below.
+Scope: Foundation audit at 1f08f8c5; P2P/storage/economics audit at 787e18ca, 2026-10-09. Block/state/PoA audit at ee9d721a. Remaining domains are tracked below.
 
 Tests named below are defining regression sources, not a claim that this
 refactor ran protocol suites. No runtime behavior is authorized by this table.
@@ -22,6 +22,8 @@ refactor ran protocol suites. No runtime behavior is authorized by this table.
 | DOC-012 | Supplied Network contract substitutes maximum throughput for storage capacity | DEC-290, NetworkPage; operator correction: base 5 op/min, current/max separate, capacity/hosted | Stale product audit | Preserve latest explicit operator contract; no historical benchmark UI or inferred ceiling. Current UI package separately validated |
 | DOC-013 | Accumulated status/roadmap mix old and current claims | 26_IMPLEMENTATION_STATUS, 22_ROADMAP, 25_OPEN_QUESTIONS | Superseded planning mixed with evidence | Archive dated records; short code/test/live/remaining matrix and remaining-only roadmap. Open |
 | DOC-014 | Governance/legal/crypto claims require dated primary review | SECURITY_GOVERNANCE, SECURITY_STANDARDS, 37–43 | Unverified review scope | Verify primary sources in later package; metadata classification does not certify conformity or revalidate law. Open |
+
+| DOC-015 | State docs retain usage/quota and lease status/remainder fields; finality wording implies arbitrary-depth replacement | state.h/state.cpp have no such fields; state_store.cpp replaces only current head competitors | Documentation error plus recovery scope gap | Snapshot, block commitments, certificate digest and journal namespace corrected. Historical conflict/descendant replay remains open; no runtime change authorized |
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
