@@ -289,7 +289,7 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
     }
 
     // Сначала полная проверка всех выплат, затем применение: settlement атомарен.
-    struct LeaseTotals { uint64_t amount{0}; uint32_t payouts{0}; };
+    struct LeaseTotals { uint64_t amount{0}; uint32_t payouts{0}; size_t term_index{0}; };
     std::map<cybou::Hash256, LeaseTotals> totals;
     for (const auto& entry : settlement.entries) {
         const auto lease = state.leases.find(entry.publication_id);
@@ -302,8 +302,21 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
         if (entry.payout_account == lease->second.payer) return StorageSettlementError::SELF_PAYOUT;
         auto& total = totals[entry.publication_id];
         if (++total.payouts > lease->second.replicas) return StorageSettlementError::TOO_MANY_PAYOUTS;
-        const auto cap = ComputeStorageLeasePeriodCap(params, lease->second.units, lease->second.replicas);
+        const auto& terms = lease->second.funded_terms;
+        const auto term = std::find_if(terms.begin(), terms.end(), [&](const auto& funded) {
+            return funded.first_period <= settlement.period && settlement.period < funded.end_period;
+        });
+        if (term == terms.end() || term->paid_onboarding > term->initial_onboarding ||
+            term->paid_locked > term->initial_locked) return StorageSettlementError::INVALID_PAYLOAD;
+        total.term_index = static_cast<size_t>(term - terms.begin());
+        auto funded_params = params;
+        funded_params.storage_rate_per_gib_day_replica = term->rate;
+        funded_params.storage_settlement_period_seconds = term->period_seconds;
+        const auto cap = ComputeStorageLeasePeriodCap(funded_params, lease->second.units, lease->second.replicas);
+        const uint64_t remaining = (term->initial_onboarding - term->paid_onboarding) +
+            (term->initial_locked - term->paid_locked);
         if (!cap || entry.amount > *cap - std::min(*cap, total.amount) ||
+            entry.amount > remaining - std::min(remaining, total.amount) ||
             total.amount + entry.amount > lease->second.escrow_onboarding + lease->second.escrow_locked) {
             return StorageSettlementError::PAYOUT_EXCEEDS_ESCROW;
         }
@@ -313,8 +326,11 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
     // Переводы внутри TotalCybou < 2^64 не могут переполнить ни один баланс.
     for (const auto& entry : settlement.entries) {
         auto& lease = state.leases.at(entry.publication_id);
+        auto& term = lease.funded_terms.at(totals.at(entry.publication_id).term_index);
         auto& provider = state.accounts.at(entry.payout_account);
-        const uint64_t onboarding = std::min(lease.escrow_onboarding, entry.amount);
+        const uint64_t onboarding = std::min(term.initial_onboarding - term.paid_onboarding, entry.amount);
+        term.paid_onboarding += onboarding;
+        term.paid_locked += entry.amount - onboarding;
         lease.escrow_onboarding -= onboarding;
         lease.escrow_locked -= entry.amount - onboarding;
         provider.system_balance += onboarding;

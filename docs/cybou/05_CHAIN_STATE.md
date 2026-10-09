@@ -118,21 +118,29 @@ allocation. The order in [state.cpp](../../src/cybou/state.cpp) is:
 | leases | u32 count; publication ID[32], payer[32], units u32, replicas u8, first period u64, end period u64, onboarding escrow u64, locked escrow u64 (101 bytes) |
 
 Approved isolated-development format (2026-10-09, not deployed): each lease now
-adds funded-term count u32 followed by chronological immutable terms. Each term
-is 96 bytes: funding OperationID[32], first/end period, rate, period seconds,
+adds funded-term count u32 followed by chronological funding terms. Each term
+is 112 bytes: funding OperationID[32], first/end period, rate, period seconds,
 replica share B, contracted unit-seconds T, original onboarding/locked funding
-(eight u64, LE). Initial funding uses RootPublication OperationID; renewal uses
+(eight immutable u64, LE), followed by finalized paid onboarding/locked totals
+(two mutable u64, LE). Initial funding uses RootPublication OperationID; renewal uses
 the exact authorized StorageLease OperationID. The lease's live escrow remains
 the only monetary position; original term funding is historical input and is
 not counted twice in TotalCybou. Terms must be contiguous, globally unique by
 funding ID, arithmetically consistent and cover the lease range; revocation may
 shorten that range without rescaling the original terms. Live escrow of each
-origin cannot exceed its original funding. Missing/corrupt term records fail.
+origin equals the sum of original funding minus finalized paid for that origin.
+Each term's paid totals cannot exceed its original funding; locked-origin debits
+require exhaustion of that term's onboarding origin. Settlement debits only the
+term containing its period, using that term's frozen rate/duration for the old
+daily cap, and rejects spending a future term's budget. Missing/corrupt term
+records or disagreement with aggregate escrow fail.
 This source-tree snapshot layout is incompatible with deployed nonempty lease
 snapshots; there is no legacy decoder, version field or automatic migration.
 Genesis with zero leases retains the same bytes. No cutover/deployment is
-authorized. Cumulative paid/service state and term-aware settlement/refund/closure
-remain required before activation; current closure still removes the lease.
+authorized. These totals track monetary debits, not provider-specific service
+entitlement. Cumulative service/paid per assignment, verified witnesses and
+term-aware closure/retention remain required before activation; current closure
+still refunds aggregate remaining origins and removes the lease and its history.
 
 State root is SHA-256 of `"CYBOU/STATE" || exact canonical state bytes`.
 Network parameters are supplied by verified genesis; they are not another field

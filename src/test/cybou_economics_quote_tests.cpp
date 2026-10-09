@@ -69,6 +69,9 @@ BOOST_AUTO_TEST_CASE(tiny_lease_funds_each_replica_but_daily_cap_still_pays_earl
     BOOST_CHECK(cybou::TotalCybou(state) == before);
     BOOST_REQUIRE_EQUAL(state.leases.at(publication_id).funded_terms.size(), 1U);
     BOOST_CHECK_EQUAL(state.leases.at(publication_id).funded_terms.front().initial_onboarding, 2U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication_id).funded_terms.front().paid_onboarding, 1U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication_id).funded_terms.front().paid_locked, 0U);
+    BOOST_REQUIRE(cybou::ValidateCybouState(state) == cybou::StateValidationError::NONE);
 }
 BOOST_AUTO_TEST_CASE(publication_quote_separates_fees_and_initial_escrow)
 {
@@ -87,6 +90,84 @@ BOOST_AUTO_TEST_CASE(publication_quote_separates_fees_and_initial_escrow)
     BOOST_REQUIRE(without_lease);
     BOOST_CHECK_EQUAL(without_lease->storage_escrow, 0U);
     BOOST_CHECK_EQUAL(without_lease->total_system_debit, 8U);
+}
+BOOST_AUTO_TEST_CASE(settlement_debits_only_active_term_and_preserves_origin_after_restart)
+{
+    CybouServiceTestFixture fixture;
+    auto payer = fixture.CreateIdentity("term-debit-payer.vault");
+    auto provider = fixture.CreateIdentity("term-debit-provider.vault");
+    const auto snapshot = fixture.runtime->GetStore().GetStateSnapshot();
+    BOOST_REQUIRE(snapshot && snapshot.state);
+    auto state = *snapshot.state;
+    const auto payer_id = *payer->GetKeyStore().GetAccountId();
+    const auto provider_id = *provider->GetKeyStore().GetAccountId();
+    const auto params = fixture.definition.GetProtocolParameters();
+    cybou::Hash256 publication, renewal;
+    publication.begin()[0] = 55;
+    renewal.begin()[0] = 56;
+    // Fixture provenance: the initial term mixes origins; renewal is onboarding-only.
+    state.accounts.at(payer_id).onboarding_system_balance = 1;
+    const auto total = cybou::TotalCybou(state);
+    BOOST_REQUIRE_EQUAL(*cybou::ComputeStorageLeaseEscrow(params, 1, 2, 3), 2U);
+    cybou::FundStorageLease(state, publication, payer_id, 1, 2, 3, 2, params, publication);
+    state.accounts.at(payer_id).onboarding_system_balance = state.accounts.at(payer_id).system_balance;
+    cybou::FundStorageLease(state, publication, payer_id, 1, 2, 3, 2, params, renewal);
+    BOOST_REQUIRE(cybou::ValidateCybouState(state) == cybou::StateValidationError::NONE);
+    const auto provider_before = state.accounts.at(provider_id);
+    const auto payer_after_funding = state.accounts.at(payer_id);
+    const auto settle = [&](uint64_t period, uint64_t amount) {
+        cybou::StorageSettlement operation{.period = period,
+            .period_start_utc = 1700000000 + period * params.storage_settlement_period_seconds};
+        if (amount) operation.entries.push_back({publication, provider_id, amount});
+        const auto digest = cybou::ComputeStorageSettlementDigest(fixture.runtime->GetNetworkBinding(), operation);
+        BOOST_REQUIRE(digest);
+        const auto signature = cybou::SignIdentityMessage(fixture.validator_seed,
+            cybou::IdentityKeyPurpose::POA_FINALIZER, *digest);
+        BOOST_REQUIRE(signature);
+        operation.poa_signature = *signature;
+        return cybou::ApplyStorageSettlement(operation, fixture.runtime->GetNetworkBinding(), params,
+            fixture.definition.GetPoaPublicKey(), state);
+    };
+    BOOST_REQUIRE(settle(0, 1) == cybou::StorageSettlementError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(provider_id).system_balance - provider_before.system_balance, 1U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication).funded_terms.front().paid_onboarding, 1U);
+    const auto bytes = cybou::SerializeCybouState(state);
+    BOOST_REQUIRE(bytes);
+    const auto restored = cybou::DeserializeCybouState(*bytes);
+    BOOST_REQUIRE(restored);
+    BOOST_CHECK(cybou::CybouStateHash(state) == cybou::CybouStateHash(*restored));
+    state = *restored;
+    BOOST_CHECK(settle(0, 1) == cybou::StorageSettlementError::WRONG_PERIOD);
+    BOOST_CHECK(cybou::SerializeCybouState(state) == bytes);
+    BOOST_REQUIRE(settle(1, 1) == cybou::StorageSettlementError::NONE);
+    BOOST_CHECK_EQUAL(state.accounts.at(provider_id).balance - provider_before.balance, 1U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication).escrow_onboarding, 2U); // future origin remains untouched
+    BOOST_CHECK_EQUAL(state.leases.at(publication).funded_terms.front().paid_locked, 1U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication).funded_terms.back().paid_onboarding, 0U);
+    const auto exhausted = cybou::SerializeCybouState(state);
+    BOOST_REQUIRE(exhausted);
+    BOOST_CHECK(settle(2, 1) == cybou::StorageSettlementError::PAYOUT_EXCEEDS_ESCROW);
+    BOOST_CHECK(cybou::SerializeCybouState(state) == exhausted);
+    auto corrupt = state;
+    corrupt.leases.at(publication).funded_terms.front().paid_locked = 0;
+    BOOST_CHECK(cybou::ValidateCybouState(corrupt) == cybou::StateValidationError::INVALID_STORAGE_LEASE);
+    corrupt = state;
+    corrupt.leases.at(publication).funded_terms.front().paid_locked = 2;
+    BOOST_CHECK(cybou::ValidateCybouState(corrupt) == cybou::StateValidationError::INVALID_STORAGE_LEASE);
+    corrupt = state;
+    corrupt.leases.at(publication).funded_terms.front().paid_onboarding = 0;
+    ++corrupt.leases.at(publication).escrow_onboarding;
+    BOOST_CHECK(cybou::ValidateCybouState(corrupt) == cybou::StateValidationError::INVALID_STORAGE_LEASE);
+    BOOST_REQUIRE(settle(2, 0) == cybou::StorageSettlementError::NONE);
+    BOOST_REQUIRE(settle(3, 1) == cybou::StorageSettlementError::NONE);
+    BOOST_CHECK_EQUAL(state.leases.at(publication).funded_terms.back().paid_onboarding, 1U);
+    BOOST_REQUIRE(cybou::ValidateCybouState(state) == cybou::StateValidationError::NONE);
+    BOOST_REQUIRE(settle(4, 0) == cybou::StorageSettlementError::NONE);
+    BOOST_REQUIRE(settle(5, 0) == cybou::StorageSettlementError::NONE);
+    BOOST_CHECK(!state.leases.contains(publication));
+    BOOST_CHECK_EQUAL(state.accounts.at(payer_id).system_balance - payer_after_funding.system_balance, 1U);
+    BOOST_CHECK_EQUAL(state.accounts.at(payer_id).onboarding_system_balance - payer_after_funding.onboarding_system_balance, 1U);
+    BOOST_CHECK(cybou::TotalCybou(state) == total);
 }
 BOOST_AUTO_TEST_CASE(quote_rejects_invalid_inputs_and_combined_overflow)
 {
@@ -223,10 +304,10 @@ BOOST_AUTO_TEST_CASE(exact_publication_quote_matches_consensus_debit_and_conserv
         truncated.pop_back();
         BOOST_CHECK(!cybou::DeserializeCybouState(truncated));
         auto missing_terms = *bytes;
-        missing_terms.resize(missing_terms.size() - 4 - 2 * 96);
+        missing_terms.resize(missing_terms.size() - 4 - 2 * 112);
         BOOST_CHECK(!cybou::DeserializeCybouState(missing_terms));
         auto oversized_count = *bytes;
-        const auto count_offset = oversized_count.size() - 4 - 2 * 96;
+        const auto count_offset = oversized_count.size() - 4 - 2 * 112;
         oversized_count[count_offset] = 3;
         BOOST_CHECK(!cybou::DeserializeCybouState(oversized_count));
         BOOST_CHECK_THROW(cybou::FundStorageLease(state, *publication_id, account, units, params.storage_replica_target,

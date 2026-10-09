@@ -20,7 +20,7 @@ namespace {
 constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
 constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 4};
-constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 8};
+constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 10};
 constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -479,7 +479,7 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
         if (lease.funded_terms.empty() || lease.funded_terms.size() > std::numeric_limits<uint32_t>::max())
             return StateValidationError::INVALID_STORAGE_LEASE;
         uint64_t end = lease.first_period;
-        unsigned __int128 original_onboarding{0}, original_locked{0};
+        unsigned __int128 remaining_onboarding{0}, remaining_locked{0};
         for (const auto& term : lease.funded_terms) {
             if (term.funding_operation_id.IsNull() || !funding_ids.insert(term.funding_operation_id).second ||
                 term.first_period != end || term.end_period <= term.first_period)
@@ -488,14 +488,16 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
                 term.end_period - term.first_period, term.period_seconds, term.rate);
             if (!budget || budget->per_replica != term.replica_share ||
                 budget->contracted_unit_seconds != term.contracted_unit_seconds ||
-                static_cast<unsigned __int128>(term.initial_onboarding) + term.initial_locked != budget->total)
+                static_cast<unsigned __int128>(term.initial_onboarding) + term.initial_locked != budget->total ||
+                term.paid_onboarding > term.initial_onboarding || term.paid_locked > term.initial_locked ||
+                (term.paid_locked != 0 && term.paid_onboarding != term.initial_onboarding))
                 return StateValidationError::INVALID_STORAGE_LEASE;
-            original_onboarding += term.initial_onboarding;
-            original_locked += term.initial_locked;
+            remaining_onboarding += term.initial_onboarding - term.paid_onboarding;
+            remaining_locked += term.initial_locked - term.paid_locked;
             end = term.end_period;
         }
-        if (end < lease.end_period || lease.escrow_onboarding > original_onboarding ||
-            lease.escrow_locked > original_locked) return StateValidationError::INVALID_STORAGE_LEASE;
+        if (end < lease.end_period || lease.escrow_onboarding != remaining_onboarding ||
+            lease.escrow_locked != remaining_locked) return StateValidationError::INVALID_STORAGE_LEASE;
     }
     return StateValidationError::NONE;
 }
@@ -581,7 +583,8 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         for (const auto& term : lease.funded_terms) {
             out.insert(out.end(), term.funding_operation_id.begin(), term.funding_operation_id.end());
             for (const auto value : {term.first_period, term.end_period, term.rate, term.period_seconds,
-                    term.replica_share, term.contracted_unit_seconds, term.initial_onboarding, term.initial_locked})
+                    term.replica_share, term.contracted_unit_seconds, term.initial_onboarding, term.initial_locked,
+                    term.paid_onboarding, term.paid_locked})
                 Write64(out, value);
         }
     }
@@ -710,7 +713,8 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
             if (!funding) return std::nullopt;
             std::copy(funding->begin(), funding->end(), term.funding_operation_id.begin());
             for (auto* value : {&term.first_period, &term.end_period, &term.rate, &term.period_seconds,
-                    &term.replica_share, &term.contracted_unit_seconds, &term.initial_onboarding, &term.initial_locked}) {
+                    &term.replica_share, &term.contracted_unit_seconds, &term.initial_onboarding, &term.initial_locked,
+                    &term.paid_onboarding, &term.paid_locked}) {
                 const auto parsed = reader.U64();
                 if (!parsed) return std::nullopt;
                 *value = *parsed;

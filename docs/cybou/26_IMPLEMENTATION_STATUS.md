@@ -8,7 +8,48 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Active-term finalized debit accounting (2026-10-09)
+
+Approved isolated development now records paid onboarding/locked totals in each
+funded term. ApplyStorageSettlement debits only the term covering its period,
+uses its frozen rate/duration for the existing daily cap, and validates all
+entries before changing balances, paid totals or cursor. Future renewal money
+cannot cover an exhausted earlier term; a later term's onboarding origin cannot
+replace the active term's locked origin. StorageService settlement preparation
+uses the same active-term residuals and frozen parameters.
+
+State codec/hash includes both counters (112 bytes per term). Validation requires
+each counter within its original origin, onboarding-first consumption within the
+term, and aggregate escrow exactly equal to the sum of term residuals. Original
+funding and paid counters are not extra monetary supply. Renewal appends a term
+without resetting earlier paid totals. Closure still refunds all remaining
+origins and erases the lease and its history.
+
+This is monetary debit accounting, not provider-specific cumulative service/paid
+enforcement. The old daily ceiling still permits premature payouts. Canonical
+assignment/evidence witnesses, entitlement arithmetic, bounded period batches,
+retention/closure and exact-operation recovery remain open. No DEVNET deployment;
+nonempty deployed snapshots remain incompatible with this source-tree format.
+
+Validation: core build passed. The two new signed settlement regressions passed
+88 assertions (312 other cases skipped), including the existing production
+StorageService -> PoA/runtime -> finalized-block execution path in memory-only
+fixtures. Evidence: `artifacts/economics-active-term-debits-targeted.txt`.
+The first targeted invocation selected no cases due to a test-filter syntax
+error, retained in `artifacts/economics-active-term-debits-filter-error.txt`;
+the corrected selector ran both cases. This is not live provider/evidence or
+desktop acceptance.
+
+Full core regression at baseline `43220316` plus this package passed all 314
+test cases and 141,112 assertions, with no skipped cases. Evidence:
+`artifacts/economics-active-term-debits-core.txt`. Documentation manifest/link
+checks passed. No official network, genesis, key, signing history or live
+process was changed.
+
 ### Canonical immutable funded-term history (2026-10-09)
+
+This subsection records the earlier `e6ade856` layout and evidence. The active-term
+follow-up above supersedes its 96-byte layout and aggregate-only debit accounting.
 
 Full core regression follow-up at `e6ade856`: all 312 test cases and 140,641
 assertions passed, with no skipped cases. Evidence:

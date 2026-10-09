@@ -28,7 +28,11 @@ placement chunks, retains at most lease.replica_count recipients and distributes
 the old period cap. The deployed baseline has one extendable lease per publication.
 The approved isolated source-tree transition at `e6ade856` now retains immutable
 funded terms within that lease, but has no per-provider cumulative paid ledger.
-On closure settlement still refunds aggregate escrow and erases the lease and
+The isolated source-tree follow-up debits only the active funded term, retains
+its finalized onboarding/locked paid totals and validates exact remaining-origin
+agreement with aggregate escrow. This prevents spending future renewal funding;
+it does not enforce cumulative provider service entitlement or replace the old
+daily ceiling. On closure settlement still refunds aggregate escrow and erases the lease and
 its terms. These are protocol gaps, not missing GUI work.
 
 | Existing module | Production caller today | Owned/duplicated data | Integration disposition |
@@ -245,9 +249,12 @@ Terms freeze rate, period duration, B/T, chronological period bounds and origina
 funding origins. Existing state codec/root/validation includes these records;
 they are not another live escrow balance. See
 [the precise development layout](05_CHAIN_STATE.md#current-state-snapshot-layout).
-The existing settlement executor is not term-aware yet; paid/service records,
-per-term remaining origin accounting, closure/retention and proof/batch validation
-must be completed before deployment. No source-tree term data is silently imported
+The existing settlement executor now uses the active term's funding and frozen
+rate/duration, records finalized debits by origin, and rejects a payment that
+requires another term's funds. Aggregate escrow exactly equals all term residuals;
+renewal does not reset paid totals. Per-provider service/paid entitlement,
+closure/retention and proof/batch validation must still be completed before
+deployment. No source-tree term data is silently imported
 into the running DEVNET or presented as finalized payouts.
 
 Use a separately funded term for each initial lease or renewal. A renewal must

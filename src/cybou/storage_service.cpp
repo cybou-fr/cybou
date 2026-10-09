@@ -314,7 +314,18 @@ std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std:
         const auto lease = m_runtime.GetStorageLease(placement.operation_id);
         if (!lease || lease->replicas == 0 || lease->units == 0 ||
             period < lease->first_period || period >= lease->end_period) continue;
-        const auto cap = ComputeStorageLeasePeriodCap(params, lease->units, lease->replicas);
+        const auto term = std::find_if(lease->funded_terms.begin(), lease->funded_terms.end(), [&](const auto& funded) {
+            return funded.first_period <= period && period < funded.end_period;
+        });
+        if (term == lease->funded_terms.end() || term->paid_onboarding > term->initial_onboarding ||
+            term->paid_locked > term->initial_locked) throw std::runtime_error{"invalid active funded storage term"};
+        std::uint64_t remaining = (term->initial_onboarding - term->paid_onboarding) +
+            (term->initial_locked - term->paid_locked);
+        if (remaining == 0) continue;
+        auto funded_params = params;
+        funded_params.storage_rate_per_gib_day_replica = term->rate;
+        funded_params.storage_settlement_period_seconds = term->period_seconds;
+        const auto cap = ComputeStorageLeasePeriodCap(funded_params, lease->units, lease->replicas);
         if (!cap) continue;
         // Число проверенных в этом периоде чанков на каждый payout-аккаунт; одна реплика чанка на аккаунт.
         const auto verified_chunks = m_evidence->VerifiedChunks(placement, payout_by_storage,
@@ -343,7 +354,6 @@ std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std:
         for (std::size_t i{0}; leftover > 0 && i < amounts.size(); ++i, --leftover) {
             ++amounts[(period + i) % amounts.size()];
         }
-        std::uint64_t remaining = lease->escrow_onboarding + lease->escrow_locked;
         for (std::size_t i{0}; i < ranked.size(); ++i) {
             const auto paid = std::min(amounts[i], remaining);
             if (paid == 0) continue;

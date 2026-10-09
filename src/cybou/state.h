@@ -70,6 +70,9 @@ struct StorageFundedTerm {
     // Original funding provenance, not another live escrow balance.
     uint64_t initial_onboarding{0};
     uint64_t initial_locked{0};
+    // Finalized debits of this term only; renewal never rescales or resets them.
+    uint64_t paid_onboarding{0};
+    uint64_t paid_locked{0};
     friend bool operator==(const StorageFundedTerm&, const StorageFundedTerm&) = default;
 };
 
@@ -81,7 +84,7 @@ struct StorageLeaseRecord {
     uint64_t end_period{0};           ///< Первый непокрытый период (исключительно).
     uint64_t escrow_onboarding{0};    ///< Escrow onboarding-происхождения.
     uint64_t escrow_locked{0};        ///< Escrow SystemLock-происхождения.
-    std::vector<StorageFundedTerm> funded_terms; ///< Immutable funding history in chronological order.
+    std::vector<StorageFundedTerm> funded_terms; ///< Immutable funding terms and their finalized debits.
 
     friend bool operator==(const StorageLeaseRecord&, const StorageLeaseRecord&) = default;
 };

@@ -106,6 +106,13 @@ and origins. Current settlement is still aggregate and has no canonical
 service/paid assignment enforcement. DOC-005/006/020 remain open; deployed
 nonempty lease snapshots require an approved transition, not implicit decoding.
 
+Active-term debit follow-up records finalized paid origins in each
+funded term and rejects spending future renewal escrow. State validation requires
+exact origin residual sums; codec records are now 112 bytes. The old daily
+ceiling, missing per-provider cumulative service/paid and assignment/evidence
+verification, and closure erasing history remain gaps. DOC-005/006/020 remain open;
+this is approved isolated development with no live deployment.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.
