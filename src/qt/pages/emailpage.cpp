@@ -26,6 +26,9 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QPushButton>
+#include <QProgressBar>
+#include <QDebug>
+#include <QElapsedTimer>
 #include <QResizeEvent>
 #include <QShortcut>
 #include <QShowEvent>
@@ -49,6 +52,7 @@ constexpr int kThreePaneWindowWidth = 1400;
 constexpr int kRankRole = Qt::UserRole + 1;
 constexpr int kOperationRole = Qt::UserRole + 2;
 constexpr int kOnlineRole = Qt::UserRole + 3;
+constexpr int kMoveRole = Qt::UserRole + 4;
 class MessageItem final : public QListWidgetItem {
 public:
     using QListWidgetItem::QListWidgetItem;
@@ -144,7 +148,8 @@ public:
         meta.setPixelSize(12);
         if (item->unread) meta.setWeight(QFont::Bold);
         painter->setFont(meta);
-        const QString meta_text = pending
+        const QString move_text = index.data(kMoveRole).toString();
+        const QString meta_text = !move_text.isEmpty() ? move_text : pending
             ? (item->state == CybouContentState::Securing ? CybouProduct::contentStateText(item->state)
                 : CybouProduct::contentWithOperationText(item->state, operation, online)) : shortTime(item->time);
         const QFontMetrics meta_metrics{meta};
@@ -291,6 +296,31 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
     connect(m_banner_action, &QPushButton::clicked, this, [this] { if (m_home_requested) m_home_requested(); });
     list_layout->addWidget(m_banner);
 
+    m_move_status = new QFrame{m_list_pane};
+    m_move_status->setObjectName(QStringLiteral("mailMoveStatus"));
+    auto* move_layout = new QHBoxLayout{m_move_status};
+    move_layout->setContentsMargins(12, 8, 12, 8);
+    m_move_progress = new QProgressBar{m_move_status};
+    m_move_progress->setObjectName(QStringLiteral("usageMeter"));
+    m_move_progress->setRange(0, 0);
+    m_move_progress->setTextVisible(false);
+    m_move_progress->setFixedSize(48, 8);
+    m_move_progress->setAccessibleName(tr("Saving mail moves"));
+    move_layout->addWidget(m_move_progress);
+    m_move_status_text = new QLabel{m_move_status};
+    m_move_status_text->setObjectName(QStringLiteral("mailMoveStatusText"));
+    m_move_status_text->setWordWrap(true);
+    move_layout->addWidget(m_move_status_text, 1);
+    m_move_retry = new QPushButton{tr("Retry"), m_move_status};
+    m_move_retry->setObjectName(QStringLiteral("mailMoveRetry"));
+    move_layout->addWidget(m_move_retry);
+    connect(m_move_retry, &QPushButton::clicked, this, [this] {
+        const auto failed = m_failed_moves;
+        for (auto it = failed.cbegin(); it != failed.cend(); ++it) moveMessagesTo({it.key()}, it.value());
+    });
+    m_move_status->hide();
+    list_layout->addWidget(m_move_status);
+
     m_list = new QListWidget{m_list_pane};
     m_list->setObjectName(QStringLiteral("messageList"));
     m_list->setItemDelegate(new MailDelegate{[this](const QString& id) -> const CybouMailItem* {
@@ -381,6 +411,7 @@ EmailPage::EmailPage(CybouDesktopModel* model, std::function<void()> home_reques
         rebuildList();
         refreshEmptyHint();
     });
+    connect(m_model, &CybouDesktopModel::applicationTasksChanged, this, &EmailPage::refreshMoveStatus);
     connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::featureAvailabilityChanged, this, [this] { refreshBanner(); });
     connect(m_model, &CybouDesktopModel::applicationLoadChanged, this,
@@ -477,15 +508,20 @@ void EmailPage::moveMessagesTo(const QStringList& ids, View target)
     batch->remaining = before.size();
     const auto folder = target == View::Archive ? CybouMailFolder::Archive
         : target == View::Trash ? CybouMailFolder::Trash : CybouMailFolder::Inbox;
-    m_model->notify(target == View::Archive ? tr("Archiving…") : tr("Moving messages…"));
     const QPointer<EmailPage> guard{this};
     for (const auto& entry : before) {
+        m_failed_moves.remove(entry.id);
         m_model->requestMoveMail(entry.id, folder, [guard, batch, entry, target](bool ok, const QString&) {
             if (!guard) return;
             if (ok) {
+                guard->m_failed_moves.remove(entry.id);
                 batch->succeeded.append(entry);
                 if (entry.id == guard->m_current_id) guard->closeDetail();
-            } else ++batch->failed;
+            } else {
+                ++batch->failed;
+                guard->m_failed_moves.insert(entry.id, target);
+            }
+            guard->refreshMoveStatus();
             if (--batch->remaining != 0) return;
             const int count = batch->succeeded.size();
             QString text = target == View::Archive ? tr("%1 conversations archived").arg(count)
@@ -497,6 +533,38 @@ void EmailPage::moveMessagesTo(const QStringList& ids, View target)
             }} : std::function<void()>{});
         });
     }
+}
+
+void EmailPage::refreshMoveStatus()
+{
+    if (m_model->status().identity_state != CybouIdentityState::Active) m_failed_moves.clear();
+    QHash<QString, QString> moving;
+    QSet<QString> affected;
+    int pending{0};
+    for (const auto& task : m_model->applicationTasks()) {
+        if (task.scope != CybouTaskScope::Mail || task.kind != CybouTaskKind::Move) continue;
+        affected.insert(task.item_id);
+        if (task.state != CybouCommandState::Queued && task.state != CybouCommandState::Running) continue;
+        ++pending;
+        moving.insert(task.item_id, task.state == CybouCommandState::Queued ? tr("Move queued…") : tr("Moving…"));
+    }
+    for (auto it = m_failed_moves.cbegin(); it != m_failed_moves.cend(); ++it) affected.insert(it.key());
+    // Touch only command-related rows, not the entire mailbox on every ack.
+    for (const auto& id : affected) {
+        auto* row = m_rows.value(id);
+        if (!row) continue;
+        const auto text = moving.value(id, m_failed_moves.contains(id) ? tr("Move failed") : QString{});
+        row->setData(kMoveRole, text);
+        const QString description = m_rendered_mail.value(id).preview +
+            (text.isEmpty() ? QString{} : QStringLiteral(" · ") + text);
+        row->setData(Qt::AccessibleDescriptionRole, description);
+    }
+    m_move_progress->setVisible(pending > 0);
+    m_move_retry->setVisible(!m_failed_moves.isEmpty());
+    m_move_retry->setEnabled(pending == 0);
+    m_move_status_text->setText(pending > 0 ? tr("Moving %1 messages… You can keep using Mail.").arg(pending)
+        : tr("%1 messages could not be moved. They remain in their original folder.").arg(m_failed_moves.size()));
+    m_move_status->setVisible(pending > 0 || !m_failed_moves.isEmpty());
 }
 
 void EmailPage::deleteForever(const QStringList& ids)
@@ -762,6 +830,8 @@ void EmailPage::rebuildFolders()
 
 void EmailPage::rebuildList()
 {
+    QElapsedTimer render_timer;
+    render_timer.start();
     const QString needle = m_search->text().trimmed();
     QVector<CybouMailItem> items;
     for (const auto& item : m_model->mailItems()) {
@@ -828,6 +898,7 @@ void EmailPage::rebuildList()
             m_rendered_meta.insert(mail.id, meta);
         }
     }
+    refreshMoveStatus();
     if (order != previous) {
         m_list->sortItems(Qt::AscendingOrder);
         m_list->doItemsLayout();
@@ -843,6 +914,8 @@ void EmailPage::rebuildList()
     m_list_empty->setVisible(items.isEmpty() && identity);
     m_list->setVisible(!items.isEmpty());
     m_list->viewport()->update();
+    if (qEnvironmentVariableIsSet("CYBOU_PROFILE_MAIL_MOVES"))
+        qInfo() << "MAIL-DND-LATENCY gui_list_ms" << render_timer.elapsed() << "rows" << items.size();
 }
 
 void EmailPage::refreshBanner()

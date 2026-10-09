@@ -604,6 +604,23 @@ prior view on failure. Batch operations show completed/failed counts and retry
 only failed items. Undo must serialize behind an unfinished move and remain
 correct through refresh, lock and error reconciliation.
 
+MAIL-DND-LATENCY: while local moves are queued/running, Mail keeps a visible
+nonmodal saving indicator above the list and labels the affected rows. The list,
+folder targets and other messages remain usable; the source folder changes only
+after the durable local acknowledgement. A failed move keeps its row and offers
+Retry for failed IDs only. No PoA or remote replica progress is shown for a move.
+Acceptance covers 50 consecutive queued moves, partial failure/retry, Undo and
+late replies after Identity lock. Real OS drag/cursor timing remains a separate
+native acceptance check, not something a delayed-backend fixture can prove.
+
+Optional `CYBOU_PROFILE_MAIL_MOVES=1` diagnostics record queue wait, complete
+MoveMail/local DB duration, worker-to-GUI acknowledgement, Refresh scan/storage/
+snapshot stages and GUI list update duration. They log timings/counts only, no
+message IDs, addresses, subjects or bodies. MoveMail duration includes record
+load/encryption and synchronous disk commit; these are not independently timed.
+Do not weaken durable writes or split the shared session worker without profiling
+the actual slow scenario. Commit acknowledgement already precedes Refresh.
+
 Context menu, keyboard, toolbar and drag/drop use the same move command path.
 Mail ID drag/drop already exists in Qt; acceptance requires actual mouse drag
 from populated row widgets to Archive/Trash, visible drop feedback and correct

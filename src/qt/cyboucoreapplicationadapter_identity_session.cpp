@@ -4,6 +4,7 @@
 #include <qt/cyboucoreapplicationadapter_internal.h>
 
 #include <exception>
+#include <QElapsedTimer>
 
 using namespace cybou::qt_detail;
 
@@ -87,12 +88,15 @@ void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
 
 void CybouCoreApplicationAdapter::IdentitySession::Refresh()
 {
+    QElapsedTimer stage;
+    stage.start();
     // Same Identity, new key material (IdentityRotate finalized elsewhere): reopen.
     if (!db->IsUnlocked() && keystore.HasKey() && keystore.GetAccountId() == std::optional{db->Account()}) {
         StateToGui([owner = owner] { owner->identityKeysChanged(); });
         return;
     }
     const auto progress = application->Scan();
+    const auto scan_ms = stage.restart();
     StateToGui([owner = owner, scanned = progress.scanned_height, total = progress.finalized_height, unavailable = progress.unavailable_roots] {
         if (!owner->m_initial_projection_ready)
             Q_EMIT owner->applicationLoadChanged(CybouApplicationLoadState::Loading, scanned, total, unavailable ?
@@ -105,7 +109,11 @@ void CybouCoreApplicationAdapter::IdentitySession::Refresh()
     catching_up = !history_scanned;
     storage_projection.Refresh(progress.Complete());
     AdvanceRotation();
+    const auto storage_ms = stage.restart();
     Snapshot(history_scanned ? CybouRestoreStepState::Done : CybouRestoreStepState::Running, progress.Complete() && progress.unavailable_roots == 0);
+    if (qEnvironmentVariableIsSet("CYBOU_PROFILE_MAIL_MOVES"))
+        qInfo() << "MAIL-DND-LATENCY refresh_scan_ms" << scan_ms << "refresh_storage_ms" << storage_ms
+            << "refresh_snapshot_ms" << stage.elapsed();
 }
 
 void CybouCoreApplicationAdapter::IdentitySession::AdvanceRotation()

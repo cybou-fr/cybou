@@ -2422,6 +2422,13 @@ Racine d’état %7</translation>
 </context>
 <context>
     <name>EmailPage</name>
+    <message><source>Saving mail moves</source><translation>Enregistrement des déplacements</translation></message>
+    <message><source>Move queued…</source><translation>Déplacement en attente…</translation></message>
+    <message><source>Moving…</source><translation>Déplacement…</translation></message>
+    <message><source>Move failed</source><translation>Échec du déplacement</translation></message>
+    <message><source>Moving %1 messages… You can keep using Mail.</source><translation>Déplacement de %1 messages… Vous pouvez continuer à utiliser le courrier.</translation></message>
+    <message><source>%1 messages could not be moved. They remain in their original folder.</source><translation>%1 messages n’ont pas pu être déplacés. Ils restent dans leur dossier d’origine.</translation></message>
+    <message><source>Retry</source><translation>Réessayer</translation></message>
     <message>
         <location filename="../pages/emailpage.cpp" line="+67"/>
         <source>Inbox</source>

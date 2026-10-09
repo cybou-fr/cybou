@@ -2504,6 +2504,72 @@ void CybouShellTests::appearanceAndLanguageSwitchPreserveMailCompose()
     window->setLanguage(saved_language);
 }
 
+void CybouShellTests::mailMovesShowPendingRetryAndUndo()
+{
+    CybouDesktopModel model{QStringLiteral("CYBOU DEV")};
+    RecordingBackend backend;
+    model.setApplicationBackend(&backend);
+    model.setFeatureAvailability(AllFeatureAvailability());
+    model.setIdentityState(CybouIdentityState::Active, QStringLiteral("acct"), 1);
+    QVector<CybouMailItem> messages;
+    for (int i = 0; i < 50; ++i) {
+        CybouMailItem message;
+        message.id = QStringLiteral("mail-%1").arg(i);
+        message.subject = QStringLiteral("Message %1").arg(i);
+        messages.append(message);
+    }
+    model.setMailItems(messages);
+    EmailPage page{&model, {}};
+    page.resize(1100, 720);
+    page.show();
+    auto* status = page.findChild<QWidget*>(QStringLiteral("mailMoveStatus"));
+    auto* label = page.findChild<QLabel*>(QStringLiteral("mailMoveStatusText"));
+    auto* retry = page.findChild<QPushButton*>(QStringLiteral("mailMoveRetry"));
+    auto* list = page.findChild<QListWidget*>(QStringLiteral("messageList"));
+    QVERIFY(status && label && retry && list);
+    QVector<std::function<void()>> undo;
+    connect(&model, &CybouDesktopModel::notificationRequested, &page,
+        [&](const QString&, const QString& action, std::function<void()> callback) { if (action == QStringLiteral("Undo")) undo.append(callback); });
+    for (const auto& message : messages) page.moveMessagesTo({message.id}, EmailPage::View::Archive);
+    QCOMPARE(backend.move_results.size(), 50);
+    QVERIFY(status->isVisibleTo(&page));
+    QVERIFY(label->text().contains(QStringLiteral("50")));
+    QCOMPARE(page.visibleMessageIds().size(), 50); // No claimed move before commit.
+    QVERIFY(list->isEnabled());
+    QVERIFY(list->item(0)->data(Qt::AccessibleDescriptionRole).toString().contains(QStringLiteral("Move queued")));
+    const auto capture = qEnvironmentVariable("CYBOU_MAIL_MOVE_CAPTURE");
+    if (!capture.isEmpty()) {
+        CybouTheme::applyTo(*qApp);
+        QVERIFY(page.grab().save(capture));
+    }
+    bool event_processed{false};
+    QTimer::singleShot(0, &page, [&] { event_processed = true; });
+    QTRY_VERIFY(event_processed); // Pending saves never hold the GUI event loop.
+    for (int i = 0; i < 49; ++i) backend.move_results[i](CybouCommandState::Committed, {});
+    backend.move_results[49](CybouCommandState::Failed, QStringLiteral("DB failed"));
+    QTRY_COMPARE(page.visibleMessageIds().size(), 1);
+    QTRY_VERIFY(retry->isVisibleTo(&page));
+    QCOMPARE(model.mailItem(messages.last().id)->folder, CybouMailFolder::Inbox);
+    retry->click();
+    QCOMPARE(backend.move_results.size(), 51);
+    QVERIFY(!retry->isVisibleTo(&page));
+    backend.move_results.last()(CybouCommandState::Committed, {});
+    QTRY_VERIFY(page.visibleMessageIds().isEmpty());
+    QTRY_VERIFY(!status->isVisibleTo(&page));
+    QCOMPARE(undo.size(), 50);
+    for (auto it = undo.crbegin(); it != undo.crend(); ++it) (*it)();
+    QCOMPARE(backend.move_results.size(), 101);
+    QVERIFY(status->isVisibleTo(&page));
+    for (int i = 51; i < 101; ++i) backend.move_results[i](CybouCommandState::Committed, {});
+    QTRY_COMPARE(page.visibleMessageIds().size(), 50);
+    QTRY_VERIFY(!status->isVisibleTo(&page));
+    page.moveMessagesTo({messages.front().id}, EmailPage::View::Trash);
+    model.requestLockVault();
+    backend.move_results.last()(CybouCommandState::Failed, QStringLiteral("late"));
+    QTRY_VERIFY(!status->isVisibleTo(&page));
+    QVERIFY(page.visibleMessageIds().isEmpty());
+}
+
 void CybouShellTests::mailContextMenuAndMoves()
 {
     auto window = makeWindow();

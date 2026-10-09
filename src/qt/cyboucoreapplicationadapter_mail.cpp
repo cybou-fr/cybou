@@ -6,6 +6,7 @@
 #include <cybou/support_mail.h>
 #include <QFile>
 #include <QPointer>
+#include <chrono>
 
 using namespace cybou::qt_detail;
 
@@ -383,12 +384,22 @@ void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder fo
         if (progress) progress(CybouCommandState::Failed, tr("This message cannot be moved there."));
         return;
     }
-    m_session->Post([message_id = *message_id, target = *target, progress](IdentitySession& s) {
+    const auto queued_at = std::chrono::steady_clock::now();
+    const bool profile = qEnvironmentVariableIsSet("CYBOU_PROFILE_MAIL_MOVES");
+    m_session->Post([message_id = *message_id, target = *target, progress, queued_at, profile](IdentitySession& s) {
+        const auto running_at = std::chrono::steady_clock::now();
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         bool ok{false};
         try { ok = s.application->MoveMail(message_id, target); } catch (const std::exception&) { }
+        const auto committed_at = std::chrono::steady_clock::now();
         // Report the durable local commit without waiting for a full history/storage refresh.
-        s.StateToGui([owner = s.owner, progress, ok] {
+        s.StateToGui([owner = s.owner, progress, ok, queued_at, running_at, committed_at, profile] {
+            if (profile) {
+                const auto ms = [](auto end, auto begin) { return std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count(); };
+                qInfo() << "MAIL-DND-LATENCY queue_ms" << ms(running_at, queued_at)
+                    << "move_db_ms" << ms(committed_at, running_at)
+                    << "gui_ack_ms" << ms(std::chrono::steady_clock::now(), committed_at) << "committed" << ok;
+            }
             const auto error = ok ? QString{} : tr("This message could not be moved. Try again.");
             if (progress) progress(ok ? CybouCommandState::Committed : CybouCommandState::Failed, error);
             else if (!ok) Q_EMIT owner->commandFailed(error);

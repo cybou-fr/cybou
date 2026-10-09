@@ -66,6 +66,7 @@ private Q_SLOTS:
     void languageSwitchRebuildsShell();
     void appearanceAndLanguageSwitchPreserveMailCompose();
     void mailContextMenuAndMoves();
+    void mailMovesShowPendingRetryAndUndo();
     void filesDropIntoFolders();
     void filesDropTargetsRespectIdentityAndCatalog();
     void themeResolvesAllTokens();

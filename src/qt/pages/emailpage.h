@@ -20,6 +20,7 @@ class QMenu;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
+class QProgressBar;
 class QStackedWidget;
 class QVBoxLayout;
 class MailCompose;
@@ -95,6 +96,11 @@ private:
     QFrame* m_banner{nullptr};
     QLabel* m_banner_text{nullptr};
     QPushButton* m_banner_action{nullptr};
+    QWidget* m_move_status{nullptr};
+    QLabel* m_move_status_text{nullptr};
+    QProgressBar* m_move_progress{nullptr};
+    QPushButton* m_move_retry{nullptr};
+    QHash<QString, View> m_failed_moves;
     QListWidget* m_list{nullptr};
     QHash<QString, QListWidgetItem*> m_rows;
     QHash<QString, CybouMailItem> m_rendered_mail;
@@ -119,6 +125,7 @@ private:
     void rebuildFolders();
     void rebuildList();
     void refreshBanner();
+    void refreshMoveStatus();
     void refreshEmptyHint();
     void updateLayoutMode();
     void closeDetail();
