@@ -22,6 +22,9 @@ enum class StorageEvidenceAppendResult { ADDED, DUPLICATE, REJECTED };
 /// Internal accounting of previously verified evidence, not a raw-proof verifier.
 /// Caller must verify assignment attestation, binding, proof and UTC policy first.
 /// No clock, elapsed-time inference, payout or new database is introduced.
+/// A shared funded-slot journal excludes overlapping service across replacement
+/// assignment epochs. Local and shared claims are committed together and queried
+/// only when they agree; lost/corrupt shared claims never become zero service.
 StorageEvidenceAppendResult AppendStorageAssignmentEvidence(PrivateApplicationStore& db,
     const StorageAssignmentEvidenceScope& scope, const StorageAssignmentInterval& interval,
     std::uint64_t verified_through_utc);

@@ -51,6 +51,12 @@ audit response are rechecked against local ciphertext; GET success/time is a
 trusted local assertion. Production collection/aggregation, interval derivation
 and canonical settlement integration remain absent; DOC-005/006 remain open.
 
+Cross-epoch accounting follow-up: shared funded-slot claims now reject overlapping
+intervals/proof reuse across replacement assignments and commit atomically with
+local interval records. This does not establish audit interval policy, active
+epoch authority, canonical lease provenance or settlement activation. DOC-005/006
+and the rounding/state transition gap DOC-020 remain open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

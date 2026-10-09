@@ -166,12 +166,46 @@ Restart/reopening retains credited intervals without an in-memory cursor.
 This API is an internal accounting boundary, not a raw-audit verifier or a PoA
 attestation. It accepts references to proofs verified by its caller. Signed
 assignment verification, retained raw evidence, transport-to-verifier ingestion,
-independent-host validation and global term/slot exclusion across replacement
-epochs remain integration gates. A commitment supplied by a peer is not verified
+independent-host validation and production integration remain gates. Shared
+funded-slot exclusion below handles local cross-epoch accounting. A commitment supplied by a peer is not verified
 service. Callers must validate UTC policy and completed periods before preparing
 settlement; this component has no clock or canonical period authority. Current
 production auditing, placement and settlement execution are not activated through
 this new journal by this package.
+
+### Shared funded-slot exclusion across replacement epochs
+
+Interval accounting now additionally journals claims under
+`storage/funded-slot-evidence/<NetworkBinding>/<PublicationID>/<ChunkID>/<payer>/<term_start>/<term_end>/<slot>`.
+The key deliberately excludes epoch, finalized seed and selected provider: a
+replacement assignment cannot create another budget for the same funded slot.
+Separate chunks, replica slots and independently funded terms retain separate
+accounting. Canonical lease/payer/term provenance remains caller validation;
+supplying a different term does not establish new funding.
+
+Each claim retains assignment commitment plus the original interval. Shared
+claims are UTC-ordered, non-overlapping, proof-unique and bounded to 4096 per funded
+slot across all epochs. The same UTC anchor/duration is required across epochs.
+Local assignment intervals and shared claims commit in one app.db batch.
+The same batch retains an `/initialized` marker (exact byte 1); a missing shared
+record with a surviving marker fails for every epoch, including a fresh one.
+Losing or deleting all copies of trusted local accounting cannot be detected by
+this journal alone; production recovery must reconcile durable canonical history.
+Exact retry remains idempotent only for the original assignment; overlap or reused proof
+under another epoch fails. Query requires an exact match between local intervals
+and the shared claims owned by that assignment. Missing/corrupt shared records
+fail rather than recreating credit or reporting zero.
+
+Shared record: UTC anchor u64, period duration u64, count u32, then assignment
+commitment 32 and interval period/start/end u64 plus proof commitment 32 (88 bytes
+per claim), integers LE, exact consumption. This complements the existing local
+record without a version discriminator or legacy decoder. Previously standalone
+local fixture records cannot supply payable totals without matching shared claims;
+they fail closed. No deployed accounting migration or live activation is claimed.
+Proof authentication, audit cadence/gap policy, active epoch time boundaries,
+observation-to-interval derivation and canonical payout/state integration remain
+open. This change prevents local duplicate funded-slot credit, not all provenance
+or physical host/replica independence errors.
 
 Evidence foundation follow-up: existing provider diagnostics now commit record,
 index and bounded eviction atomically before changing memory. Failed persistence

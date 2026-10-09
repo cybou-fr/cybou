@@ -8,6 +8,27 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Cross-epoch funded-slot exclusion (2026-10-09)
+
+Assignment interval accounting now atomically maintains a shared funded-slot
+journal across replacement epochs. Its scope includes network, publication,
+chunk, payer, separately funded term and replica slot; epoch/seed/provider cannot
+create a second budget. Overlap and reused proof are rejected across epochs.
+Counters require exact correspondence between local intervals and shared claims;
+missing/corrupt records and inconsistent UTC anchors/durations fail closed.
+Shared claims are bounded without eviction. Active epoch boundaries, authenticated
+observation-to-interval policy and canonical funding/payout activation remain open.
+
+Validation: core build passed; focused assignment/attestation, private store,
+storage service/economy, quotes and resource limits passed 73 cases / 122,583
+assertions; 234 other core cases were skipped. Replacement-epoch regression checks
+overlap/reused proof rejection, adjacent service, independent replica slots,
+concurrent conflicting writes with exactly one winner, reopen, anchor mismatch
+and missing shared journal rejection even for a fresh epoch. The full 4096-entry
+fixture validates matching local/shared records without thousands of disk commits.
+Evidence: `artifacts/economics-funded-slot-core.txt`, baseline `bebf740b` plus this
+package. No live funded lease or protocol activation acceptance is claimed.
+
 ### Durable assignment observation collector (2026-10-09)
 
 The new storage_assignment_observation_store calls assigned audit/GET and atomically

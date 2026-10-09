@@ -73,6 +73,65 @@ std::vector<unsigned char> Encode(const StorageAssignmentEvidenceScope& scope,
     }
     return out.Take();
 }
+struct Claim {
+    StorageAssignmentId assignment{};
+    StorageAssignmentInterval interval;
+};
+std::string FundedKey(const StorageAssignmentEvidenceScope& scope)
+{
+    const auto hex = [](const auto& id) { return Hash256{std::span<const unsigned char, 32>{id}}.GetHex(); };
+    const auto& c = scope.assignment.context;
+    // Epoch, seed and provider deliberately do not identify a separately funded slot.
+    return "storage/funded-slot-evidence/" + hex(c.network_binding) + '/' + hex(c.publication) +
+        '/' + hex(c.chunk) + '/' + hex(c.payer) + '/' + std::to_string(c.term_start) +
+        '/' + std::to_string(c.term_end) + '/' + std::to_string(scope.replica_slot);
+}
+constexpr std::size_t CLAIM_RECORD_LIMIT{20 + 88 * MAX_STORAGE_ASSIGNMENT_INTERVALS};
+std::optional<std::vector<Claim>> Claims(PrivateApplicationStore& db, const StorageAssignmentEvidenceScope& scope)
+{
+    const auto key = FundedKey(scope);
+    const auto bytes = db.Get(key);
+    const auto initialized = db.Get(key + "/initialized");
+    if (!bytes) return db.Has(key) || db.Has(key + "/initialized") || !db.IsUnlocked() ?
+        std::nullopt : std::optional{std::vector<Claim>{}};
+    if (initialized != std::vector<unsigned char>{1}) return std::nullopt;
+    try {
+        BinaryReader in{*bytes, CLAIM_RECORD_LIMIT};
+        if (in.U64() != scope.term_start_utc || in.U64() != scope.period_seconds) return std::nullopt;
+        const auto count = in.U32(); if (count > MAX_STORAGE_ASSIGNMENT_INTERVALS) return std::nullopt;
+        std::vector<Claim> result;
+        std::set<StorageAssignmentId> proofs;
+        for (std::uint32_t i{0}; i < count; ++i) {
+            Claim claim{in.Fixed<StorageAssignmentId>(),
+                {in.U64(), in.U64(), in.U64(), in.Fixed<StorageAssignmentId>()}};
+            if (std::all_of(claim.assignment.begin(), claim.assignment.end(), [](auto b) { return b == 0; }) ||
+                !IntervalValid(scope, claim.interval) || !proofs.insert(claim.interval.proof_commitment).second ||
+                (!result.empty() && result.back().interval.end_utc > claim.interval.start_utc)) return std::nullopt;
+            result.push_back(claim);
+        }
+        in.Finish(); return result;
+    } catch (const std::invalid_argument&) { return std::nullopt;
+    } catch (const std::length_error&) { return std::nullopt; }
+}
+std::vector<unsigned char> EncodeClaims(const StorageAssignmentEvidenceScope& scope, const std::vector<Claim>& claims)
+{
+    BinaryWriter out{CLAIM_RECORD_LIMIT};
+    out.U64(scope.term_start_utc); out.U64(scope.period_seconds); out.U32(static_cast<std::uint32_t>(claims.size()));
+    for (const auto& claim : claims) {
+        out.Fixed(claim.assignment); out.U64(claim.interval.period); out.U64(claim.interval.start_utc);
+        out.U64(claim.interval.end_utc); out.Fixed(claim.interval.proof_commitment);
+    }
+    return out.Take();
+}
+bool Consistent(const StorageAssignmentEvidenceScope& scope,
+    const std::vector<StorageAssignmentInterval>& intervals, const std::vector<Claim>& claims)
+{
+    std::vector<StorageAssignmentInterval> owned;
+    for (const auto& claim : claims) {
+        if (claim.assignment == scope.assignment.commitment) owned.push_back(claim.interval);
+    }
+    return owned == intervals;
+}
 }
 
 StorageEvidenceAppendResult AppendStorageAssignmentEvidence(PrivateApplicationStore& db,
@@ -84,7 +143,8 @@ StorageEvidenceAppendResult AppendStorageAssignmentEvidence(PrivateApplicationSt
         return StorageEvidenceAppendResult::REJECTED;
     }
     auto intervals = Read(db, scope);
-    if (!intervals) return StorageEvidenceAppendResult::REJECTED;
+    auto claims = Claims(db, scope);
+    if (!intervals || !claims || !Consistent(scope, *intervals, *claims)) return StorageEvidenceAppendResult::REJECTED;
     for (const auto& prior : *intervals) {
         if (prior == interval) return StorageEvidenceAppendResult::DUPLICATE;
         if (prior.proof_commitment == interval.proof_commitment ||
@@ -93,9 +153,20 @@ StorageEvidenceAppendResult AppendStorageAssignmentEvidence(PrivateApplicationSt
         }
     }
     if (intervals->size() >= MAX_STORAGE_ASSIGNMENT_INTERVALS) return StorageEvidenceAppendResult::REJECTED;
+    if (claims->size() >= MAX_STORAGE_ASSIGNMENT_INTERVALS) return StorageEvidenceAppendResult::REJECTED;
+    for (const auto& claim : *claims) {
+        const auto& prior = claim.interval;
+        if (prior.proof_commitment == interval.proof_commitment ||
+            (prior.start_utc < interval.end_utc && interval.start_utc < prior.end_utc)) return StorageEvidenceAppendResult::REJECTED;
+    }
+    claims->insert(std::lower_bound(claims->begin(), claims->end(), interval.start_utc,
+        [](const auto& prior, auto start) { return prior.interval.start_utc < start; }),
+        Claim{scope.assignment.commitment, interval});
     intervals->insert(std::lower_bound(intervals->begin(), intervals->end(), interval.start_utc,
         [](const auto& prior, auto start) { return prior.start_utc < start; }), interval);
-    return db.Put(Key(scope), Encode(scope, *intervals)) && batch.Commit() ?
+    return db.Put(Key(scope), Encode(scope, *intervals)) &&
+        db.Put(FundedKey(scope), EncodeClaims(scope, *claims)) &&
+        db.Put(FundedKey(scope) + "/initialized", std::vector<unsigned char>{1}) && batch.Commit() ?
         StorageEvidenceAppendResult::ADDED : StorageEvidenceAppendResult::REJECTED;
 }
 
@@ -106,7 +177,8 @@ std::optional<std::uint64_t> StorageAssignmentVerifiedSeconds(PrivateApplication
     if (!ScopeValid(db, scope) || through_period < scope.assignment.context.term_start ||
         through_period >= scope.assignment.context.term_end) return std::nullopt;
     const auto intervals = Read(db, scope);
-    if (!intervals) return std::nullopt;
+    const auto claims = Claims(db, scope);
+    if (!intervals || !claims || !Consistent(scope, *intervals, *claims)) return std::nullopt;
     std::uint64_t seconds{0};
     for (const auto& interval : *intervals) {
         if (interval.period <= through_period) seconds += interval.end_utc - interval.start_utc;

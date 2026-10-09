@@ -30,6 +30,14 @@ std::vector<cybou::StorageAssignmentProvider> Providers()
     }
     return result;
 }
+std::string FundedKey(const cybou::StorageAssignmentEvidenceScope& scope)
+{
+    const auto hex = [](const auto& id) { return cybou::Hash256{std::span<const unsigned char, 32>{id}}.GetHex(); };
+    const auto& c = scope.assignment.context;
+    return "storage/funded-slot-evidence/" + hex(c.network_binding) + '/' + hex(c.publication) +
+        '/' + hex(c.chunk) + '/' + hex(c.payer) + '/' + std::to_string(c.term_start) +
+        '/' + std::to_string(c.term_end) + '/' + std::to_string(scope.replica_slot);
+}
 }
 BOOST_AUTO_TEST_SUITE(cybou_storage_assignment_tests)
 
@@ -247,20 +255,81 @@ BOOST_AUTO_TEST_CASE(assignment_evidence_bound_and_concurrent_duplicate_are_enfo
     cybou::BinaryWriter out;
     out.Fixed(plan->commitment); out.U8(0); out.U64(1000); out.U64(200);
     out.U32(cybou::MAX_STORAGE_ASSIGNMENT_INTERVALS);
+    cybou::BinaryWriter claims{20 + 88 * cybou::MAX_STORAGE_ASSIGNMENT_INTERVALS};
+    claims.U64(1000); claims.U64(200); claims.U32(cybou::MAX_STORAGE_ASSIGNMENT_INTERVALS);
     for (std::uint32_t i{0}; i < cybou::MAX_STORAGE_ASSIGNMENT_INTERVALS; ++i) {
         out.U64(10 + i / 200); out.U64(1000 + i); out.U64(1001 + i);
         cybou::StorageAssignmentId proof{};
         for (unsigned byte{0}; byte < 4; ++byte) proof[byte] = static_cast<unsigned char>((i + 1) >> (byte * 8));
         out.Fixed(proof);
+        claims.Fixed(plan->commitment); claims.U64(10 + i / 200);
+        claims.U64(1000 + i); claims.U64(1001 + i); claims.Fixed(proof);
     }
     const auto key = "storage/assignment-evidence/" +
         cybou::Hash256{std::span<const unsigned char, 32>{plan->commitment}}.GetHex() + "/0";
     const auto full = out.Take();
     BOOST_REQUIRE(db.Put(key, full));
+    BOOST_REQUIRE(db.Put(FundedKey(scope), claims.Take()));
+    BOOST_REQUIRE(db.Put(FundedKey(scope) + "/initialized", std::vector<unsigned char>{1}));
     BOOST_REQUIRE(cybou::StorageAssignmentVerifiedSeconds(db, scope, 39));
     BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, scope, 39), 4096U);
     interval = {30, 5096, 5097}; interval.proof_commitment.fill(99);
     BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, scope, interval, 5097) == Result::REJECTED);
     BOOST_CHECK(db.Get(key) == full);
+}
+BOOST_AUTO_TEST_CASE(replacement_epochs_share_funded_slot_and_cannot_double_credit)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("epoch-evidence.cybou");
+    const auto path = fixture.directory / "epoch-intervals";
+    auto first = cybou::PrepareStorageAssignment(Context(), Providers()); BOOST_REQUIRE(first);
+    auto context = Context(); ++context.epoch; context.finalized_seed.fill(9);
+    auto providers = Providers(); providers.erase(providers.begin(), providers.begin() + 3);
+    auto second = cybou::PrepareStorageAssignment(context, providers); BOOST_REQUIRE(second);
+    cybou::StorageAssignmentEvidenceScope old_scope{*first, 0, 1000, 100}, new_scope{*second, 0, 1000, 100};
+    using Result = cybou::StorageEvidenceAppendResult;
+    cybou::StorageAssignmentInterval interval{10, 1000, 1050}; interval.proof_commitment.fill(1);
+    {
+        cybou::PrivateApplicationStore db{identity->GetKeyStore(), path};
+        BOOST_REQUIRE(cybou::FreezeStorageAssignment(db, *first));
+        BOOST_REQUIRE(cybou::FreezeStorageAssignment(db, *second));
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(db, old_scope, interval, 1100) == Result::ADDED);
+        BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, new_scope, interval, 1100) == Result::REJECTED);
+        auto overlap = interval; overlap.start_utc = 1040; overlap.end_utc = 1060; overlap.proof_commitment.fill(2);
+        BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, new_scope, overlap, 1100) == Result::REJECTED);
+        overlap.start_utc = 1050; overlap.end_utc = 1100;
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(db, new_scope, overlap, 1100) == Result::ADDED);
+        BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, old_scope, 10), 50U);
+        BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, new_scope, 10), 50U);
+        auto wrong_anchor = new_scope; ++wrong_anchor.term_start_utc;
+        BOOST_CHECK(!cybou::StorageAssignmentVerifiedSeconds(db, wrong_anchor, 10));
+        auto other_slot = new_scope; other_slot.replica_slot = 1;
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(db, other_slot, interval, 1100) == Result::ADDED);
+        BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, other_slot, 10), 50U);
+        cybou::StorageAssignmentInterval left{11, 1100, 1150}; left.proof_commitment.fill(3);
+        auto right = left; right.proof_commitment.fill(4);
+        std::array<Result, 2> results;
+        {
+            std::jthread a{[&] { results[0] = cybou::AppendStorageAssignmentEvidence(db, old_scope, left, 1150); }};
+            std::jthread b{[&] { results[1] = cybou::AppendStorageAssignmentEvidence(db, new_scope, right, 1150); }};
+        }
+        BOOST_CHECK((results[0] == Result::ADDED && results[1] == Result::REJECTED) ||
+            (results[1] == Result::ADDED && results[0] == Result::REJECTED));
+        BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, old_scope, 11) +
+            *cybou::StorageAssignmentVerifiedSeconds(db, new_scope, 11), 150U);
+    }
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), path};
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, old_scope, 10), 50U);
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(db, new_scope, 10), 50U);
+    BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, new_scope, interval, 1100) == Result::REJECTED);
+    BOOST_REQUIRE(db.Erase(FundedKey(old_scope)));
+    BOOST_CHECK(!cybou::StorageAssignmentVerifiedSeconds(db, old_scope, 10));
+    BOOST_CHECK(!cybou::StorageAssignmentVerifiedSeconds(db, new_scope, 10));
+    BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, old_scope, interval, 1100) == Result::REJECTED);
+    auto fresh_context = context; ++fresh_context.epoch;
+    const auto fresh = cybou::PrepareStorageAssignment(fresh_context, providers); BOOST_REQUIRE(fresh);
+    BOOST_REQUIRE(cybou::FreezeStorageAssignment(db, *fresh));
+    auto fresh_scope = new_scope; fresh_scope.assignment = *fresh;
+    BOOST_CHECK(cybou::AppendStorageAssignmentEvidence(db, fresh_scope, interval, 1100) == Result::REJECTED);
 }
 BOOST_AUTO_TEST_SUITE_END()
