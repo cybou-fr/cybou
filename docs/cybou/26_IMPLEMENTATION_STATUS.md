@@ -10,6 +10,13 @@ desktop updates below; deployment statements retain their stated scope.
 
 ### Canonical immutable funded-term history (2026-10-09)
 
+Full core regression follow-up at `e6ade856`: all 312 test cases and 140,641
+assertions passed, with no skipped cases. Evidence:
+`artifacts/economics-canonical-terms-full-core.txt`. This broadens the focused
+regression evidence below; it does not establish assignment/evidence payment
+validation, desktop acceptance or live DEVNET compatibility. No runtime code
+or live processes changed in this follow-up.
+
 The approved isolated source-tree transition now retains StorageFundedTerm
 records within each existing lease. Initial publication and authorized renewal
 execution supply their exact OperationIDs and canonical parameters. Renewal

@@ -25,9 +25,11 @@ Current production path is
 `PoaFinalizer::SignStorageSettlement` -> candidate/block execution ->
 `ApplyStorageSettlement`. It reads live payout bindings, ranks locally verified
 placement chunks, retains at most lease.replica_count recipients and distributes
-the old period cap. Current state has one extendable lease per publication and
-no independently funded term or per-provider cumulative paid ledger. On closure
-it refunds and erases the lease. These are protocol gaps, not missing GUI work.
+the old period cap. The deployed baseline has one extendable lease per publication.
+The approved isolated source-tree transition at `e6ade856` now retains immutable
+funded terms within that lease, but has no per-provider cumulative paid ledger.
+On closure settlement still refunds aggregate escrow and erases the lease and
+its terms. These are protocol gaps, not missing GUI work.
 
 | Existing module | Production caller today | Owned/duplicated data | Integration disposition |
 |---|---|---|---|
