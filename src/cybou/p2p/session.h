@@ -12,6 +12,7 @@
 #include <cybou/poa_finalizer.h>
 #include <cybou/finalized_chunk_store.h>
 #include <cybou/storage_audit.h>
+#include <cybou/storage_usage.h>
 #include <cybou/operation_relay.h>
 
 #include <boost/asio/ip/tcp.hpp>
@@ -72,9 +73,11 @@ enum class MessageType : uint8_t {
     STORAGE_PROOF_REQUEST = 24,         ///< Challenge для on-demand доказательства `StorageId`.
     STORAGE_AUDIT_CHALLENGE = 25,       ///< Random-offset audit challenge по admitted chunk (DEC-276).
     STORAGE_AUDIT_RESPONSE = 26,        ///< Ответ на audit challenge по exact stored bytes.
+    STORAGE_USAGE_REQUEST = 27,        ///< Direct request for existing provider counters.
+    STORAGE_USAGE = 28,                ///< Reported provider capacity and admitted encrypted bytes.
 };
 /// \brief Наибольший допустимый wire-код сообщения в текущем baseline.
-inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_AUDIT_RESPONSE)};
+inline constexpr uint8_t MAX_MESSAGE_TYPE{static_cast<uint8_t>(MessageType::STORAGE_USAGE)};
 
 /// \brief Стабильная identity storage-провайдера: BLAKE3 от его STORAGE public key.
 using StorageId = std::array<unsigned char, 32>;
@@ -228,6 +231,7 @@ public:
     /// \brief Добывает on-demand proof storage-identity, привязанный к текущему TLS-каналу.
     /// \return Закэшированный или только что доказанный `StorageId`; `std::nullopt` при любой ошибке challenge/verify.
     std::optional<StorageId> ProveStorageIdentity();
+    std::optional<StorageUsage> RequestStorageUsage();
     const std::optional<StorageId>& PeerStorageId() const { return m_peer_storage_id; }
     /// \brief Payout binding, полученный вместе с доказанным StorageId; STORAGE-подпись уже проверена.
     /// \details Authorization-подпись проверяет runtime против finalized Identity registry.

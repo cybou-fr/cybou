@@ -55,14 +55,14 @@ features and durability rather than reopening architecture cleanup.
 ## Desktop Beta acceptance and performance evidence (2026-10-08)
 
 Product scope correction, 2026-10-09: the primary Network page must eventually
-show exactly current finalized op/min, maximum network throughput and actual
+show exactly current finalized op/min, reported network storage capacity and actual
 network-hosted encrypted bytes. Local node counters belong in Home/Advanced,
 not a substitute network summary. The full-map layout has been restored.
-Next monitoring work is the service-owned source/coverage/accounting contract in
-NETWORK_OBSERVABILITY_PLAN.md, followed by capacity evidence and hosted-byte
-collection. The latter two figures are not implemented; the former broad remote
-resource telemetry is not being automatically reinstated. This product request
-does not complete or replace the independent Beta acceptance gates below.
+The lightweight direct provider-counter query, approximate aggregate and header
+overlay are source-implemented under DEC-290. Update peers and verify actual
+response coverage. No new accounting/audit platform or fresh capacity benchmark
+is a prerequisite for these indicative values. The full-map layout is retained
+and benchmark UI removed. Independent Beta acceptance gates below remain open.
 
 [DESKTOP_BETA_ACCEPTANCE_PLAN.md](DESKTOP_BETA_ACCEPTANCE_PLAN.md) is the active
 Level 4 desktop plan reviewed at `1f5417fb`; historical implementation delivery

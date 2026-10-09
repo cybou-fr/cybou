@@ -10,6 +10,7 @@
 #include <cybou/traffic_meter.h>
 #include <cybou/finalization_meter.h>
 #include <cybou/process_cpu.h>
+#include <cybou/storage_usage.h>
 #include <string>
 #include <vector>
 namespace cybou {
@@ -38,6 +39,7 @@ struct OperationDiagnostics {
 /// \brief Полный снимок локального состояния узла для CLI и UI-диагностики.
 /// \details Каноническая вершина только одна; высоты пиров здесь остаются недоверенными объявлениями.
 struct NodeDiagnosticsSnapshot {
+    std::optional<NetworkStorageUsage> network_storage;
     TrafficDiagnostics traffic;
     StorageTransferDiagnostics storage_transfers;
     FinalizationDiagnostics finalization;

@@ -214,7 +214,8 @@ hash_values:
   hex: forward_byte_order_64_digits_lowercase_output
   parse_prefix_or_padding: rejected
 transport:
-  message_ids: compact_1_through_26
+  message_ids: compact_1_through_28
+  storage_usage: direct_TLS_existing_provider_capacity_and_admitted_byte_counters
   block_sync: GET_BLOCKS_META_DATA_END_consecutive_batched
   maximum_blocks_per_batch: 32
   operation_transfer: shared_OP_META_OP_DATA_OP_RESULT

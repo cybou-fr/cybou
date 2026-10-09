@@ -4858,6 +4858,24 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
+    <message><source>Observed max: %1</source><translation>Max. observé : %1</translation></message>
+    <message><source>Observed maxima since this node started; storage values are approximate.</source><translation>Maximums observés depuis le démarrage de ce nœud ; stockage indicatif.</translation></message>
+    <message><source>≈ %1</source><translation>≈ %1</translation></message>
+    <message><source>Approximate sum of responding nodes’ provider capacity; not guaranteed free disk space.</source><translation>Somme indicative de la capacité disponible pour les répliques des nœuds répondants ; aucun espace disque libre garanti.</translation></message>
+    <message><source>Approximate admitted provider bytes across responding nodes; replicas included.</source><translation>Volume indicatif admis pour les répliques sur les nœuds répondants ; copies incluses.</translation></message>
+    <message><source>Storage limits reported directly by responding Full Nodes; not guaranteed free space.</source><translation>Limites de stockage déclarées par les Full Nodes répondants ; aucun espace libre garanti.</translation></message>
+    <message><source>Stored encrypted bytes reported by responding Full Nodes; replicas included, not unique file sizes.</source><translation>Octets chiffrés stockés déclarés par les Full Nodes répondants ; copies incluses, pas la taille des fichiers uniques.</translation></message>
+    <message><source>%1 nodes · %2/%3 peer replies · copies included</source><translation>%1 nœuds · %2/%3 réponses · copies incluses</translation></message>
+    <message><source>Collecting network storage data</source><translation>Collecte des données de stockage réseau</translation></message>
+    <message><source>Network operations / min</source><translation>Opérations réseau / min</translation></message>
+    <message><source>Network storage capacity</source><translation>Capacité de stockage du réseau</translation></message>
+    <message><source>Data hosted by the network</source><translation>Données hébergées par le réseau</translation></message>
+    <message><source>Verified finalized operations observed over 60 complete seconds; history imports excluded.</source><translation>Opérations finalisées vérifiées observées sur 60 secondes complètes ; hors imports d'historique.</translation></message>
+    <message><source>Network-wide storage measurements are not available yet.</source><translation>Les mesures de stockage de l'ensemble du réseau ne sont pas encore disponibles.</translation></message>
+    <message><source>Storage totals unavailable</source><translation>Totaux de stockage indisponibles</translation></message>
+    <message><source>
+Observed %1 UTC</source><translation>
+Observé à %1 UTC</translation></message>
     <message><source>Available disk space</source><translation>Espace disque disponible</translation></message>
     <message><source>OS available bytes on the chunk filesystem · shared with other applications · before admission reserve</source><translation>Octets disponibles sur le disque des chunks · partagé avec d'autres applications · avant la réserve d'admission</translation></message>
     <message><source>Stored encrypted bytes: %1 % of V · policy headroom: %2 · admitted provider bytes: %3 / %4</source><translation>Octets chiffrés stockés : %1 % de V · marge du plafond : %2 · octets admis pour les répliques : %3 / %4</translation></message>

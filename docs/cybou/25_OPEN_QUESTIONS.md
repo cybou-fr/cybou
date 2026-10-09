@@ -29,14 +29,12 @@ or certification claims.
 
 ## Network summary source gate (2026-10-09)
 
-The accepted Network product request is three figures: current finalized op/min,
-maximum network throughput and actual hosted encrypted data. Local diagnostics
-do not answer the last two. Before implementation, define the capacity acceptance
-procedure and service-owned hosted-byte evidence with copy accounting,
-deduplication, freshness, coverage, deletion and metadata/privacy boundaries.
-Canonical lease units are billing authorization, not measured hosted bytes;
-historical workload throughput is not a network ceiling. Keep these gaps explicit
-and preserve the full-map UI. See NETWORK_OBSERVABILITY_PLAN.md for delivery order.
+The three Network figures are indicative current op/min, summed reported provider
+capacity and admitted encrypted bytes. DEC-290 reuses existing counters and the
+storage probe, without gating display on a new audit/accounting platform. Live
+peer updates/response coverage and native overlay acceptance remain open. Exact
+global census, unique content accounting and independently audited byte holdings
+are separate future questions, not prerequisites for the requested estimates.
 
 ## Candidate pool bounds
 

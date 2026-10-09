@@ -192,32 +192,28 @@ void CybouNodeRuntime::StartStorageProbe()
 void CybouNodeRuntime::ProbeOneStorageEndpoint()
 {
     const auto now = std::chrono::steady_clock::now();
-    std::set<Endpoint> connected;
-    {
-        std::lock_guard p2p_lock(m_network.mutex);
-        if (!m_network.peer_manager) return;
-        for (const auto& peer : m_network.peer_manager->Peers()) connected.insert({peer.address, peer.port});
-    }
-    const auto known = GetPeerEndpointsForGossip();
-    const auto configured = GetConfiguredPeerEndpoints();
+    std::set<Endpoint> known;
+    for (const auto& endpoint : GetPeerEndpointsForGossip()) known.insert(endpoint);
+    for (const auto& endpoint : GetConfiguredPeerEndpoints()) known.insert(endpoint);
     std::optional<Endpoint> target;
     {
         std::lock_guard probe_lock(m_network.storage_probe_mutex);
         std::erase_if(m_network.probed_storage, [&](const auto& entry) {
             return entry.second.proven_at < now - std::chrono::minutes{30};
         });
+        std::erase_if(m_network.next_storage_probe, [&](const auto& entry) { return !known.contains(entry.first); });
+        for (auto& [endpoint, probed] : m_network.probed_storage) {
+            if (probed.usage && now - probed.usage->sampled_at > std::chrono::seconds{90}) probed.usage.reset();
+        }
         for (const auto& endpoint : known) {
-            if (connected.contains(endpoint)) continue;
-            // Configured peers are dialed as mesh peers; probe only discovered ones.
-            if (std::any_of(configured.begin(), configured.end(), [&](const Endpoint& peer) { return peer == endpoint; })) continue;
             if (const auto next = m_network.next_storage_probe.find(endpoint);
                 next != m_network.next_storage_probe.end() && now < next->second) continue;
             target = endpoint;
             break;
         }
         if (!target) return;
-        // One probe per endpoint every 10 min, whatever its outcome.
-        m_network.next_storage_probe[*target] = now + std::chrono::minutes{10};
+        // Reuse the existing independent storage probe, never block mesh sync.
+        m_network.next_storage_probe[*target] = now + std::chrono::seconds{30};
     }
     if (!AdmitPeerAddress(target->first)) return;
     boost::asio::io_context io;
@@ -226,8 +222,12 @@ void CybouNodeRuntime::ProbeOneStorageEndpoint()
     if (!session) return;
     const auto proven = session->ProveStorageIdentity();
     if (!proven || (m_provider.storage_id && *proven == *m_provider.storage_id)) return;
+    const auto payout_binding = session->PeerPayoutBinding();
+    const auto usage = session->RequestStorageUsage();
+    std::optional<StorageUsageSample> sample;
+    if (usage && usage->storage_id == *proven) sample = StorageUsageSample{*usage, std::chrono::steady_clock::now()};
     std::lock_guard probe_lock(m_network.storage_probe_mutex);
-    m_network.probed_storage[*target] = {*proven, session->PeerPayoutBinding(), now};
+    m_network.probed_storage[*target] = {*proven, payout_binding, now, sample};
 }
 
 void CybouNodeRuntime::SchedulePeerRetry(

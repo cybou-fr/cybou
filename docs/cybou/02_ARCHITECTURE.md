@@ -203,18 +203,26 @@ verified foreign storage service, while protocol fees still go to the Central
 Treasury. See `24_DECISIONS.md` DEC-274–DEC-283 and `18_ECONOMICS_FEES.md`.
 See `18_ECONOMICS_FEES.md`.
 
-## Built-in local monitoring
+## Built-in monitoring
 
 DEC-289 limits Beta monitoring to passive local runtime metrics, one independently
 verified canonical chain stream, ordinary peer liveness and service-owned storage
-evidence. There is no remote telemetry report protocol, cache, exchange, address-
-group aggregation, cohort history or polling scheduler. The P2P baseline ends at
-STORAGE_AUDIT_RESPONSE (26); unsupported message codes fail closed. No compatibility
-parser or experimental runtime path is retained.
+evidence. Broad resource telemetry, address-group aggregation, cohort history
+and a separate polling scheduler remain absent. DEC-290 adds a small direct
+storage query: ordinary TLS carries two existing FinalizedChunkStore counters
+(provider budget and admitted encrypted bytes), without a new signature/audit. The existing independent storage probe samples
+known/configured endpoints at most every 30 seconds per endpoint; aggregate only
+direct samples not older than 90 seconds, once per StorageId, with coverage/age.
+Physical provider copies count; declarations are not audited service,
+guaranteed disk or a global census. No remote aggregate is forwarded or counted.
+The P2P baseline ends at STORAGE_USAGE (28); higher codes fail closed. No
+compatibility parser, consensus change, role or new worker is introduced.
 
 Local CPU/RAM/frame traffic are Technical/Console diagnostics. Network retains
-finalized progress, peers, operations/min, local storage, completed PUT/GET payload
-and existing content protection. At most two bounded local charts show operations
+three primary values over the centered full map: verified-stream operations/min,
+approximate provider capacity and admitted encrypted bytes across sampled nodes.
+Local storage/PUT/GET and content protection remain Advanced detail. At most two
+bounded local charts show operations
 and completed payload. Local samples never imply network-wide totals or capacity.
 See NETWORK_OBSERVABILITY_PLAN.md for the frozen metric set and addition gate.
 

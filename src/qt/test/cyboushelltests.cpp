@@ -25,7 +25,6 @@
 #include <qt/pages/storagepage.h>
 #include <qt/pages/diagnosticspage.h>
 #include <qt/pages/networkpage.h>
-#include <qt/benchmarkreference.h>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -1346,7 +1345,8 @@ void CybouShellTests::networkPageReflectsModel()
     QVERIFY(!network->findChild<QLabel*>(QStringLiteral("networkObservedCpu")));
     QTRY_COMPARE(traffic_chart->property("sampleCount").toInt(), 2);
     QTRY_COMPARE(operation_chart->property("sampleCount").toInt(), 2);
-    static_cast<NetworkPage*>(network)->showBenchmarkDetails();
+    static_cast<NetworkPage*>(network)->showAdvanced();
+    network->findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"))->setCurrentIndex(0);
     window->show();
     QTest::keyClick(traffic_chart, Qt::Key_Home);
     QCOMPARE(traffic_chart->property("selectedIntervalMs").toULongLong(), 5000ULL);
@@ -5898,50 +5898,96 @@ void CybouShellTests::filesSelectionToolbarFollowsView()
     QVERIFY(bar->isHidden());
 }
 
-void CybouShellTests::networkReferenceAndAdvancedScopes()
+void CybouShellTests::networkAdvancedSections()
 {
     CybouDesktopModel model{QStringLiteral("DEVNET")};
     NetworkPage page{&model};
     page.resize(1040, 720);
     page.show();
-    auto* summary = page.findChild<QLabel*>(QStringLiteral("networkBenchmarkSummary"));
-    auto* scope = page.findChild<QLabel*>(QStringLiteral("networkBenchmarkScope"));
     auto* tabs = page.findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"));
-    QVERIFY(summary && scope && tabs);
+    QVERIFY(tabs);
     QCOMPARE(tabs->count(), 4);
-    QTRY_VERIFY(summary->text().contains(QStringLiteral("Unknown")));
-    QFile evidence{QStringLiteral(":/evidence/benchmark.json")};
-    QVERIFY(evidence.open(QIODevice::ReadOnly));
-    const auto reference = CybouBenchmarkReference::Parse(evidence.readAll());
+    QVERIFY(!page.findChild<QLabel*>(QStringLiteral("networkBenchmarkSummary")));
+    QVERIFY(!page.findChild<QLabel*>(QStringLiteral("networkBenchmarkReference")));
     cybou::NodeDiagnosticsSnapshot snapshot;
-    if (reference) snapshot.network_binding = reference->network_binding.toStdString();
+    snapshot.network_binding = "DEVNET";
     snapshot.peers = {{"127.0.0.1:29461", 100, ""}};
     model.setNetworkDiagnostics(snapshot);
     QTRY_COMPARE(page.peerCount(), 1);
-    if (reference) {
-        QTRY_VERIFY(summary->text().contains(QLocale{}.toString(reference->finalized_per_s*60,'f',1)));
-        QVERIFY(scope->text().contains(QStringLiteral("historical reference")));
-        if (reference->co_located_wsl) QVERIFY(scope->text().contains(QStringLiteral("Same-host simulation")));
-    }
-    QVERIFY(summary->isVisibleTo(&page));
     page.selectPeer(0);
     page.showAdvanced();
     QCOMPARE(tabs->currentIndex(), 1);
     QCOMPARE(page.selectedPeerIndex(), 0);
-    QVERIFY(!summary->isVisibleTo(&page));
-    page.showBenchmarkDetails();
-    QCOMPARE(tabs->currentIndex(), 0);
-    QCOMPARE(page.selectedPeerIndex(), 0);
     page.showTechnicalDetails();
     QCOMPARE(tabs->currentIndex(), 3);
     page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
-    QVERIFY(summary->isVisibleTo(&page));
-    QCOMPARE(page.selectedPeerIndex(), 0);
     QVERIFY(page.detailsWidget()->parentWidget() == page.mapWidget());
     snapshot.network_binding = "different-network";
     model.setNetworkDiagnostics(snapshot);
-    QTRY_VERIFY(summary->text().contains(QStringLiteral("Unknown")));
     QTRY_COMPARE(page.selectedPeerIndex(), -1);
+}
+
+void CybouShellTests::networkSummaryPreservesFullMap()
+{
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    NetworkPage page{&model};
+    page.resize(1040, 720);
+    page.show();
+    auto* overlay = page.findChild<QWidget*>(QStringLiteral("networkSummaryOverlay"));
+    auto* rate = page.findChild<QLabel*>(QStringLiteral("networkSummaryRate"));
+    auto* capacity = page.findChild<QLabel*>(QStringLiteral("networkSummaryCapacity"));
+    auto* hosted = page.findChild<QLabel*>(QStringLiteral("networkSummaryHosted"));
+    QVERIFY(overlay && rate && capacity && hosted);
+    QCOMPARE(overlay->parentWidget(), page.mapWidget());
+    QVERIFY(overlay->isVisibleTo(&page));
+    QTRY_COMPARE(page.mapWidget()->height(), page.height());
+    QCOMPARE(rate->text(), QStringLiteral("—"));
+    model.setNodeStatus(true, 3, true);
+    model.setSyncing(false);
+    cybou::NodeDiagnosticsSnapshot snapshot;
+    snapshot.observed_unix_ms = 1791460800000ULL;
+    snapshot.initialized = true;
+    snapshot.local_storage_capacity = 16106127360ULL;
+    snapshot.local_storage_used = 1048576;
+    snapshot.finalization.windows[0] = {.window_ms = 60000, .observed_operations = 5, .complete = true};
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(5.0, 'f', 1));
+    // Local bytes are never passed off as network totals.
+    QCOMPARE(capacity->text(), QStringLiteral("—"));
+    QCOMPARE(hosted->text(), QStringLiteral("—"));
+    model.setSyncing(true);
+    QTRY_COMPARE(rate->text(), QStringLiteral("—"));
+    model.setSyncing(false);
+    snapshot.finalization.windows[0].observed_operations = 0;
+    snapshot.finalization.peak_known = true;
+    snapshot.finalization.peak_observed_minute = 8;
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_COMPARE(rate->text(), QLocale{}.toString(0.0, 'f', 1));
+    QTRY_COMPARE(page.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
+        QStringLiteral("Observed max: %1").arg(QLocale{}.toString(quint64{8})));
+    snapshot.network_storage = cybou::NetworkStorageUsage{.capacity_bytes = 128849018880ULL,
+        .stored_bytes = 9876543210ULL, .nodes = 4, .responding_endpoints = 3, .known_endpoints = 3,
+        .peak_capacity_bytes = 128849018880ULL, .peak_stored_bytes = 11000000000ULL};
+    model.setNetworkDiagnostics(snapshot);
+    QTRY_COMPARE(capacity->text(), QStringLiteral("≈ %1").arg(CybouProduct::sizeText(128849018880ULL)));
+    QTRY_COMPARE(hosted->text(), QStringLiteral("≈ %1").arg(CybouProduct::sizeText(9876543210ULL)));
+    const auto capture = qEnvironmentVariable("CYBOU_NETWORK_SUMMARY_CAPTURE");
+    if (!capture.isEmpty()) {
+        CybouTheme::setAppearance(CybouTheme::Appearance::Dark);
+        CybouTheme::applyTo(*qApp);
+        QTest::qWait(100);
+        QVERIFY(page.grab().save(capture));
+    }
+    page.resize(760, 640);
+    QTest::qWait(100);
+    QCOMPARE(page.mapWidget()->height(), page.height());
+    QVERIFY(page.mapWidget()->rect().contains(overlay->geometry()));
+    if (!capture.isEmpty()) QVERIFY(page.grab().save(capture + QStringLiteral(".narrow.png")));
+    page.showAdvanced();
+    QVERIFY(!overlay->isVisibleTo(&page));
+    QCOMPARE(page.mapWidget()->height(), page.height());
+    page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
+    QVERIFY(overlay->isVisibleTo(&page));
 }
 
 void CybouShellTests::networkRefreshCoalescesStatusBurst()
@@ -6013,33 +6059,6 @@ void CybouShellTests::headerSaysWhenTheNetworkStopsConfirming()
     snap.peers = {{"51.255.46.58:29461", 1011, ""}, {"51.255.46.58:29462", 1011, ""}, {"203.0.113.9:29461", 9000000000, ""}};
     model.setNetworkDiagnostics(snap);
     QCOMPARE(model.status().sync_target_height, quint64{1011});
-}
-
-void CybouShellTests::benchmarkReferenceRequiresAcceptedEvidence()
-{
-    QJsonObject o{{"result","PASS"},{"run_id","20261007-120000"},{"network_binding",QString(64,'a')},
-        {"profile","files"},{"attempted_operations",5},{"submitted_operations",3},{"finalized_operations",3},
-        {"measurement_window_s",10},{"finalized_ops_per_s",0.3},{"replicas",2},{"file_size","64KiB"},
-        {"clients",QJsonObject{{"test-client",QJsonObject{}}}},{"co_located_wsl",true},
-        {"provenance",QJsonObject{{"revision",QString(40,'b')},{"windows_loadgen_sha256",QString(64,'c')},{"dirty",true}}},
-        {"checks",QJsonArray{QJsonArray{"restore",true,"3/3"}}}};
-    const auto parse=[](const QJsonObject& object) { return CybouBenchmarkReference::Parse(QJsonDocument{object}.toJson()); };
-    const auto accepted=parse(o);
-    QVERIFY(accepted);
-    QCOMPARE(accepted->finalized,quint64{3});
-    QCOMPARE(accepted->finalized_per_s,0.3);
-    QVERIFY(accepted->co_located_wsl);
-    for (const auto& [key,value] : std::vector<std::pair<QString,QJsonValue>>{
-        {"result","FAIL"},{"finalized_operations",2},{"attempted_operations",1},
-        {"measurement_window_s",0},{"finalized_ops_per_s",10},{"checks",QJsonArray{}},
-        {"checks",QJsonArray{QJsonArray{"restore",false,"failed"}}},{"provenance",QJsonObject{}},
-        {"run_id","20269999-120000"},{"network_binding","unknown"},{"replicas",0},
-        {"clients",QJsonObject{}},{"file_size","unknown"}}) {
-        auto bad=o; bad.insert(key,value); QVERIFY2(!parse(bad),qPrintable(key));
-    }
-    QVERIFY(!CybouBenchmarkReference::Parse("{}"));
-    QVERIFY(!CybouBenchmarkReference::Parse("{\"operations\":3,\"operations_per_s\":1}"));
-    QVERIFY(!CybouBenchmarkReference::Parse(QByteArray(1024*1024+1,' ')));
 }
 
 void CybouShellTests::consoleCompletionAndSearchClearOnLock()

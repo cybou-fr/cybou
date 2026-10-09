@@ -1,121 +1,63 @@
-# Built-in Network monitoring — Beta scope
+# Built-in Network overview
 
-Status: active Level 4 delivery boundary and Level 5 metric contract, 2026-10-09.
-DEC-289 freezes Beta monitoring to passive local measurements and evidence
-naturally produced by the existing chain, P2P and storage protocols. No separate
-remote telemetry protocol, report cache, polling worker, address-group aggregation
-or cohort history is part of the active runtime. Git retains the former design.
+Status: active product/implementation scope, 2026-10-09, DEC-289/DEC-290.
 
-## Frozen metric set
+## Exactly three primary figures
 
-### Network product target — corrected scope (2026-10-09)
-
-The operator explicitly requested three network-wide figures. The primary
-Network page must answer these questions, preserving the full-map composition:
-
-| Primary figure | Meaning | Current evidence and delivery gap |
+| Figure | Existing source | Honest precision |
 |---|---|---|
-| Current operations/min | Operations finalized in the single verified network stream during a defined observation window | Existing finalization meter observes verified block arrivals; complete windows, sync/import state and sample time must remain explicit. It is not this node's produced-operation rate, sum of peer rates or a global freshness guarantee. |
-| Maximum network throughput | Measured sustainable finalized operations/min under a stated workload and network configuration | No established network-wide maximum exists. The historical Files simulation measures its workload/cohort, not a ceiling. Define an accepted capacity procedure, saturation/error/latency criteria and configuration before publishing a number. Never derive it from local CPU, storage V, current rate or protocol block bounds. |
-| Data actually hosted by the network | Actual encrypted payload currently held by the network, with a defined copy accounting basis | No complete aggregate exists. Canonical publications/leases record authorization and billing units, not exact byte lengths or current holdings. Define storage-service evidence, replica accounting, deduplication, freshness, coverage and deletion handling before collecting/publishing the total. Local ChunkStore use, owned file sizes, paid units and chunk count × 512 KiB are not this figure. |
+| Operations/min | Verified finalized stream, existing FinalizationMeter, completed 60-second arrival window | Observed current rate; history imports excluded, missing/partial/offline/syncing observations unavailable. Never substitute a historical load-test rate for current traffic. |
+| Network storage capacity | Sum of responding nodes' existing FinalizedChunkStore CapacityBytes provider budgets | Approximate reported usable provider capacity, not a census or guaranteed free disk. Local reserve excluded. |
+| Data hosted by the network | Sum of responding nodes' existing FinalizedChunkStore UsedBytes admission counters | Approximate accounted admitted encrypted bytes. Copies on distinct stores count; no unique-file or independently audited holding claim. |
 
-These three figures are the accepted product scope, not implemented telemetry.
-They replace the mistaken interpretation that local storage and PUT/GET cards
-constitute the requested network overview. Do not introduce a fourth primary
-storage-capacity figure or substitute a local reading for a missing network value.
-Do not restore the former broad peer resource-report protocol as a side effect.
-The source/evidence work below must precede numeric claims and GUI delivery.
+The operator wants useful approximate figures, not proof of every byte. Do not
+gate these readings on a new audit/notarization/accounting system, a network
+census, independent failure domains or a new capacity benchmark. Achieved maxima
+come only from real measurements during ordinary operation, never imported test
+results, generated load or a theoretical ceiling.
 
-Local node health/storage/transfer diagnostics belong in a compact Home summary
-and detailed Advanced/Console surfaces. That Home summary is target work;
-restoring the large Network map did not implement it. CPU/RAM remain technical.
+## Small direct query, no telemetry platform
 
-### Next delivery work
+Every Full Node can answer a direct ordinary TLS storage query with two existing
+u64 counters. STORAGE_USAGE_REQUEST (27) has no payload; STORAGE_USAGE (28) is
+exactly provider_capacity:u64 LE and admitted_bytes:u64 LE. No new signature,
+audit or proof of bytes is created. The existing on-demand storage identity proof
+is reused solely to deduplicate the storage relationship, never as authority.
 
-1. Specify a small service-owned network summary for the three figures above.
-   Record units, observation window, network binding, as-of time, evidence source,
-   known coverage, Unknown/partial/stale states and collector cost. Separate
-   independently verified chain facts, scoped measured capacity and storage
-   evidence; no observation grants consensus authority.
-2. For hosted data, decide and expose unique encrypted payload versus physical
-   replica bytes without summing duplicate peer reports. Define the observation
-   population and privacy boundary; StorageId alone is no host/operator census.
-   Existing receipts/audits are relationship-scoped evidence, not a network total.
-3. Establish the throughput-capacity acceptance procedure on the actual supported
-   configuration. A workload's highest achieved rate is scoped evidence, not
-   proof of an absolute maximum. Retain the run/configuration/date with the value.
-4. Wire the resulting summary into one compact surface within the existing map
-   composition. No strip of three diagnostic cards above the map. Keep local
-   numbers in Home/Advanced and retain exactly the existing two chart types.
-5. Verify source correctness, missing/partial/stale states, replica deduplication
-   and native EN/FR layout before calling the network summary complete.
-
-### Existing implemented local diagnostics
-
-| Metric | Source and scope |
-|---|---|
-| Status / safety halt / sync | This Full Node's runtime and verified state; peer sync is only a liveness hint |
-| Finalized height | Locally independently verified PoA-finalized chain |
-| Connected peers | Current admitted local mesh sessions; not a network census |
-| Finalized operations/min | One verified stream, completed 1/5/15-minute local arrival windows; historical imports separate |
-| Local storage | Explicit V, accounted encrypted copies, admitted provider bytes/budget and available filesystem bytes |
-| PUT/GET payload | Completed encrypted transfers, receive/send totals and 60-complete-second rates; repeats included |
-| Content protection | Existing Identity-scoped Mail/Files durability model and storage-service evidence |
-| Candidate pool / uptime | Actual volatile local pool and runtime lifetime, in Technical/Console |
-| CPU / RAM / frame traffic | Local Technical/Console diagnostics; no remote values or network load score |
-
-A complete quiet window may be zero. Startup, missing/failed samples and partial
-windows stay Unknown. Measurements reset with the runtime, carry its network
-binding/sample time, and retain no peer/user/content identifiers in metric history.
-The existing diagnostics sampler continues independently of Identity unlock and
-Network visibility. Reading the UI triggers no transfer, proof, audit or benchmark.
-
-PUT receive counts successful admission; PUT send requires a matching verified
-provider receipt. GET receive requires complete ChunkID verification; GET send
-means a complete local write, without proof of remote receipt. Completion-time
-windows include recovery/repair/full GET checks and repeat transfers. Endpoint
-totals can differ. Frame traffic includes service/retries and excludes TLS/TCP
-headers; it is separate from completed encrypted payload.
-
-Storage V and physical use are not unique logical content, verified durability,
-service-eligible remote capacity or consensus rights. Available shared disk space
-is not a promised allocation. Peer reachability/height are not PoA authority,
-independent failure domains or proof of global freshness. Storage evidence remains
-service-owned; GUI pages do not enumerate provider databases or the common store.
+The existing independent storage probe queries known/configured endpoints one
+at a time, at most once per endpoint per 30 seconds. It uses ordinary admission,
+TLS pinning, ingress/transfer limits and a two-second usage reply deadline.
+Only fresh direct samples up to 90 seconds old enter a sum, once per StorageId;
+never recursively sum another node's aggregate. Include this Full Node once.
+Overflow yields unavailable values; missing replies do not mean zero.
+The small in-memory sample fits the existing bounded storage-probe map; no new
+DB, worker, CPU/RAM report, cohort history, provider registry or consensus state.
 
 ## Presentation
 
-The primary Network / Réseau target is the three network figures specified above;
-the restored runtime still shows the map, local sessions/protection and historical
-reference, with diagnostic readings in Advanced. Local CPU/RAM, uptime, candidate pool, frame traffic,
-peer table, StorageIds, state root and NetworkBinding belong in Advanced/Technical
-or Console. The illustrative France map is an observed-connection view only.
+Preserve the map's fitted size and center. Exactly three figures appear
+horizontally in a translucent overlay over its top/header. No lateral panel,
+no layout space reserved above the map and no historical benchmark card in
+Network or Advanced. Capacity/hosted values carry ≈, sampled-node/reply coverage
+and observation time. These are indicative totals for reached nodes, not a
+guarantee that every participant has answered. Real zero remains zero.
 
-Keep at most two local bounded charts: finalized operations and completed PUT/GET
-payload receive/send. Both use completed five-second intervals, at most 180 points
-(15 minutes) in volatile RAM. No network CPU, frame-traffic or capacity chart.
-Console `health`, `metrics` and `capacity` remain read-only and match local sources.
+Each figure has a small observed-maximum value. The runtime retains the greatest
+completed-minute operation observation and greatest sampled capacity/admitted
+byte sum since this node started. These are maxima actually observed by this
+runtime, not guaranteed global all-time records. They reset with runtime restart
+or explicit meter reset; no persistent telemetry ledger or synthetic load.
 
-## Addition gate
+Local CPU/RAM, disk, PUT/GET, uptime and candidate pool remain Advanced/Console
+details; they are not primary network figures. A Home node summary is separate
+future work. Keep only the existing two local charts (finalized operations and
+completed PUT/GET), with no remote resource chart.
 
-The existing local Beta metric set is frozen. The three-figure network product
-request above is an explicit scope decision; it does not authorize invented
-numeric estimates or automatically revive the former remote-report architecture.
-Do not automatically continue the former queue of
-storage I/O, queue age, error counters, canonical register totals, resource history,
-remote consolidation or theoretical capacity estimates. A proposed addition must
-answer a concrete operator/product question (for example, why this publication
-cannot obtain a replica), identify an existing trustworthy source, define its
-scope/cost/privacy and receive an explicit scope decision before implementation.
+## Delivery and acceptance
 
-Future storage views may summarize real receipt/audit/repair evidence, but proven
-StorageIds alone do not establish hosts or operators; a percentage needs a defined
-sample/window and denominator. No global capacity or throughput ceiling follows
-from local resource headroom. Do not invent provider, replica, audited-service or
-protected-byte totals absent a service-owned evidence definition.
-
-Beta acceptance remains live restore/rotation, uncertain payments, retrieval,
-repair, independent remote failure domains and native desktop usability. Optional
-historical capacity benchmarks validate a separate ceiling and never replace
-monitoring. No network/genesis/key/history change or deployment is required by
-this source simplification.
+The direct counter query, deduplication/sum and overlay are source-implemented.
+Test the real TLS exchange, malformed response bounds, duplicate/expired samples,
+zero/partial states and native EN/FR layout. Update the ordinary peer executables
+before accepting live coverage; synthetic totals are layout evidence only.
+No network/genesis/key/history reset, new PoA route or alternate node type.
+Live restore/rotation/payment/durability Beta acceptance remains separate.

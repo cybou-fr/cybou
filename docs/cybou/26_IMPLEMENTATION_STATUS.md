@@ -3,6 +3,37 @@
 Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Network indicative totals and observed maxima (2026-10-09)
+
+The primary Network page preserves the centered, full-size map. A translucent
+horizontal header overlay presents exactly observed finalized op/min, approximate
+network provider capacity and admitted encrypted bytes. Benchmark cards, compiled
+reference resource and GUI parser are removed. Each figure has its greatest real
+observation since runtime start; no generated load, benchmark result or historical
+block import supplies an operation maximum. Maxima are volatile, not all-time
+network records or theoretical ceilings.
+
+DEC-290 adds only a small direct counter query over ordinary TLS: empty request
+(27), exactly two little-endian u64 counters in response (28). Existing storage
+identity proof deduplicates storage relationships; no new usage signature, audit
+or accounting platform. Source is existing FinalizedChunkStore CapacityBytes /
+UsedBytes. The independent storage probe samples known/configured endpoints at
+most every 30 seconds per endpoint, with two-second reply deadline; samples older
+than 90 seconds do not contribute. Sum direct samples once per StorageId, plus
+this node once; display approximate values, response coverage and time. Copies
+count, local reserve excluded; not a census, free disk or unique logical size.
+GUI reads snapshots without network I/O. No new worker, DB, network role, signer
+route, genesis/key/history reset or canonical operation.
+
+Validation: desktop/core/Qt targets rebuilt; runtime, P2P and node-service
+suites passed (74 cases), full native Windows Qt passed (92, zero failed/skipped).
+After the responsive header adjustment, both Network regressions passed again;
+1040x720 and 760x640 fixture captures preserve the map and show uncut labels.
+These fixture values are layout evidence, not live network measurements.
+The VPS still runs its prior executable; updated-peer live acceptance is pending
+ordinary peer binary deployment. No service, state, key or signer was changed.
+Ignored build/test/fixture evidence: `artifacts/network-overlay-20261009/`.
+
 ## Beta monitoring simplification (2026-10-09)
 
 Remote telemetry has been removed from production source and active documents:

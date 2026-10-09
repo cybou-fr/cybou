@@ -274,6 +274,7 @@ public:
     /// \brief Возвращает диагностический snapshot runtime, peer set и storage usage.
     /// \return Данные для UI/CLI diagnostics; peer и state locks не удерживаются одновременно дольше нужного.
     NodeDiagnosticsSnapshot GetDiagnostics() const;
+    std::optional<StorageUsage> LocalStorageUsage() const;
     std::shared_ptr<TrafficMeter> GetTrafficMeter() const { return m_traffic; }
     /// \brief Доступ к optional writer'у событий runtime.
     /// \return Shared pointer на writer либо nullptr, если логирование отключено.
@@ -678,9 +679,11 @@ private:
             std::array<unsigned char, 32> storage_id{};
             std::optional<StoragePayoutBinding> payout_binding;
             std::chrono::steady_clock::time_point proven_at{};
+            std::optional<StorageUsageSample> usage;
         };
         mutable std::mutex storage_probe_mutex;
         std::map<Endpoint, ProbedStorage> probed_storage;
+        mutable uint64_t peak_storage_capacity{0}, peak_storage_used{0};
         std::map<Endpoint, std::chrono::steady_clock::time_point> next_storage_probe;
         /** Probes run on their own thread: a dial to an unreachable endpoint waits for its
             timeout and must never hold back block sync or operation relay. */

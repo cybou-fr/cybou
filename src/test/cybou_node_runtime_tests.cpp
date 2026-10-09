@@ -26,6 +26,45 @@
 
 BOOST_FIXTURE_TEST_SUITE(cybou_node_runtime_tests, CybouTestSetup)
 
+BOOST_AUTO_TEST_CASE(observed_minute_peak_retains_real_measurements_and_resets)
+{
+    const auto start = cybou::FinalizationMeter::Clock::time_point{};
+    cybou::FinalizationMeter meter{start};
+    meter.Record(8, cybou::BlockObservation::ANNOUNCEMENT, start + std::chrono::seconds{10});
+    meter.Record(1000, cybou::BlockObservation::HISTORY, start + std::chrono::seconds{20});
+    BOOST_CHECK(!meter.Snapshot(start + std::chrono::seconds{59}).peak_known);
+    const auto measured = meter.Snapshot(start + std::chrono::seconds{60});
+    BOOST_CHECK(measured.peak_known);
+    BOOST_CHECK_EQUAL(measured.peak_observed_minute, 8U);
+    const auto quiet = meter.Snapshot(start + std::chrono::seconds{200});
+    BOOST_CHECK_EQUAL(quiet.windows.front().observed_operations, 0U);
+    BOOST_CHECK_EQUAL(quiet.peak_observed_minute, 8U);
+    meter.Reset(start + std::chrono::seconds{200});
+    BOOST_CHECK(!meter.Snapshot(start + std::chrono::seconds{201}).peak_known);
+}
+
+BOOST_AUTO_TEST_CASE(network_storage_sums_fresh_unique_nodes_and_rejects_overflow)
+{
+    const auto now = std::chrono::steady_clock::now();
+    cybou::StorageUsage local{{1}, 100, 10};
+    std::vector<cybou::StorageUsageSample> samples{
+        {{{2}, 200, 20}, now - std::chrono::seconds{20}},
+        {{{2}, 200, 30}, now - std::chrono::seconds{10}},
+        {{{1}, 100, 10}, now}, // Local identity reached through another endpoint.
+        {{{3}, 999, 999}, now - std::chrono::seconds{91}},
+        {{{4}, 999, 999}, now + std::chrono::seconds{1}}};
+    const auto sum = cybou::SumStorageUsage(local, samples, 5, now);
+    BOOST_REQUIRE(sum);
+    BOOST_CHECK_EQUAL(sum->capacity_bytes, 300U);
+    BOOST_CHECK_EQUAL(sum->stored_bytes, 40U);
+    BOOST_CHECK_EQUAL(sum->nodes, 2U);
+    BOOST_CHECK_EQUAL(sum->responding_endpoints, 2U);
+    BOOST_CHECK_EQUAL(sum->known_endpoints, 5U);
+    BOOST_CHECK_EQUAL(sum->oldest_age_ms, 10000U);
+    samples.push_back({{{5}, std::numeric_limits<uint64_t>::max(), 0}, now});
+    BOOST_CHECK(!cybou::SumStorageUsage(local, samples, 6, now));
+}
+
 BOOST_AUTO_TEST_CASE(process_cpu_intervals_use_elapsed_time_and_reset_on_missing_data)
 {
     cybou::ProcessCpuMeter meter;

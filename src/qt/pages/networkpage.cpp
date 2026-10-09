@@ -7,14 +7,12 @@
 #include <qt/cybouproduct.h>
 #include <qt/cybouobservationchart.h>
 #include <qt/franceoutline.h>
-#include <qt/benchmarkreference.h>
 #include <qt/cyboutheme.h>
 #include <qt/cybouui.h>
 #include <qt/storagetransfertext.h>
 
 #include <QFrame>
 #include <QTimeZone>
-#include <QFile>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QScrollArea>
@@ -42,6 +40,24 @@
 using namespace CybouUi;
 
 namespace {
+
+class NetworkSummaryOverlay final : public QWidget {
+public:
+    using QWidget::QWidget;
+protected:
+    void paintEvent(QPaintEvent*) override
+    {
+        QPainter painter{this};
+        painter.setRenderHint(QPainter::Antialiasing);
+        auto fill = CybouTheme::color(CybouTheme::CARD);
+        fill.setAlpha(CybouTheme::isDark() ? 70 : 145);
+        auto border = CybouTheme::color(CybouTheme::BORDER);
+        border.setAlpha(65);
+        painter.setPen(border);
+        painter.setBrush(fill);
+        painter.drawRoundedRect(rect().adjusted(1, 1, -1, -1), 12, 12);
+    }
+};
 
 bool isLanEndpoint(const QString& endpoint)
 {
@@ -272,10 +288,7 @@ void SchematicFranceMap::paintEvent(QPaintEvent* /*event*/)
     // Compiled public-domain geometry, fitted without stretching its aspect ratio.
     const qreal map_height = std::min(map_rect.height(), map_rect.width() / CybouMap::ASPECT_RATIO);
     const QSizeF map_size{map_height * CybouMap::ASPECT_RATIO, map_height};
-    // Use spare horizontal space for the compact reference without covering
-    // Corsica. Keep the fitted size/aspect and the same positions in Advanced.
-    const qreal left_shift = std::min(qreal{120}, std::max(qreal{0}, (map_rect.width() - map_size.width()) / 2 - 20));
-    const QRectF silhouette{map_rect.center() - QPointF{map_size.width() / 2 + left_shift, map_size.height() / 2}, map_size};
+    const QRectF silhouette{map_rect.center() - QPointF{map_size.width() / 2, map_size.height() / 2}, map_size};
     const auto project = [&silhouette](const QPolygonF& ring) {
         QPolygonF result;
         for (const auto& pt : ring)
@@ -504,18 +517,6 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     storage_layout->addLayout(storage_grid);
     storage_layout->addWidget(MutedText(tr("Replica observations concern your Mail and Files. Mesh connections do not prove storage service. Distinct StorageIds do not prove independent machines."), storage));
     m_peer_layout->addWidget(MutedText(tr("Locally observed mesh sessions. Heights are unverified announcements; StorageId proof belongs only to an on-demand storage relationship."), peers));
-    auto* benchmark_card = Card(overview);
-    auto* benchmark_layout = new QVBoxLayout{benchmark_card};
-    benchmark_layout->addWidget(SectionTitle(tr("Benchmark reference"), benchmark_card));
-    m_benchmark_reference = new QLabel{benchmark_card};
-    m_benchmark_reference->setObjectName(QStringLiteral("networkBenchmarkReference"));
-    m_benchmark_reference->setTextFormat(Qt::PlainText);
-    m_benchmark_reference->setWordWrap(true);
-    m_benchmark_reference->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    benchmark_layout->addWidget(m_benchmark_reference);
-    overview_layout->addWidget(benchmark_card);
-
-    // Middle area: Map (left) + Peer list & details (right)
     auto* middle = new QHBoxLayout;
     middle->setSpacing(16);
 
@@ -524,29 +525,61 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     m_map->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     middle->addWidget(m_map, 1);
 
-    m_benchmark_card = Card(m_map);
-    m_benchmark_card->setProperty("cybouId", QStringLiteral("networkBenchmarkCard"));
-    m_benchmark_card->setFixedWidth(310);
-    auto* compact_layout = new QVBoxLayout{m_benchmark_card};
-    compact_layout->setContentsMargins(14, 10, 14, 10);
-    compact_layout->setSpacing(5);
-    auto* compact_header = new QHBoxLayout;
-    compact_header->addWidget(SectionTitle(tr("Benchmark reference"), m_benchmark_card), 1);
-    auto* benchmark_details = IconButton(Glyph::Info, m_benchmark_card, tr("Benchmark details"));
-    benchmark_details->setObjectName(QStringLiteral("networkBenchmarkDetails"));
-    compact_header->addWidget(benchmark_details);
-    compact_layout->addLayout(compact_header);
-    m_benchmark_summary = new QLabel{m_benchmark_card};
-    m_benchmark_summary->setObjectName(QStringLiteral("networkBenchmarkSummary"));
-    m_benchmark_summary->setTextFormat(Qt::PlainText);
-    m_benchmark_summary->setWordWrap(true);
-    compact_layout->addWidget(m_benchmark_summary);
-    m_benchmark_scope = MutedText({}, m_benchmark_card);
-    m_benchmark_scope->setObjectName(QStringLiteral("networkBenchmarkScope"));
-    m_benchmark_scope->setTextFormat(Qt::PlainText);
-    compact_layout->addWidget(m_benchmark_scope);
-    connect(benchmark_details, &QToolButton::clicked, this, &NetworkPage::showBenchmarkDetails);
-
+    // Map child only: never consumes layout space or changes the map's scale.
+    m_network_summary = new NetworkSummaryOverlay{m_map};
+    m_network_summary->setObjectName(QStringLiteral("networkSummaryOverlay"));
+    m_network_summary->setStyleSheet(QStringLiteral(
+        "QWidget#networkSummaryOverlay QLabel { background: transparent; border: none; }"
+        "QWidget#networkSummaryOverlay QLabel[summaryCaption=true] { font-size: 12px; }"
+        "QWidget#networkSummaryOverlay QLabel[summaryValue=true] { font-size: 24px; font-weight: 600; }"));
+    auto* network_summary_layout = new QGridLayout{m_network_summary};
+    network_summary_layout->setContentsMargins(18, 10, 18, 10);
+    network_summary_layout->setHorizontalSpacing(24);
+    network_summary_layout->setVerticalSpacing(5);
+    int summary_column = 0;
+    std::array<QLabel*, 3> peaks{};
+    auto summary_value = [&](const QString& caption, const QString& name) {
+        auto* column = new QWidget{m_network_summary};
+        column->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        auto* column_layout = new QVBoxLayout{column};
+        column_layout->setContentsMargins(0, 0, 0, 0);
+        column_layout->setSpacing(4);
+        auto* title = new QLabel{caption, column};
+        title->setObjectName(QStringLiteral("cardLabel"));
+        title->setWordWrap(true);
+        title->setProperty("summaryCaption", true);
+        column_layout->addWidget(title);
+        auto* value = new QLabel{QStringLiteral("—"), m_network_summary};
+        value->setObjectName(name);
+        value->setProperty("summaryValue", true);
+        value->setMinimumWidth(0);
+        value->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        column_layout->addWidget(value);
+        auto* peak = new QLabel{column};
+        peak->setObjectName(QStringLiteral("cardLabel"));
+        peak->setProperty("summaryCaption", true);
+        peak->setWordWrap(true);
+        peak->setToolTip(tr("Observed maxima since this node started; storage values are approximate."));
+        column_layout->addWidget(peak);
+        peaks[summary_column] = peak;
+        network_summary_layout->addWidget(column, 0, summary_column);
+        network_summary_layout->setColumnStretch(summary_column++, 1);
+        return value;
+    };
+    m_network_rate = summary_value(tr("Network operations / min"), QStringLiteral("networkSummaryRate"));
+    m_network_rate->setToolTip(tr("Verified finalized operations observed over 60 complete seconds; history imports excluded."));
+    m_network_capacity = summary_value(tr("Network storage capacity"), QStringLiteral("networkSummaryCapacity"));
+    m_network_hosted = summary_value(tr("Data hosted by the network"), QStringLiteral("networkSummaryHosted"));
+    m_network_rate_peak = peaks[0]; m_network_capacity_peak = peaks[1]; m_network_hosted_peak = peaks[2];
+    m_network_rate_peak->setObjectName(QStringLiteral("networkSummaryRatePeak"));
+    m_network_capacity->setToolTip(tr("Approximate sum of responding nodes’ provider capacity; not guaranteed free disk space."));
+    m_network_hosted->setToolTip(tr("Approximate admitted provider bytes across responding nodes; replicas included."));
+    m_network_sample = new QLabel{m_network_summary};
+    m_network_sample->setObjectName(QStringLiteral("cardLabel"));
+    m_network_sample->setProperty("summaryCaption", true);
+    m_network_sample->setWordWrap(true);
+    network_summary_layout->addWidget(m_network_sample, 1, 0, 1, 3);
 
     // Peer Table
     m_table = new QTableWidget{0, 5, this};
@@ -624,7 +657,7 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
             m_details_card->move(18, 94);
         }
         updateDetails();
-        m_benchmark_card->setVisible(!open);
+        m_network_summary->setVisible(!open);
         positionOverlays();
         m_advanced_button->raise();
     });
@@ -655,12 +688,6 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
 
 void NetworkPage::setDiagnosticsWidget(QWidget* widget) { m_technical_layout->addWidget(widget); }
 void NetworkPage::showAdvanced() { findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(true); }
-void NetworkPage::showBenchmarkDetails()
-{
-    showAdvanced();
-    m_advanced_tabs->setCurrentIndex(0);
-    static_cast<QScrollArea*>(m_advanced_tabs->widget(0))->ensureWidgetVisible(m_benchmark_reference);
-}
 void NetworkPage::showTechnicalDetails()
 {
     showAdvanced();
@@ -708,9 +735,10 @@ void NetworkPage::positionOverlays()
     const int panel_width = std::min(560, std::max(300, width() - 36));
     m_advanced_scroll->setGeometry(width() - panel_width - 18, 70, panel_width, std::max(100, height() - 88));
     m_advanced_button->raise();
-    m_benchmark_card->adjustSize();
-    m_benchmark_card->move(std::max(18, width() - m_benchmark_card->width() - 24),
-        std::max(84, height() - m_benchmark_card->height() - 30));
+    m_network_summary->setFixedWidth(std::max(300, m_advanced_button->x() - 192));
+    m_network_summary->adjustSize();
+    m_network_summary->move(180, 16);
+
 }
 
 void NetworkPage::showEvent(QShowEvent* event)
@@ -737,36 +765,6 @@ void NetworkPage::refresh()
     m_last_update = QDateTime::currentDateTime();
     const auto& status = m_model->status();
     const auto& diag = m_model->networkDiagnostics();
-    static const auto reference = [] {
-        QFile file{QStringLiteral(":/evidence/benchmark.json")};
-        return file.open(QIODevice::ReadOnly) ? CybouBenchmarkReference::Parse(file.readAll()) : std::nullopt;
-    }();
-    if (reference && reference->network_binding==QString::fromStdString(diag.network_binding)) {
-        const auto& r=*reference;
-        m_benchmark_summary->setText(tr("%1 finalized op/min").arg(QLocale{}.toString(r.finalized_per_s*60,'f',1)));
-        const auto date = QDateTime::fromString(r.run_id, QStringLiteral("yyyyMMdd-HHmmss")).date().toString(Qt::ISODate);
-        m_benchmark_scope->setText(tr("%1 UTC · %2 · %3 operations\n%4 · historical reference")
-            .arg(date, r.profile).arg(r.finalized).arg(r.co_located_wsl ? tr("Same-host simulation") : tr("DEVNET cohort")));
-        m_benchmark_reference->setText(tr(
-            "Finalized throughput: %1 op/min\n"
-            "Reference run %2 (UTC) · profile %3 · PASS\n"
-            "%4 attempted · %5 submitted · %6 finalized · %7 s\n"
-            "Controller window includes reconnect, load and drain. This is a measured cohort, not live network throughput or a capacity limit.\n"
-            "Revision %8 · modified source: %9\nLoadgen SHA-256: %10\n"
-            "%11 clients · %12 replica target · file size %13\n%14")
-            .arg(QLocale{}.toString(r.finalized_per_s*60,'f',1),r.run_id,r.profile)
-            .arg(r.attempted).arg(r.submitted).arg(r.finalized)
-            .arg(QLocale{}.toString(r.window_s,'f',1),r.revision,r.dirty ? tr("Yes") : tr("No"),r.binary_sha256)
-            .arg(r.clients).arg(r.replicas).arg(r.file_size)
-            .arg(r.co_located_wsl ? tr("Simulation: Windows and WSL share one physical host. Distinct network addresses do not prove independent remote machines.")
-                                 : tr("Observed DEVNET cohort.")));
-    } else {
-        m_benchmark_summary->setText(tr("Finalized op/min: Unknown"));
-        m_benchmark_scope->setText(tr("No accepted reference for this network."));
-        m_benchmark_reference->setText(tr(
-            "Finalized throughput: Unknown\nNo accepted benchmark reference for this network. Live peer observations do not measure network throughput."));
-    }
-
     // 1. Scope note
     const QString update_str = m_model->lastSync().isValid() ? relTime(m_model->lastSync()) : tr("Unknown");
     m_scope_note->setText(tr(
@@ -803,6 +801,25 @@ void NetworkPage::refresh()
     m_metric_finalization->setText(measured && diag.initialized && finalization.complete && finalization.window_ms ?
         QLocale{}.toString(finalization.observed_operations * 60000.0 / finalization.window_ms, 'f', 1) : tr("Unknown"));
     m_metric_finalization_sub->setText(tr("1-minute local observation · history imports excluded · no global freshness proof"));
+    const bool network_rate_ready = measured && diag.initialized && status.online && !status.syncing &&
+        finalization.complete && finalization.window_ms == 60000;
+    m_network_rate->setText(network_rate_ready ? m_metric_finalization->text() : QStringLiteral("—"));
+    m_network_rate_peak->setText(tr("Observed max: %1").arg(measured && diag.finalization.peak_known ?
+        QLocale{}.toString(diag.finalization.peak_observed_minute) : QStringLiteral("—")));
+    m_network_capacity->setText(measured && diag.network_storage ?
+        tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->capacity_bytes)) : QStringLiteral("—"));
+    m_network_hosted->setText(measured && diag.network_storage ?
+        tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->stored_bytes)) : QStringLiteral("—"));
+    m_network_capacity_peak->setText(tr("Observed max: %1").arg(measured && diag.network_storage ?
+        tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->peak_capacity_bytes)) : QStringLiteral("—")));
+    m_network_hosted_peak->setText(tr("Observed max: %1").arg(measured && diag.network_storage ?
+        tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->peak_stored_bytes)) : QStringLiteral("—")));
+    m_network_sample->setText((measured && diag.network_storage ?
+        tr("%1 nodes · %2/%3 peer replies · copies included")
+            .arg(diag.network_storage->nodes).arg(diag.network_storage->responding_endpoints).arg(diag.network_storage->known_endpoints) :
+        tr("Collecting network storage data")) + (measured ?
+        tr("\nObserved %1 UTC").arg(QDateTime::fromMSecsSinceEpoch(static_cast<qint64>(diag.observed_unix_ms),
+            QTimeZone::UTC).toString(QStringLiteral("HH:mm:ss"))) : QString{}));
     const auto& traffic = diag.traffic;
     m_metric_traffic->setText(measured && traffic.window_ms ? tr("↓ %1 B/s · ↑ %2 B/s")
         .arg(QLocale{}.toString(traffic.window_received_bytes * 1000.0 / traffic.window_ms, 'f', 1),
@@ -849,8 +866,7 @@ void NetworkPage::refresh()
     m_metric_protection->setText(tr("%1/%2 protected").arg(protected_count).arg(total_count));
     m_metric_protection_sub->setText(securing_count ? tr("%1 securing").arg(securing_count) : tr("Own encrypted publications"));
 
-    m_map->setOverview(status.network_name, tr("%1 · %2 connections · %3/%4 protected")
-        .arg(cybouConnectionText(status)).arg(status.peer_count).arg(protected_count).arg(total_count));
+    m_map->setOverview(status.network_name, cybouConnectionText(status));
 
     // 7. Process peers
     const bool network_changed = m_network_binding != QString::fromStdString(diag.network_binding);

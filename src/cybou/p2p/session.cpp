@@ -306,6 +306,8 @@ bool IsSupportedMessageType(const uint8_t type)
     case MessageType::OP_POLL:
     case MessageType::STORAGE_AUDIT_CHALLENGE:
     case MessageType::STORAGE_AUDIT_RESPONSE:
+    case MessageType::STORAGE_USAGE_REQUEST:
+    case MessageType::STORAGE_USAGE:
         return true;
     default:
         return false;
@@ -790,6 +792,17 @@ std::optional<StorageId> PeerSession::ProveStorageIdentity()
     return m_peer_storage_id;
 }
 
+std::optional<StorageUsage> PeerSession::RequestStorageUsage()
+{
+    const auto identity = ProveStorageIdentity();
+    if (!identity) return std::nullopt;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    if (!Write(Frame{MessageType::STORAGE_USAGE_REQUEST, {}}, deadline)) return std::nullopt;
+    const auto response = Read(deadline);
+    if (!response || response->type != MessageType::STORAGE_USAGE || response->payload.size() != 16) return std::nullopt;
+    return StorageUsage{*identity, Read64(response->payload.data()), Read64(response->payload.data() + 8)};
+}
+
 bool PeerSession::Ping(uint64_t nonce)
 {
     if (!m_peer || nonce == 0) return false;
@@ -1181,7 +1194,7 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         return m_socket.is_open();
     }
     std::shared_ptr<void> transfer;
-    if (request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||
+    if (request->type == MessageType::STORAGE_USAGE_REQUEST || request->type == MessageType::STORAGE_PROOF_REQUEST || request->type == MessageType::PUT_AUTHORIZED_CHUNK ||
         request->type == MessageType::GET_CHUNK_BY_ID || request->type == MessageType::GET_CHUNK_AUTHORIZATION_PROOF ||
         request->type == MessageType::STORAGE_AUDIT_CHALLENGE) {
         boost::system::error_code ec;
@@ -1193,6 +1206,15 @@ bool PeerSession::ServeNext(CybouNodeRuntime& runtime)
         const auto remote = m_socket.remote_endpoint(ec);
         return !ec && runtime.AdmitIngress(remote.address().to_string(), work, bytes);
     };
+    if (request->type == MessageType::STORAGE_USAGE_REQUEST) {
+        if (!request->payload.empty() || !admit_storage(IngressBudget::Work::STORAGE_PROOF, 16)) return false;
+        const auto usage = runtime.LocalStorageUsage();
+        if (!usage) return false;
+        std::vector<unsigned char> response;
+        Put64(response, usage->capacity_bytes);
+        Put64(response, usage->stored_bytes);
+        return Write(Frame{MessageType::STORAGE_USAGE, response});
+    }
     if (request->type == MessageType::STORAGE_PROOF_REQUEST) {
         boost::system::error_code ec;
         const auto remote = m_socket.remote_endpoint(ec);

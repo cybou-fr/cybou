@@ -49,6 +49,17 @@ because it is outside these files.
 
 ## Deletion and retention boundaries
 
+DEC-290 direct storage usage adds a narrow numeric response inventory: each
+admitted TLS storage relationship carries reported provider capacity and admitted bytes; existing storage
+identity proof is reused for deduplication, without a new metric signature. No filename, ChunkID, AccountID or CPU/RAM is
+exported. The existing bounded routing/probe map retains endpoint, StorageId,
+optional payout binding and last direct numeric sample in RAM, without a new DB.
+Only samples up to 90 seconds old enter totals; existing placement identity proofs
+retain their separate 30-minute lifetime. TLS delivers indicative declarations,
+not audited service or a physical node census. GUI receives aggregate numeric
+values, coverage and age, not a new per-content provider index. This inventory
+does not claim legal certification or complete deployment/third-party retention.
+
 - Catalog deletion changes semantic application state. It does not itself
   delete historical chain records or all ciphertext copies.
 - Finalized author revocation removes active publication authorization and

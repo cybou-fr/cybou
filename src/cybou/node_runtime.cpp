@@ -117,7 +117,34 @@ NodeDiagnosticsSnapshot CybouNodeRuntime::GetDiagnostics() const
         snapshot.storage_disk_available = m_provider.chunk_blob_store->AvailableDiskBytes();
         snapshot.local_storage_capacity = m_config.storage_capacity_bytes.value_or(0);
     }
+    if (const auto local = LocalStorageUsage()) {
+        std::set<Endpoint> known;
+        for (const auto& endpoint : GetPeerEndpointsForGossip()) known.insert(endpoint);
+        for (const auto& endpoint : GetConfiguredPeerEndpoints()) known.insert(endpoint);
+        std::vector<StorageUsageSample> samples;
+        {
+            std::lock_guard lock{m_network.storage_probe_mutex};
+            for (const auto& [endpoint, probed] : m_network.probed_storage) {
+                if (known.contains(endpoint) && probed.usage) samples.push_back(*probed.usage);
+            }
+        }
+        snapshot.network_storage = SumStorageUsage(*local, samples, known.size(), std::chrono::steady_clock::now());
+        if (snapshot.network_storage) {
+            std::lock_guard lock{m_network.storage_probe_mutex};
+            m_network.peak_storage_capacity = std::max(m_network.peak_storage_capacity, snapshot.network_storage->capacity_bytes);
+            m_network.peak_storage_used = std::max(m_network.peak_storage_used, snapshot.network_storage->stored_bytes);
+            snapshot.network_storage->peak_capacity_bytes = m_network.peak_storage_capacity;
+            snapshot.network_storage->peak_stored_bytes = m_network.peak_storage_used;
+        }
+    }
     return snapshot;
+}
+
+std::optional<StorageUsage> CybouNodeRuntime::LocalStorageUsage() const
+{
+    if (!m_provider.storage_id || !m_provider.finalized_chunk_store) return std::nullopt;
+    return StorageUsage{*m_provider.storage_id, m_provider.finalized_chunk_store->CapacityBytes(),
+        m_provider.finalized_chunk_store->UsedBytes()};
 }
 
 OperationSubmitResult CybouNodeRuntime::SubmitOperationInternal(

@@ -125,7 +125,7 @@ void RunScreenshotHarness(CybouMainWindow* window, const QString& directory)
         // Synthetic local diagnostics only in the explicit screenshot fixture.
         cybou::NodeDiagnosticsSnapshot map_snapshot;
         // The fixture uses the compiled public DEVNET profile. Peer observations
-        // remain synthetic; the benchmark resource, if accepted, remains historical.
+        // remain synthetic and do not constitute live network evidence.
         map_snapshot.network_binding = cybou::ComputeNetworkBinding(
             cybou::RequireOfficialNetwork("devnet").genesis.GetNetworkPublicKey()).GetHex();
         map_snapshot.peers = {{"51.255.46.58:29461", 48213, ""}, {"51.255.46.58:29462", 48212, ""}, {"127.0.0.1:29461", 48213, ""}};
@@ -136,8 +136,6 @@ void RunScreenshotHarness(CybouMainWindow* window, const QString& directory)
         save(QStringLiteral("network-peer"));
         network->showAdvanced();
         save(QStringLiteral("network-advanced-peer"));
-        network->showBenchmarkDetails();
-        save(QStringLiteral("network-benchmark"));
         network->findChild<QTabWidget*>(QStringLiteral("networkAdvancedTabs"))->setCurrentIndex(2);
         save(QStringLiteral("network-storage"));
         network->findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);

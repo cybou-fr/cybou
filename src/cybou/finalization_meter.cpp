@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/finalization_meter.h>
 #include <utility>
+#include <algorithm>
 namespace cybou {
 FinalizationMeter::FinalizationMeter(Clock::time_point started) : m_started{started} {}
 uint64_t FinalizationMeter::Second(Clock::time_point now) const
@@ -14,6 +15,8 @@ void FinalizationMeter::Reset(Clock::time_point now)
     m_started = now;
     m_buckets = {};
     m_observed = m_produced = m_history = 0;
+    m_peak_observed_minute = 0;
+    m_peak_known = false;
 }
 void FinalizationMeter::Record(uint64_t operations, BlockObservation source, Clock::time_point now)
 {
@@ -50,6 +53,12 @@ FinalizationDiagnostics FinalizationMeter::Snapshot(Clock::time_point now) const
             window.history_operations += bucket.history;
         }
     }
+    if (result.windows.front().complete) {
+        m_peak_known = true;
+        m_peak_observed_minute = std::max(m_peak_observed_minute, result.windows.front().observed_operations);
+    }
+    result.peak_known = m_peak_known;
+    result.peak_observed_minute = m_peak_observed_minute;
     return result;
 }
 } // namespace cybou

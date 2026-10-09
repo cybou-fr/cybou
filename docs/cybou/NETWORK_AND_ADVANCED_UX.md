@@ -23,13 +23,14 @@ introduced by these product features.
 ## Network overview
 
 The corrected primary product target is exactly three network-wide figures:
-current finalized operations/min, maximum measured network throughput and actual
+current finalized operations/min, approximate reported provider capacity and actual
 encrypted data hosted across the network. Definitions, source gaps and delivery
 order are in NETWORK_OBSERVABILITY_PLAN.md. Preserve the full-map composition;
 the rejected local diagnostic card strip above it must not return. Local node
 health, storage and transfer readings belong in Home's future node summary and
 Advanced/Console detail. A local reading cannot fill an absent network aggregate.
-This is a target; current runtime has no network-wide capacity/hosted-byte source.
+DEC-290 supplies direct indicative storage usage; coverage and freshness are
+explicit, without an assertion that every network participant is reachable.
 
 DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local passive
 metrics plus ordinary chain/P2P/storage evidence. Remote telemetry, resource
@@ -62,9 +63,9 @@ The page is named Network / Réseau in navigation and headers. Built-in monitori
 is standard CYBOU functionality. The primary network figures above and local
 node diagnostics have distinct scopes and sources. Local transfer speed,
 resource load, storage capacity and policy headroom have matching Console detail.
-The observability plan
-defines local sources, the frozen metric set and the addition gate. Historical load
-benchmarks are separate ceiling evidence and do not replace current telemetry.
+The observability plan defines the direct counter sources and their approximate
+scope. Achieved maxima come only from observations during ordinary runtime;
+load-test results never supply dashboard figures or ceilings.
 No external monitoring product or synthetic load is required for collection.
 
 The existing local surfaces expose connectivity, local verified height, content
@@ -104,20 +105,16 @@ and the scrollable Advanced drawer overlay it; opening Advanced does not shrink
 the map or grow the page. Network presentation coalesces status signals and pauses
 while hidden. Diagnostic rows are retained and only their values are updated.
 
-A compact historical benchmark reference occupies the lower-right map margin.
-It shows finalized op/min, the UTC run date, workload/count and same-host
-simulation scope where applicable. Details opens the accepted evidence in
-Advanced Overview. Missing, rejected or wrong-network evidence shows Unknown.
-The fitted France/Corsica silhouette uses spare horizontal space so the reference
-does not cover Corsica, retaining its size/aspect and placement when Advanced
-opens. This is a historical workload result, never a live throughput counter.
+Three figures occupy a horizontal translucent overlay at the top of the map.
+They reserve no layout space, move no silhouette and change no map scale.
+Historical benchmark cards are removed from both Network and Advanced.
 
 Advanced has four bounded scrollable sections: Overview (local finality/mesh
-summary and reference details), Peers (observed sessions and the selected-peer
+summary), Peers (observed sessions and the selected-peer
 card), Storage (local capacity and own-content protection), and Technical
 (existing diagnostics, monitor and console entry points). Selecting a peer opens
 Peers while Advanced is active; closing returns the same selected card to the
-map. Reference and Technical entry points select their corresponding sections.
+map. Technical entry points select their corresponding section.
 Unknown capacity is not rendered as a measured zero. Mesh sessions and storage
 relationship proofs remain separate observations; no provider census or storage
 reliability is inferred from the peer table.
@@ -314,9 +311,7 @@ network-wide throughput or a full security audit. Active checks declare target,
 bytes/cost, resource limits and cancellation/cleanup behavior first.
 
 Loadgen and storage smoke/soak remain development tools behind BUILD_TESTS.
-An optional DEVNET test-build panel can consume their results after a reviewed
-resource/safety design; production cybou does not gain a load generator merely
-to fill a dashboard. No automatic benchmark on page opening, no additional PoA
+Their results stay outside the production Network and Advanced interfaces. No automatic benchmark on page opening, no additional PoA
 signer and no reset/secret export. Real live testing is a separate planned run.
 
 The current loadgen measurement contract has no schema version. It distinguishes
@@ -337,25 +332,19 @@ load and drain. It does not divide total operations by the longest individual
 client window. Rates describe that cohort/workload, not the network capacity.
 Missing latency samples render Unknown with n=0 in the report.
 
-Network Advanced can display a compiled benchmark reference separately from live
-peer observations. It requires PASS, successful nonempty acceptance checks,
-consistent counts/rate, nonzero finalized operations, binary/revision provenance,
-and the current node's matching NetworkBinding. No valid reference means Unknown.
-The compiled resource is an evidence artifact, not network/genesis configuration;
-opening Network never runs a test. `tools/battle/battle_test.py` writes
-`benchmark.json` with counts, timing scope, profile, binding, build provenance and
-acceptance checks; only a reviewed successful result may replace
-`docs/cybou/battle/benchmark_reference.json`.
+Benchmark reports remain separate tool artifacts; Network and Advanced no
+longer display the historical reference card. Live Network op/min are observed
+verified-stream arrivals, not the historical test rate.
 
 An operator-authorized Windows/WSL simulation records `co_located_wsl: true` in
-the reference and displays that scope explicitly. WSL can exercise a second
+the separate test report and displays that scope explicitly. WSL can exercise a second
 network address through ordinary private-LAN admission, but shares the Windows
 physical host. Two successful placement addresses in this exercise are not
 evidence of independent remote machines, operators or failure domains. No public
 proxy or admission bypass is required for this simulation.
 
 The desktop displays finalized operations per minute (`op/min`), rounded to one
-decimal from the unrounded per-second reference rate multiplied by 60. The
+decimal from its defined observation window. The
 measurement artifact retains its per-second fields and exact measurement window.
 
 ## Data confidence, CIA and deletion

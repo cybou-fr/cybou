@@ -82,7 +82,6 @@ public:
     void selectPeer(int index);
     void setDiagnosticsWidget(QWidget* widget);
     void showAdvanced();
-    void showBenchmarkDetails();
     void showTechnicalDetails();
 
     SchematicFranceMap* mapWidget() const { return m_map; }
@@ -117,10 +116,14 @@ private:
 
     // Header & summary
     QLabel* m_scope_note{nullptr};
-    QLabel* m_benchmark_reference{nullptr};
-    QWidget* m_benchmark_card{nullptr};
-    QLabel* m_benchmark_summary{nullptr};
-    QLabel* m_benchmark_scope{nullptr};
+    QWidget* m_network_summary{nullptr};
+    QLabel* m_network_rate{nullptr};
+    QLabel* m_network_capacity{nullptr};
+    QLabel* m_network_hosted{nullptr};
+    QLabel* m_network_rate_peak{nullptr};
+    QLabel* m_network_capacity_peak{nullptr};
+    QLabel* m_network_hosted_peak{nullptr};
+    QLabel* m_network_sample{nullptr};
     QLabel* m_metric_height{nullptr};
     QLabel* m_metric_height_sub{nullptr};
     QLabel* m_metric_peers{nullptr};

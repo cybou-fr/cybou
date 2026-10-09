@@ -17,6 +17,8 @@ struct FinalizationDiagnostics {
     std::vector<ObservationPoint> history;
     std::array<FinalizationWindow, 3> windows{{{60000}, {300000}, {900000}}};
     uint64_t observed_total{0}, local_produced_total{0}, history_total{0};
+    uint64_t peak_observed_minute{0};
+    bool peak_known{false};
 };
 /// Fixed local commit history; all access serialized by the runtime chain mutex.
 class FinalizationMeter {
@@ -32,6 +34,8 @@ private:
     Clock::time_point m_started;
     std::array<Bucket, 905> m_buckets{};
     uint64_t m_observed{0}, m_produced{0}, m_history{0};
+    mutable uint64_t m_peak_observed_minute{0};
+    mutable bool m_peak_known{false};
 };
 } // namespace cybou
 #endif

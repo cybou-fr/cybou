@@ -171,7 +171,7 @@ BOOST_AUTO_TEST_CASE(inbound_listener_closes_routes_when_policy_is_missing)
 
 BOOST_AUTO_TEST_CASE(unsupported_compact_wire_ids_are_rejected)
 {
-    BOOST_CHECK_EQUAL(cybou::p2p::MAX_MESSAGE_TYPE, 26U);
+    BOOST_CHECK_EQUAL(cybou::p2p::MAX_MESSAGE_TYPE, 28U);
     for (unsigned int type = cybou::p2p::MAX_MESSAGE_TYPE + 1; type <= 255; ++type) {
         BOOST_CHECK(!cybou::p2p::EncodeFrame({static_cast<cybou::p2p::MessageType>(type), {}}));
         const std::array<unsigned char, 10> encoded{
@@ -1789,6 +1789,46 @@ BOOST_AUTO_TEST_CASE(storage_put_budget_rejection_does_not_wait_for_chunk_body)
     BOOST_REQUIRE(session.SendFrame({MessageType::PUT_AUTHORIZED_CHUNK, init}));
     server.join();
     BOOST_CHECK(rejected);
+}
+
+BOOST_AUTO_TEST_CASE(storage_usage_reads_existing_provider_counters_over_tls)
+{
+    CybouServiceTestFixture fixture;
+    using namespace cybou::p2p;
+    const auto local = fixture.runtime->LocalStorageUsage();
+    BOOST_REQUIRE(local);
+    for (const bool malformed_reply : {false, true}) {
+        boost::asio::io_context io;
+        using boost::asio::ip::tcp;
+        tcp::acceptor acceptor{io, tcp::endpoint{boost::asio::ip::address_v4::loopback(), 0}};
+        bool served{false};
+        std::jthread server{[&] {
+            tcp::socket socket{io}; acceptor.accept(socket);
+            PeerSession session{std::move(socket), TransportRole::SERVER};
+            if (!session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+                .finalized_tip = fixture.definition.GetGenesisAnchor(), .nonce = 271})) return;
+            if (!session.ServeNext(*fixture.runtime)) return; // Existing StorageId proof.
+            if (!malformed_reply) { served = session.ServeNext(*fixture.runtime); return; }
+            const auto request = session.ReceiveFrame(std::chrono::steady_clock::now() + std::chrono::seconds{2});
+            if (!request || request->type != MessageType::STORAGE_USAGE_REQUEST) return;
+            std::vector<unsigned char> forged(17, 0); // Exact 16-byte response is mandatory.
+            served = session.SendFrame({MessageType::STORAGE_USAGE, forged});
+        }};
+        tcp::socket socket{io}; socket.connect(acceptor.local_endpoint());
+        PeerSession session{std::move(socket), TransportRole::CLIENT};
+        BOOST_REQUIRE(session.Handshake({.network_binding = fixture.runtime->GetNetworkBinding(),
+            .finalized_tip = fixture.definition.GetGenesisAnchor(), .nonce = 272}));
+        const auto usage = session.RequestStorageUsage();
+        server.join();
+        BOOST_CHECK(served);
+        if (malformed_reply) { BOOST_CHECK(!usage); }
+        else {
+            BOOST_REQUIRE(usage);
+            BOOST_CHECK(usage->storage_id == local->storage_id);
+            BOOST_CHECK_EQUAL(usage->capacity_bytes, local->capacity_bytes);
+            BOOST_CHECK_EQUAL(usage->stored_bytes, local->stored_bytes);
+        }
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()
