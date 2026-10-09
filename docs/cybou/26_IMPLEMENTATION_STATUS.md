@@ -6,6 +6,22 @@ Scope: Classification only; dated evidence and pending requirements retain their
 Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Shared economics quotes (2026-10-09)
+
+The pure economics_quote module returns publication fee, initial escrow and
+total immediate System Balance debit using current consensus helpers. Its exact
+overload serializes the authorized operation; renewal quotes include the
+StorageLease protocol fee and additional escrow. No tariff, settlement rounding,
+wire or state field changed. Wallet/Compose/Files previews are not connected yet.
+
+Scoped quote/storage-economy/root-publication suites passed 13 cases / 86,516
+assertions on Windows/MinGW: artifacts/economics-quote-core.txt (ignored).
+The four new cases exercise valid/invalid/overflow inputs, 512 KiB/1 MiB/1 GiB
+billing boundaries, parameter-derived renewal cost and comparison with signed
+RootPublication plus StorageLease consensus execution, Treasury/escrow changes
+and monetary conservation. Existing accumulator tests contribute most assertion
+counts; this is not a live publication, tariff study or Linux acceptance result.
+
 ## Forced process termination and disk recovery (2026-10-09)
 
 The process suite now also covers three Identity rotation checkpoints: both

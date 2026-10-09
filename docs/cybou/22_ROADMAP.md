@@ -38,6 +38,9 @@ large imports and native desktop acceptance remain open. The process suite now
 also covers prepared key access, finalized rotation before vault promotion and
 restart after vault promotion. Concurrent desktop rotation and crashes inside
 vault replacement retain separate acceptance gates.
+The shared pure publication/renewal quote module is now implemented and checked
+against consensus debits. Cost previews, tariff simulation and any tariff decision
+are subsequent packages; no deployed economics changes follow from these quotes.
 
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 

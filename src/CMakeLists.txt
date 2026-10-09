@@ -31,6 +31,7 @@ add_library(cybou_core STATIC
   cybou/chunk_authorization.cpp
   cybou/storage_audit.cpp
   cybou/storage_economy.cpp
+  cybou/economics_quote.cpp
   cybou/storage_lease.cpp
   cybou/encrypted_chunk.cpp
   cybou/encrypted_chunk_tree.cpp

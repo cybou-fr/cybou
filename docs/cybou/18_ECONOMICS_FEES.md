@@ -69,6 +69,26 @@ Payment uses the existing configured payment_fee. RootPublication uses:
 Each paid operation performs its own transfer. Block execution checks that
 TotalCybou is unchanged; it performs no later fee distribution.
 
+### Shared publication and renewal quotes
+
+`economics_quote.h/.cpp` provides pure read-only cost calculations using
+`ComputeRootPublicationFee` and `ComputeStorageLeaseEscrow`; it does not use the
+provisional shadow-accounting rate as an alternate tariff. Publication quotes
+separate Treasury fee, initial storage escrow and total immediate System Balance
+debit. RootPublication currently has no additional protocol fee.
+
+The exact overload serializes the complete AuthorizedRootPublication, including
+its authorization/signature and capsules. Numeric inputs can support estimates,
+but file plaintext length alone does not determine the authorized chunk count:
+metadata/index chunks must be included after staging. Zero initial lease periods
+preserve the current consensus behavior; renewal requires positive periods.
+All sums fail on overflow and use the supplied finalized protocol parameters.
+
+Renewal quotes separate the StorageLease protocol fee and new escrow. They are
+future costs under current parameters, not already spent money. A quote neither
+authorizes an operation nor guarantees sufficient balance, current state, valid
+nonce, lease ownership or execution. UI integration remains separate work.
+
 ## Supply
 
 TotalCybou counts unclaimed genesis allocation Balances, account Balances,
