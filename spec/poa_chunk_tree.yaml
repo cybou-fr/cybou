@@ -1,7 +1,7 @@
 status: CURRENT
 scope: protocol_content_KEM_recovery_source_review_with_explicit_acceptance_gaps
-remaining_review: full_Identity_operation_layouts_standards_and_clean_GUI_acceptance
-reviewed_revision: 75ba7969
+remaining_review: standards_independent_vectors_coordinator_and_clean_GUI_acceptance
+reviewed_revision: 4b606ce1
 sources:
   - docs/cybou/24_DECISIONS.md
   - docs/cybou/P2P_TRANSPORT.md
@@ -25,6 +25,10 @@ sources:
   - src/cybou/identity_authorization.cpp
   - src/cybou/identity_vault.cpp
   - src/cybou/identity_material.cpp
+  - src/cybou/account_creation.cpp
+  - src/cybou/protocol_operation.cpp
+  - src/cybou/identity_registry.cpp
+  - src/cybou/identity_registry_codec.cpp
 full_node:
   type: Full_Node
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce, listen_port]
@@ -388,3 +392,26 @@ identity_vault:
   contains_network_binding_or_epoch: false
   contains_signing_journal_or_historical_KEM_seeds: false
   after_publication_failure: authenticated_reconciliation_required_not_automatic_rollback
+
+identity_operation_wire:
+  external_tags: {account_create: 1, payment: 2, identity_rotate: 3, system_lock: 4, name_commit: 5, name_reveal: 6, root_publication: 7, revoke_publication: 8, storage_lease: 9, storage_settlement: 10}
+  tag_bytes: 1
+  extra_body_length_prefix: absent
+  integer_encoding: little_endian
+  account_create_body_bytes: 10549
+  account_create_work_bytes: 112
+  account_create_work_fields: [NetworkBinding, AccountID, authorization_commitment, work_epoch_u64, work_nonce_u64]
+  account_create_authorization_domain_exact: CYBOU/ACCOUNT-AUTHORIZATION
+  account_create_POP_domain_exact: CYBOU/ACCOUNT-POP
+  account_create_work_domain_exact: CYBOU/ACCOUNT-CREATE-WORK
+  service_authorization_prefix_bytes: 2565
+  service_authorization_fields: [AccountID, nonce_u64, current_key_epoch_u64, kind_u8, payload_commitment, ed25519_signature_64, ml_dsa_44_signature_2420]
+  service_kinds: {payment: 1, system_lock: 2, name_commit: 3, name_reveal: 4, root_publication: 5, revoke_publication: 6, storage_lease: 7}
+  service_digest_domains_exact: [CYBOU/IDENTITY-OP-DIGEST, CYBOU/IDENTITY-OP]
+  rotate_body_bytes: 13824
+  rotate_fields: [AccountID, new_recovery_key, new_authorization_key, new_KEM_package, current_nonce_u64, next_key_epoch_u64, old_recovery_signature, new_recovery_POP, new_authorization_POP]
+  rotate_old_epoch_field: absent
+  rotate_digest_domains_exact: [CYBOU/IDENTITY-ROTATE-DIGEST, CYBOU/IDENTITY-ROTATE]
+  rotate_bridge_durability: application_requirement_not_consensus_check
+  registry_entry_bytes: 3408
+  registry_recovery_index: rebuilt_not_serialized

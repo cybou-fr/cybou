@@ -20,10 +20,10 @@ editing an included file.
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 57 | 0619f949af157c63 |
 | docs/cybou/08_P2P.md | 165 | 565385191d231da0 |
 | docs/cybou/09_CRYPTO_PQ.md | 34 | 5f8208e10e994b70 |
-| docs/cybou/10_IDENTITY_NAMES.md | 44 | d893c1f1f9dbbfd3 |
+| docs/cybou/10_IDENTITY_NAMES.md | 146 | 0dc9adff0cdf9897 |
 | docs/cybou/18_ECONOMICS_FEES.md | 200 | 043335e3a9b18227 |
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 105 | 29fcf619984c72c0 |
-| docs/cybou/20_PROTOCOL_SERIALIZATION.md | 82 | 56758a627985874d |
+| docs/cybou/20_PROTOCOL_SERIALIZATION.md | 88 | 74a9f57084f7ff13 |
 | docs/cybou/21_RELEASE_SECURITY.md | 32 | 93acfc8f43ed64d7 |
 | docs/cybou/22_ROADMAP.md | 110 | f7cf4706c9f575ab |
 | docs/cybou/24_DECISIONS.md | 191 | 5459b18408c6e19b |
@@ -70,8 +70,8 @@ editing an included file.
 | docs/cybou/DEVNET_DEVELOPMENT.md | 90 | 498657a3c401e607 |
 | docs/cybou/DEVNET_LIVE_ACCEPTANCE.md | 101 | 8b1d4626739c7124 |
 | docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 10 | f1c6610bf943e798 |
-| docs/cybou/DOCUMENTATION_CONFLICT_REGISTER.md | 32 | dd0d3e0d4660e697 |
-| docs/cybou/DOCUMENTATION_REFACTOR_PLAN.md | 32 | edf52ba86157f7d3 |
+| docs/cybou/DOCUMENTATION_CONFLICT_REGISTER.md | 33 | 1dc4d211bfb5d725 |
+| docs/cybou/DOCUMENTATION_REFACTOR_PLAN.md | 32 | 79bb541b22cda245 |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 119 | ec292d49f114797c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 121 | 74b158df77a65108 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 109 | 36fd44482b35a090 |
@@ -103,7 +103,7 @@ editing an included file.
 | spec/mail_files_architecture.yaml | 110 | c97e50d62e0c955f |
 | spec/market_strategy.yaml | 78 | 16037da9584d7687 |
 | spec/monetary_model.yaml | 73 | 4cdfe745bd4bc963 |
-| spec/onboarding.yaml | 39 | 166c32c5e31ff2f2 |
-| spec/poa_chunk_tree.yaml | 390 | a5e53579ab8fecc3 |
+| spec/onboarding.yaml | 44 | 8412001de9ce189d |
+| spec/poa_chunk_tree.yaml | 417 | 9d74654bafc9bbfb |
 | spec/protocol_fee_test_vectors.csv | 9 | 015632764e9a0078 |
 | www/llms.txt | 78 | 5844e331185118f7 |

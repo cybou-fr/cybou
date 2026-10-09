@@ -1,6 +1,6 @@
 status: CURRENT
 scope: Treasury_funded_account_creation_and_local_capacity
-reviewed_revision: 787e18ca
+reviewed_revision: 4b606ce1
 sources:
   - docs/cybou/18_ECONOMICS_FEES.md
   - src/cybou/protocol_params.h
@@ -26,6 +26,11 @@ account_creation:
     required: true
     profile: ACCOUNT_CREATION_WORK
     target: protocol_parameter
+    dev_leading_zero_bits: 25
+    dev_epoch_blocks: 1024
+    dev_max_age_epochs: 1
+    future_epoch: rejected
+    minimum_wait_epochs: absent
 
 storage_onboarding:
   remote_storage: paid_storage_lease  # DEC-274

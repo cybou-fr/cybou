@@ -1,7 +1,7 @@
 # 20 — Protocol serialization
 
 Status: CURRENT
-Scope: Block/state/PoA/storage audit at ee9d721a; encrypted-content and KEM transcript audit at 531dc0da, 2026-10-09. Signing-role/vault and standards acceptance remain separate.
+Scope: Block/state/PoA/storage audit at ee9d721a; encrypted-content and KEM transcript audit at 531dc0da, 2026-10-09. Signing-role/vault reviewed at 75ba7969; Identity operation layouts reviewed at 4b606ce1. Standards/product acceptance remain separate.
 
 ## Canonical bytes
 
@@ -80,3 +80,9 @@ The current [lease and settlement layouts](18_ECONOMICS_FEES.md#current-lease-an
 are defined by [storage_lease.h](../../src/cybou/storage_lease.h) and
 [storage_lease.cpp](../../src/cybou/storage_lease.cpp). Accepted DEC-282 evidence
 fields are a target gap, not fields silently added to the current encoding.
+
+## Identity operation layouts
+
+Exact [AccountCreate, shared authorization, rotation and registry layouts](10_IDENTITY_NAMES.md#current-operation-encoding)
+separate body codecs from signature/state acceptance. Rotation encodes only the
+next key_epoch; external operation tags differ from internal authorization kinds.
