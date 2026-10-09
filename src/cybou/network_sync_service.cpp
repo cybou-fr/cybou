@@ -16,6 +16,14 @@ void NetworkSyncService::ProcessOutbox(LocalApplicationService& local, Publicati
         if (pending.status.phase == PublicationJobPhase::PROTECTED) continue;
         auto status = publication.GetJob(pending.job_id);
         if (!status) {
+            std::vector<unsigned char> leaves;
+            for (const auto& leaf : pending.content.leaves) leaves.insert(leaves.end(), leaf.begin(), leaf.end());
+            if (!network_db.Put("publication/leaves/" + pending.job_id, leaves)) throw std::runtime_error{"cannot restore publication leaves"};
+            status = publication.RecoverJob(pending.job_id, pending.content.bundle, pending.status.operation_id);
+            if (status && status->phase != PublicationJobPhase::NEEDS_ATTENTION)
+                status = publication.Resume(pending.job_id);
+        }
+        if (!status) {
             // A saved OperationID must never be silently replaced after loss of
             // its network journal. Preserve local work and ask for recovery.
             if (!pending.status.operation_id.IsNull()) {
@@ -30,6 +38,8 @@ void NetworkSyncService::ProcessOutbox(LocalApplicationService& local, Publicati
             if (!network_db.Put("publication/leaves/" + pending.job_id, leaves)) throw std::runtime_error{"cannot save publication leaves"};
             status = publication.SubmitPrepared(pending.job_id, pending.content.bundle, pending.recipient);
         } else status = publication.Resume(pending.job_id);
+        if (status->operation_id.IsNull() && !pending.status.operation_id.IsNull())
+            status->operation_id = pending.status.operation_id;
         if (!local.SetPublicationStatus(pending.job_id, *status)) throw std::runtime_error{"cannot save Outbox status"};
         // Preserve submission order. Finalized jobs may still secure copies,
         // while the next intent can be sent on a later pass.

@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(network_handoff_retains_content_and_reuses_exact_operation)
     cybou::LocalApplicationService local{db};
     cybou::PrivateApplicationStore network_db{identity->GetKeyStore(), fixture.directory / "handoff", "app.db", true};
     cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), network_db,
-        fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore())};
+        fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore()), &db};
     cybou::LocalContentStager stager{fixture.runtime->GetChunkBlobStore(), fixture.runtime->GetChunkRetention(),
         fixture.runtime->GetNetworkBinding(), db.Account(), &db};
     cybou::FilesMutationBatch document;
@@ -217,12 +217,42 @@ BOOST_AUTO_TEST_CASE(network_handoff_retains_content_and_reuses_exact_operation)
     cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
     const auto first = local.Outbox().front().status.operation_id;
     BOOST_REQUIRE(!first.IsNull());
+    BOOST_REQUIRE(db.Has("outbox/network-job/handoff"));
+    // Crash boundary: local status was not saved and the network job is lost.
+    BOOST_REQUIRE(local.SetPublicationStatus("handoff", {.phase = cybou::PublicationJobPhase::QUEUED}));
+    BOOST_REQUIRE(network_db.Erase("publication/job/handoff"));
+    cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
+    BOOST_CHECK(local.Outbox().front().status.operation_id == first);
+    // Mismatched recovery evidence must roll back, never replace the operation.
+    BOOST_REQUIRE(network_db.Erase("publication/job/handoff"));
+    auto mismatch = *content;
+    mismatch.bundle.chunk_count += 1;
+    const auto rejected = publication.RecoverJob("handoff", mismatch.bundle, first);
+    BOOST_REQUIRE(rejected);
+    BOOST_CHECK(rejected->phase == cybou::PublicationJobPhase::NEEDS_ATTENTION);
+    BOOST_CHECK(!network_db.Has("publication/job/handoff"));
+    cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
+    BOOST_CHECK(local.Outbox().front().status.operation_id == first);
     BOOST_REQUIRE(stager.Release("handoff"));
     for (const auto& leaf : content->leaves) BOOST_CHECK(fixture.runtime->GetChunkRetention().IsPinned(leaf));
     cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
     BOOST_CHECK(local.Outbox().front().status.operation_id == first);
     BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
+    BOOST_CHECK(local.Outbox().front().status.operation_id == first);
+    BOOST_CHECK(local.Outbox().front().status.phase == cybou::PublicationJobPhase::SECURING);
+    BOOST_REQUIRE(network_db.Erase("publication/job/handoff"));
+    const auto backup = db.Get("outbox/network-job/handoff");
+    BOOST_REQUIRE(backup);
+    BOOST_REQUIRE(db.Put("outbox/network-job/handoff", std::vector<unsigned char>{0}));
+    cybou::NetworkSyncService::ProcessOutbox(local, publication, network_db);
+    BOOST_CHECK(local.Outbox().front().status.phase == cybou::PublicationJobPhase::NEEDS_ATTENTION);
+    BOOST_CHECK(local.Outbox().front().status.operation_id == first);
+    BOOST_CHECK(!network_db.Has("publication/job/handoff"));
+    BOOST_REQUIRE(db.Put("outbox/network-job/handoff", *backup));
+    cybou::PublicationService reopened{*fixture.runtime, identity->GetKeyStore(), network_db,
+        fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore()), &db};
+    cybou::NetworkSyncService::ProcessOutbox(local, reopened, network_db);
     BOOST_CHECK(local.Outbox().front().status.operation_id == first);
     BOOST_CHECK(local.Outbox().front().status.phase == cybou::PublicationJobPhase::SECURING);
 }

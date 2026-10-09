@@ -99,7 +99,11 @@ public:
     /// \par Потокобезопасность
     /// После построения объект сериализует собственные публичные операции внутренним mutex.
     PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
-        PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator);
+        PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator,
+        PrivateApplicationStore* local_recovery_db = nullptr);
+    /// Restore an exact Outbox-owned job; absence returns nullopt, invalid evidence fails closed.
+    std::optional<PublicationJobResult> RecoverJob(std::string_view local_job_id,
+        const PreparedPublicationBundle& bundle, const Hash256& expected_operation);
     /// \brief Отправляет уже подготовленный bundle через durable Identity journal.
     /// \param local_job_id Локальный ASCII job id.
     /// \param bundle Уже staged bundle с root/content/proof summary.
@@ -253,6 +257,7 @@ private:
     CybouKeyStore& m_identity;
     PrivateApplicationStore& m_application_db;
     IdentityOperationCoordinator& m_coordinator;
+    PrivateApplicationStore* m_local_recovery_db;
     std::mutex m_mutex;
     /// Volatile round-robin position; never stored in the Application DB.
     std::size_t m_durability_next{0};

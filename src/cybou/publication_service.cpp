@@ -142,10 +142,14 @@ struct PublicationService::Job {
 };
 
 PublicationService::PublicationService(CybouNodeRuntime& runtime, CybouKeyStore& identity,
-    PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator)
+    PrivateApplicationStore& application_db, IdentityOperationCoordinator& coordinator,
+    PrivateApplicationStore* local_recovery_db)
     : m_runtime{runtime}, m_identity{identity}, m_application_db{application_db},
-      m_coordinator{coordinator}
+      m_coordinator{coordinator}, m_local_recovery_db{local_recovery_db}
 {
+    if (local_recovery_db && (local_recovery_db == &application_db ||
+        local_recovery_db->Account() != application_db.Account()))
+        throw std::invalid_argument{"Publication recovery requires a separate store of the same Identity"};
     if (const auto attempt = m_application_db.Get("publication/staging-attempt")) {
         const std::string job{attempt->begin(), attempt->end()};
         if (!ValidJobId(job)) throw std::runtime_error{"invalid local publication staging marker"};
@@ -211,6 +215,11 @@ bool PublicationService::Save(const std::string_view local_job_id, const Job& jo
     encoded.insert(encoded.end(), job.operation_id.begin(), job.operation_id.end());
     Append32(encoded, static_cast<std::uint32_t>(publication->size()));
     encoded.insert(encoded.end(), publication->begin(), publication->end());
+    // The exact capsule/nonce/epoch and OperationID must survive loss of app.db.
+    // Persist the independent local copy before the coordinator can submit.
+    if (m_local_recovery_db && m_local_recovery_db->Has("outbox/job/" + std::string{local_job_id}) &&
+        !m_local_recovery_db->Put("outbox/network-job/" + std::string{local_job_id}, encoded)) return false;
+    PrivateApplicationStore::Batch batch{m_application_db};
     if (!m_application_db.Put(JobKey(local_job_id), encoded)) return false;
     // После finality публикация уже зафиксирована, поэтому приватный intent с ключом больше не нужен.
     if (job.phase == PublicationJobPhase::SECURING || job.phase == PublicationJobPhase::PROTECTED) {
@@ -221,12 +230,12 @@ bool PublicationService::Save(const std::string_view local_job_id, const Job& jo
     std::string_view listed{reinterpret_cast<const char*>(index.data()), index.size()};
     for (std::size_t start{0}; start < listed.size();) {
         const auto end = std::min(listed.find('\n', start), listed.size());
-        if (listed.substr(start, end - start) == local_job_id) return true;
+        if (listed.substr(start, end - start) == local_job_id) return batch.Commit();
         start = end + 1;
     }
     index.insert(index.end(), local_job_id.begin(), local_job_id.end());
     index.push_back('\n');
-    return m_application_db.Put(JOB_INDEX_KEY, index);
+    return m_application_db.Put(JOB_INDEX_KEY, index) && batch.Commit();
 }
 
 PublicationJobResult PublicationService::SubmitPrepared(const std::string_view local_job_id,
@@ -379,6 +388,7 @@ PublicationJobResult PublicationService::ResumeLocked(const std::string_view loc
             ProtocolOperation operation{AuthorizedRootPublication{authorization, job.publication}};
             const auto op_id = ComputeOperationId(operation);
             if (!op_id) return std::nullopt;
+            if (!job.operation_id.IsNull() && job.operation_id != *op_id) return std::nullopt;
             job.operation_id = *op_id;
             if (!Save(local_job_id, job)) return std::nullopt;
             return operation;
@@ -457,7 +467,10 @@ bool PublicationService::SaveIntent(const std::string_view local_job_id, const I
         out.insert(out.end(), intent.future_self->first.begin(), intent.future_self->first.end());
         Append64(out, intent.future_self->second);
     }
-    const bool saved = m_application_db.Put(IntentKey(local_job_id), out);
+    const bool backed_up = !m_local_recovery_db ||
+        !m_local_recovery_db->Has("outbox/job/" + std::string{local_job_id}) ||
+        m_local_recovery_db->Put("outbox/network-intent/" + std::string{local_job_id}, out);
+    const bool saved = backed_up && m_application_db.Put(IntentKey(local_job_id), out);
     crypto::CleanseMemory(out.data(), out.size());
     if (saved) {
         const auto attempt = m_application_db.Get("publication/staging-attempt");
@@ -465,6 +478,45 @@ bool PublicationService::SaveIntent(const std::string_view local_job_id, const I
             (void)m_application_db.Erase("publication/staging-attempt");
     }
     return saved;
+}
+
+std::optional<PublicationJobResult> PublicationService::RecoverJob(const std::string_view id,
+    const PreparedPublicationBundle& bundle, const Hash256& expected_operation)
+{
+    std::lock_guard lock{m_mutex};
+    if (!ValidJobId(id) || !m_local_recovery_db) return std::nullopt;
+    const auto key = "outbox/network-job/" + std::string{id};
+    if (!m_local_recovery_db->Has(key)) return std::nullopt;
+    if (m_application_db.Has(JobKey(id))) return Failure("Existing publication journal is corrupt; recovery refused");
+    const auto saved = m_local_recovery_db->Get(key);
+    if (!saved) return Failure("Local publication recovery record is unreadable");
+    PrivateApplicationStore::Batch batch{m_application_db};
+    if (!m_application_db.Put(JobKey(id), *saved)) return Failure("Cannot restore publication journal");
+    auto job = Load(id);
+    if (!job || job->publication.root_chunk_id != bundle.root_chunk_id ||
+        job->publication.chunk_authorization_root != bundle.chunk_authorization_root ||
+        job->publication.chunk_count != bundle.chunk_count ||
+        (!expected_operation.IsNull() && job->operation_id != expected_operation))
+        return Failure("Local publication recovery evidence does not match Outbox");
+    if (job->phase == PublicationJobPhase::SECURING || job->phase == PublicationJobPhase::PROTECTED) {
+        const auto finalized = m_runtime.FindFinalizedRootPublication(job->operation_id);
+        if (!finalized || *finalized != job->publication)
+            return Failure("Recovered publication finality cannot be verified");
+    }
+    if (job->phase == PublicationJobPhase::QUEUED || job->operation_id.IsNull()) {
+        const auto intent = m_local_recovery_db->Get("outbox/network-intent/" + std::string{id});
+        if (!intent || !m_application_db.Put(IntentKey(id), *intent))
+            return Failure("Queued publication recovery intent is invalid");
+        const auto decoded = LoadIntent(id);
+        if (!decoded || decoded->bundle.root_chunk_id != bundle.root_chunk_id ||
+            decoded->bundle.content_key != bundle.content_key ||
+            decoded->bundle.chunk_authorization_root != bundle.chunk_authorization_root ||
+            decoded->bundle.chunk_count != bundle.chunk_count)
+            return Failure("Publication recovery intent differs from local content");
+    }
+    if (!Save(id, *job) || !batch.Commit()) return Failure("Cannot commit recovered publication journal");
+    // No signing or network I/O while the database recovery batch is open.
+    return PublicationJobResult{.phase = job->phase, .operation_id = job->operation_id};
 }
 
 PublicationJobResult PublicationService::Resume(const std::string_view local_job_id)

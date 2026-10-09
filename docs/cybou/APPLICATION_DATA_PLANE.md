@@ -54,6 +54,16 @@ before a per-pass budget is imposed.
 NetworkSyncService independently advances publication jobs, history indexing,
 content recovery and remote durability. It releases local locks before network
 calls. Stable JobID and exact recorded OperationID survive retries/restarts.
+Outbox-owned publication jobs mirror their exact prepared capsules, nonce, epoch
+and OperationID into encrypted local.db before coordinator submission. Private
+intents are also retained there. Loss of an app.db job can restore this exact
+record after checking network/Identity binding, staged roots/count and the saved
+OperationID; recovered finalized phases require canonical confirmation. Corrupt
+or inconsistent recovery records fail closed. Publication job/index updates in
+app.db are atomic. These are ordered independent durable writes, not a transaction
+across two databases. The coordinator remains the owner of exact signed operation
+bytes. If its journal is also lost, a newly signed different OperationID is
+refused; recovery may require attention rather than automatic resubmission.
 Finalized Files ordering stays canonical; an older acknowledgement cannot clear
 newer desired state. Another device is ordinary Identity use, not a protocol
 Device registry; conflicts require an explicit product policy.

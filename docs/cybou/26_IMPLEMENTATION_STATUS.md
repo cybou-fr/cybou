@@ -8,6 +8,23 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Active Outbox indexing (2026-10-09)
 
+Follow-up exact-job recovery: PublicationService mirrors Outbox-owned prepared
+jobs and intents into local.db before submission; the Qt session supplies its
+separate local store. NetworkSync restores missing app.db jobs from this copy,
+validates bundle/Identity/network/OperationID and canonical finality, and preserves
+known OperationID on failure. A different newly signed ID cannot replace an
+existing publication ID. Publication records and their app.db index now commit
+atomically. This does not migrate arbitrary headless jobs or eliminate the
+coordinator's separate signed-operation journal.
+
+Deterministic local/publication/coordinator/application suites passed 36 cases /
+626 assertions with the recovered-finality check. The Qt adapter static library
+also rebuilt successfully; the running desktop executable was not replaced.
+Scenarios simulate loss of a job with stale local
+status, mismatched/corrupt backup rollback and service reconstruction after
+finalization. They are not process-kill or complete loss of both databases and
+the coordinator journal. Evidence: artifacts/outbox-recovery-core.txt (ignored).
+
 The local store retains an encrypted active-job index alongside immutable
 completed history. Acceptance appends membership in the local transaction;
 status transitions update membership atomically. Protected jobs can be

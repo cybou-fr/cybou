@@ -41,7 +41,7 @@ bool CybouCoreApplicationAdapter::IdentitySession::Open()
             transport_override ? *transport_override : static_cast<cybou::StorageTransport&>(*transport), *db,
             static_cast<std::uint8_t>(runtime.GetNetworkGenesis().GetProtocolParameters().storage_replica_target));
         publication = std::make_unique<cybou::PublicationService>(runtime, keystore, *db,
-            runtime.GetIdentityOperationCoordinator(keystore));
+            runtime.GetIdentityOperationCoordinator(keystore), local_db.get());
         application = std::make_unique<cybou::ApplicationService>(runtime, keystore, *db, *storage);
         opened_recovery_key = keystore.GetRecoveryPublicKey();
         return true;
