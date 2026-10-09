@@ -66,6 +66,9 @@ target_link_libraries(cybou-core-test
 
 # Multi-process PoA + storage provider smoke and soak clients.
 add_executable(cybou-local-crash-test cybou_local_crash_test.cpp)
+add_executable(cybou-economics-simulation cybou_economics_simulation.cpp)
+target_link_libraries(cybou-economics-simulation cybou_core core_interface Boost::headers)
+add_test(NAME cybou_economics_simulation COMMAND cybou-economics-simulation)
 target_link_libraries(cybou-local-crash-test cybou_node core_interface Boost::headers)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)

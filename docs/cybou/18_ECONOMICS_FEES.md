@@ -159,6 +159,17 @@ wire below must not be confused with that accepted target.
 
 ### Equilibrium is an estimate
 
+The [dated cost simulation](ECONOMICS_SIMULATION_2026_10_09.md) compares five
+Mail/Files workloads over 30/90/365 periods, initial-lease versus renewal costs,
+10/100/1,000-provider sensitivity and 10,000-Identity Treasury exposure. It uses
+compiled parameters and conservative ROOT/INDEX/DATA count bounds; it does not
+measure production payout or demand. Chunk counts can substantially exceed
+plaintext bytes divided by 512 KiB because DATA targets are 160–320 KiB.
+Current signed-settlement execution accepts a one-CYBOU first-period payout
+that exhausts one-unit 30-period escrow. Whole-interval floor accrual predicts
+zero whole CYBOU for the same service interval. This discrepancy is recorded as
+DOC-020; an explicit consensus specification is needed before changing payouts.
+
 A node offering 100 GiB of provider capacity at full demand earns about what
 50 GiB of two-replica storage costs. This is never a guarantee: without demand
 no foreign chunks are assigned.

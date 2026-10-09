@@ -28,6 +28,19 @@ refactor ran protocol suites. No runtime behavior is authorized by this table.
 | DOC-018 | Vault helper comments imply every failure preserves the old file | identity_vault.cpp may fail sync/reopen after successful publish/rename; Promote supports exact-payload retry | Failure-outcome / evidence gap | Documented CYBV/CYID, authenticated reconciliation and limits. Post-publication fault injection, API outcome semantics and full GUI recovery remain open; no file/key/runtime mutation authorized |
 | DOC-019 | IdentityRotate prose implies current and next epochs are both serialized; AccountCreate lag can be misread as a wait | protocol_operation.cpp encodes only next epoch; account_creation.cpp accepts current/preceding work epoch | Documentation error | Exact operation/registry bodies, tag versus kind, double-domain digests and allowed work-age window documented. Source comparison complete; independent vectors/product acceptance separate |
 
+### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
+
+Classification: accepted economic target / implementation gap. Whole-interval
+floor accrual with carried remainder is not enforced by the current canonical
+period-cap check in storage_lease.cpp. For one billing unit and two replicas,
+30-period escrow and one-period cap both equal one CYBOU; all escrow can therefore
+be paid in the first eligible period, despite floor accrual over 30 periods being
+zero. The economics quote regression reproduces the arithmetic discrepancy.
+The dated simulation describes model accrual/refunds separately from actual
+settlements. A cumulative cap/remainder and deterministic provider rounding
+require an explicit consensus specification/cutover decision. Open; no deployed
+rent, settlement wire or state arithmetic changed in this package.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

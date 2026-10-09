@@ -121,6 +121,7 @@ content review still pending; classification alone does not revalidate all claim
 
 | Document | Status |
 |---|---|
+| [Economics cost simulation — 2026-10-09](ECONOMICS_SIMULATION_2026_10_09.md) | EVIDENCE |
 | [CYBOU battle test 20261005-180752](battle/20261005-180752.md) | EVIDENCE |
 | [CYBOU battle test 20261005-223338](battle/20261005-223338.md) | EVIDENCE |
 | [CYBOU battle test 20261006-134809](battle/20261006-134809.md) | EVIDENCE |

@@ -5,10 +5,69 @@
 #include <cybou/storage_economy.h>
 #include <cybou/storage_lease.h>
 #include <test/cybou_service_test_fixture.h>
+#include <test/cybou_economics_scenarios.h>
 #include <boost/test/unit_test.hpp>
 #include <limits>
 
 BOOST_AUTO_TEST_SUITE(cybou_economics_quote_tests)
+BOOST_AUTO_TEST_CASE(cost_model_chunk_bounds_include_real_root_index_and_data_chunks)
+{
+    std::array<unsigned char, 32> binding{};
+    binding[0] = 1;
+    for (const auto bytes : {0ULL, 1ULL << 20, 41ULL << 20}) {
+        auto remaining = bytes;
+        const auto tree = cybou::BuildEncryptedChunkTree(binding,
+            [&](std::span<unsigned char> out) -> std::optional<std::size_t> {
+                const auto count = static_cast<std::size_t>(std::min<std::uint64_t>(remaining, out.size()));
+                std::fill_n(out.begin(), count, 42);
+                remaining -= count;
+                return count;
+            }, [](std::uint32_t, const cybou::EncryptedChunk&) { return true; });
+        BOOST_REQUIRE(tree);
+        const auto [low, high] = cybou::test::PublicationChunkBounds(bytes);
+        if (bytes) {
+            BOOST_CHECK_GE(tree->chunk_count + 1, low); // additional application metadata ROOT
+            BOOST_CHECK_LE(tree->chunk_count + 1, high);
+        } else BOOST_CHECK_EQUAL(tree->chunk_count, low);
+    }
+}
+BOOST_AUTO_TEST_CASE(tiny_lease_daily_ceiling_can_consume_entire_reserved_term)
+{
+    const auto p = cybou::DevProtocolParameters();
+    BOOST_CHECK_EQUAL(*cybou::ComputeStorageLeaseEscrow(p, 1, 2, 30), 1U);
+    BOOST_CHECK_EQUAL(*cybou::ComputeStorageLeasePeriodCap(p, 1, 2), 1U);
+    cybou::StorageRentAccumulator whole, split;
+    BOOST_REQUIRE(cybou::AccrueStorageRent(whole, 1, 30 * p.storage_settlement_period_seconds, 2));
+    for (int i = 0; i < 30; ++i) BOOST_REQUIRE(cybou::AccrueStorageRent(split, 1, p.storage_settlement_period_seconds, 2));
+    BOOST_CHECK_EQUAL(whole.cybou, 0U);
+    BOOST_CHECK_EQUAL(split.cybou, whole.cybou);
+    BOOST_CHECK_EQUAL(split.remainder, whole.remainder);
+    CybouServiceTestFixture fixture;
+    auto payer = fixture.CreateIdentity("tiny-rent-payer.vault");
+    auto provider = fixture.CreateIdentity("tiny-rent-provider.vault");
+    const auto snapshot = fixture.runtime->GetStore().GetStateSnapshot();
+    BOOST_REQUIRE(snapshot && snapshot.state);
+    auto state = *snapshot.state;
+    const auto payer_id = *payer->GetKeyStore().GetAccountId();
+    const auto provider_id = *provider->GetKeyStore().GetAccountId();
+    cybou::Hash256 publication_id;
+    publication_id.begin()[0] = 1;
+    cybou::FundStorageLease(state, publication_id, payer_id, 1, 2, 30, 1);
+    const auto before = cybou::TotalCybou(state);
+    const auto provider_before = state.accounts.at(provider_id).system_balance;
+    cybou::StorageSettlement settlement{.period = state.settlement.next_period, .period_start_utc = 1700000000,
+        .entries = {{publication_id, provider_id, 1}}};
+    const auto digest = cybou::ComputeStorageSettlementDigest(fixture.runtime->GetNetworkBinding(), settlement);
+    BOOST_REQUIRE(digest);
+    const auto signature = cybou::SignIdentityMessage(fixture.validator_seed, cybou::IdentityKeyPurpose::POA_FINALIZER, *digest);
+    BOOST_REQUIRE(signature);
+    settlement.poa_signature = *signature;
+    BOOST_REQUIRE(cybou::ApplyStorageSettlement(settlement, fixture.runtime->GetNetworkBinding(),
+        fixture.definition.GetProtocolParameters(), fixture.definition.GetPoaPublicKey(), state) == cybou::StorageSettlementError::NONE);
+    BOOST_CHECK_EQUAL(state.leases.at(publication_id).escrow_onboarding + state.leases.at(publication_id).escrow_locked, 0U);
+    BOOST_CHECK_EQUAL(state.accounts.at(provider_id).system_balance - provider_before, 1U);
+    BOOST_CHECK(cybou::TotalCybou(state) == before);
+}
 BOOST_AUTO_TEST_CASE(publication_quote_separates_fees_and_initial_escrow)
 {
     const auto params = cybou::DevProtocolParameters();
@@ -54,6 +113,7 @@ BOOST_AUTO_TEST_CASE(renewal_quote_uses_consensus_parameters_and_fee)
         BOOST_CHECK_EQUAL(quote->total_system_debit, params.payment_fee + quote->storage_escrow);
     }
     BOOST_CHECK(!cybou::QuoteStorageLeaseCost(params, 1, 2, 0));
+    BOOST_CHECK(!cybou::QuoteStorageLeaseCost(params, 1, 2, params.max_storage_lease_periods + 1));
     params.payment_fee = std::numeric_limits<std::uint64_t>::max();
     BOOST_CHECK(!cybou::QuoteStorageLeaseCost(params, 2048, 2, 30));
 }

@@ -41,6 +41,10 @@ vault replacement retain separate acceptance gates.
 The shared pure publication/renewal quote module is now implemented and checked
 against consensus debits. Cost previews, tariff simulation and any tariff decision
 are subsequent packages; no deployed economics changes follow from these quotes.
+The dated economics simulation now covers the requested workload/duration matrix,
+renewal rounding and provider/onboarding sensitivity. DOC-020 captures the current
+period-cap versus accrued-rent gap. Selecting tariffs, cumulative payout rules,
+assignment/evidence and GUI financial projections remain separate work.
 
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 

@@ -31,6 +31,7 @@ std::optional<PublicationCostQuote> QuotePublicationCost(const CybouProtocolPara
 std::optional<StorageLeaseCostQuote> QuoteStorageLeaseCost(const CybouProtocolParameters& params,
     const std::uint32_t units, const std::uint8_t replicas, const std::uint32_t periods)
 {
+    if (periods > params.max_storage_lease_periods) return std::nullopt;
     const auto escrow = ComputeStorageLeaseEscrow(params, units, replicas, periods);
     if (!escrow || *escrow > std::numeric_limits<std::uint64_t>::max() - params.payment_fee) return std::nullopt;
     return StorageLeaseCostQuote{.protocol_fee = params.payment_fee, .storage_escrow = *escrow,

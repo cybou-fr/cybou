@@ -8,6 +8,23 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+Follow-up offline simulation emits JSON for five workloads at 30/90/365 periods,
+provider sensitivity and onboarding Treasury exposure, and a renderer produces
+the dated EVIDENCE report. Source sizing templates contain placeholders and are
+never dispatched; no node or signer runs in the simulation. Chunk bounds are
+checked against actual encrypted tree construction, including an INDEX-bearing
+41 MiB source. The small-lease test executes a signed canonical settlement and
+confirms current acceptance of first-period exhaustion of 30-period escrow,
+preserving monetary mass and onboarding payout origin. DOC-020 records this gap;
+the deployed settlement arithmetic is unchanged. Renewal quotes now reject
+periods beyond the existing consensus maximum.
+
+Updated scoped suites passed 15 cases / 86,568 assertions and the standalone
+simulation CTest passed: artifacts/economics-simulation-core.txt (ignored).
+The report distinguishes modeled accrual/refunds from unknown actual payouts,
+shows per-object rounding and separate renewal fees, and does not establish
+provider independence, attack cost, a new tariff decision or live economics.
+
 The pure economics_quote module returns publication fee, initial escrow and
 total immediate System Balance debit using current consensus helpers. Its exact
 overload serializes the authorized operation; renewal quotes include the
