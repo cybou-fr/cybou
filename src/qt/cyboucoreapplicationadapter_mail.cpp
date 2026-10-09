@@ -366,14 +366,14 @@ void CybouCoreApplicationAdapter::setMailRead(const QString& id, bool read)
 {
     const auto message_id = FromHex(id);
     if (!m_session || !message_id) return;
-    m_session->Post([message_id = *message_id, read](IdentitySession& s) { s.application->SetMailRead(message_id, read); });
+    m_session->PostInteractive([message_id = *message_id, read](IdentitySession& s) { s.application->SetMailRead(message_id, read); });
 }
 
 void CybouCoreApplicationAdapter::setMailStarred(const QString& id, bool starred)
 {
     const auto message_id = FromHex(id);
     if (!m_session || !message_id) return;
-    m_session->Post([message_id = *message_id, starred](IdentitySession& s) { s.application->SetMailStarred(message_id, starred); });
+    m_session->PostInteractive([message_id = *message_id, starred](IdentitySession& s) { s.application->SetMailStarred(message_id, starred); });
 }
 
 void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder folder, CommandProgress progress)
@@ -386,7 +386,8 @@ void CybouCoreApplicationAdapter::moveMail(const QString& id, CybouMailFolder fo
     }
     const auto queued_at = std::chrono::steady_clock::now();
     const bool profile = qEnvironmentVariableIsSet("CYBOU_PROFILE_MAIL_MOVES");
-    m_session->Post([message_id = *message_id, target = *target, progress, queued_at, profile](IdentitySession& s) {
+    m_session->PostInteractive(
+    [message_id = *message_id, target = *target, progress, queued_at, profile](IdentitySession& s) {
         const auto running_at = std::chrono::steady_clock::now();
         s.StateToGui([progress] { if (progress) progress(CybouCommandState::Running, {}); });
         bool ok{false};

@@ -5,6 +5,7 @@
 #include <test/cybou_publication_builder.h>
 #include <cybou/chunk_retention.h>
 #include <cybou/node_runtime.h>
+#include <cybou/storage_service.h>
 #include <test/cybou_service_test_fixture.h>
 
 #include <boost/test/unit_test.hpp>
@@ -38,6 +39,31 @@ cybou::PreparedPublicationBundle Prepare(cybou::CybouNodeRuntime& runtime,
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(cybou_publication_service_tests)
+
+BOOST_AUTO_TEST_CASE(durability_budget_rotates_without_starving_jobs)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("durability-owner.cybou");
+    cybou::KVStore proof_db{cybou::KVStoreOptions{.memory_only = true}};
+    const auto prepared = Prepare(*fixture.runtime, proof_db, "durability-pub");
+    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
+    auto& coordinator = fixture.runtime->GetIdentityOperationCoordinator(identity->GetKeyStore());
+    cybou::PublicationService publication{*fixture.runtime, identity->GetKeyStore(), application_db, coordinator};
+    cybou::RuntimeStorageTransport transport{*fixture.runtime};
+    cybou::StorageService storage{*fixture.runtime, transport, application_db};
+    for (const auto* id : {"first", "second", "third"}) publication.SubmitPrepared(id, prepared);
+    const auto jobs = publication.Jobs();
+    BOOST_REQUIRE_EQUAL(jobs.size(), 3U);
+    BOOST_CHECK(publication.ProcessDurability(storage, 0).empty());
+    for (std::size_t i = 0; i < jobs.size() * 2; ++i) {
+        const auto results = publication.ProcessDurability(storage);
+        BOOST_REQUIRE_EQUAL(results.size(), 1U);
+        BOOST_CHECK_EQUAL(results.front().first, jobs[i % jobs.size()]);
+    }
+    const auto results = publication.ProcessDurability(storage, 10);
+    BOOST_REQUIRE_EQUAL(results.size(), jobs.size());
+    for (std::size_t i = 0; i < jobs.size(); ++i) BOOST_CHECK_EQUAL(results[i].first, jobs[i]);
+}
 
 BOOST_AUTO_TEST_CASE(self_publication_waits_for_finality_and_resumes_exact_operation)
 {

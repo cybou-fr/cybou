@@ -188,16 +188,26 @@ struct CybouCoreApplicationAdapter::IdentitySession {
     };
     /** Owns the sole worker; stopping joins before any session service is destroyed. */
     struct SessionScheduler {
+        using Task = std::function<void(IdentitySession&)>;
+
         std::mutex mutex;
         std::condition_variable_any wake;
-        std::deque<std::function<void(IdentitySession&)>> tasks;
+        std::deque<Task> interactive_tasks;
+        std::deque<Task> background_tasks;
         std::jthread worker;
+
         ~SessionScheduler();
         void Start(IdentitySession& session);
         void Stop();
-        void Post(std::function<void(IdentitySession&)> task);
-        std::deque<std::function<void(IdentitySession&)>> Take(std::stop_token stop, int interval);
-        std::deque<std::function<void(IdentitySession&)>> Drain();
+
+        // Обычные фоновые или потенциально долгие команды.
+        void Post(Task task);
+
+        // Короткие локальные действия пользователя.
+        void PostInteractive(Task task);
+
+        std::deque<Task> Take(std::stop_token stop, int interval);
+        std::deque<Task> Drain();
     };
     CybouCoreApplicationAdapter* owner;
     /** Snapshots of a replaced session (lock, rotation reopen) never reach the GUI. */
@@ -232,6 +242,10 @@ struct CybouCoreApplicationAdapter::IdentitySession {
         std::filesystem::path, int, cybou::StorageTransport*);
     ~IdentitySession();
     void Post(std::function<void(IdentitySession&)> task) { scheduler.Post(std::move(task)); }
+    void PostInteractive(std::function<void(IdentitySession&)> task)
+    {
+        scheduler.PostInteractive(std::move(task));
+    }
     template <typename F>
     void ToGui(F&& f)
     {

@@ -64,6 +64,11 @@ void CybouCoreApplicationAdapter::IdentitySession::Run(std::stop_token stop)
             try { task(*this); }
             catch (const std::exception&) { qWarning() << "CYBOU application command failed"; }
         }
+
+        // После выполнения команды сразу возвращаемся к очередям.
+        // Refresh запускается только тогда, когда Take() не нашёл команд.
+        if (!pending.empty()) continue;
+
         try {
             if (!stop.stop_requested()) Refresh();
         } catch (const std::exception& e) {

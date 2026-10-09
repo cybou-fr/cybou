@@ -360,7 +360,9 @@ std::uint64_t ApplicationService::Checkpoint() const
 
 /* ---- scanning ---- */
 
-ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
+ApplicationScanProgress ApplicationService::Scan(
+    const std::uint64_t max_blocks,
+    const std::size_t max_unavailable_retries)
 {
     std::lock_guard lock{m_mutex};
     ApplicationScanProgress progress;
@@ -386,10 +388,17 @@ ApplicationScanProgress ApplicationService::Scan(const std::uint64_t max_blocks)
     // short: a fresh node often lacks providers at first, and an hour-long wait once they
     // appear left a clean restore incomplete.
     const auto now = std::chrono::steady_clock::now();
-    for (const auto& operation_id : ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
+    std::size_t unavailable_retries{0};
+    for (const auto& operation_id :
+        ReadIds<cybou::Hash256>(m_application_db, UNAVAILABLE_KEY)) {
+
+        if (unavailable_retries >= max_unavailable_retries) break;
+
         auto& retry = m_unavailable_retry[operation_id];
         if (now < retry.next) continue;
-        // The indexed records, the new state and the retry list change together.
+
+        ++unavailable_retries;
+
         PrivateApplicationStore::Batch batch{m_application_db};
         auto accessible = LoadAccessible(operation_id);
         if (!accessible || Index(operation_id, *accessible) != AccessibleRootState::TEMPORARILY_UNAVAILABLE) {

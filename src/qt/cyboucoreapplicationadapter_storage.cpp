@@ -70,7 +70,7 @@ void CybouCoreApplicationAdapter::IdentitySession::StorageProjection::Refresh(bo
             QDateTime::currentMSecsSinceEpoch()));
         session.files.locally_complete.clear(); // eviction or outside changes
     }
-    for (const auto& [id, status] : session.publication->ProcessDurability(*session.storage)) jobs[id] = status;
+    for (const auto& [id, status] : session.publication->ProcessDurability(*session.storage, 1)) jobs[id] = status;
     // Only a complete index knows every reference to an own publication.
     if (index_complete && ticks % REVOKE_EVERY_TICKS == 0) RevokeUnreferenced();
 }

@@ -193,13 +193,15 @@ public:
     /// \par Потокобезопасность
     /// Требует, чтобы вызывающая сторона не модифицировала одновременно тот же Application DB в обход сервиса.
     std::vector<std::string> Jobs();
-    /// \brief Продвигает каждую незавершённую job: finality, затем placement/durability.
+    /// \brief Продвигает ограниченный набор jobs по кругу: finality, затем placement/durability.
     /// \param storage StorageService для финализованных публикаций.
-    /// \return Пары `job id -> актуальное состояние` для всех известных jobs.
+    /// \param max_jobs Максимальное число jobs за проход; ноль не выполняет работу.
+    /// \return Пары `job id -> актуальное состояние` только для обработанных jobs.
     /// \post Может перевести job между WAITING_FINALITY, SECURING, PROTECTED и NEEDS_ATTENTION.
     /// \par Потокобезопасность
     /// Метод сам не удерживает общий mutex на всём проходе; корректность опирается на потокобезопасность этого сервиса и \p storage.
-    std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(StorageService& storage);
+    std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(
+        StorageService& storage, std::size_t max_jobs = 1);
 
     /// \brief Решает, нужна ли ещё собственная публикация: OperationID и её authorization leaves.
     using PublicationNeeded = std::function<bool(const cybou::Hash256& operation_id, std::span<const ChunkId> leaves)>;
@@ -251,6 +253,8 @@ private:
     PrivateApplicationStore& m_application_db;
     IdentityOperationCoordinator& m_coordinator;
     std::mutex m_mutex;
+    /// Volatile round-robin position; never stored in the Application DB.
+    std::size_t m_durability_next{0};
 };
 
 } // namespace cybou

@@ -926,10 +926,29 @@ std::vector<std::string> PublicationService::Jobs()
     return jobs;
 }
 
-std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::ProcessDurability(StorageService& storage)
+std::vector<std::pair<std::string, PublicationJobResult>> PublicationService::ProcessDurability(
+    StorageService& storage,
+    const std::size_t max_jobs)
 {
     std::vector<std::pair<std::string, PublicationJobResult>> results;
-    for (const auto& id : Jobs()) {
+    const auto jobs = Jobs();
+    if (jobs.empty() || max_jobs == 0) return results;
+    std::vector<std::string> selected;
+    const auto count = std::min(max_jobs, jobs.size());
+    selected.reserve(count);
+    {
+        // Reserve the next slice without retaining the service mutex across
+        // GetJob/Resume/storage I/O. Deleted jobs are skipped below; changes in
+        // the job list are accommodated by wrapping on the next pass.
+        std::lock_guard lock{m_mutex};
+        m_durability_next %= jobs.size();
+        for (std::size_t i = 0; i < count; ++i) {
+            selected.push_back(jobs[m_durability_next]);
+            m_durability_next = (m_durability_next + 1) % jobs.size();
+        }
+    }
+    for (const auto& id : selected) {
+
         auto status = GetJob(id);
         if (!status) continue;
         if (status->phase == PublicationJobPhase::SECURING && !EnsureStorageLease(id, status->operation_id)) {

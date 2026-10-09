@@ -156,7 +156,9 @@ public:
     /// Сканирует до `max_blocks` финализированных блоков с публикациями и повторяет недоступные корни.
     /// \param max_blocks Верхняя граница числа релевантных блоков за один проход; прочие высоты пропускаются.
     /// \return Обновлённый прогресс локальной индексации.
-    ApplicationScanProgress Scan(std::uint64_t max_blocks = 256);
+    ApplicationScanProgress Scan(
+    std::uint64_t max_blocks = 16,
+    std::size_t max_unavailable_retries = 1);
     /// Возвращает текущий прогресс сканирования.
     /// \return Текущая точка локального rebuildable индекса.
     ApplicationScanProgress Progress();
