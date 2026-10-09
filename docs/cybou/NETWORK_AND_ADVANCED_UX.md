@@ -22,6 +22,15 @@ introduced by these product features.
 
 ## Network overview
 
+The corrected primary product target is exactly three network-wide figures:
+current finalized operations/min, maximum measured network throughput and actual
+encrypted data hosted across the network. Definitions, source gaps and delivery
+order are in NETWORK_OBSERVABILITY_PLAN.md. Preserve the full-map composition;
+the rejected local diagnostic card strip above it must not return. Local node
+health, storage and transfer readings belong in Home's future node summary and
+Advanced/Console detail. A local reading cannot fill an absent network aggregate.
+This is a target; current runtime has no network-wide capacity/hosted-byte source.
+
 DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local passive
 metrics plus ordinary chain/P2P/storage evidence. Remote telemetry, resource
 aggregation and cohort charts are absent. Keep at most two local charts:
@@ -49,16 +58,17 @@ It uses the diagnostics sample time, displays Unknown when absent, and has
 matching exact-byte output in Console `metrics`. It is not host memory, average
 load or a network total. The Beta metric set is frozen; resource history and remote reports are outside scope.
 
-The page is named Network / Réseau in navigation and headers. Built-in passive
-monitoring is standard CYBOU functionality: actual data served, finalized op/min,
-transfer speed, resource load, storage capacity and scoped potential headroom,
-with time-series charts and matching Console detail. The observability plan
+The page is named Network / Réseau in navigation and headers. Built-in monitoring
+is standard CYBOU functionality. The primary network figures above and local
+node diagnostics have distinct scopes and sources. Local transfer speed,
+resource load, storage capacity and policy headroom have matching Console detail.
+The observability plan
 defines local sources, the frozen metric set and the addition gate. Historical load
 benchmarks are separate ceiling evidence and do not replace current telemetry.
 No external monitoring product or synthetic load is required for collection.
 
-Ordinary users see connectivity, local verified height, content protection
-summary, local storage capacity/usage and finalized service budget. Distinguish
+The existing local surfaces expose connectivity, local verified height, content
+protection, local storage capacity/usage and finalized service budget. Distinguish
 logical owned file usage, physical local ChunkStore usage and provider budget
 `floor(2V/3)`; physical storage contains encrypted own and foreign content.
 Do not enumerate foreign objects to calculate a user-facing file browser.

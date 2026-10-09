@@ -27,7 +27,18 @@ or certification claims.
 - continuing live acceptance of the ordinary headless DEV VPS/current DEVNET and compiled transport pin; the VPS cutover itself is completed as recorded in `AGENTS.md`;
 - MAINNET provisioning and GUI enablement only after its actual keys, genesis and bootstrap exist.
 
-## Candidate pool
+## Network summary source gate (2026-10-09)
+
+The accepted Network product request is three figures: current finalized op/min,
+maximum network throughput and actual hosted encrypted data. Local diagnostics
+do not answer the last two. Before implementation, define the capacity acceptance
+procedure and service-owned hosted-byte evidence with copy accounting,
+deduplication, freshness, coverage, deletion and metadata/privacy boundaries.
+Canonical lease units are billing authorization, not measured hosted bytes;
+historical workload throughput is not a network ceiling. Keep these gaps explicit
+and preserve the full-map UI. See NETWORK_OBSERVABILITY_PLAN.md for delivery order.
+
+## Candidate pool bounds
 
 - bounds of the per-node candidate pool, gossip rate limits and TTL;
 - re-execution policy for held candidates when the finalized base advances.

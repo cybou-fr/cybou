@@ -25,9 +25,9 @@ editing an included file.
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 102 | 99b437f006c0429f |
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 67 | d635ba0139c80427 |
 | docs/cybou/21_RELEASE_SECURITY.md | 29 | 847caaa3d9e5aa10 |
-| docs/cybou/22_ROADMAP.md | 97 | 912d0c317af8c811 |
+| docs/cybou/22_ROADMAP.md | 107 | dcbc3694aeb05e9d |
 | docs/cybou/24_DECISIONS.md | 229 | 888440aa2d458695 |
-| docs/cybou/25_OPEN_QUESTIONS.md | 128 | d28a3ee1811e47f6 |
+| docs/cybou/25_OPEN_QUESTIONS.md | 139 | bc8d0c519c74b245 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 1503 | a9cc7c75fecb6fa1 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
@@ -73,8 +73,8 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 90 | 285bdb9385ec2d0c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 91 | 0cac0f637335bbb0 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 106 | 9226f92dc32399ea |
-| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 378 | 9c1dfbc945d83ec6 |
-| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 73 | 21621894eda227e5 |
+| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 388 | 71082dd7526e2406 |
+| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 121 | 2ebcef4f75714984 |
 | docs/cybou/P2P_TRANSPORT.md | 114 | 7a2888e82819051f |
 | docs/cybou/POA_FINALITY.md | 80 | ff21737a8991696a |
 | docs/cybou/POA_FINALITY_VECTORS.md | 47 | 3dfdabb2cfe90f32 |
