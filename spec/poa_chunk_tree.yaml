@@ -1,7 +1,7 @@
 status: CURRENT
 scope: protocol_content_KEM_recovery_source_review_with_explicit_acceptance_gaps
-remaining_review: signing_roles_vault_full_standards_and_clean_GUI_acceptance
-reviewed_revision: 531dc0da
+remaining_review: full_Identity_operation_layouts_standards_and_clean_GUI_acceptance
+reviewed_revision: 75ba7969
 sources:
   - docs/cybou/24_DECISIONS.md
   - docs/cybou/P2P_TRANSPORT.md
@@ -21,6 +21,10 @@ sources:
   - src/cybou/root_recipient_capsule.cpp
   - src/cybou/application_service.cpp
   - src/cybou/publication_service.cpp
+  - src/cybou/identity_crypto.cpp
+  - src/cybou/identity_authorization.cpp
+  - src/cybou/identity_vault.cpp
+  - src/cybou/identity_material.cpp
 full_node:
   type: Full_Node
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce, listen_port]
@@ -343,3 +347,44 @@ identity_kem_package:
   seed_kdf: HKDF_SHA256_recovery_entropy_salt_CYBOU_IDENTITY_KEM_info_XWing_recipient_key_seed
   component_vector_sources: concrete_hybrid_KEM_drafts_03_and_04
   full_HPKE_draft_05_equivalence: unverified
+
+signing_roles:
+  recovery: {purpose: 1, ml_dsa: 65, public_bytes: 1952, signature_bytes: 3309}
+  authorization: {purpose: 2, ml_dsa: 44, public_bytes: 1312, signature_bytes: 2420}
+  poa: {purpose: 7, ml_dsa: 65, public_bytes: 1952, signature_bytes: 3309}
+  storage: {purpose: 8, ml_dsa: 44, public_bytes: 1312, signature_bytes: 2420}
+  network_root: {purpose: 9, ml_dsa: 65, public_bytes: 1952, signature_bytes: 3309}
+  ed25519: {public_bytes: 32, signature_bytes: 64}
+  both_signature_components_required: true
+  kdf: HKDF_SHA256
+  kdf_salt_exact: CYBOU/IDENTITY/HKDF-SHA256
+  caller_supplies_domain_separated_message: true
+  production_network_root_private_derivation: rejected
+  retained_PoA_key_can_survive_vault_lock: true
+identity_authorization_descriptor:
+  bytes: 3330
+  fields: [root_suite_1, recovery_ed25519_32, recovery_ml_dsa_65_1952, authorization_suite_1, authorization_ed25519_32, authorization_ml_dsa_44_1312]
+  commitment_domain_exact: CYBOU/IDENTITY-AUTH-COMMIT
+  legacy_decoder: absent
+identity_vault:
+  envelope_magic: CYBV
+  version_field: absent
+  header_bytes: 60
+  kdf: Argon2id
+  memory_kib: 65536
+  iterations: 3
+  lanes: 1
+  password_bytes: {min: 12, max: 1024}
+  salt_bytes: 16
+  nonce_bytes: 12
+  aead: AES_256_GCM
+  wrapped_DEK_bytes: 48
+  aad: exact_60_byte_header_for_both_wrap_and_payload
+  payload_max_bytes: 65536
+  envelope_overhead_bytes: 124
+  identity_payload: CYID_magic_4_then_AccountID_32_then_recovery_entropy_32
+  identity_payload_bytes: 68
+  identity_envelope_bytes: 192
+  contains_network_binding_or_epoch: false
+  contains_signing_journal_or_historical_KEM_seeds: false
+  after_publication_failure: authenticated_reconciliation_required_not_automatic_rollback

@@ -1,7 +1,7 @@
 # Post-quantum cryptography profile
 
 Status: CURRENT
-Scope: KEM/application integration claims corrected from source at 531dc0da, 2026-10-09. Full role/standards review remains pending; no conformity claim.
+Scope: KEM/application source review at 531dc0da; signing-role/vault source review at 75ba7969, 2026-10-09. Full standards/composition review remains pending; no conformity claim.
 
 Applicable published standards take precedence under
 [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md). ML-KEM and ML-DSA primitive
@@ -21,10 +21,14 @@ No protocol-level device identity exists. An Identity record has one current Rec
 | Recovery | Ed25519 + ML-DSA-65 | Restore identity and authorize full key rotation |
 | Authorization | Ed25519 + ML-DSA-44 | Sign account-level service operations and storage payout bindings |
 | Recipient KEM | X-Wing (ML-KEM-768 + X25519) | Establish or wrap content keys; separate from signing |
-| Network Key | Hybrid PQ (Network Public Key = NetworkID) | Strictly offline creation-time root of trust; signs immutable genesis specification once |
+| Network Key | Ed25519 + ML-DSA-65 (Network Public Key = NetworkID) | Strictly offline creation-time root of trust; signs immutable genesis specification once |
 | PoA Finalizer P | Ed25519 + ML-DSA-65 | Authorized in genesis; signs canonical block certificates |
-| Release Signing | Hybrid PQ / Minisign | Authenticate official software and releases |
-| Treasury / Custody | Multi-signature hybrid PQ | Protect cold network reserves and custody |
-| Storage Provider | Provider service key | Prove provider identity per live CYBOU P2P session |
+| Release Signing | Separate release-policy target | Authenticate software/releases; this table does not claim an implemented Identity signing role |
+| Treasury / Custody | Separate custody-policy target | No separate runtime Treasury signing role; ordinary account Authorization controls spendable funds |
+| Storage Provider | Ed25519 + ML-DSA-44 | Prove provider identity per live CYBOU P2P session |
 
 Use standard cryptographic libraries and pinned vectors. No classical-only production fallback and no custom cryptographic primitives.
+
+Exact implemented [role values, sizes and derivation](86_IDENTITY_SECURITY_SUBSTRATE.md#current-signing-role-bytes)
+and [CYBV/CYID formats](76_IDENTITY_VAULT_RECOVERY.md#current-portable-bytes)
+are source-reviewed separately from adopted security standards and product acceptance.

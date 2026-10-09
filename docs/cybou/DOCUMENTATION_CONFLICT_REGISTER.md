@@ -1,7 +1,7 @@
 # Documentation conflict register
 
 Status: CURRENT
-Scope: Foundation audit at 1f08f8c5; P2P/storage/economics audit at 787e18ca, 2026-10-09. Block/state/PoA audit at ee9d721a. Encrypted-content/KEM/recovery source audit at 531dc0da. Remaining domains are tracked below.
+Scope: Foundation audit at 1f08f8c5; P2P/storage/economics audit at 787e18ca, 2026-10-09. Block/state/PoA audit at ee9d721a. Encrypted-content/KEM/recovery source audit at 531dc0da. Signing-role/vault source audit at 75ba7969. Remaining domains are tracked below.
 
 Tests named below are defining regression sources, not a claim that this
 refactor ran protocol suites. No runtime behavior is authorized by this table.
@@ -25,6 +25,7 @@ refactor ran protocol suites. No runtime behavior is authorized by this table.
 | DOC-015 | State docs retain usage/quota and lease status/remainder fields; finality wording implies arbitrary-depth replacement | state.h/state.cpp have no such fields; state_store.cpp replaces only current head competitors | Documentation error plus recovery scope gap | Snapshot, block commitments, certificate digest and journal namespace corrected. Historical conflict/descendant replay remains open; no runtime change authorized |
 | DOC-016 | KEM profile/vector wording conflates adopted HPKE draft-05 target with current capsule wire and earlier draft vectors | identity_kem tests cite concrete-hybrid-KEM 03/04; root_recipient_capsule.cpp implements CYBOU HKDF/AEAD transcript | Crypto composition / acceptance gap | Exact wrapper, zero separator in package commitment, NetworkBinding and endian contexts documented. Independent profile equivalence/composition review remains open; no byte/key/domain change authorized |
 | DOC-017 | Tree prose implies global visit/count enforcement and bounded RAM for every traversal | Fetch uses path plus caller visitor; Enumerate keeps O(N) seen set | Documentation overclaim / resource coverage | Builder count, reader visitor responsibility and enumeration memory distinguished. Malformed-tree/caller resource coverage remains a gate |
+| DOC-018 | Vault helper comments imply every failure preserves the old file | identity_vault.cpp may fail sync/reopen after successful publish/rename; Promote supports exact-payload retry | Failure-outcome / evidence gap | Documented CYBV/CYID, authenticated reconciliation and limits. Post-publication fault injection, API outcome semantics and full GUI recovery remain open; no file/key/runtime mutation authorized |
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
