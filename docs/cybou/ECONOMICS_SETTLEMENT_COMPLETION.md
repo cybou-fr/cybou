@@ -124,6 +124,90 @@ and review a boundary/closure policy and pre/post-boundary vectors, then authori
 deployment separately. No genesis, NetworkID, keys, signing history or live nodes
 are changed here. No dual permanent codec/version path is prescribed.
 
+#### Settlement layout and recovery review (2026-10-09)
+
+Source inspection confirms `MAX_OPERATION_PAYLOAD_BYTES = 131072`, including
+the operation-kind byte. The finalized block limit is 33554432 bytes; it does
+not override the per-operation limit. Current settlement uses a 20-byte body
+header, 72-byte entries and a 3373-byte signature: 1024 entries produce 77122
+tagged bytes. A replacement codec must check both entry count and exact byte size.
+
+Concrete proposed base layout for review (all integers LE, identifiers raw32,
+no discriminator, exact consumption):
+
+| Field | Bytes | Validation |
+|---|---:|---|
+| period | 8 | Current canonical period, or approved batch cursor |
+| period_start_utc | 8 | Nonzero, equal to canonical expected start |
+| period_end_utc | 8 | Checked start + immutable period duration |
+| evidence_root | 32 | PoA commitment to retained assignment/service inputs |
+| entry_count | 4 | At most 1024; count checked before allocation |
+| entries | 113 each | Strict full-key order, no duplicate key |
+| witness_count | 4 | Bounded by count and remaining byte budget |
+| witnesses | Variable | Exact length-delimited typed historical binding/assignment proofs; codec still requires review |
+| PoA signature | 3373 | Existing Ed25519 + ML-DSA-65 role |
+
+An entry is funded-term OperationID32, replica_slot u8, StorageId32,
+payout AccountID32, cumulative_verified_unit_seconds u64, payout_amount u64.
+Publication/payer/budget derive from the canonical funded term, not repeated
+untrusted fields. Sort by (term, slot, StorageId, payout). Zero-amount entries
+are necessary to finalize verified service before a whole CYBOU accrues; require
+a strict service increase or an explicitly permitted initial assignment, not
+unlimited unchanged no-op entries. Amount must exactly equal the new cumulative
+floor minus canonical paid; reject a lower service total or overpayment.
+
+Without witnesses the tagged base is `3438 + 113 * count`: at 1024 it is
+119150 bytes, leaving only 11922 for all witnesses. Adding a per-entry assignment
+commitment32 instead would exceed 128 KiB (151918 bytes before witnesses).
+Therefore historical bindings/assignment proofs must be deduplicated and byte
+bounded. A hash reference alone is insufficient unless canonical execution can
+resolve its retained verified contents deterministically. An off-chain RPC fetch
+or current connected peer cannot be a block execution dependency. Do not omit
+binding verification to fit the payload; approved bounded batching or already
+canonical proof material is required. The proposal is not yet a complete codec
+and must not be activated until witnesses and batching have exact layouts/vectors.
+
+Keep the existing `CYBOU/STORAGE-SETTLEMENT` signing domain and NetworkBinding;
+the reviewed body changes, not the domain spelling. Compute operation identity
+from existing canonical operation bytes. Do not introduce a provider registry
+as a shortcut for proof lookup. Batch commitment hash domains remain separately
+specified before implementation, not mechanically renamed existing domains.
+
+Current `PoaFinalizer::SignStorageSettlement` checks safety halt and verifies its
+signature, but does not persist the signed operation; its block-signing journal
+does not constitute an exact settlement-operation journal. Current runtime
+submission then admits the operation to the volatile candidate pool. The desktop
+controller holds pending generation only in memory. No inspected path connects
+this settlement to IdentityOperationCoordinator's exact-byte journal. A lost ACK
+or process restart cannot be claimed recovered merely because the block signer
+has a safe history.
+
+Required durable lifecycle in existing app.db, scoped by NetworkBinding and
+canonical period/batch identity:
+
+- Prepare: reconcile finalized cursor and term paid state; durably retain the
+  exact unsigned body and its canonical input/evidence references before signing.
+- Sign: reuse an existing exact signed record; otherwise sign that durable body,
+  self-verify and durably save canonical bytes/OperationID before pool admission.
+  A crash between signing and saving may retry the same body; never substitute a
+  different body under the same unresolved journal key.
+- Submit: retry those same bytes, including after lost ACK. Pending means no
+  balance/paid/cursor changes. Rejection or missing evidence retains the journal
+  and obligations with an explicit error, not successful empty completion.
+- Reconcile: lookup exact OperationID in verified finalized history. Only its
+  accepted canonical result permits clearing submission work; advance paid only
+  through canonical execution. If another settlement consumed the period,
+  reconcile its complete canonical effects before rebasing any outstanding work.
+- Retain: keep evidence/checkpoint references needed for replay and the approved
+  dispute horizon. Journal deletion is not evidence compaction; neither is allowed
+  to remove the only reconstructible unresolved operation.
+
+This uses existing encrypted store and finalizer, without a second database,
+worker or signing authority. app.db locking must not span network I/O. Journal
+corruption/unlock failure is fail-closed. Exact restart fixtures must cover every
+boundary above, including failure to save signed bytes; no such production
+recovery acceptance is claimed by these specification checks.
+
 #### Required vectors and integration order
 
 First approve the above contract, byte layouts/domains, audit/time policy,
