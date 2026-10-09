@@ -35,6 +35,7 @@ struct StorageAssignmentSlotQuote {
 /// and a consistent local mirror. Missing epochs/chunks/corruption fail closed.
 /// Provider-specific cumulative floors share ONE slot budget; replacement does
 /// not replenish it. Preparation never changes paid or emits a wire operation.
+/// Enclosing store transactions are rejected: staged evidence is not durable.
 std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     std::span<const StorageAssignmentEvidenceScope> assignments,

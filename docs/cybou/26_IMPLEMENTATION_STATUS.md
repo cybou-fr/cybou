@@ -40,6 +40,15 @@ restores the valid quote. Evidence: `artifacts/economics-historical-binding-core
 baseline `77db7db8` plus this package. This does not prove the external snapshot's
 chain provenance or live funded settlement acceptance.
 
+Durable quote follow-up: enclosing app.db transactions now reject preparation,
+preventing uncommitted interval data from producing a successful payout quote.
+Core build passed; focused assignment attestation/payout and private-store suites
+passed 18 cases / 329 assertions, with 293 other core cases skipped. Regression
+checks staged append/rollback, then committed service across two chunks with one
+provider and one slot budget (one CYBOU due, not one rounded share per chunk).
+Evidence: `artifacts/economics-durable-quote-core.txt`, baseline `fcc7abe7` plus this
+package; synthetic component evidence, no live settlement activation.
+
 ### Cross-epoch funded-slot exclusion (2026-10-09)
 
 Assignment interval accounting now atomically maintains a shared funded-slot

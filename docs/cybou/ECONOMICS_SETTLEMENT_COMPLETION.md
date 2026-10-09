@@ -245,7 +245,9 @@ than 1024 provider/payment inputs fails without truncation. Missing/corrupt/lock
 state, inconsistent terms, invalid attestations and arithmetic overflow fail.
 
 The sorted result includes per-pair service, entitlement, canonical paid and due,
-plus the single-slot budget/totals. It never writes paid history, advances a period,
+plus the single-slot budget/totals. Preparation rejects enclosing app.db
+transactions, so staged intervals cannot become a successful payout quote before
+durable commit. It never writes paid history, advances a period,
 signs a settlement or emits current wire entries. All reads run under one local DB
 snapshot. Repeating preparation and reopening retain the same quote; only a new
 canonical finalized-paid input reduces due. Physical independence, lease/manifest

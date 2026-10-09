@@ -16,6 +16,7 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
 {
     if (assignments.empty() || authorized_chunks.empty()) return std::nullopt;
     PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost()) return std::nullopt;
     std::map<Hash256, const IdentityRegistry*> historical;
     for (const auto& registry : registries) {
         if (!registry.registry || !historical.emplace(registry.block_id, registry.registry).second) return std::nullopt;

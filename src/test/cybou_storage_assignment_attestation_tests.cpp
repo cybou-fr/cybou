@@ -511,4 +511,38 @@ BOOST_AUTO_TEST_CASE(slot_payout_provider_replacement_preserves_separate_floors_
     // Merging providers' fractions would incorrectly pay one CYBOU.
     BOOST_CHECK_EQUAL(*cybou::ComputeAssignedStoragePayout(quote->budget, quote->verified_unit_seconds, 0), 1U);
 }
+BOOST_AUTO_TEST_CASE(slot_quote_multiple_chunks_share_one_budget_and_reject_staged_evidence)
+{
+    Fixture f;
+    auto context = f.plan.context; context.term_end = 1;
+    auto initial = cybou::PrepareStorageAssignment(context, f.plan.eligible); BOOST_REQUIRE(initial);
+    f.plan = *initial; BOOST_REQUIRE(f.Attest());
+    context.chunk = cybou::ComputeChunkId(std::vector<unsigned char>{4, 3, 2, 1});
+    const auto other = cybou::PrepareStorageAssignment(context, f.plan.eligible); BOOST_REQUIRE(other);
+    BOOST_REQUIRE(cybou::AttestStorageAssignment(*f.db, f.service.definition, *other, f.registry,
+        *f.service.runtime->GetFinalizedTip(), f.proofs, f.signer));
+    std::array scopes{cybou::StorageAssignmentEvidenceScope{f.plan, 0, 1000, 86400},
+        cybou::StorageAssignmentEvidenceScope{*other, 0, 1000, 86400}};
+    std::array chunks{f.plan.context.chunk, other->context.chunk};
+    const auto quote = [&] { return cybou::PrepareStorageAssignmentSlotPayouts(*f.db,
+        f.service.definition, scopes, chunks, 5, 0, {}, f.RegistrySnapshots()); };
+    cybou::StorageAssignmentInterval interval{0, 1000, 87400}; interval.proof_commitment.fill(1);
+    {
+        cybou::PrivateApplicationStore::Batch pending{*f.db};
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scopes[0], interval, 87400) ==
+            cybou::StorageEvidenceAppendResult::ADDED);
+        BOOST_CHECK(!quote());
+    } // Rollback: staged service never became durable.
+    const auto empty = quote(); BOOST_REQUIRE(empty);
+    BOOST_CHECK_EQUAL(empty->verified_unit_seconds, 0U);
+    for (const auto& scope : scopes) {
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scope, interval, 87400) ==
+            cybou::StorageEvidenceAppendResult::ADDED);
+    }
+    const auto complete = quote(); BOOST_REQUIRE(complete);
+    BOOST_REQUIRE_EQUAL(complete->entries.size(), 1U);
+    BOOST_CHECK_EQUAL(complete->verified_unit_seconds, 172800U);
+    BOOST_CHECK_EQUAL(complete->budget.per_replica, 1U);
+    BOOST_CHECK_EQUAL(complete->payout, 1U); // Not one ceil share per chunk.
+}
 BOOST_AUTO_TEST_SUITE_END()
