@@ -8,6 +8,17 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Forced process termination and disk recovery (2026-10-09)
 
+The process suite now also covers three Identity rotation checkpoints: both
+application data keys wrapped for future access before submission; canonical
+rotation finalized while the original vault remains active; and candidate vault
+promoted before process termination. Fresh-process recovery checks access to
+acknowledged draft/Mail/Outbox and an app.db sentinel, reconciles the rotation via
+IdentityService and verifies the promoted recovery key. Prepared wrappers preserve
+old-vault access until promotion, and the promoted vault opens the same data.
+All six scenarios passed: artifacts/local-rotation-crash-first.txt (ignored).
+This is serial disk-backed core/service acceptance, not concurrent desktop key
+rotation, a crash inside vault replacement, or loss of both wrapping keys.
+
 A BUILD_TESTS-only child executable and Python supervisor now exercise actual
 process termination (Windows TerminateProcess / POSIX SIGKILL), without destructor
 or normal shutdown assistance. Each isolated synthetic fixture uses disk-backed
@@ -26,7 +37,7 @@ The CTest entry cybou_local_crash_recovery passed all three checkpoints on
 Windows/MinGW in 2.16 seconds. Evidence: artifacts/local-process-crash-first.txt
 and artifacts/local-process-crash-ctest.txt (ignored). These checkpoints do not
 establish power-loss durability, arbitrary instruction-boundary crash safety,
-crash during key rotation, concurrent shutdown or large-file desktop acceptance.
+arbitrary crashes inside key rotation, concurrent shutdown or large-file desktop acceptance.
 The production executable and running desktop are unchanged by this test package.
 
 ## Active Outbox indexing (2026-10-09)

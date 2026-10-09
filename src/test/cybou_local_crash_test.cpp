@@ -26,11 +26,12 @@ std::uint64_t FinalizedNonce(cybou::CybouNodeRuntime& runtime, const cybou::Acco
 int main(int argc, char** argv)
 {
     try {
-        Require(argc == 4, "usage: child <absolute isolated directory> <stage|commit|submit> <write|recover>");
+        Require(argc == 4, "usage: child <absolute isolated directory> <checkpoint> <write|recover>");
         const std::filesystem::path root{argv[1]};
         const std::string point{argv[2]}, action{argv[3]};
         Require(root.is_absolute() && std::filesystem::is_regular_file(root / "crash-fixture"), "isolated fixture marker required");
-        Require(point == "stage" || point == "commit" || point == "submit", "invalid checkpoint");
+        const bool rotation = point == "rotation-prepared" || point == "rotation-finalized" || point == "rotation-promoted";
+        Require(point == "stage" || point == "commit" || point == "submit" || rotation, "invalid checkpoint");
         Require(action == "write" || action == "recover", "invalid action");
         auto genesis = cybou::CreateTestGenesisState();
         auto definition = cybou::CreateTestNetworkGenesis(genesis,
@@ -56,6 +57,8 @@ int main(int argc, char** argv)
             runtime.GetNetworkBinding(), db.Account(), &db};
         cybou::PublicationService publication{runtime, identity.GetKeyStore(), app,
             runtime.GetIdentityOperationCoordinator(identity.GetKeyStore()), &db};
+        cybou::RecoveryEntropy rotation_entropy{};
+        rotation_entropy.fill(77); // synthetic fixture only
         if (action == "write") {
             cybou::MailMessage mail;
             mail.message_id = *cybou::NewPrivateItemId();
@@ -86,12 +89,44 @@ int main(int argc, char** argv)
                 Require(db.Put("crash/expected-operation", std::span{result.operation_id.begin(), 32}), "cannot save expected ID");
                 Require(local.Outbox().front().status.operation_id.IsNull(), "local status was unexpectedly advanced");
             }
+            if (rotation) {
+                Require(app.Put("crash/network-index", std::vector<unsigned char>{7, 8, 9}), "cannot save application sentinel");
+                Require(db.PrepareKeyRotation(rotation_entropy), "cannot wrap local data key");
+                Require(app.PrepareKeyRotation(rotation_entropy), "cannot wrap network data key");
+                if (point != "rotation-prepared") {
+                    const auto result = identity.RotateIdentitySync(cybou::EncodeRecoveryWords(rotation_entropy), PASSWORD);
+                    Require(result.phase == cybou::IdentityOperationPhase::ACCEPTED ||
+                        result.phase == cybou::IdentityOperationPhase::UNCERTAIN, "cannot submit fixture rotation");
+                    Require(runtime.ProduceBlock().has_value(), "cannot finalize fixture rotation");
+                    if (point == "rotation-promoted")
+                        Require(identity.ResumeIdentityRotationSync(PASSWORD).phase == cybou::IdentityOperationPhase::FINALIZED,
+                            "cannot promote fixture vault");
+                }
+            }
             std::cout << "READY " << point << std::endl;
             // Supervisor terminates this process. No stack unwinding, DB close,
             // worker join or normal shutdown can contribute to the result.
             for (;;) std::this_thread::sleep_for(std::chrono::seconds{1});
         }
         Require(local.ListDrafts().size() == 1 && local.ListDrafts().front().body == "acknowledged draft", "acknowledged draft lost");
+        if (rotation) {
+            Require(app.Get("crash/network-index") == std::optional<std::vector<unsigned char>>{{7, 8, 9}}, "network application data lost");
+            const auto expected_key = cybou::DeriveIdentityPublicKey(rotation_entropy, cybou::IdentityKeyPurpose::RECOVERY_ROOT);
+            Require(expected_key.has_value(), "fixture rotation key unavailable");
+            Require((identity.GetKeyStore().GetRecoveryPublicKey() == expected_key) == (point == "rotation-promoted"),
+                "vault was promoted at the wrong checkpoint");
+            if (point == "rotation-prepared") {
+                const auto result = identity.RotateIdentitySync(cybou::EncodeRecoveryWords(rotation_entropy), PASSWORD);
+                Require(result.phase == cybou::IdentityOperationPhase::ACCEPTED ||
+                    result.phase == cybou::IdentityOperationPhase::UNCERTAIN, "prepared wrappers did not permit rotation");
+                Require(runtime.ProduceBlock().has_value(), "cannot finalize restarted rotation");
+            }
+            Require(identity.ResumeIdentityRotationSync(PASSWORD).phase == cybou::IdentityOperationPhase::FINALIZED,
+                "cannot reconcile rotation after process restart");
+            Require(identity.GetKeyStore().GetRecoveryPublicKey() == expected_key, "rotation did not load promoted keys");
+            Require(local.ListDrafts().size() == 1 && local.ListDrafts().front().body == "acknowledged draft", "local data inaccessible with promoted keys");
+            Require(app.Get("crash/network-index") == std::optional<std::vector<unsigned char>>{{7, 8, 9}}, "network data inaccessible with promoted keys");
+        }
         const auto leaves = db.Get("crash/expected-leaves");
         Require(leaves && !leaves->empty() && leaves->size() % 32 == 0, "fixture leaves lost");
         for (std::size_t i = 0; i < leaves->size(); i += 32) {

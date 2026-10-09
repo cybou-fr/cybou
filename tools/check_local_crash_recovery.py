@@ -57,6 +57,7 @@ if __name__ == "__main__":
     parser.add_argument("executable", type=Path)
     args = parser.parse_args()
     executable = args.executable.resolve(strict=True)
-    for checkpoint in ("stage", "commit", "submit"):
+    checkpoints = ("stage", "commit", "submit", "rotation-prepared", "rotation-finalized", "rotation-promoted")
+    for checkpoint in checkpoints:
         run_checkpoint(executable, checkpoint)
-    print("PASS: 3 forced-termination/restart scenarios")
+    print(f"PASS: {len(checkpoints)} forced-termination/restart scenarios")

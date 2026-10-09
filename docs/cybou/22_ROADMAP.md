@@ -34,7 +34,10 @@ packages retain separate acceptance gates.
 Three real child-process termination/restart checkpoints now cover staging,
 acknowledged local commit and submission before status persistence on disk-backed
 fixtures. See implementation status; rotation faults, arbitrary crash boundaries,
-large imports and native desktop acceptance remain open.
+large imports and native desktop acceptance remain open. The process suite now
+also covers prepared key access, finalized rotation before vault promotion and
+restart after vault promotion. Concurrent desktop rotation and crashes inside
+vault replacement retain separate acceptance gates.
 
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 
