@@ -28,6 +28,13 @@ refactor ran protocol suites. No runtime behavior is authorized by this table.
 | DOC-018 | Vault helper comments imply every failure preserves the old file | identity_vault.cpp may fail sync/reopen after successful publish/rename; Promote supports exact-payload retry | Failure-outcome / evidence gap | Documented CYBV/CYID, authenticated reconciliation and limits. Post-publication fault injection, API outcome semantics and full GUI recovery remain open; no file/key/runtime mutation authorized |
 | DOC-019 | IdentityRotate prose implies current and next epochs are both serialized; AccountCreate lag can be misread as a wait | protocol_operation.cpp encodes only next epoch; account_creation.cpp accepts current/preceding work epoch | Documentation error | Exact operation/registry bodies, tag versus kind, double-domain digests and allowed work-age window documented. Source comparison complete; independent vectors/product acceptance separate |
 
+DOC-005 follow-up (2026-10-09): deterministic off-chain assignment preparation
+and immutable encrypted plan retention now exist in storage_assignment. They
+retain a caller-supplied eligible snapshot and finalized seed, with separate
+payout-identity grouping and replayable commitment. Production placement remains
+CSPRNG; proof collection, PoA attestation and evidence/settlement integration are
+not implemented by this helper. DOC-005 and DOC-006 remain open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

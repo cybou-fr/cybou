@@ -8,6 +8,28 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Deterministic assignment preparation (2026-10-09)
+
+New off-chain storage_assignment helpers accept a bounded canonical candidate
+snapshot and fixed context/seed, select distinct payout identities and StorageIds
+with deterministic rejection-sampled shuffles, and commit the complete input and
+result. Immutable plans are saved in existing encrypted app.db, survive reopening
+and reject conflicting replacements for the same chunk/epoch/term. Endpoints are
+excluded. This is target preparation, not PoA-signed assignment, verified
+eligibility, physical independence, activated placement or finalized payout.
+DEC-280's current CSPRNG placement and current settlement wire remain unchanged.
+Tests cover replay, input permutation/aliases, distinct payout selection, invalid
+or oversized snapshots, immutable retry/conflict, reopen and network/epoch/term
+isolation. See the exact local transcript in
+[the completion contract](ECONOMICS_SETTLEMENT_COMPLETION.md).
+
+Win/MinGW assignment/service/economy/quote/resource-limit suites passed 54 cases
+(artifacts/economics-assignment-core.txt, ignored). After adding the independently
+reproduced fixed commitment vector, the final assignment suite passed 3 cases /
+330 assertions (artifacts/economics-assignment-vector.txt). These results are not
+added together. Production executable deployment and live PoA acceptance were
+not performed; this package activates no new settlement or placement rule.
+
 ### Evidence persistence and interval safety (2026-10-09)
 
 Existing EvidenceLedger now writes provider record/index/eviction in one store

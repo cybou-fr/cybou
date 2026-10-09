@@ -76,6 +76,58 @@ replica slot; aggregate verified unit-seconds cannot exceed that slot's T.
 Provider-specific cumulative floors and paid history remain distinct, including
 after an endpoint disconnects. Assignment replay must enforce these constraints.
 
+### Deterministic off-chain assignment preparation
+
+`storage_assignment.h/.cpp` now prepares and freezes an immutable per-chunk plan
+in the existing encrypted Application DB. This is not a canonical provider
+registry or an attestation. Context is NetworkBinding, PublicationID, ChunkID,
+finalized seed, payer AccountID, AssignmentEpoch, funded-term start/end and
+replica count (1 or 2). Candidates contain only StorageId and payout AccountID;
+endpoint/address changes do not affect the transcript. At most 1024 input pairs
+are accepted, never silently truncated. Empty IDs, conflicting payouts for one
+StorageId, self payout and too few distinct payout identities fail closed.
+
+Sort/deduplicate identical pairs, group by payout AccountID, then deterministic
+Fisher–Yates with rejection sampling: shuffle the canonical account list; for
+each selected account shuffle its sorted StorageIds and select one. An account
+has one group regardless of its number of keys. This is reproducibility and
+economic-identity deduplication, not physical independence or a Sybil solution.
+The complete eligible input set must be frozen before the seed is chosen; its
+eligibility/proof collection and finalized-seed validation remain integration work.
+
+Local transcript (all integers little-endian): context contains five raw 32-byte
+fields in the order above, then epoch/start/end u64 and replica count u8. Each
+provider list is count u32 followed by count pairs of 32+32 bytes. INPUT hashes
+context plus canonical eligible list. Each DRAW hashes input digest plus a u64
+counter starting at zero; read its first eight bytes as u64 and reject values
+at or above `UINT64_MAX - UINT64_MAX % bound`. One counter spans account and
+StorageId shuffles. COMMITMENT hashes context, eligible list and selected list
+(selected list retains replica-slot order). SHA-256 domains are exact ASCII
+`CYBOU/STORAGE-ASSIGNMENT-INPUT`, `CYBOU/STORAGE-ASSIGNMENT-DRAW` and
+`CYBOU/STORAGE-ASSIGNMENT-COMMITMENT`, concatenated without separator/terminator.
+These new local transcripts do not rename any existing protocol/crypto domain.
+
+The assignment test fixes a byte-for-byte commitment vector independently
+reproduced with Python hashlib/struct: repeated-byte IDs 1/2/3/4/5, epoch 7,
+term 10–40, two replicas, candidate StorageIds 10–17 and payout byte
+`20 + StorageIdByte % 3` select StorageId bytes 15 then 10. Commitment is
+`7bb3ccdf9dc723d8294ab4ede6c7849cac989f4a44cc9d7098df33db66828a72`.
+
+The immutable store key uses SHA-256 with domain `CYBOU/STORAGE-ASSIGNMENT-KEY`
+over binding/publication/chunk/epoch/start/end. It excludes seed/candidates/payer
+so changing those cannot silently create an alternative assignment for the same
+context. Exact retry is idempotent; incompatible replacement fails. Loading
+reconstructs selection/commitment and requires exact canonical bytes, bounded
+counts and no trailing bytes. A newer epoch creates a distinct retained plan;
+it does not itself authorize replacement or overlapping service/payment.
+
+Production placement still uses its current selector. This target preparation
+is not activated there until PoA validates eligibility and payout bindings,
+attests assignments and binds receipts/audits to their periods/slots. A caller
+supplied finalized seed or payout pair alone carries no authority. Proof
+retention, independent-host policy, evidence integration and payout execution
+remain explicit gates; deterministic hashes alone do not close DOC-005/006.
+
 Retain verified evidence with assignment/period binding and duplicate/overlap
 exclusion. Receipts establish admission, not continuous service. Audits and full
 GET verification justify bounded service intervals under an explicit policy.
