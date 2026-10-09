@@ -1,5 +1,8 @@
 # CYBOU protocol and product roadmap
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU is an Identity-centered private Mail and Files platform over an
 encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 

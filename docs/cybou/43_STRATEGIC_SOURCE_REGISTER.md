@@ -1,5 +1,8 @@
 # 43 — Strategic source register
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Official/public references used in the v0.6 France/EU strategy pass.
 
 This file is evidence for planning, not a substitute for legal advice.

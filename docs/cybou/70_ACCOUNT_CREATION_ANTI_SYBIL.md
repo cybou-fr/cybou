@@ -1,6 +1,9 @@
 # 70 — Account creation and anti-Sybil work
 
-Status: consensus operation and current desktop CYID identity path are
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: consensus operation and current desktop CYID identity path are
 implemented. End-to-end clean-machine and operational recovery remain product
 readiness work.
 

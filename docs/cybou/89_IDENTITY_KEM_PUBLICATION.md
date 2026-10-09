@@ -1,6 +1,9 @@
 # 89 — Identity KEM capability publication
 
-Status: DEV-only X-Wing draft-05 profile. Publication belongs to Identity; Mail and Files remain unavailable until their full application integration gates pass. The profile does not automatically follow later drafts or RFCs.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: DEV-only X-Wing draft-05 profile. Publication belongs to Identity; Mail and Files remain unavailable until their full application integration gates pass. The profile does not automatically follow later drafts or RFCs.
 
 ## Canonical Identity record
 

@@ -1,5 +1,8 @@
 # 38 — CYBOU sovereignty definition
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU is a sovereign cybersecurity, communications and data infrastructure engineered
 at the protocol level around an open-source Full Node trust core, designed in France.
 

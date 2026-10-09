@@ -1,5 +1,8 @@
 # 21 — Release and supply-chain security
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 A secure P2P protocol is insufficient if attackers can replace `cybou.exe`.
 
 ## Required release controls

@@ -1,5 +1,8 @@
 # 41 — French and European support / funding map
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU should not be designed around grants.
 
 The correct order is:

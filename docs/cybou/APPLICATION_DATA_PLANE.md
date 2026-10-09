@@ -1,6 +1,9 @@
 # CYBOU application data plane
 
-Status: architecture target for Mail, Files, local indexing and content access.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: architecture target for Mail, Files, local indexing and content access.
 
 This document defines the boundary between the network's encrypted physical
 storage and the decrypted virtual user experience.

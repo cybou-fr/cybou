@@ -1,6 +1,9 @@
 # Identity and `.cybou` names
 
-Status: canonical Identity and name protocol contract. Identity keys derive from a 24-word recovery phrase; AccountID is a separate random, permanent identifier.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical Identity and name protocol contract. Identity keys derive from a 24-word recovery phrase; AccountID is a separate random, permanent identifier.
 
 ## Identity model
 

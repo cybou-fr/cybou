@@ -1,5 +1,8 @@
 # Post-quantum cryptography profile
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Applicable published standards take precedence under
 [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md). ML-KEM and ML-DSA primitive
 references do not certify their hybrid compositions. The existing DEV X-Wing

@@ -1,6 +1,9 @@
 # Beta offline Mail attachment acceptance — MAIL-OFFLINE-01
 
-Status: prepared manual/live scenario; NOT RUN. Execute after the applicable
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: prepared manual/live scenario; NOT RUN. Execute after the applicable
 green-revision and independent-topology gates in
 [the acceptance plan](DESKTOP_BETA_ACCEPTANCE_PLAN.md). Preparing this scenario
 does not authorize sending Mail, permanent deletion or stopping a signer.

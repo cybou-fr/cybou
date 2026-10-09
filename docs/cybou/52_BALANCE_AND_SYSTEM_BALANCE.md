@@ -1,5 +1,8 @@
 # 52 — Balance and System Balance
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Every AccountState holds two values:
 
 ```text

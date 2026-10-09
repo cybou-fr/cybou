@@ -1,5 +1,8 @@
 # Data, key and retention inventory
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Reviewed: 2026-10-04, code baseline `d335011`. Governing reference:
 [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md).
 This is an engineering inventory of reviewed paths, not a completed GDPR

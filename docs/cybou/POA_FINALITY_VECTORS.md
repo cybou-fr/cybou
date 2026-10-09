@@ -1,5 +1,8 @@
 # PoA finality interoperability vectors
 
+Status: EVIDENCE
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 These regression vectors freeze the current canonical domains and layouts.
 `src/test/cybou_poa_tests.cpp` verifies hybrid keys, both signatures, digests
 and exact certificate encoding. The hash/layout values below were also computed

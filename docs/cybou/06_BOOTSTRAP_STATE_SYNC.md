@@ -1,5 +1,8 @@
 # 06 — Bootstrap and verified state sync
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Node roles
 
 Every node validates the same canonical chain. The Central Authority PoA finalizer

@@ -1,5 +1,8 @@
 # 76 — Identity vault and recovery
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Recovery phrase
 
 The current 24-word mnemonic encodes the recovery entropy from which current

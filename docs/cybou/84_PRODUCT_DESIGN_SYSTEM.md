@@ -1,6 +1,9 @@
 # 84 — CYBOU product design system
 
-Status: canonical shared desktop product design and interaction contract.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical shared desktop product design and interaction contract.
 
 ## Identity opening and background preparation
 
@@ -466,7 +469,7 @@ changed rows/fields and preserve expanded details, selection, focus, scroll and
 compose text. Reducing polling alone does not fix destructive widget rebuilds.
 Activity and diagnostics show Last updated and a manual Refresh action;
 unchanged snapshots cause no visible redraw. Important failures/completion
-remain event-driven. See `DESKTOP_UX_DELIVERY_PLAN.md` for implementation order.
+remain event-driven. See `DESKTOP_BETA_ACCEPTANCE_PLAN.md` for implementation order.
 
 ## 22. Home
 

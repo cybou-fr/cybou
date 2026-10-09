@@ -1,5 +1,8 @@
 # CYBOU architecture
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
@@ -80,14 +83,15 @@ transitions, and executes every candidate operation before relaying it.
 The Beta target remains two independent remote full replicas; the current
 placement algorithm deduplicates proven StorageIds, which does not establish
 independent hosts, operators or failure domains. The 1:3 reciprocal baseline
-is a capacity/service objective, not measured proof of contribution: automatic
-local capacity is an explicit operator choice (`V >= 15 GiB`), not proof of service.
+is a capacity/service objective, not measured proof of contribution: explicit
+local capacity is an operator choice (`V >= 15 GiB`), not proof of service.
 Storage is paid by finalized leases; only PoA-signed settlements record service.
 
 Canonical state currently records publications, roots and recipient capsules,
-not provider placements or audit reliability. Mutual-audit transport, PoA
-notarization and canonical reliability coefficients are unimplemented target
-work requiring an evidence/privacy/accounting design before implementation.
+not provider placements or audit reliability. Off-chain audit transport is implemented under DEC-276. Autonomous mutual-audit
+scheduling and PoA evidence aggregation still need explicit design/integration.
+Per-audit canonical notarization/reliability state are outside the current
+accepted storage model; this does not change the deployed wire or genesis.
 Off-chain storage evidence (DEC-276) consists of provider-signed receipts,
 random-offset audits and periodic full GET plus ChunkID verification; none of
 it is consensus state or a canonical proof.

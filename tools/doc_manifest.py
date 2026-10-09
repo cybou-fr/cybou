@@ -30,7 +30,7 @@ INCLUDED_ROOT_FILES = [
 def collect_manifest_files():
     files = list(INCLUDED_ROOT_FILES)
 
-    docs_cybou = sorted(glob.glob(str(ROOT / "docs" / "cybou" / "*.md")))
+    docs_cybou = sorted(glob.glob(str(ROOT / "docs" / "cybou" / "**" / "*.md"), recursive=True))
     for p in docs_cybou:
         rel = os.path.relpath(p, ROOT).replace("\\", "/")
         files.append(rel)

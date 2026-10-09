@@ -1,6 +1,9 @@
 # Encrypted chunk tree
 
-Status: active DEV content format. Cross-implementation vectors and tested
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: active DEV content format. Cross-implementation vectors and tested
 storage durability remain Beta readiness gates. This is the shared encrypted
 payload format for Mail, Files, and later Backup. Application schemas exist
 only inside authenticated encryption.

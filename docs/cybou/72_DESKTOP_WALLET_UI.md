@@ -1,5 +1,8 @@
 # 72 — Desktop Wallet UI
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 The desktop client surfaces the two protocol balances from doc 52 natively.
 CYBOU has no block subsidy; the wallet shows only these finalized balances.
 

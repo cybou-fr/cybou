@@ -1,5 +1,8 @@
 # 56 — Owner, operator, and network trust
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU is commercially owned and operated by CYBOU. User Identity, balances,
 names, and encrypted content remain protocol-owned under their respective
 cryptographic authorization rules. Commercial ownership does not confer access

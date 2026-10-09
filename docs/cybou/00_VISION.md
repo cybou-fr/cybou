@@ -1,5 +1,8 @@
 # CYBOU vision
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU is an experimental European identity and private communication platform,
 designed in France. One account-level Identity is the security root for Mail,
 Files, and Wallet. A portable recovery phrase restores the account; a device

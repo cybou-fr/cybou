@@ -1,5 +1,8 @@
 # 42 — Competitive positioning
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU is a sovereign cybersecurity, communications and data infrastructure designed
 in France around an open-source Full Node P2P core.
 

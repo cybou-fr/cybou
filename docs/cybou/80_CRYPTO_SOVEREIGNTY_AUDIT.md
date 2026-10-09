@@ -1,5 +1,8 @@
 # CYBOU dependency boundary
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 This page describes the current CYBOU source and cryptographic boundary.
 
 ## Active cryptographic paths

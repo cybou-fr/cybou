@@ -1,5 +1,8 @@
 # 73 — Core → Desktop contract
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 The desktop renders verified core/application state. It does not invent
 protocol truth.
 

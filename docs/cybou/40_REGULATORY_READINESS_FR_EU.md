@@ -1,5 +1,8 @@
 # 40 — France/EU regulatory readiness
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 This document is an engineering/compliance planning aid, not legal advice.
 
 CYBOU should obtain professional French/EU legal advice before public commercial launch.

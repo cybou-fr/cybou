@@ -1,5 +1,8 @@
 # 04 — Network lifecycle
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Uniform Full Node invariant
 
 CYBOU defines exactly one network node type: Full Node. Every Full Node
@@ -14,7 +17,7 @@ never confer consensus authority. StorageId is proven on demand only for a
 storage relationship. Peer sync completion is a liveness/UX hint, never proof
 of global freshness or a prerequisite for creating an Identity.
 
-Status: **Active architecture target**. This document defines official network
+Recorded status: **Active architecture target**. This document defines official network
 trust, creation, joining, and network replacement.
 
 ## Official networks

@@ -1,6 +1,9 @@
 # 87 — Identity operation coordinator
 
-Status: canonical cross-service authorization and retry contract.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical cross-service authorization and retry contract.
 
 ## Ownership rule
 

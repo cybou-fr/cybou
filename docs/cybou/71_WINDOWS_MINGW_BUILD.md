@@ -1,5 +1,8 @@
 # 71 — Сборка CYBOU core (Windows, Qt MinGW + vcpkg)
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Это **единственная авторитетная процедура сборки** CYBOU core на Windows.
 Воспроизводит конфигурацию `build_cybou_qt_mingw`, на которой собираются
 `cybou-core-test.exe`, `cybou.exe` (desktop + headless node),

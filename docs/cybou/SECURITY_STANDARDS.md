@@ -1,5 +1,8 @@
 # Security standards and evidence
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Reviewed: 2026-10-04. Supporting technical register under
 [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md) and `AGENTS.md`.
 Scope: cryptographic primitives, transport, key lifecycle and data deletion.

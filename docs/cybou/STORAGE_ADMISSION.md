@@ -1,6 +1,9 @@
 # Finalized chunk storage admission and durability
 
-Status: active admission substrate plus frozen durability architecture target.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: active admission substrate plus frozen durability architecture target.
 
 
 ## Storage implementation evidence boundary

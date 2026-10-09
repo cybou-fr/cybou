@@ -1,5 +1,8 @@
 # CYBOU P2P transport
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU P2P is one uniform Full Node baseline: finalized block serving and sync,
 announcements, discovery, candidate operation relay,
 transport and encrypted storage. No compatibility

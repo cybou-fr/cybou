@@ -1,5 +1,8 @@
 # 81 — Beta product scope
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 CYBOU Beta is an Identity-centered desktop product with:
 
 ```text
@@ -28,7 +31,7 @@ benchmarks are staged extensions with separate data/privacy gates, not assumed
 implemented Beta features. Provider placement remains randomized; display
 ranking never chooses paid storage providers.
 
-Delivery order: `DESKTOP_UX_DELIVERY_PLAN.md`. Product boundaries:
+Delivery order: `DESKTOP_BETA_ACCEPTANCE_PLAN.md`. Product boundaries:
 `NETWORK_AND_ADVANCED_UX.md`. No interface claims universal erasure, verified
 independent failure domains or blanket RGPD conformity without evidence.
 

@@ -1,5 +1,8 @@
 # Open engineering and product gates
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 These are implementation and integration questions inside the active architecture,
 not invitations to reintroduce superseded BFT/MailTx/StorageObject designs.
 

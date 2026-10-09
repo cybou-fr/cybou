@@ -1,5 +1,8 @@
 # 50 — Mail and Files content security
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Mail and Files are private application data over generic RootPublication and
 the shared encrypted chunk tree.
 

@@ -1,5 +1,8 @@
 # 46 — Copyright, license and attribution policy
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Engineering policy only; obtain legal review before changing project licensing.
 
 ## CYBOU license: Apache-2.0

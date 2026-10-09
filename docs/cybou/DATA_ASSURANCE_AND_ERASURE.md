@@ -1,6 +1,9 @@
 # Data assurance and erasure review
 
-Status: implementation assessment and design proposal, 2026-10-04.
+Status: EVIDENCE
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: implementation assessment and design proposal, 2026-10-04.
 Original assessment baseline: `262198ba317e483a4a85f0265c4e90b20ddf013f`.
 Current code and governance evidence reviewed at `f0e9293` (2026-10-04).
 Code fixes and regression coverage were committed in `a3f05aa`.
@@ -14,7 +17,7 @@ audit evidence and payout-binding verification; these are not proposals to
 start from zero. Canonical mutual reliability, independent failure-domain
 evidence, remote purge receipts and crypto-erasure remain unestablished.
 Current implementation truth is `26_IMPLEMENTATION_STATUS.md`; desktop evidence
-presentation and its remaining APIs follow `DESKTOP_UX_DELIVERY_PLAN.md`.
+presentation and its remaining APIs follow `DESKTOP_BETA_ACCEPTANCE_PLAN.md`.
 
 ## Evidence contract
 

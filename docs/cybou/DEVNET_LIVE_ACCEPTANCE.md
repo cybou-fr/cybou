@@ -1,5 +1,8 @@
 # DEVNET live content acceptance — 2026-10-04
 
+Status: EVIDENCE
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 This exercise uses the existing compiled DEVNET after the explicitly authorized
 coordinated development reset. Network keys, signed genesis and the initial TLS
 pin are unchanged. Windows desktop is the sole PoA signer. The OVH VPS runs an

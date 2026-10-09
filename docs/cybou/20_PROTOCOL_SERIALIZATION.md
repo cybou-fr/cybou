@@ -1,5 +1,8 @@
 # 20 — Protocol serialization
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Canonical bytes
 
 Every consensus object has one canonical byte representation before hashing or

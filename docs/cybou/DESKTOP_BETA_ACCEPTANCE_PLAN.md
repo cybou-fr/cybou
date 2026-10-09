@@ -1,6 +1,9 @@
 # Desktop Beta Acceptance & Performance Evidence
 
-Status: active Level 4 delivery plan, reviewed 2026-10-08 against
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: active Level 4 delivery plan, reviewed 2026-10-08 against
 `1f5417fb6d6c4d418b474b856a23bdb21486c2d6`. This supersedes the remaining-work
 order of `DESKTOP_UX_REMAINING_WORK_2026-10-06.md` and the initial W0–W8 order
 in `DESKTOP_UX_DELIVERY_PLAN.md`; their dated findings and delivery records remain

@@ -1,5 +1,8 @@
 # CYBOU security threat model
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Trust boundaries
 
 - The single PoA operator controls ordering and can censor or stop finality

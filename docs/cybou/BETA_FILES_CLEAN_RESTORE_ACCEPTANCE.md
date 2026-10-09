@@ -1,6 +1,9 @@
 # Beta clean-client Files recovery — FILES-RESTORE-01
 
-Status: prepared manual/live scenario; NOT RUN. Follow the green-revision and
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: prepared manual/live scenario; NOT RUN. Follow the green-revision and
 independent-topology gates in [the acceptance plan](DESKTOP_BETA_ACCEPTANCE_PLAN.md).
 Preparation does not authorize vault export, deletion, network reset or signer
 interruption. Provider-outage repair is a separate scenario.

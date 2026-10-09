@@ -1,5 +1,8 @@
 # Canonical chain state
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Full nodes execute finalized blocks deterministically and derive the same state
 root. Mail and Files do not create permanent per-message/per-file consensus
 objects.

@@ -1,6 +1,9 @@
 # 78 — Identity desktop UX contract
 
-Status: Identity creation, clean-machine restore, and all-role key rotation are the desktop workflows. The UI must not expose device registration or a per-device security model.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: Identity creation, clean-machine restore, and all-role key rotation are the desktop workflows. The UI must not expose device registration or a per-device security model.
 
 The first screen gives equal prominence to **Create identity** and **Restore identity**. Finalized facts come from native core. Local phrase, vault, and work states must never imply consensus finality.
 

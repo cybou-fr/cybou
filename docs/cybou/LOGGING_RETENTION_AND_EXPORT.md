@@ -1,5 +1,8 @@
 # Diagnostic logging, retention and support export
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Reviewed: 2026-10-04, code baseline `20ab3fd`. Governing baseline:
 [`SECURITY_GOVERNANCE.md`](SECURITY_GOVERNANCE.md). Inventory:
 [`DATA_PROCESSING_INVENTORY.md`](DATA_PROCESSING_INVENTORY.md).

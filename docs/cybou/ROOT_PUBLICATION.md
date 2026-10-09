@@ -1,5 +1,8 @@
 # RootPublication
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 RootPublication is the single generic application-content protocol operation.
 
 ## Public body

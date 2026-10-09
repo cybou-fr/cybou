@@ -1,6 +1,9 @@
 # 77 — `.cybou` name registry
 
-Status: commit, work, reveal, and ownership rules are implemented in the
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: commit, work, reveal, and ownership rules are implemented in the
 canonical core. Desktop reads a finalized primary name from verified state;
 the native name service and desktop can submit and resume a claim using a durable
 encrypted claim file beside the identity vault. DEV runs this protocol.

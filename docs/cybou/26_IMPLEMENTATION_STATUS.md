@@ -1,7 +1,28 @@
 # Implementation status
 
-Status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
+
+## Network layout correction and shutdown investigation (2026-10-09)
+
+Operator-confirmed base 5 op/min is a labelled GUI reference; current measured
+rate and actual observed maximum stay separate. Numeric text is 18 px; fitted
+map uses larger bounds. The summary remains visible with Advanced, whose drawer
+starts below it. Wide/narrow/Advanced captures and Network regressions pass.
+Desktop rebuilt; full native Windows Qt: 92 passed, zero failed/skipped.
+Evidence: artifacts/network-overlay-20261009/qt-compact-full.txt (ignored).
+
+The old process was force-ended only after explicit operator authorization.
+Ordinary close was tested with the existing local state, first locked and then
+operator-unlocked Identity; both completed within the 15-second check. The prior
+hang was not reproduced and its root cause is not established. Keep-running-in-
+background is a separate intended close behavior, not the demonstrated cause.
+Static shutdown phase logs now distinguish operator/settlement/network/application
+waits and controller completion; window-to-tray logs identify the actual setting.
+No private keys, content or identifiers are added to those diagnostics.
 
 ## Network indicative totals and observed maxima (2026-10-09)
 

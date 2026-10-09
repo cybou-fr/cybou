@@ -1,10 +1,13 @@
 # 83 — CYBOU Files UI/UX
 
-Status: canonical Beta Files/Storage product UX contract. The Qt Files page
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical Beta Files/Storage product UX contract. The Qt Files page
 implements a live encrypted catalog, publication, retrieval and durability
 projection through CybouCoreApplicationAdapter as well as deterministic UI
 fixtures (`CYBOU_UI_FIXTURE`). Connection is not full Beta acceptance: see
-`26_IMPLEMENTATION_STATUS.md` and `DESKTOP_UX_DELIVERY_PLAN.md` for remaining
+`26_IMPLEMENTATION_STATUS.md` and `DESKTOP_BETA_ACCEPTANCE_PLAN.md` for remaining
 interaction and evidence gaps. Local-only content is never `Protected`.
 
 The shell's contextual header search drives the current Files view's filter,

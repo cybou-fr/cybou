@@ -1,5 +1,8 @@
 # Security, privacy and resilience governance
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Reviewed: 2026-10-04. This is CYBOU's governing security and privacy baseline,
 above internal architecture, product goals and implementation convenience.
 Cryptographic standards are a supporting technical layer, not the whole baseline.

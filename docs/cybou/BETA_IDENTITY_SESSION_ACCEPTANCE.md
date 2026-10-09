@@ -1,6 +1,9 @@
 # Beta Identity session acceptance — ID-SESSION-01
 
-Status: prepared manual/live scenario; NOT RUN. This is a small part of
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: prepared manual/live scenario; NOT RUN. This is a small part of
 [the active acceptance plan](DESKTOP_BETA_ACCEPTANCE_PLAN.md), not clean-machine
 restore, key rotation or release approval. Execute only after the applicable
 revision/CI gate is green. Preparation does not authorize restarting a signer.

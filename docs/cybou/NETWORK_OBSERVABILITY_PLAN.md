@@ -1,12 +1,15 @@
 # Built-in Network overview
 
-Status: active product/implementation scope, 2026-10-09, DEC-289/DEC-290.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: active product/implementation scope, 2026-10-09, DEC-289/DEC-290.
 
 ## Exactly three primary figures
 
 | Figure | Existing source | Honest precision |
 |---|---|---|
-| Operations/min | Verified finalized stream, existing FinalizationMeter, completed 60-second arrival window | Observed current rate; history imports excluded, missing/partial/offline/syncing observations unavailable. Never substitute a historical load-test rate for current traffic. |
+| Base operations/min, current observation and achieved maximum | Operator-confirmed base 5 op/min; separate FinalizationMeter completed 60-second arrival window | Base is an explicitly labelled presentation reference, not measured traffic, runtime throttling or maximum. Current observations exclude history imports; missing/partial/offline/syncing observations are unavailable. Never import test rates. |
 | Network storage capacity | Sum of responding nodes' existing FinalizedChunkStore CapacityBytes provider budgets | Approximate reported usable provider capacity, not a census or guaranteed free disk. Local reserve excluded. |
 | Data hosted by the network | Sum of responding nodes' existing FinalizedChunkStore UsedBytes admission counters | Approximate accounted admitted encrypted bytes. Copies on distinct stores count; no unique-file or independently audited holding claim. |
 
@@ -38,9 +41,12 @@ DB, worker, CPU/RAM report, cohort history, provider registry or consensus state
 Preserve the map's fitted size and center. Exactly three figures appear
 horizontally in a translucent overlay over its top/header. No lateral panel,
 no layout space reserved above the map and no historical benchmark card in
-Network or Advanced. Capacity/hosted values carry ≈, sampled-node/reply coverage
+Network or Advanced. The summary remains visible when Advanced opens; the drawer
+starts below it. Smaller numeric text and reduced map margins preserve a large map.
+Capacity/hosted values carry ≈, sampled-node/reply coverage
 and observation time. These are indicative totals for reached nodes, not a
-guarantee that every participant has answered. Real zero remains zero.
+guarantee that every participant has answered. A real current zero remains zero in the current-observation line; it does not
+overwrite the separately labelled operator base 5.
 
 Each figure has a small observed-maximum value. The runtime retains the greatest
 completed-minute operation observation and greatest sampled capacity/admitted

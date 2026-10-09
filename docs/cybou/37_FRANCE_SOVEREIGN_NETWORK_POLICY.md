@@ -1,5 +1,8 @@
 # 37 — France-first sovereign P2P policy
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 ## Network model
 
 CYBOU is a peer-to-peer network of independently validating full nodes.

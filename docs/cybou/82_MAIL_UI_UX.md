@@ -1,6 +1,9 @@
 # 82 — CYBOU Mail UI/UX
 
-Status: canonical Beta Mail product UX contract.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical Beta Mail product UX contract.
 
 The desktop shell exposes one contextual header search. Typing and clearing use
 the existing current-mailbox filter; choosing a suggestion opens its semantic

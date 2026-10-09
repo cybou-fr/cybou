@@ -1,6 +1,9 @@
 # 86 — Identity security substrate
 
-Status: canonical user-service security architecture. This document defines
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: canonical user-service security architecture. This document defines
 the target ownership and capability model. `26_IMPLEMENTATION_STATUS.md`
 records which parts are wired into the current code.
 

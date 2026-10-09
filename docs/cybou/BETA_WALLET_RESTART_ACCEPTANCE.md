@@ -1,6 +1,9 @@
 # Beta Wallet uncertain-delivery acceptance — WALLET-RESTART-01
 
-Status: prepared manual/live scenario; NOT RUN. Follow the green-revision gate
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: prepared manual/live scenario; NOT RUN. Follow the green-revision gate
 in [the acceptance plan](DESKTOP_BETA_ACCEPTANCE_PLAN.md). This document does
 not authorize a payment, funding, journal modification or signer interruption.
 

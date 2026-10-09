@@ -1,5 +1,8 @@
 # 68 — Operator key separation
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Commercial ownership does not justify a shared master key. Production roles
 remain cryptographically separate:
 

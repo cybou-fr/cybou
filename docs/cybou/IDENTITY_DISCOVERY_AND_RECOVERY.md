@@ -1,5 +1,8 @@
 # Identity publication discovery and recovery
 
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
 Every client scans canonical finalized RootPublications and builds only the
 private application state accessible to its Identity.
 

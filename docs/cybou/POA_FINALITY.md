@@ -1,6 +1,9 @@
 # PoA finality target
 
-Status: **Active PoA protocol**. Finality is single-operator hybrid-PQ PoA
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: **Active PoA protocol**. Finality is single-operator hybrid-PQ PoA
 under the genesis-authorized operational key `P`. It is not BFT and has no
 ValidatorSet, vote, quorum or staking weight.
 

@@ -1,6 +1,15 @@
 # Network and Advanced product contract
 
-Status: Level 5 product target, reviewed against desktop/core source on
+Status: CURRENT
+
+Operator correction, 2026-10-09: base cadence 5 op/min is a labelled presentation
+reference, with current measured rate and achieved maximum separate. Capacity
+and hosted data remain the other two figures. Summary stays visible above the
+Advanced drawer; compact numbers and larger map. No runtime rate limit of 5
+or measured traffic of 5 is implied by that base.
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: Level 5 product target, reviewed against desktop/core source on
 2026-10-08. New surfaces described here are not implemented merely because
 this contract exists. Delivery order and source evidence are in
 [`DESKTOP_BETA_ACCEPTANCE_PLAN.md`](DESKTOP_BETA_ACCEPTANCE_PLAN.md) and

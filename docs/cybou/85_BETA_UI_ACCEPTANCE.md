@@ -1,6 +1,9 @@
 # 85 — CYBOU Beta UI/UX acceptance
 
-Status: Beta product acceptance checklist.
+Status: CURRENT
+Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+
+Recorded status: Beta product acceptance checklist.
 
 This document converts the product contracts in docs 81–84 into end-to-end
 acceptance scenarios. It does not replace protocol/security tests; a Beta build
