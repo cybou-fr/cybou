@@ -1,16 +1,28 @@
+status: CURRENT
+scope: P2P_storage_economics_review_with_explicit_accepted_target_gaps
+remaining_review: chain_finality_crypto_tree_and_recovery_integration
+reviewed_revision: 787e18ca
+sources:
+  - docs/cybou/24_DECISIONS.md
+  - docs/cybou/P2P_TRANSPORT.md
+  - docs/cybou/STORAGE_ADMISSION.md
+  - docs/cybou/18_ECONOMICS_FEES.md
+  - src/cybou/p2p/session.h
+  - src/cybou/root_publication.h
+  - src/cybou/storage_lease.h
+  - src/cybou/protocol_params.h
 full_node:
   type: Full_Node
-  hello_fields: [network_binding, finalized_height, finalized_tip, nonce]
+  hello_fields: [network_binding, finalized_height, finalized_tip, nonce, listen_port]
   capability_bitmap: absent
   network_role_announcement: absent
-  baseline: [block_sync, announcements, discovery, operation_relay, Validation_transport, encrypted_storage]
+  baseline: [block_sync, announcements, discovery, operation_relay, encrypted_storage]
   storage: intrinsic_positive_production_allocation
   storage_identity: on_demand_TLS_bound_challenge_proof_for_storage_only
   poa_authority: genesis_key_possession_proved_by_block_certificates
   signer_activation_reconnects_peers: false
   peer_sync_completion: advisory_not_global_freshness
   identity_creation_requires_peer_sync_completion: false
-status: active_protocol_architecture
 consensus:
   mode: genesis_authorized_single_operator_PoA
   network_identity:
@@ -133,11 +145,10 @@ chunks:
     - padding_overhead_benchmarks
     - typed_binary_schema_cross_implementation_vectors
     - root_capsule_wrap_unwrap_vectors_and_recipient_recovery
-    - root_publication_client_construction_and_history_scanner
+    - clean_client_live_recovery_acceptance
 publication:
-  wire_profile: 4
   canonical_encoding: fixed_order_binary_LE_strict_exact_consumption
-  fields: [root_chunk_id, chunk_authorization_root, chunk_count, recipient_capsules]
+  fields: [root_chunk_id, chunk_authorization_root, chunk_count, lease_periods, recipient_capsules]
   body_max_bytes: 131072
   full_operation_max_bytes: 147456
   authorized_chunk_set_public: false
@@ -168,38 +179,36 @@ publication:
   finality_authorizes_storage: true
   finality_proves_durability: false
 storage:
-  model: notarial_register_deterministic_quotas
+  model: finalized_publications_and_paid_leases
   address: ChunkID
-  admission_policy_default: finality_first
-  validation_authorizes_admission: false
+  admission_policy_default: finality_first_with_active_funded_lease
   proof: domain_separated_Merkle_inclusion
-  onboarding_trust_credit_bytes: 5368709120  # 5 GiB
-  reciprocal_storage_ratio: 3
-  local_onboarding_storage_baseline_bytes: 16106127360  # 15 GiB
-  mutual_proof_of_storage: challenge_response_byte_offset_nonce_verified_in_blocks
-  object_pruning_on_revocation: true
-  revocation_operation: RevokePublication  # author only, payment fee
-  quota_unit_bytes: 524288  # one authorized chunk
+  local_capacity_min_bytes: 16106127360
+  provider_budget: floor_2V_over_3
+  object_pruning_on_revocation: journalled_purge_of_unshared_chunks_with_retry
+  hidden_copy_deletion_proven: false
+  revocation_operation: RevokePublication
+  billing_unit_bytes: 524288
   publication_register: state.publications_keyed_by_root_publication_operation_id
+  evidence: off_chain_receipts_offset_audits_and_full_GET
+  audit_transport: {challenge: 25, response: 26, sample_max_bytes: 64}
+  audit_digest: BLAKE3_sample_bytes_followed_by_nonce
+  audit_sample_tail: min_64_and_remaining_bytes
+  per_audit_canonical_records: absent
+  durability_targets:
+    development: 1_remote_full_replica
+    beta: 2_independent_remote_full_replicas_plus_local_copy
+  operations: [PUT_AUTHORIZED_CHUNK, GET_CHUNK_BY_ID, GET_CHUNK_AUTHORIZATION_PROOF, STORAGE_AUDIT_CHALLENGE]
+  chunk_placement: per_chunk
 one_name_per_identity: true
-relay_proof_of_work:  # DEC-273, DEC-284
+relay_proof_of_work:
   work_bits: 22
   hash: SHA-256(CYBOU/OP-WORK || NetworkBinding || OperationID || nonce_u64_le)
   name_operation_extra_bits: 4
   exempt: [AccountCreate, StorageSettlement]
-  checked_by: every_full_node_including_poa_before_candidate_execution_and_relay
+  checked_by: every_full_node_before_candidate_execution_and_relay
   transport: OP_META_size_u32_nonce_u64
   in_block: false
-  durability_targets:
-    development: 1_remote_full_replica
-    beta: 2_independent_remote_full_replicas_plus_local_copy_equals_3_physical_copies
-  operations: [PUT_CHUNK, GET_CHUNK, optional_HAS_CHUNK]
-  manifest_commit_staging_abort_protocol: absent
-  chunk_placement: independent_per_chunk
-  open_gates:
-    - storage_chunk_wire_serialization_and_admission_integration
-    - durability_threshold_and_retry_semantics
-    - retention_repair_accounting_and_storage_loss
 recovery:
   publication_scanner: local_rebuildable_index
   clean_machine_requires_prior_client_database: false
@@ -231,15 +240,31 @@ private_application_schema:
   encoding: typed_fixed_order_binary
   types: {Mail: 1, Files: 2, RecoveryBridge: 3}
 
-storage_economy:  # DEC-274..DEC-283; implemented in M5, active from the M7 genesis; supersedes the storage keys above
+storage_economy:  # Current deployed economics; accepted gaps are separate below
   local_capacity_min_bytes: 16106127360  # 15 GiB, explicit, not consensus
   provider_budget: floor_2V_over_3
   auth_storage_quota: absent
   entitlement: paid_storage_lease
   billing_unit_bytes: 524288
   replica_target: 2
-  provider_assignment: randomized_finalized_seed_poa_attested_never_payer_chosen
+  current_provider_selection: local_CSPRNG_order_by_verified_payout_identity_then_node
+  accepted_assignment_target: finalized_seed_and_PoA_attestation_DEC_280
+  accepted_assignment_target_implemented: false
   replica_distinctness: [StorageId, payout_AccountID]
   evidence: off_chain_receipts_audits_full_get
   canonical_service_record: StorageSettlement_daily_poa_signed
   max_publication_chunks: safety_bound_only
+
+storage_settlement_wire:
+  source: src/cybou/storage_lease.h
+  fields: [period_u64_le, period_start_utc_u64_le, entry_count_u32_le, entries, poa_signature]
+  entry_fields: [publication_id_32, payout_account_32, amount_u64_le]
+  entry_bytes: 72
+  entries_max: 1024
+  entries_order: strict_publication_id_then_payout_account
+  signature_bytes: {ed25519: 64, ml_dsa_65: 3309}
+  digest: SHA256_domain_CYBOU_STORAGE_SETTLEMENT_then_NetworkBinding_then_body
+  evidence_root: absent
+  storage_id: absent
+  period_end_utc: derived_from_signed_start_and_genesis_period_length
+  target_gap: DEC_282_evidence_assignment_design_requires_explicit_resolution

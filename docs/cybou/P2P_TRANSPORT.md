@@ -1,7 +1,7 @@
 # CYBOU P2P transport
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: P2P/storage wire source review at 787e18ca, 2026-10-09; acceptance retains its stated evidence limits.
 
 CYBOU P2P is one uniform Full Node baseline: finalized block serving and sync,
 announcements, discovery, candidate operation relay,
@@ -56,8 +56,9 @@ Reconnection requires a new proof; invalid proofs fail closed.
 
 StorageId = BLAKE3("CYBOU/STORAGE-ID" || Ed25519 public key || ML-DSA public key).
 It distinguishes remote replica identities, never nodes or PoA authority.
-Two endpoints proving the same StorageId count as one independent replica.
-Every Full Node implements storage; quota zero/full returns CAPACITY_EXCEEDED
+Two endpoints proving the same StorageId count as one replica identity; this
+does not prove independent hosts or operators.
+Every Full Node implements storage; exhausted provider capacity returns CAPACITY_EXCEEDED
 for otherwise valid admissions and does not impair its other protocol functions.
 Remote PUT still requires finalized RootPublication and Merkle authorization.
 
@@ -96,6 +97,7 @@ Local-network addresses (DEC-285) are not limited per address.
 | 11 | OP_META | 24 | STORAGE_PROOF_REQUEST |
 | 12 | OP_DATA | 25 | STORAGE_AUDIT_CHALLENGE |
 | 13 | OP_RESULT | 26 | STORAGE_AUDIT_RESPONSE |
+| 27 | STORAGE_USAGE_REQUEST | 28 | STORAGE_USAGE |
 
 GET_BLOCKS requests a first height (u64 LE) and count (u8, 1–32).
 For each consecutive block the responder sends BLOCK_META (height u64 LE,
@@ -106,7 +108,8 @@ exchange or alternate single-block transfer exists.
 Operation submission and OP_POLL share OP_META (size u32 LE, relay-PoW nonce
 u64 LE; DEC-273), OP_DATA and OP_RESULT (status u8, OperationID 32). A zero
 OP_META size answers an empty poll. A receiver checks the nonce against the
-author's finalized tier before candidate execution.
+flat relay difficulty (22 leading zero bits, names +4), never an AUTH tier,
+before candidate execution (DEC-284).
 The receiver applies ingress limits before payload allocation and independently
 executes the exact signed operation. Successful OP_RESULT acknowledges the
 sender's FIFO item; unsuccessful delivery preserves it for retry.
@@ -115,3 +118,33 @@ Configured peers are one ordered list of endpoint and optional TLS SPKI pin.
 Compiled rendezvous locators populate that list first; discovered peers use a
 separate bounded cache, filled from `GET_PEERS` answers and from inbound peers
 verified by connecting back. No endpoint represents the Central Authority.
+
+## Off-chain audit and indicative usage
+
+STORAGE_AUDIT_CHALLENGE (25) is exactly 72 bytes: ChunkID[32], offset u64 LE,
+nonce[32]. STORAGE_AUDIT_RESPONSE (26) is one byte 0 for missing/invalid admitted
+copy, or 1 followed by a 32-byte BLAKE3 digest. The preimage is the stored byte
+slice starting at offset, length min(64, bytes remaining), followed by nonce.
+No digest is produced for an empty chunk or an offset beyond the chunk. The
+provider audits admitted ciphertext, not arbitrary local cache. This is not a
+signature or a proof of continuous service; receipt/full-GET evidence is separate.
+
+STORAGE_USAGE_REQUEST (27) is empty; STORAGE_USAGE (28) is exactly two u64 LE
+counters: provider capacity, admitted physical bytes. The caller reuses its
+on-demand proven StorageId to deduplicate relationships. Ordinary TLS provides
+transport protection; counters are declarations, not audited bytes or consensus.
+No new usage signature, role, global census or resource-telemetry protocol exists.
+See [Network contract](NETWORK_OBSERVABILITY_PLAN.md) for freshness/coverage.
+
+## Defining source and regressions
+
+[session.h](../../src/cybou/p2p/session.h) defines IDs/HELLO;
+[session.cpp](../../src/cybou/p2p/session.cpp) defines strict frame/HELLO/audit/usage
+codecs and handlers; [storage_audit.cpp](../../src/cybou/storage_audit.cpp) defines
+the sample digest. Peer-manager regressions include
+`unsupported_compact_wire_ids_are_rejected`,
+`hello_has_only_baseline_fields_and_rejects_unknown_message_type`,
+`storage_usage_reads_existing_provider_counters_over_tls` in
+[cybou_p2p_peer_manager_tests.cpp](../../src/test/cybou_p2p_peer_manager_tests.cpp).
+These references identify component evidence; they are not a fresh live or
+cross-implementation acceptance claim.
