@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 107 | 6b478b5620e3facf |
 | docs/cybou/24_DECISIONS.md | 230 | ff3e8028160b09dd |
 | docs/cybou/25_OPEN_QUESTIONS.md | 137 | 1748cf4540afc739 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1534 | a64149e29efd59bc |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 1548 | 6dd0854f967de4f6 |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 73 | 3ee00b8269160fd8 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 89 | 9e09e5cf9c797360 |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 143 | ccdb432e07b86542 |

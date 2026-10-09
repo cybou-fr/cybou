@@ -30,8 +30,22 @@ suites passed (74 cases), full native Windows Qt passed (92, zero failed/skipped
 After the responsive header adjustment, both Network regressions passed again;
 1040x720 and 760x640 fixture captures preserve the map and show uncut labels.
 These fixture values are layout evidence, not live network measurements.
-The VPS still runs its prior executable; updated-peer live acceptance is pending
-ordinary peer binary deployment. No service, state, key or signer was changed.
+Operator-authorized deployment followed: VPS checkout fast-forwarded from
+7f043f95 to 9353c740, headless cybou rebuilt (GUI/tests OFF), and all three ordinary
+services restarted with their unchanged state/configuration. All returned active,
+height 11401, NRestarts=0. Direct TLS request/response checks on public ports
+29461/29462/29463 returned respectively capacity/stored byte counters:
+28633115306/287738688, 10737418240/255143424, 10737418240/336516352.
+Sum: 50107951786 capacity bytes and 879398464 admitted physical bytes
+(approximately 46.7 GiB / 839 MiB, copies included). This is the three VPS processes,
+not a global census or independent failure-domain claim. Bootstrap SPKI was
+checked against the compiled pin; the other ordinary endpoints have no compiled
+pin. This one-shot read-only check validates live response shape/counters, not
+storage-proof signatures or the desktop's displayed aggregate. The runtime's
+identity-proof path has separate TLS regression coverage.
+Windows desktop rebuilt and started; existing application/state/key material and
+PoA signing history retained. No genesis replacement/reset, new signer or load
+run. PoA requires unlocking the existing authorized Identity after restart.
 Ignored build/test/fixture evidence: `artifacts/network-overlay-20261009/`.
 
 ## Beta monitoring simplification (2026-10-09)
