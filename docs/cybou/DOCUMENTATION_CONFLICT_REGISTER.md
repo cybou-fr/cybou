@@ -63,6 +63,11 @@ provider-specific floors and canonical-paid inputs. No current wire/state rules
 or live payout path were changed; provenance, policy and activation gates keep
 DOC-005/006/020 open.
 
+Historical-binding follow-up: payout preparation now rechecks retained STORAGE
+and Authorization signatures using the registry snapshot for each assignment seed.
+Snapshot finalized provenance is still caller-verified, and production/state
+activation is absent; DOC-005/006/020 remain open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

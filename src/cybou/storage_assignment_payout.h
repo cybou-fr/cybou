@@ -7,6 +7,10 @@
 #include <cybou/storage_economy.h>
 
 namespace cybou {
+struct StorageAssignmentRegistrySnapshot {
+    Hash256 block_id;
+    const IdentityRegistry* registry{nullptr};
+};
 struct StorageAssignmentPaid {
     StorageAssignmentProvider provider;
     std::uint64_t finalized_paid{0};
@@ -24,6 +28,9 @@ struct StorageAssignmentSlotQuote {
 /// Read-only target quote for ONE funded replica slot across all chunks/epochs.
 /// Caller supplies the finalized authorized chunk manifest, immutable funded
 /// rate/term/UTC and canonical paid history. These inputs are not proven here.
+/// Supply a historical registry snapshot for every assignment seed. Their
+/// finalized provenance is caller-verified; retained binding signatures are
+/// rechecked here against those snapshots, not today's rotated keys.
 /// Every shared claim must resolve to a supplied frozen, genesis-attested plan
 /// and a consistent local mirror. Missing epochs/chunks/corruption fail closed.
 /// Provider-specific cumulative floors share ONE slot budget; replacement does
@@ -32,6 +39,7 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     std::span<const StorageAssignmentEvidenceScope> assignments,
     std::span<const ChunkId> authorized_chunks, std::uint64_t rate,
-    std::uint64_t through_period, std::span<const StorageAssignmentPaid> paid);
+    std::uint64_t through_period, std::span<const StorageAssignmentPaid> paid,
+    std::span<const StorageAssignmentRegistrySnapshot> registries);
 }
 #endif

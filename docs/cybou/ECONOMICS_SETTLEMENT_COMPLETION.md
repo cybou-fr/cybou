@@ -249,9 +249,17 @@ plus the single-slot budget/totals. It never writes paid history, advances a per
 signs a settlement or emits current wire entries. All reads run under one local DB
 snapshot. Repeating preparation and reopening retain the same quote; only a new
 canonical finalized-paid input reduces due. Physical independence, lease/manifest
-and paid provenance, historical binding verification, audit-to-interval policy,
+and paid provenance, historical registry provenance, audit-to-interval policy,
 active epoch boundaries, full multi-slot operation/state format and separately
 authorized activation remain explicit gates.
+
+Preparation now requires registry snapshots indexed by every assignment's seed.
+For each plan it reloads the retained raw payout bindings and checks both STORAGE
+and Authorization signatures against that exact historical registry. Missing,
+duplicate or null snapshots, wrong keys and corrupt retained bindings fail before
+a quote is returned. The helper verifies cryptography and matching block IDs;
+callers still independently establish that the supplied registry really is the
+finalized state at that block. It does not substitute today's rotated keys.
 
 ### Off-chain attestation and signed admission verification
 

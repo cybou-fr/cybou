@@ -11,10 +11,15 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     const std::span<const StorageAssignmentEvidenceScope> assignments,
     const std::span<const ChunkId> authorized_chunks, const std::uint64_t rate,
-    const std::uint64_t through_period, const std::span<const StorageAssignmentPaid> paid)
+    const std::uint64_t through_period, const std::span<const StorageAssignmentPaid> paid,
+    const std::span<const StorageAssignmentRegistrySnapshot> registries)
 {
     if (assignments.empty() || authorized_chunks.empty()) return std::nullopt;
     PrivateApplicationStore::Batch snapshot{db};
+    std::map<Hash256, const IdentityRegistry*> historical;
+    for (const auto& registry : registries) {
+        if (!registry.registry || !historical.emplace(registry.block_id, registry.registry).second) return std::nullopt;
+    }
     const auto& base = assignments.front();
     const auto& c = base.assignment.context;
     if (through_period < c.term_start || through_period >= c.term_end) return std::nullopt;
@@ -36,7 +41,11 @@ std::optional<StorageAssignmentSlotQuote> PrepareStorageAssignmentSlotPayouts(
             scope.period_seconds != base.period_seconds || !chunks.contains(s.chunk) ||
             !plans.emplace(scope.assignment.commitment, &scope).second) return std::nullopt;
         const auto attested = LoadStorageAssignmentAttestation(db, genesis, s);
+        const auto seed = Hash256{std::span<const unsigned char, 32>{s.finalized_seed}};
+        const auto registry = historical.find(seed);
         if (!attested || attested->plan != scope.assignment ||
+            registry == historical.end() ||
+            !LoadStorageAssignmentBindings(db, genesis, s, *registry->second, seed) ||
             !StorageAssignmentVerifiedSeconds(db, scope, through_period)) return std::nullopt;
         representatives.emplace(s.chunk, &scope);
     }
