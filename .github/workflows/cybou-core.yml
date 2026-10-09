@@ -87,7 +87,17 @@ jobs:
 
       - name: Run CYBOU protocol tests
         run: |
-          build-ci/bin/cybou-core-test --log_level=error
+          set -o pipefail
+          build-ci/bin/cybou-core-test --log_level=test_suite --report_level=detailed 2>&1 | tee "$RUNNER_TEMP/cybou-core-tests.log"
+
+      - name: Retain protocol test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cybou-core-tests-${{ github.sha }}
+          path: ${{ runner.temp }}/cybou-core-tests.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Check official DEVNET CLI
         run: |

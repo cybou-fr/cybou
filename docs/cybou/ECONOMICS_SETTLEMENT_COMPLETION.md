@@ -10,6 +10,29 @@ deployable while funding and cumulative settlement rules remain inconsistent.
 
 ## Delivery order
 
+### Re-audit reconciliation (2026-10-10)
+
+The supplied repeat audit reviewed `43220316`. Current local baseline `2969c1f7`
+also has active-term debit accounting and 112-byte funded-term records, with
+finalized paid onboarding/locked totals and exact residual reconciliation.
+Future renewal escrow is protected in both preparation and execution. This
+closes the audit's missing term-specific spending observation; it does not
+establish canonical service/paid per replica slot/provider or cumulative payout.
+
+Keep the next economics deliverable concrete: a finalized payout derived from
+canonical cumulative service and paid, using the existing funded terms,
+StorageSettlement, BlockExecutor and assignment payout arithmetic. Then cover
+replacement, all-slot budgets, monotonicity, witnesses/bounded batches and exact
+crash recovery. Another standalone preparation helper is not acceptance.
+Closure still erases history; bounded retention/compaction and checkpoints remain
+open. Do not introduce an arbitrary renewal limit as a substitute for that lifecycle.
+
+The audit also identifies failed Core CI at `43220316`. The connect-back test
+destroyed B while its inbound server/workers still borrowed B. Correct test
+teardown, repeat it and use sanitizers; never disable the test. Keep CI test logs
+as artifacts, including failures. Local PASS is not green Core/Desktop CI on the
+same HEAD. These checks authorize no deployment, genesis/reset or live-state change.
+
 ### Integration control checkpoint (2026-10-09)
 
 Source audit baseline `05ca1fee`, followed by complete-term quote package

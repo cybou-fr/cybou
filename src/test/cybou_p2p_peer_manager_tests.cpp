@@ -265,7 +265,8 @@ BOOST_AUTO_TEST_CASE(listening_inbound_peer_is_verified_by_connect_back_then_sha
         std::this_thread::sleep_for(std::chrono::milliseconds{50});
     }
     BOOST_CHECK(shared());
-    b.reset();
+    // Keep B alive until Stop joins both listeners and their inbound workers.
+    // server_b and its workers borrow B; destroying B first races their runtime access.
 }
 
 BOOST_AUTO_TEST_CASE(poa_signer_toggles_preserve_the_full_node_session)

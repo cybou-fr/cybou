@@ -8,6 +8,43 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Repeat-audit CI lifetime follow-up (2026-10-10)
+
+The repeat audit reviewed `43220316`; active-term debit protection at `2969c1f7`
+already supersedes its aggregate-only spending observation. Per-slot/provider
+cumulative service/paid and verified settlement execution remain open; this
+follow-up does not implement or accept them.
+
+The connect-back P2P test destroyed node B before its Stop guard joined the
+listeners/workers borrowing B. Removed that early reset; normal scope destruction
+now joins listeners/workers before destroying servers and B. No production
+runtime, protocol, consensus, genesis or live process changed. Ten independent
+Windows runs of the unchanged test assertions passed (four assertions each),
+evidence `artifacts/p2p-listener-lifetime-repeat.txt`.
+
+Core CI now uses pipefail plus tee for the full suite/report and uploads the log
+with an always-running, pinned artifact step, keyed by commit SHA. Failure status
+is preserved; missing logs warn instead of masking the original build/test error.
+YAML and retention/pipefail structural checks passed. The historical failed
+[Core run at 43220316](https://github.com/cybou-fr/cybou/actions/runs/37992906342)
+remains FAIL evidence; local checks do not establish green Core/Desktop CI.
+
+Linux WSL build with GCC 15.2.0, `-O1 -g1 -fsanitize=address,undefined
+-fno-omit-frame-pointer` and sanitizer linker flags passed. ASan leak detection
+and halt-on-error plus UBSan halt-on-error/stack traces were enabled. All 38
+P2P suite cases / 1,185 assertions passed; 283 other Linux core cases were
+skipped. Evidence: `artifacts/p2p-lifetime-asan-build.txt` and
+`artifacts/p2p-lifetime-asan-suite.txt`. Initial configuration failed because the
+BLAKE3 prefix was absent; the existing local dependency path fixed it, with the
+failure retained in `artifacts/p2p-lifetime-asan-configure-initial-fail.txt`.
+No old failing revision was rerun under sanitizers; these results validate the
+corrected teardown and do not reproduce/prove the historical CI crash trace.
+Five additional independent Linux ASan/UBSan runs of the connect-back test
+passed all four assertions each, with leak detection enabled. Evidence:
+`artifacts/p2p-lifetime-asan-repeat.txt`. Together with ten native Windows repeats
+and the full sanitizer P2P suite, this is bounded local regression evidence;
+new GitHub Core/Desktop runs on the committed HEAD remain necessary.
+
 ### Active-term finalized debit accounting (2026-10-09)
 
 Approved isolated development now records paid onboarding/locked totals in each
