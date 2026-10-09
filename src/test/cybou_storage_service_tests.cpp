@@ -418,6 +418,9 @@ BOOST_AUTO_TEST_CASE(settlement_pays_verified_replicas_of_leased_publications)
     BOOST_REQUIRE(cap && *cap > 0);
     // Every slot is verified: the whole period cap is paid, split between the two accounts.
     const auto entries = storage.SettlementEntries(period, 0);
+    BOOST_CHECK_THROW(storage.SettlementEntries(period, 0, 0), std::length_error);
+    BOOST_CHECK_THROW(storage.SettlementEntries(period, 0, cybou::MAX_STORAGE_SETTLEMENT_ENTRIES + 1), std::invalid_argument);
+    BOOST_CHECK(storage.SettlementEntries(period, 0, entries.size()) == entries);
     BOOST_REQUIRE(!entries.empty() && entries.size() <= 2U);
     std::uint64_t total{0};
     for (const auto& entry : entries) {

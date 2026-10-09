@@ -192,6 +192,21 @@ remain immutable.
 
 ## Conflict handling
 
+### DEC-292 — Economics-first cumulative settlement target (2026-10-09)
+
+Accepted operator implementation plan: finish accounting, assignment/evidence
+and recoverable payouts before financial UX/Beta. For each separately funded
+term, reserve a whole-CYBOU ceil share per replica; payout is cumulative floor
+entitlement from verified unit-seconds minus finalized paid. Do not round daily
+payouts up, truncate obligations, use elapsed time as evidence or convert
+onboarding-origin rent to transferable Balance. See
+[the exact target and transition gates](ECONOMICS_SETTLEMENT_COMPLETION.md).
+Pure target arithmetic and fail-closed preparation are implementation steps;
+canonical state/wire enforcement, evidence integration and live acceptance remain
+open. DEC-279's current deployed funding/cap rules stay explicitly documented
+until a separately reviewed protocol transition. This decision does not authorize
+cutover, genesis replacement, signer duplication or historical-state deletion.
+
 See [documentation conflict register](DOCUMENTATION_CONFLICT_REGISTER.md).
 Resolve architecture/code gaps explicitly before release; do not rewrite accepted
 requirements merely because code differs. Historical records never create tasks.

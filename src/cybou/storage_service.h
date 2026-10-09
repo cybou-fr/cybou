@@ -300,7 +300,11 @@ public:
     ///          остаток раздаётся по одному CYBOU, начиная со смещения \p period.
     ///          Payout-аккаунт берётся из живой проверенной binding; плательщик не получает ничего,
     ///          не больше `replicas` аккаунтов на аренду. Записи упорядочены для StorageSettlement.
-    std::vector<StorageSettlementEntry> SettlementEntries(std::uint64_t period, std::int64_t verified_since_ms);
+    /// Throws std::length_error rather than truncating obligations when the
+    /// preparation limit is exceeded. A smaller limit can bound a caller batch;
+    /// it does not authorize advancing the canonical settlement period.
+    std::vector<StorageSettlementEntry> SettlementEntries(std::uint64_t period, std::int64_t verified_since_ms,
+        std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
 
 private:
     struct Placement;

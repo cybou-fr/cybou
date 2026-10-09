@@ -41,6 +41,11 @@ settlements. A cumulative cap/remainder and deterministic provider rounding
 require an explicit consensus specification/cutover decision. Open; no deployed
 rent, settlement wire or state arithmetic changed in this package.
 
+Follow-up ECONOMICS-P0-01 selects separate funded replica shares and cumulative
+verified-service entitlement (DEC-292). Pure target arithmetic and explicit
+preparation overflow rejection are implemented. Canonical term/assignment/evidence
+inputs and cumulative paid enforcement remain open; DOC-020 is not marked closed.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

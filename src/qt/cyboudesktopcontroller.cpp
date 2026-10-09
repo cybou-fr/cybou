@@ -206,9 +206,14 @@ void CybouDesktopController::settleStoragePeriod()
     m_settlement_pending = true;
     const auto generation = ++m_settlement_generation;
     m_application->prepareStorageSettlement(period, static_cast<std::int64_t>(start) * 1000,
-        [this, start, period, period_seconds, account, generation](std::vector<cybou::StorageSettlementEntry> entries) {
-          QMetaObject::invokeMethod(this, [this, start, period, period_seconds, account, generation, entries = std::move(entries)]() mutable {
+        [this, start, period, period_seconds, account, generation](std::vector<cybou::StorageSettlementEntry> entries, QString error) {
+          QMetaObject::invokeMethod(this, [this, start, period, period_seconds, account, generation, entries = std::move(entries), error = std::move(error)]() mutable {
             if (generation != m_settlement_generation) return;
+            if (!error.isEmpty()) {
+                m_settlement_pending = false;
+                m_model->notify(error);
+                return;
+            }
             if (m_model->status().account_id != account || !ReviewStorageSettlement(m_model, period, start,
                     start + period_seconds, entries, QApplication::activeWindow())) { if (generation == m_settlement_generation) m_settlement_pending = false; return; }
             std::uint64_t total{0};

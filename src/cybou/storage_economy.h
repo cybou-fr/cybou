@@ -2,10 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// \file
-/// \brief Целочисленная арифметика storage rent (DEC-279) для shadow accounting.
-///
-/// Здесь нет consensus state: M4 только оценивает rent и вознаграждение
-/// providers, не перемещая CYBOU. Та же арифметика станет канонической в M5.
+/// \brief Pure storage rent and accepted target settlement arithmetic.
+/// This module does not mutate consensus state or activate a protocol transition.
 
 #ifndef CYBOU_STORAGE_ECONOMY_H
 #define CYBOU_STORAGE_ECONOMY_H
@@ -50,6 +48,26 @@ bool AccrueStorageRent(StorageRentAccumulator& accumulator, std::uint64_t units,
 /// \brief Rent за одни сутки для \p units на \p replicas репликах, floor в CYBOU.
 /// \return std::nullopt при переполнении.
 std::optional<std::uint64_t> StorageRentPerDay(std::uint64_t units, std::uint64_t replicas);
+
+/// Economics-P0-01 target arithmetic, not the deployed lease tariff. Each
+/// independently assigned replica receives its own whole-CYBOU funded share.
+/// Renewal funds a separate term; it must not rescale an existing entitlement.
+struct AssignedStorageBudget {
+    std::uint64_t per_replica{0};
+    std::uint64_t total{0};
+    std::uint64_t contracted_unit_seconds{0};
+};
+
+std::optional<AssignedStorageBudget> ComputeAssignedStorageBudget(std::uint64_t units,
+    std::uint64_t replicas, std::uint64_t periods, std::uint64_t period_seconds,
+    std::uint64_t rate);
+
+/// floor(funded replica share * cumulative verified unit-seconds / contracted
+/// unit-seconds) - finalized paid. A cumulative counter comes exclusively from
+/// deduplicated assignment-bound evidence, never elapsed time alone. Pure quote:
+/// preparing or retrying a settlement must not advance finalized paid.
+std::optional<std::uint64_t> ComputeAssignedStoragePayout(const AssignedStorageBudget& budget,
+    std::uint64_t verified_unit_seconds, std::uint64_t finalized_paid);
 
 } // namespace cybou
 

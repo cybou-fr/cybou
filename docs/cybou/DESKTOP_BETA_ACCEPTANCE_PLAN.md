@@ -12,6 +12,11 @@ retain their authority. This plan does not certify Beta readiness.
 
 ## Assessment and corrections to the supplied review
 
+Operator priority update, 2026-10-09: complete storage economics first under
+[ECONOMICS_SETTLEMENT_COMPLETION](ECONOMICS_SETTLEMENT_COMPLETION.md), then
+financial UX and independent-provider/Beta hardening. The dated CI and UX evidence
+below retains its original revision and does not override this delivery order.
+
 Desktop feature delivery is substantially implemented; release confidence now
 depends on acceptance evidence. No percentage of readiness is assigned.
 

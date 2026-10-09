@@ -67,6 +67,7 @@ content review still pending; classification alone does not revalidate all claim
 | Document | Status |
 |---|---|
 | [CYBOU protocol and product roadmap](22_ROADMAP.md) | CURRENT |
+| [Economics-first settlement completion](ECONOMICS_SETTLEMENT_COMPLETION.md) | CURRENT |
 | [Open engineering and product gates](25_OPEN_QUESTIONS.md) | CURRENT |
 | [Implementation status](26_IMPLEMENTATION_STATUS.md) | CURRENT |
 | [Beta clean-client Files recovery — FILES-RESTORE-01](BETA_FILES_CLEAN_RESTORE_ACCEPTANCE.md) | CURRENT |

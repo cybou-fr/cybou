@@ -181,6 +181,12 @@ an open legal gate before MAINNET (`25_OPEN_QUESTIONS.md`).
 
 ## Current lease and settlement wire
 
+The accepted [economics-first target](ECONOMICS_SETTLEMENT_COMPLETION.md), DEC-292,
+selects separately funded whole-CYBOU replica shares and cumulative confirmed
+service entitlement. Its pure arithmetic is implemented separately; the current
+wire/execution below remains unchanged pending explicit transition. DOC-020 is
+not resolved by introducing a quote helper alone.
+
 All integers below are little-endian. These are operation payloads; the common
 operation envelope is separate. Hashes and AccountIDs retain their raw 32-byte order.
 

@@ -8,6 +8,31 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### ECONOMICS-P0-01 initial accounting package (2026-10-09)
+
+DEC-292 sets economics before Beta hardening. Pure target helpers compute funded
+whole-CYBOU replica shares and cumulative verified-unit-second entitlement minus
+finalized paid; they are not connected to current canonical funding/execution.
+Invalid counters/remainders and overflows fail closed. Two-replica funding adds
+at most one CYBOU over current combined ceil in the checked 1–2048 unit,
+1/2/30/365-period matrix. Tests also cover 1/2/1000 shares, partial service,
+missing intervals and repeatable calculation from supplied counters. These are
+arithmetic tests, not durable-ledger or process-restart evidence.
+
+StorageService settlement preparation no longer truncates above 1024 entries:
+it throws an explicit preparation error. The Qt adapter reports failure and the
+controller does not review/submit an empty success or advance the period. The
+service regression checks rejection under a reduced preparation limit and exact
+boundary success without changing the subsequent result. Qt static library built;
+no new GUI runtime acceptance or production executable deployment is claimed.
+
+Scoped Win/MinGW core suites passed 49 cases / 122,020 assertions:
+storage economy, economics quotes, storage service and resource limits.
+Ignored log: artifacts/economics-p0-01-core.txt. Other 239 core cases were not run.
+DOC-020, canonical term/paid serialization, assignment/evidence integration,
+recoverable settlement execution and coordinated transition remain open under
+[the completion contract](ECONOMICS_SETTLEMENT_COMPLETION.md).
+
 Follow-up offline simulation emits JSON for five workloads at 30/90/365 periods,
 provider sensitivity and onboarding Treasury exposure, and a renderer produces
 the dated EVIDENCE report. Source sizing templates contain placeholders and are

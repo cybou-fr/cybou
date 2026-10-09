@@ -8,6 +8,13 @@ encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
 ## Architecture, economics and desktop completion (operator plan, 2026-10-09)
 
+Priority override: the operator now requires completed storage economics before
+Beta hardening. Follow [economics-first completion](ECONOMICS_SETTLEMENT_COMPLETION.md):
+cumulative settlement accounting, assignment/evidence, recoverable end-to-end
+payouts, then tariffs/Wallet and Beta acceptance. The sequence below records
+the earlier Local/Network package order; it no longer postpones economics behind
+extended UX testing. Critical data-loss/security/CI fixes remain urgent.
+
 Continue the existing Local/Network implementation rather than replacing its
 services. Delivery order: (1) staging cancellation and real-disk acceptance;
 (2) active Outbox index and exact-operation crash recovery; (3) local data,

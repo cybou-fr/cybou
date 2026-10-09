@@ -44,14 +44,23 @@ void CybouCoreApplicationAdapter::openIdentity()
 }
 
 void CybouCoreApplicationAdapter::prepareStorageSettlement(const std::uint64_t period,
-    const std::int64_t verified_since_ms, std::function<void(std::vector<cybou::StorageSettlementEntry>)> done)
+    const std::int64_t verified_since_ms, std::function<void(std::vector<cybou::StorageSettlementEntry>, QString)> done)
 {
     if (!m_session) {
-        done({});
+        done({}, tr("Storage settlement preparation requires an open Identity."));
         return;
     }
     m_session->Post([period, verified_since_ms, done = std::move(done)](IdentitySession& s) {
-        done(s.storage_projection.Settlement(period, verified_since_ms));
+        std::vector<cybou::StorageSettlementEntry> entries;
+        QString error;
+        try {
+            entries = s.storage_projection.Settlement(period, verified_since_ms);
+        } catch (const std::length_error&) {
+            error = tr("Too many storage payouts for one settlement. Nothing was submitted; obligations were not discarded.");
+        } catch (const std::exception&) {
+            error = tr("Storage settlement preparation failed. Nothing was submitted.");
+        }
+        done(std::move(entries), std::move(error));
     });
 }
 

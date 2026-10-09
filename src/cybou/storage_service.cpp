@@ -10,6 +10,7 @@
 #include <cybou/root_publication.h>
 #include <algorithm>
 #include <limits>
+#include <stdexcept>
 
 namespace cybou {
 
@@ -289,8 +290,9 @@ std::optional<StorageService::PlacementView> StorageService::DescribePlacement(c
 }
 
 std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std::uint64_t period,
-    const std::int64_t verified_since_ms)
+    const std::int64_t verified_since_ms, const std::size_t entry_limit)
 {
+    if (entry_limit > MAX_STORAGE_SETTLEMENT_ENTRIES) throw std::invalid_argument{"settlement entry limit exceeds protocol maximum"};
     // Payout-аккаунты известны только из живых проверенных bindings (в placement они не хранятся).
     std::map<std::array<unsigned char, 32>, AccountId> payout_by_storage;
     for (const auto& provider : m_transport.Providers()) {
@@ -347,12 +349,12 @@ std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std:
             if (paid == 0) continue;
             remaining -= paid;
             entries.push_back({.publication_id = placement.operation_id, .payout_account = ranked[i].second, .amount = paid});
+            if (entries.size() > entry_limit) throw std::length_error{"settlement preparation exceeds entry limit; no partial settlement produced"};
         }
     }
     std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
         return a.publication_id != b.publication_id ? a.publication_id < b.publication_id : a.payout_account < b.payout_account;
     });
-    if (entries.size() > MAX_STORAGE_SETTLEMENT_ENTRIES) entries.resize(MAX_STORAGE_SETTLEMENT_ENTRIES);
     return entries;
 }
 
