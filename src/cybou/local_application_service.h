@@ -48,8 +48,12 @@ public:
         const PrivateApplicationDocument& document, std::optional<AccountId> recipient = std::nullopt,
         std::string_view draft_id = {});
     std::vector<PendingPublication> Outbox();
+    /// Bounded active work in acceptance order; completed history remains intact.
+    std::vector<PendingPublication> PendingOutbox(std::size_t limit);
     bool SetPublicationStatus(std::string_view job, const PublicationJobResult& status);
 private:
+    bool EnsureActiveOutboxIndex();
+    std::vector<PendingPublication> ReadOutbox(const std::vector<std::string>& ids);
     std::optional<MailRecord> LoadMail(const PrivateItemId& id) const;
     bool SaveMail(const MailRecord& record);
     std::optional<FileRecord> LoadFile(const PrivateItemId& id, bool desired = true) const;

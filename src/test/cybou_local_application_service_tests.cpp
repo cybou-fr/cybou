@@ -341,4 +341,43 @@ BOOST_AUTO_TEST_CASE(stopping_content_preparation_cancels_before_local_acceptanc
     BOOST_REQUIRE(db.Get("staging/jobs"));
     BOOST_CHECK(db.Get("staging/jobs")->empty());
 }
+BOOST_AUTO_TEST_CASE(active_outbox_is_bounded_and_survives_restart)
+{
+    CybouServiceTestFixture fixture;
+    auto identity = fixture.CreateIdentity("active-outbox.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "active-outbox", "local.db", true};
+    cybou::LocalContentStager stager{fixture.runtime->GetChunkBlobStore(), fixture.runtime->GetChunkRetention(),
+        fixture.runtime->GetNetworkBinding(), db.Account(), &db};
+    const auto mail = Mail(identity->GetKeyStore());
+    std::vector<cybou::NewContent> children;
+    const auto content = stager.Prepare("active-first", children, [&](std::span<const cybou::EncryptedTreeSummary>) {
+        return cybou::EncodePrivateApplicationDocument(mail.message);
+    });
+    BOOST_REQUIRE(content);
+    {
+        cybou::LocalApplicationService local{db};
+        BOOST_REQUIRE(local.QueuePublication("active-first", *content, mail.message));
+        BOOST_REQUIRE(local.QueuePublication("active-second", *content, mail.message));
+        BOOST_REQUIRE(local.QueuePublication("active-third", *content, mail.message));
+        BOOST_REQUIRE(local.SetPublicationStatus("active-first", {.phase = cybou::PublicationJobPhase::PROTECTED}));
+        BOOST_REQUIRE_EQUAL(local.PendingOutbox(1).size(), 1U);
+        BOOST_CHECK_EQUAL(local.PendingOutbox(1).front().job_id, "active-second");
+        BOOST_CHECK(local.PendingOutbox(0).empty());
+        BOOST_CHECK_EQUAL(local.Outbox().size(), 3U);
+    }
+    {
+        cybou::LocalApplicationService local{db};
+        BOOST_REQUIRE_EQUAL(local.PendingOutbox(16).size(), 2U);
+        BOOST_REQUIRE(local.SetPublicationStatus("active-first", {.phase = cybou::PublicationJobPhase::NEEDS_ATTENTION}));
+        BOOST_CHECK_EQUAL(local.PendingOutbox(1).front().job_id, "active-first");
+        // Rebuild an older store's missing index once, retaining all active jobs.
+        BOOST_REQUIRE(db.Erase("outbox/active"));
+        BOOST_CHECK_EQUAL(local.PendingOutbox(16).size(), 3U);
+        BOOST_REQUIRE(local.SetPublicationStatus("active-first", {.phase = cybou::PublicationJobPhase::PROTECTED}));
+        // Completed payloads are not decoded by subsequent network passes.
+        BOOST_REQUIRE(db.Put("outbox/job/active-first", std::vector<unsigned char>{0}));
+        BOOST_CHECK_EQUAL(local.PendingOutbox(16).size(), 2U);
+        BOOST_CHECK_THROW(local.Outbox(), std::runtime_error);
+    }
+}
 BOOST_AUTO_TEST_SUITE_END()

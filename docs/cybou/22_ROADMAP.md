@@ -6,6 +6,32 @@ Scope: Classification only; dated evidence and pending requirements retain their
 CYBOU is an Identity-centered private Mail and Files platform over an
 encrypted P2P mesh with single-operator hybrid-PQ PoA finality.
 
+## Architecture, economics and desktop completion (operator plan, 2026-10-09)
+
+Continue the existing Local/Network implementation rather than replacing its
+services. Delivery order: (1) staging cancellation and real-disk acceptance;
+(2) active Outbox index and exact-operation crash recovery; (3) local data,
+rotation and snapshot fault injection; (4) pure consensus-backed cost quotes;
+(5) tariff/rounding simulations; (6) durable assignment-bound storage evidence;
+(7) recoverable operator settlement preparation and evidence collection;
+(8) explicitly agreed settlement schema and serialization vectors;
+(9) finalized Wallet lease/escrow/refund/earnings ledger; (10) publication cost
+and bounded renewal policy; (11) Mail/Files batch actions, Undo and semantic
+deltas; (12) native desktop, offline/restart and independent-host Beta acceptance.
+
+The settlement schema, any accrued-rent consensus fields and tariff changes
+require their own normative decision and explicit deployment/cutover plan.
+This roadmap does not authorize replacing immutable genesis, resetting DEVNET
+or silently changing deployed wire. Simulations and exact quotes must reuse
+current authoritative integer arithmetic. Detect settlement overflow explicitly;
+do not silently truncate financial obligations. Successfully imported local
+content stays successful when a separate network publication lacks funds.
+
+The independent stager already exists in 06d8d7d; its scoped tests are not
+10 GiB real-disk acceptance. Outbox active indexing is the first incremental
+implementation; crash recovery, active-pass scheduling and the remaining
+packages retain separate acceptance gates.
+
 ## Phase 1 — Architectural alignment and clean core (In Progress)
 
 1. **Constitutional documentation alignment**: establish single truth across Level 0, 1, and 2 documents (Completed in `AGENTS.md`, `24_DECISIONS.md`, `02_ARCHITECTURE.md`, `04_NETWORK_LIFECYCLE.md`, `VALIDATION.md`, and core domain specs).

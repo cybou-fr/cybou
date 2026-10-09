@@ -596,7 +596,7 @@ bool LocalApplicationService::ImportFile(const FileRecord& incoming)
     const auto pending = m_application_db.Get("files/desired-job/" + Hex(incoming.item.item_id));
     if (pending) {
         const std::string job_id{pending->begin(), pending->end()};
-        for (const auto& job : Outbox()) {
+        for (const auto& job : ReadOutbox({job_id})) {
             if (job.job_id == job_id && job.status.operation_id == incoming.operation_id && !incoming.operation_id.IsNull()) {
                 if (!m_application_db.Erase("files/desired/" + Hex(incoming.item.item_id)) ||
                     !m_application_db.Erase("files/desired-job/" + Hex(incoming.item.item_id))) return false;
@@ -652,7 +652,7 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
     if (!encoded_document) return false;
     // Job ownership is immutable: retries reuse this exact prepared content.
     if (m_application_db.Has("outbox/job/" + std::string{job})) {
-        for (const auto& existing : Outbox()) if (existing.job_id == job)
+        for (const auto& existing : ReadOutbox({std::string{job}}))
             return existing.document == document && existing.recipient == recipient &&
                 existing.content.leaves == content.leaves &&
                 existing.content.bundle.root_chunk_id == content.bundle.root_chunk_id &&
@@ -663,6 +663,7 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
     }
     PrivateApplicationStore::Batch batch{m_application_db};
     std::uint64_t sequence{0};
+    if (!EnsureActiveOutboxIndex()) return false;
     if (const auto saved = m_application_db.Get("outbox/sequence")) {
         Reader in{*saved};
         const auto n = in.U64();
@@ -683,8 +684,11 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
     counter.U64(sequence);
     auto jobs = ReadNames(m_application_db, "outbox/index");
     jobs.emplace_back(job);
+    auto active = ReadNames(m_application_db, "outbox/active");
+    active.emplace_back(job);
     if (!m_application_db.Put("outbox/job/" + std::string{job}, out.Out()) ||
-        !m_application_db.Put("outbox/sequence", counter.Out()) || !WriteNames(m_application_db, "outbox/index", jobs)) return false;
+        !m_application_db.Put("outbox/sequence", counter.Out()) || !WriteNames(m_application_db, "outbox/index", jobs) ||
+        !WriteNames(m_application_db, "outbox/active", active)) return false;
     if (const auto* mail = std::get_if<MailMessage>(&document)) {
         MailRecord record;
         record.message = *mail;
@@ -720,8 +724,32 @@ bool LocalApplicationService::QueuePublication(std::string_view job, const Local
 std::vector<PendingPublication> LocalApplicationService::Outbox()
 {
     std::lock_guard lock{m_mutex};
+    return ReadOutbox(ReadNames(m_application_db, "outbox/index"));
+}
+
+bool LocalApplicationService::EnsureActiveOutboxIndex()
+{
+    if (m_application_db.Has("outbox/active")) return true;
+    std::vector<std::string> active;
+    for (const auto& job : Outbox())
+        if (job.status.phase != PublicationJobPhase::PROTECTED) active.push_back(job.job_id);
+    return WriteNames(m_application_db, "outbox/active", active);
+}
+
+std::vector<PendingPublication> LocalApplicationService::PendingOutbox(const std::size_t limit)
+{
+    std::lock_guard lock{m_mutex};
+    if (limit == 0) return {};
+    if (!EnsureActiveOutboxIndex()) throw std::runtime_error{"cannot initialize active Outbox index"};
+    auto ids = ReadNames(m_application_db, "outbox/active");
+    if (ids.size() > limit) ids.resize(limit);
+    return ReadOutbox(ids);
+}
+
+std::vector<PendingPublication> LocalApplicationService::ReadOutbox(const std::vector<std::string>& ids)
+{
     std::vector<PendingPublication> result;
-    for (const auto& id : ReadNames(m_application_db, "outbox/index")) {
+    for (const auto& id : ids) {
         const auto encoded = m_application_db.Get("outbox/job/" + id);
         if (!encoded) throw std::runtime_error{"Outbox entry missing; refusing to forget local work"};
         Reader in{*encoded};
@@ -766,12 +794,28 @@ bool LocalApplicationService::SetPublicationStatus(std::string_view job, const P
 {
     std::lock_guard lock{m_mutex};
     if (!m_application_db.Has("outbox/job/" + std::string{job}) || status.error.size() > 4096) return false;
+    PrivateApplicationStore::Batch batch{m_application_db};
+    if (!EnsureActiveOutboxIndex()) return false;
+    auto active = ReadNames(m_application_db, "outbox/active");
+    const auto found = std::find(active.begin(), active.end(), job);
+    if (status.phase == PublicationJobPhase::PROTECTED) {
+        if (found != active.end()) active.erase(found);
+    } else if (found == active.end()) {
+        // Reactivated jobs retain their original acceptance order.
+        const auto history = ReadNames(m_application_db, "outbox/index");
+        const auto position = std::find(history.begin(), history.end(), job);
+        const auto next = std::find_if(active.begin(), active.end(), [&](const auto& id) {
+            return std::find(history.begin(), history.end(), id) > position;
+        });
+        active.insert(next, std::string{job});
+    }
     Writer out;
     out.U8(static_cast<std::uint8_t>(status.phase));
     out.Bytes(std::span{status.operation_id.begin(), 32});
     out.U64(status.finalized_height);
     PutString(out, status.error);
-    return m_application_db.Put("outbox/status/" + std::string{job}, out.Out());
+    return m_application_db.Put("outbox/status/" + std::string{job}, out.Out()) &&
+        WriteNames(m_application_db, "outbox/active", active) && batch.Commit();
 }
 
 } // namespace cybou

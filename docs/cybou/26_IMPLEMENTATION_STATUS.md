@@ -6,6 +6,24 @@ Scope: Classification only; dated evidence and pending requirements retain their
 Recorded status: code/evidence reviewed on 2026-10-04 with dated 2026-10-05 runtime and
 desktop updates below; deployment statements retain their stated scope.
 
+## Active Outbox indexing (2026-10-09)
+
+The local store retains an encrypted active-job index alongside immutable
+completed history. Acceptance appends membership in the local transaction;
+status transitions update membership atomically. Protected jobs can be
+reactivated in original acceptance order. Existing stores initialize the index
+once from validated history. PendingOutbox(limit) decodes only the selected
+active payloads; NetworkSync no longer decodes completed history each pass.
+The network pass still processes all active jobs to avoid starving later intents
+behind jobs securing replicas. A bounded scheduling cursor remains open.
+
+Scoped local/application core suites passed 22 cases / 439 assertions:
+artifacts/active-outbox-core.txt (ignored). Tests cover selection limits, service
+restart with retained store, index reconstruction, reactivation order and an
+invalid completed payload excluded from active reads. They do not establish
+process-kill recovery, 10,000-job real-disk performance or the cross-database
+exact-operation crash guarantee. Desktop deployment was not part of this check.
+
 ## Independent local content preparation (2026-10-09)
 
 Upload and new local Mail attachment preparation run on the LocalContentStager executor.

@@ -43,6 +43,14 @@ commits advance the local snapshot revision, rejecting older network snapshots.
 Local Files catalog deltas also carry an ordering marker, so a late GUI callback
 cannot erase a newer catalog delivered by the other local executor.
 
+The durable active Outbox index excludes protected jobs without deleting their
+immutable content or status. Status and active membership commit together.
+An older local store builds this index once from retained history, failing closed
+on invalid records. PendingOutbox(limit) bounds payload decoding in acceptance
+order. The current network pass consumes all active jobs: a bounded scheduling
+cursor must preserve submission order and avoid starvation behind securing jobs
+before a per-pass budget is imposed.
+
 NetworkSyncService independently advances publication jobs, history indexing,
 content recovery and remote durability. It releases local locks before network
 calls. Stable JobID and exact recorded OperationID survive retries/restarts.

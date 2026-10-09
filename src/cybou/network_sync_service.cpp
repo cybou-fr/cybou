@@ -3,12 +3,15 @@
 #include <cybou/network_sync_service.h>
 #include <cybou/local_application_service.h>
 #include <chrono>
+#include <limits>
 namespace cybou {
 void NetworkSyncService::ProcessOutbox(LocalApplicationService& local, PublicationService& publication,
     PrivateApplicationStore& network_db)
 {
     // Local mutex/store are released before any signing, relay or storage call.
-    const auto outbox = local.Outbox();
+    // Keep submission ordering and avoid starving later intents behind jobs
+    // still securing replicas. A per-pass cursor/budget is a separate change.
+    const auto outbox = local.PendingOutbox(std::numeric_limits<std::size_t>::max());
     for (const auto& pending : outbox) {
         if (pending.status.phase == PublicationJobPhase::PROTECTED) continue;
         auto status = publication.GetJob(pending.job_id);
