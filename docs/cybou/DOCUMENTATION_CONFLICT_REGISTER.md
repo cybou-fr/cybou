@@ -100,6 +100,12 @@ must not be deployed and does not close DOC-020. The earlier one-CYBOU escrow
 description above records the audited deployed baseline, not the new development
 funding formula. Separate canonical terms, paid/evidence and settlement remain open.
 
+Approved isolated canonical-term follow-up now persists original
+funding records in the existing state codec, preserving renewal budgets/rates
+and origins. Current settlement is still aggregate and has no canonical
+service/paid assignment enforcement. DOC-005/006/020 remain open; deployed
+nonempty lease snapshots require an approved transition, not implicit decoding.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

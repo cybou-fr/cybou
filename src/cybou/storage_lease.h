@@ -65,7 +65,8 @@ enum class StorageLeaseError : uint8_t {
 /// \brief Переводит \p escrow из System Balance плательщика в аренду публикации, создавая или продлевая её.
 /// \pre Достаточный System Balance и отсутствие переполнения уже проверены вызывающим.
 void FundStorageLease(CybouState& state, const cybou::Hash256& publication_id, const AccountId& payer,
-    uint32_t units, uint8_t replicas, uint32_t periods, uint64_t escrow);
+    uint32_t units, uint8_t replicas, uint32_t periods, uint64_t escrow,
+    const CybouProtocolParameters& params, const cybou::Hash256& funding_operation_id);
 
 /// \brief Создаёт или продлевает аренду: комиссия `payment_fee` в Treasury, rent в StorageEscrow (DEC-278).
 StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybou::Hash256& network_binding,

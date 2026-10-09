@@ -8,6 +8,38 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Canonical immutable funded-term history (2026-10-09)
+
+The approved isolated source-tree transition now retains StorageFundedTerm
+records within each existing lease. Initial publication and authorized renewal
+execution supply their exact OperationIDs and canonical parameters. Renewal
+appends a separate budget/denominator/origin record, preserving earlier terms.
+Current lease escrow remains the sole live balance; original funding is not
+another obligation ledger or added monetary supply. Existing state serialization,
+hashing, decoding and validation include the 96-byte term records.
+
+Missing terms, duplicate funding IDs, discontinuous periods, inconsistent budget
+or provenance, truncated/count-overrun bytes and live-origin escrow above original
+funding fail. Genesis with no leases has unchanged bytes. Nonempty deployed lease
+snapshots are incompatible; no automatic migration, legacy decoder or live
+restart/deployment is authorized. Term-specific paid/service, evidence/proof/batch
+execution and correct term-aware settlement/refund/closure remain open. Old
+settlement still consumes aggregate escrow and deletes a closed lease; this is
+not complete economics or an activatable protocol transition.
+
+Validation: core build passed; focused economy/quotes, state, RootPublication,
+runtime/PoA, operation codec, network genesis, KV store, resource limits and
+storage/publication/application suites passed 132 cases / 137,951 assertions;
+180 other cases were skipped. Evidence: `artifacts/economics-canonical-terms-core.txt`,
+baseline `fc134c7e` plus this package. Initial run failed one of 132 cases because
+the overflow fixture manually corrupted lease.end_period without its funding
+history (`artifacts/economics-canonical-terms-initial-fail.txt`). The repaired
+fixture creates a valid near-limit term through canonical publication execution;
+renewal overflow still rejects before debit. Signed publication/renewal tests
+cover immutable term copies, exact funding IDs, codec/hash round-trip, bad budget,
+duplicate/gapped terms, truncated/count-overrun/missing history and duplicate
+funding without mutation. Isolated fixtures, no live deployment or E2E payouts.
+
 ### Approved isolated canonical funding change (2026-10-09)
 
 Operator approved consensus-code development in isolated fixtures, without

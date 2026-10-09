@@ -8,6 +8,8 @@
 #include <cybou/crypto/sha256.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/storage_economy.h>
+#include <cybou/protocol_operation.h>
+#include <stdexcept>
 
 #include <algorithm>
 #include <limits>
@@ -138,20 +140,38 @@ std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParamete
 }
 
 void FundStorageLease(CybouState& state, const cybou::Hash256& publication_id, const AccountId& payer,
-    const uint32_t units, const uint8_t replicas, const uint32_t periods, const uint64_t escrow)
+    const uint32_t units, const uint8_t replicas, const uint32_t periods, const uint64_t escrow,
+    const CybouProtocolParameters& params, const cybou::Hash256& funding_operation_id)
 {
+    const auto budget = ComputeAssignedStorageBudget(units, replicas, periods,
+        params.storage_settlement_period_seconds, params.storage_rate_per_gib_day_replica);
+    const auto existing = state.leases.find(publication_id);
+    const auto first = existing == state.leases.end() ? state.settlement.next_period : existing->second.end_period;
+    if (!budget || budget->total != escrow || funding_operation_id.IsNull() ||
+        first > std::numeric_limits<uint64_t>::max() - periods ||
+        (existing != state.leases.end() &&
+            (existing->second.funded_terms.empty() || existing->second.payer != payer || existing->second.units != units || existing->second.replicas != replicas ||
+             std::any_of(existing->second.funded_terms.begin(), existing->second.funded_terms.end(),
+                [&](const auto& term) { return term.funding_operation_id == funding_operation_id; })))) {
+        throw std::invalid_argument{"invalid or duplicate funded storage term"};
+    }
     // Onboarding-происхождение уходит в escrow первым и сохраняется для выплат (DEC-281).
     const uint64_t onboarding = DebitSystemBalance(state.accounts.at(payer), escrow);
-    if (auto existing = state.leases.find(publication_id); existing != state.leases.end()) {
+    StorageFundedTerm term{.funding_operation_id = funding_operation_id, .first_period = first,
+        .end_period = first + periods, .rate = params.storage_rate_per_gib_day_replica,
+        .period_seconds = params.storage_settlement_period_seconds, .replica_share = budget->per_replica,
+        .contracted_unit_seconds = budget->contracted_unit_seconds,
+        .initial_onboarding = onboarding, .initial_locked = escrow - onboarding};
+    if (existing != state.leases.end()) {
         existing->second.end_period += periods;
         existing->second.escrow_onboarding += onboarding;
         existing->second.escrow_locked += escrow - onboarding;
+        existing->second.funded_terms.push_back(term);
         return;
     }
-    const uint64_t first = state.settlement.next_period;
     state.leases.emplace(publication_id, StorageLeaseRecord{.payer = payer, .units = units, .replicas = replicas,
-        .first_period = first, .end_period = first + periods, .escrow_onboarding = onboarding,
-        .escrow_locked = escrow - onboarding});
+        .first_period = first, .end_period = term.end_period, .escrow_onboarding = onboarding,
+        .escrow_locked = escrow - onboarding, .funded_terms = {term}});
 }
 
 StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybou::Hash256& network_binding,
@@ -174,6 +194,12 @@ StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybo
     if (!escrow || *escrow > std::numeric_limits<uint64_t>::max() - params.payment_fee) {
         return StorageLeaseError::ESCROW_OVERFLOW;
     }
+    const auto first = existing == state.leases.end() ? state.settlement.next_period : existing->second.end_period;
+    const auto funding_id = ComputeOperationId(ProtocolOperation{op});
+    if (!funding_id || (existing != state.leases.end() && existing->second.funded_terms.empty()))
+        return StorageLeaseError::INVALID_PAYLOAD;
+    if (first > std::numeric_limits<uint64_t>::max() - op.lease.periods)
+        return StorageLeaseError::ESCROW_OVERFLOW;
     if (existing != state.leases.end() && (existing->second.end_period >
             std::numeric_limits<uint64_t>::max() - op.lease.periods ||
         existing->second.escrow_onboarding + existing->second.escrow_locked >
@@ -188,7 +214,7 @@ StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybo
     DebitSystemBalance(sender->second, params.payment_fee);
     CreditCentralAuthorityFee(state, params.payment_fee);
     FundStorageLease(state, op.lease.publication_id, account_id, publication->second.chunk_count, replicas,
-        op.lease.periods, *escrow);
+        op.lease.periods, *escrow, params, *funding_id);
     return StorageLeaseError::NONE;
 }
 

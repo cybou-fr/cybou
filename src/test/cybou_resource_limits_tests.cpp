@@ -455,6 +455,8 @@ BOOST_AUTO_TEST_CASE(settlement_payout_attacks_are_refused)
 BOOST_AUTO_TEST_CASE(lease_payload_and_extension_bounds_are_enforced)
 {
     LimitsFixture f;
+    // Create a valid funded term near the period limit through canonical execution.
+    f.state.settlement.next_period = std::numeric_limits<uint64_t>::max() - 2;
     const auto publication = f.Publish(2048, 0xC0, 1);
     const auto id = *ComputeOperationId(publication);
     BOOST_REQUIRE(f.Execute({publication}, 1));
@@ -464,7 +466,8 @@ BOOST_AUTO_TEST_CASE(lease_payload_and_extension_bounds_are_enforced)
         StorageLeaseError::INVALID_PAYLOAD);
     f.nonce = f.state.identities.Find(f.account)->nonce;
     // An extension that would overflow the period range is refused before any debit.
-    f.state.leases.at(id).end_period = std::numeric_limits<uint64_t>::max() - 1;
+    BOOST_CHECK_EQUAL(f.state.leases.at(id).end_period, std::numeric_limits<uint64_t>::max() - 1);
+    BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
     const auto system_before = f.state.accounts.at(f.account).system_balance;
     BOOST_CHECK(f.Execute({f.Lease(id, 5)}, 2).lease_error == StorageLeaseError::ESCROW_OVERFLOW);
     BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, system_before);

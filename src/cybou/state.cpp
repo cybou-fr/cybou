@@ -6,6 +6,7 @@
 #include <cybou/state.h>
 #include <cybou/protocol_operation.h>
 #include <cybou/storage_lease.h>
+#include <cybou/storage_economy.h>
 #include <cybou/crypto/sha256.h>
 
 #include <algorithm>
@@ -18,7 +19,8 @@ namespace cybou {
 namespace {
 constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
-constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8};
+constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 4};
+constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 8};
 constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -122,6 +124,7 @@ size_t SerializedStateSize(const CybouState& state,
     }
     total_size += 4 + state.publications.size() * PUBLICATION_SIZE;
     total_size += 8 + 8 + 4 + state.leases.size() * LEASE_SIZE;
+    for (const auto& [id, lease] : state.leases) total_size += lease.funded_terms.size() * FUNDED_TERM_SIZE;
     return total_size;
 }
 
@@ -333,6 +336,8 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     // Начальная аренда оплачивается атомарно с публикацией: контент не бывает финализирован неоплаченным.
     std::optional<uint64_t> escrow{0};
     if (op.publication.lease_periods != 0) {
+        if (state.settlement.next_period > std::numeric_limits<uint64_t>::max() - op.publication.lease_periods)
+            return RootPublicationError::INVALID_PAYLOAD;
         escrow = ComputeStorageLeaseEscrow(params, op.publication.chunk_count, params.storage_replica_target,
             op.publication.lease_periods);
     }
@@ -350,7 +355,7 @@ RootPublicationError ApplyRootPublication(const AuthorizedRootPublication& op,
     CreditCentralAuthorityFee(state, *fee);
     if (*escrow != 0) {
         FundStorageLease(state, *publication_id, op.authorization.account_id, op.publication.chunk_count,
-            params.storage_replica_target, op.publication.lease_periods, *escrow);
+            params.storage_replica_target, op.publication.lease_periods, *escrow, params, *publication_id);
     }
     return RootPublicationError::NONE;
 }
@@ -461,6 +466,7 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
         }
     }
     // Аренда: плательщик существует, период непуст и начинается не позже курсора settlement.
+    std::set<cybou::Hash256> funding_ids;
     for (const auto& [id, lease] : state.leases) {
         if (id.IsNull() || !state.accounts.contains(lease.payer) || lease.units == 0 || lease.replicas == 0 ||
             lease.replicas > MAX_STORAGE_LEASE_REPLICAS || lease.first_period >= lease.end_period ||
@@ -470,6 +476,26 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
             (publication->second.owner != lease.payer || publication->second.chunk_count != lease.units)) {
             return StateValidationError::INVALID_STORAGE_LEASE;
         }
+        if (lease.funded_terms.empty() || lease.funded_terms.size() > std::numeric_limits<uint32_t>::max())
+            return StateValidationError::INVALID_STORAGE_LEASE;
+        uint64_t end = lease.first_period;
+        unsigned __int128 original_onboarding{0}, original_locked{0};
+        for (const auto& term : lease.funded_terms) {
+            if (term.funding_operation_id.IsNull() || !funding_ids.insert(term.funding_operation_id).second ||
+                term.first_period != end || term.end_period <= term.first_period)
+                return StateValidationError::INVALID_STORAGE_LEASE;
+            const auto budget = ComputeAssignedStorageBudget(lease.units, lease.replicas,
+                term.end_period - term.first_period, term.period_seconds, term.rate);
+            if (!budget || budget->per_replica != term.replica_share ||
+                budget->contracted_unit_seconds != term.contracted_unit_seconds ||
+                static_cast<unsigned __int128>(term.initial_onboarding) + term.initial_locked != budget->total)
+                return StateValidationError::INVALID_STORAGE_LEASE;
+            original_onboarding += term.initial_onboarding;
+            original_locked += term.initial_locked;
+            end = term.end_period;
+        }
+        if (end < lease.end_period || lease.escrow_onboarding > original_onboarding ||
+            lease.escrow_locked > original_locked) return StateValidationError::INVALID_STORAGE_LEASE;
     }
     return StateValidationError::NONE;
 }
@@ -551,6 +577,13 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
         Write64(out, lease.end_period);
         Write64(out, lease.escrow_onboarding);
         Write64(out, lease.escrow_locked);
+        Write32(out, static_cast<uint32_t>(lease.funded_terms.size()));
+        for (const auto& term : lease.funded_terms) {
+            out.insert(out.end(), term.funding_operation_id.begin(), term.funding_operation_id.end());
+            for (const auto value : {term.first_period, term.end_period, term.rate, term.period_seconds,
+                    term.replica_share, term.contracted_unit_seconds, term.initial_onboarding, term.initial_locked})
+                Write64(out, value);
+        }
     }
     return out;
 }
@@ -666,9 +699,25 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
         std::copy(id_bytes->begin(), id_bytes->end(), id.begin());
         if (prior_lease && !(*prior_lease < id)) return std::nullopt;
         prior_lease = id;
-        state.leases.emplace(id, StorageLeaseRecord{.payer = *payer, .units = *units, .replicas = *replicas,
+        StorageLeaseRecord lease{.payer = *payer, .units = *units, .replicas = *replicas,
             .first_period = *first, .end_period = *end, .escrow_onboarding = *escrow_onboarding,
-            .escrow_locked = *escrow_locked});
+            .escrow_locked = *escrow_locked};
+        const auto terms = reader.U32();
+        if (!terms || *terms == 0 || *terms > reader.Remaining() / FUNDED_TERM_SIZE) return std::nullopt;
+        for (uint32_t j{0}; j < *terms; ++j) {
+            StorageFundedTerm term;
+            const auto funding = reader.Bytes(32);
+            if (!funding) return std::nullopt;
+            std::copy(funding->begin(), funding->end(), term.funding_operation_id.begin());
+            for (auto* value : {&term.first_period, &term.end_period, &term.rate, &term.period_seconds,
+                    &term.replica_share, &term.contracted_unit_seconds, &term.initial_onboarding, &term.initial_locked}) {
+                const auto parsed = reader.U64();
+                if (!parsed) return std::nullopt;
+                *value = *parsed;
+            }
+            lease.funded_terms.push_back(term);
+        }
+        state.leases.emplace(id, std::move(lease));
     }
     if (reader.Remaining()) return std::nullopt;
     // Окончательная валидация после чтения всех доменов не допускает частично

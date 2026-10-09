@@ -237,6 +237,17 @@ remain urgent. Beta requires a completed storage economic cycle.
 
 ## P0-01: funded terms and cumulative entitlement
 
+Isolated canonical-term implementation follow-up: existing lease records now
+retain immutable initial/renewal funding history, keyed by the funding operation.
+Terms freeze rate, period duration, B/T, chronological period bounds and original
+funding origins. Existing state codec/root/validation includes these records;
+they are not another live escrow balance. See
+[the precise development layout](05_CHAIN_STATE.md#current-state-snapshot-layout).
+The existing settlement executor is not term-aware yet; paid/service records,
+per-term remaining origin accounting, closure/retention and proof/batch validation
+must be completed before deployment. No source-tree term data is silently imported
+into the running DEVNET or presented as finalized payouts.
+
 Use a separately funded term for each initial lease or renewal. A renewal must
 not rescale rights already accrued under an earlier term. With immutable rate
 R, assigned chunk units U, period count P, period duration S and replica count N:

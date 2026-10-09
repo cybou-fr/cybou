@@ -59,6 +59,20 @@ struct PublicationRecord {
 /// \brief Финализированная аренда хранения одной публикации (DEC-279).
 /// \details Покрывает settlement-периоды `[first_period, end_period)`. Escrow хранится раздельно по
 ///          происхождению, чтобы onboarding-часть платилась providers только в System Balance (DEC-281).
+struct StorageFundedTerm {
+    cybou::Hash256 funding_operation_id;
+    uint64_t first_period{0};
+    uint64_t end_period{0};
+    uint64_t rate{0};
+    uint64_t period_seconds{0};
+    uint64_t replica_share{0};
+    uint64_t contracted_unit_seconds{0};
+    // Original funding provenance, not another live escrow balance.
+    uint64_t initial_onboarding{0};
+    uint64_t initial_locked{0};
+    friend bool operator==(const StorageFundedTerm&, const StorageFundedTerm&) = default;
+};
+
 struct StorageLeaseRecord {
     AccountId payer;                  ///< Владелец публикации, оплативший аренду.
     uint32_t units{0};                ///< Billing units: authorized chunk-и публикации.
@@ -67,6 +81,7 @@ struct StorageLeaseRecord {
     uint64_t end_period{0};           ///< Первый непокрытый период (исключительно).
     uint64_t escrow_onboarding{0};    ///< Escrow onboarding-происхождения.
     uint64_t escrow_locked{0};        ///< Escrow SystemLock-происхождения.
+    std::vector<StorageFundedTerm> funded_terms; ///< Immutable funding history in chronological order.
 
     friend bool operator==(const StorageLeaseRecord&, const StorageLeaseRecord&) = default;
 };
