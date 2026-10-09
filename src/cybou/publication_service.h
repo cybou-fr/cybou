@@ -13,6 +13,7 @@
 #include <cybou/encrypted_chunk_tree.h>
 
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -201,7 +202,7 @@ public:
     /// \par Потокобезопасность
     /// Метод сам не удерживает общий mutex на всём проходе; корректность опирается на потокобезопасность этого сервиса и \p storage.
     std::vector<std::pair<std::string, PublicationJobResult>> ProcessDurability(
-        StorageService& storage, std::size_t max_jobs = 1);
+        StorageService& storage, std::size_t max_jobs = std::numeric_limits<std::size_t>::max());
 
     /// \brief Решает, нужна ли ещё собственная публикация: OperationID и её authorization leaves.
     using PublicationNeeded = std::function<bool(const cybou::Hash256& operation_id, std::span<const ChunkId> leaves)>;

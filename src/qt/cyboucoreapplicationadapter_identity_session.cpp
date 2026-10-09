@@ -100,7 +100,7 @@ void CybouCoreApplicationAdapter::IdentitySession::Refresh()
         StateToGui([owner = owner] { owner->identityKeysChanged(); });
         return;
     }
-    const auto progress = application->Scan();
+    const auto progress = application->Scan(16, 1);
     const auto scan_ms = stage.restart();
     StateToGui([owner = owner, scanned = progress.scanned_height, total = progress.finalized_height, unavailable = progress.unavailable_roots] {
         if (!owner->m_initial_projection_ready)

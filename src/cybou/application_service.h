@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstdint>
 #include <map>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <string_view>
@@ -157,8 +158,8 @@ public:
     /// \param max_blocks Верхняя граница числа релевантных блоков за один проход; прочие высоты пропускаются.
     /// \return Обновлённый прогресс локальной индексации.
     ApplicationScanProgress Scan(
-    std::uint64_t max_blocks = 16,
-    std::size_t max_unavailable_retries = 1);
+        std::uint64_t max_blocks = 256,
+        std::size_t max_unavailable_retries = std::numeric_limits<std::size_t>::max());
     /// Возвращает текущий прогресс сканирования.
     /// \return Текущая точка локального rebuildable индекса.
     ApplicationScanProgress Progress();

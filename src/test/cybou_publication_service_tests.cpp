@@ -56,7 +56,7 @@ BOOST_AUTO_TEST_CASE(durability_budget_rotates_without_starving_jobs)
     BOOST_REQUIRE_EQUAL(jobs.size(), 3U);
     BOOST_CHECK(publication.ProcessDurability(storage, 0).empty());
     for (std::size_t i = 0; i < jobs.size() * 2; ++i) {
-        const auto results = publication.ProcessDurability(storage);
+        const auto results = publication.ProcessDurability(storage, 1);
         BOOST_REQUIRE_EQUAL(results.size(), 1U);
         BOOST_CHECK_EQUAL(results.front().first, jobs[i % jobs.size()]);
     }
