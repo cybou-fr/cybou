@@ -74,6 +74,9 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
+#include <QScopeGuard>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QStackedWidget>
 #include <QTextEdit>
 #include <QTranslator>
@@ -5964,7 +5967,7 @@ void CybouShellTests::networkSummaryPreservesFullMap()
     model.setNetworkDiagnostics(snapshot);
     QTRY_COMPARE(rate->text(), QLocale{}.toString(5));
     QTRY_COMPARE(page.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
-        QStringLiteral("Current: %1 · Observed max: %2").arg(QLocale{}.toString(0.0, 'f', 1), QLocale{}.toString(quint64{8})));
+        QStringLiteral("Observed max: %1").arg(QLocale{}.toString(quint64{8})));
     snapshot.network_storage = cybou::NetworkStorageUsage{.capacity_bytes = 128849018880ULL,
         .stored_bytes = 9876543210ULL, .nodes = 4, .responding_endpoints = 3, .known_endpoints = 3,
         .peak_capacity_bytes = 128849018880ULL, .peak_stored_bytes = 11000000000ULL};
@@ -5990,6 +5993,99 @@ void CybouShellTests::networkSummaryPreservesFullMap()
     QCOMPARE(page.mapWidget()->height(), page.height());
     page.findChild<QPushButton*>(QStringLiteral("networkAdvancedButton"))->setChecked(false);
     QVERIFY(overlay->isVisibleTo(&page));
+}
+
+void CybouShellTests::networkRatePersistsPerNetwork()
+{
+    // A temporary settings file makes repeated runs independent of user settings.
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+    const auto previous_format = QSettings::defaultFormat();
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    const auto restart_settings = qEnvironmentVariable("CYBOU_RATE_RESTART_SETTINGS");
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+        restart_settings.isEmpty() ? directory.path() : restart_settings);
+    const auto restore_settings = qScopeGuard([&] { QSettings::setDefaultFormat(previous_format); });
+    const QString first_id = QStringLiteral("aabb0011");
+    const QString second_id = QStringLiteral("aabb0022");
+    const QString key = QStringLiteral("network/%1/operationsPerMinute").arg(first_id);
+    CybouDesktopModel model{QStringLiteral("DEVNET")};
+    model.setNetworkInfo(QStringLiteral("DEVNET"), first_id);
+    model.setNodeStatus(true, 1, true);
+    model.setSyncing(false);
+    if (!restart_settings.isEmpty()) {
+        // Executed in a fresh process, with no page/model/settings cache.
+        NetworkPage restored{&model};
+        restored.show();
+        QCOMPARE(restored.findChild<QLabel*>(QStringLiteral("networkSummaryRate"))->text(),
+            QLocale{}.toString(quint64{8}));
+        QTRY_COMPARE(restored.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
+            QStringLiteral("Observed max: —"));
+        return;
+    }
+    cybou::NodeDiagnosticsSnapshot sample;
+    sample.initialized = true;
+    sample.finalization.windows[0] = {.window_ms = 60000, .complete = true};
+    const auto observe = [&](quint64 count) {
+        ++sample.observed_unix_ms;
+        sample.finalization.windows[0].observed_operations = count;
+        model.setNetworkDiagnostics(sample);
+    };
+    {
+        NetworkPage page{&model};
+        page.show();
+        auto* rate = page.findChild<QLabel*>(QStringLiteral("networkSummaryRate"));
+        auto* peak = page.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"));
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{5}));
+        QVERIFY(!QSettings{}.contains(key)); // Initial 5 is not a measured value.
+        QTRY_COMPARE(peak->text(), QStringLiteral("Observed max: —"));
+        observe(12);
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{12}));
+        observe(8);
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{8}));
+        observe(0);
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{8}));
+        model.setSyncing(true);
+        observe(99);
+        model.setSyncing(false); // Same snapshot must not be accepted afterwards.
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{8}));
+        sample.finalization.windows[0].complete = false;
+        observe(77);
+        QCOMPARE(rate->text(), QLocale{}.toString(quint64{8}));
+        sample.finalization.windows[0].complete = true;
+        page.hide();
+        observe(8); // Saving works while a different page is open.
+        QCOMPARE(QSettings{}.value(key).toULongLong(), quint64{8});
+    }
+    QProcess process;
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("CYBOU_RATE_RESTART_SETTINGS"), directory.path());
+    process.setProcessEnvironment(environment);
+    process.start(QCoreApplication::applicationFilePath(), {QStringLiteral("networkRatePersistsPerNetwork")});
+    QVERIFY(process.waitForFinished(30000));
+    QCOMPARE(process.exitStatus(), QProcess::NormalExit);
+    QVERIFY2(process.exitCode() == 0, process.readAllStandardOutput().constData());
+    NetworkPage restarted{&model};
+    restarted.show();
+    auto* rate = restarted.findChild<QLabel*>(QStringLiteral("networkSummaryRate"));
+    QCOMPARE(rate->text(), QLocale{}.toString(quint64{8}));
+    sample.finalization.peak_known = true;
+    sample.finalization.peak_observed_minute = 17;
+    observe(17);
+    QCOMPARE(rate->text(), QLocale{}.toString(quint64{17}));
+    QTRY_COMPARE(restarted.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
+        QStringLiteral("Observed max: %1").arg(QLocale{}.toString(quint64{17})));
+    model.setNetworkInfo(QStringLiteral("DEVNET"), second_id);
+    QCOMPARE(rate->text(), QLocale{}.toString(quint64{5}));
+    QCOMPARE(QSettings{}.value(key).toULongLong(), quint64{17});
+    QVERIFY(!QSettings{}.contains(QStringLiteral("network/%1/operationsPerMinute").arg(second_id)));
+    sample.finalization.peak_observed_minute = 2;
+    observe(2);
+    QCOMPARE(rate->text(), QLocale{}.toString(quint64{2}));
+    QTRY_COMPARE(restarted.findChild<QLabel*>(QStringLiteral("networkSummaryRatePeak"))->text(),
+        QStringLiteral("Observed max: %1").arg(QLocale{}.toString(quint64{2})));
+    model.setNetworkInfo(QStringLiteral("DEVNET"), first_id);
+    QCOMPARE(rate->text(), QLocale{}.toString(quint64{17}));
 }
 
 void CybouShellTests::networkRefreshCoalescesStatusBurst()

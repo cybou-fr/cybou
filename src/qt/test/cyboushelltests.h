@@ -109,6 +109,7 @@ private Q_SLOTS:
     void networkRefreshCoalescesStatusBurst();
     void networkAdvancedSections();
     void networkSummaryPreservesFullMap();
+    void networkRatePersistsPerNetwork();
     void authorityExplorerAndEvidenceWorkspace();
     void authorityReviewsRejectStaleSessions();
     void ownContentInspectorAndBoundedConsole();

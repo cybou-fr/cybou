@@ -105,6 +105,9 @@ private:
     int m_selected_peer_index{-1};
     QDateTime m_last_update;
     QString m_network_binding;
+    QString m_rate_network_id;
+    quint64 m_displayed_rate{5};
+    quint64 m_rate_sample_ms{0};
     QWidget* m_advanced{nullptr};
     QScrollArea* m_advanced_scroll{nullptr};
     QPushButton* m_advanced_button{nullptr};
@@ -165,6 +168,7 @@ private:
     QTimer* m_refresh_timer{nullptr};
     void scheduleRefresh();
     void refresh();
+    void updateNetworkRate();
     void updateDetails();
     void positionOverlays();
 };

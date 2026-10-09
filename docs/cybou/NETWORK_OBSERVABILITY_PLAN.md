@@ -9,7 +9,7 @@ Recorded status: active product/implementation scope, 2026-10-09, DEC-289/DEC-29
 
 | Figure | Existing source | Honest precision |
 |---|---|---|
-| Base operations/min, current observation and achieved maximum | Operator-confirmed base 5 op/min; separate FinalizationMeter completed 60-second arrival window | Base is an explicitly labelled presentation reference, not measured traffic, runtime throttling or maximum. Current observations exclude history imports; missing/partial/offline/syncing observations are unavailable. Never import test rates. |
+| Operations/min | Last positive FinalizationMeter observation from a completed 60-second window; initially 5 | One retained figure, saved locally per exact NetworkID. Initial 5 is a presentation default, not measured traffic, throttling or a maximum. Excludes history imports, Battle Test references and artificial/theoretical rates. |
 | Network storage capacity | Sum of responding nodes' existing FinalizedChunkStore CapacityBytes provider budgets | Approximate reported usable provider capacity, not a census or guaranteed free disk. Local reserve excluded. |
 | Data hosted by the network | Sum of responding nodes' existing FinalizedChunkStore UsedBytes admission counters | Approximate accounted admitted encrypted bytes. Copies on distinct stores count; no unique-file or independently audited holding claim. |
 
@@ -45,14 +45,26 @@ Network or Advanced. The summary remains visible when Advanced opens; the drawer
 starts below it. Smaller numeric text and reduced map margins preserve a large map.
 Capacity/hosted values carry ≈, sampled-node/reply coverage
 and observation time. These are indicative totals for reached nodes, not a
-guarantee that every participant has answered. A real current zero remains zero in the current-observation line; it does not
-overwrite the separately labelled operator base 5.
+guarantee that every participant has answered.
+
+Operations/min is one displayed value. At first launch it is 5. Each new positive
+completed-minute observation replaces it, including decreases (12 → 8), and is
+saved in existing local settings under `network/<canonical NetworkID hex>/operationsPerMinute`.
+Zero, missing/incomplete measurements, offline state and synchronization do not
+overwrite it; the next launch in the same network restores the saved value.
+A status-only change cannot reuse a rejected synchronization sample as a new
+measurement. Saving continues while the Network page is hidden. The tooltip
+explains the last positive observation and initial default; no Base operations/min
+card, separate base metric or current-rate line. Local diagnostic charts retain
+their real zero observations. No new DB, P2P message, telemetry service or
+consensus field is needed.
 
 Each figure has a small observed-maximum value. The runtime retains the greatest
 completed-minute operation observation and greatest sampled capacity/admitted
 byte sum since this node started. These are maxima actually observed by this
 runtime, not guaranteed global all-time records. They reset with runtime restart
 or explicit meter reset; no persistent telemetry ledger or synthetic load.
+The persisted display value and initial 5 never seed or update these maxima.
 
 Local CPU/RAM, disk, PUT/GET, uptime and candidate pool remain Advanced/Console
 details; they are not primary network figures. A Home node summary is separate
@@ -67,3 +79,8 @@ zero/partial states and native EN/FR layout. Update the ordinary peer executable
 before accepting live coverage; synthetic totals are layout evidence only.
 No network/genesis/key/history reset, new PoA route or alternate node type.
 Live restore/rotation/payment/durability Beta acceptance remains separate.
+
+Operations/min acceptance: 5 → 12 → 8 → idle (8) → restart (8) → new
+measurement 17. Verify settings persistence, NetworkID isolation, skipped
+partial/synchronizing/absent samples, hidden-page saving and a real measured
+maximum below 5 without substitution by the initial default.

@@ -26,7 +26,7 @@ editing an included file.
 | docs/cybou/20_PROTOCOL_SERIALIZATION.md | 88 | 74a9f57084f7ff13 |
 | docs/cybou/21_RELEASE_SECURITY.md | 32 | 93acfc8f43ed64d7 |
 | docs/cybou/22_ROADMAP.md | 110 | f7cf4706c9f575ab |
-| docs/cybou/24_DECISIONS.md | 191 | 5459b18408c6e19b |
+| docs/cybou/24_DECISIONS.md | 191 | 58031de328131b28 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 140 | 9850f43c1f622766 |
 | docs/cybou/26_IMPLEMENTATION_STATUS.md | 1569 | a10322e7df7ed07a |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 76 | 6276cf42c21f9c83 |
@@ -75,8 +75,8 @@ editing an included file.
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 119 | ec292d49f114797c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 121 | 74b158df77a65108 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 109 | 36fd44482b35a090 |
-| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 386 | d0e562d31090ef1f |
-| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 69 | cff720d4c7ada24c |
+| docs/cybou/NETWORK_AND_ADVANCED_UX.md | 401 | 5306598e11029ad3 |
+| docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 86 | 6a41bc1dba0b781d |
 | docs/cybou/P2P_TRANSPORT.md | 150 | 831650af24aa456d |
 | docs/cybou/POA_FINALITY.md | 136 | 0af13202cabad88b |
 | docs/cybou/POA_FINALITY_VECTORS.md | 50 | c167ee4b144a0c09 |

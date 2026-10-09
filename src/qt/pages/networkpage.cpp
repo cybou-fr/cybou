@@ -15,6 +15,7 @@
 #include <QTimeZone>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSettings>
 #include <QScrollArea>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -566,8 +567,8 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
         network_summary_layout->setColumnStretch(summary_column++, 1);
         return value;
     };
-    m_network_rate = summary_value(tr("Base operations / min"), QStringLiteral("networkSummaryRate"));
-    m_network_rate->setToolTip(tr("Operator-set base rate: 5 op/min. This is not measured traffic or a maximum; the current observation is shown separately."));
+    m_network_rate = summary_value(tr("Network operations / min"), QStringLiteral("networkSummaryRate"));
+    m_network_rate->setToolTip(tr("Last positive completed-minute observation, saved for this network. Initially 5; idle or unavailable observations keep the previous value. This is not a capacity ceiling."));
     m_network_capacity = summary_value(tr("Network storage capacity"), QStringLiteral("networkSummaryCapacity"));
     m_network_hosted = summary_value(tr("Data hosted by the network"), QStringLiteral("networkSummaryHosted"));
     m_network_rate_peak = peaks[0]; m_network_capacity_peak = peaks[1]; m_network_hosted_peak = peaks[2];
@@ -670,7 +671,10 @@ NetworkPage::NetworkPage(CybouDesktopModel* model, QWidget* parent)
     // Event connections
     connect(m_table, &QTableWidget::itemSelectionChanged, this, [this] { onTableSelectionChanged(); });
     m_map->on_peer_clicked = [this](int index) { onMapPeerClicked(index); };
-    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] { scheduleRefresh(); });
+    connect(m_model, &CybouDesktopModel::statusChanged, this, [this] {
+        updateNetworkRate(); // Retain observations even when Network is hidden.
+        scheduleRefresh();
+    });
     connect(m_model, &CybouDesktopModel::filesChanged, this, [this] { scheduleRefresh(); });
     connect(m_model, &CybouDesktopModel::mailChanged, this, [this] { scheduleRefresh(); });
 
@@ -760,8 +764,40 @@ void NetworkPage::scheduleRefresh()
     if (isVisibleTo(window()) && !m_refresh_timer->isActive()) m_refresh_timer->start();
 }
 
+void NetworkPage::updateNetworkRate()
+{
+    const auto& status = m_model->status();
+    // Despite its model field name, the controller supplies the exact canonical
+    // NetworkID hex here (GetNetworkId), not the diagnostics' hashed binding.
+    const auto& network_id = status.network_binding;
+    QSettings settings;
+    const QString key = QStringLiteral("network/%1/operationsPerMinute").arg(network_id);
+    if (m_rate_network_id != network_id) {
+        m_rate_network_id = network_id;
+        m_rate_sample_ms = m_model->networkDiagnostics().observed_unix_ms;
+        bool valid{false};
+        const auto saved = settings.value(key).toULongLong(&valid);
+        m_displayed_rate = !network_id.isEmpty() && valid && saved > 0 ? saved : 5;
+    }
+    const auto& diag = m_model->networkDiagnostics();
+    if (diag.observed_unix_ms != 0 && diag.observed_unix_ms != m_rate_sample_ms) {
+        // Consume unavailable/sync samples too: a status-only transition must
+        // not turn a previously rejected snapshot into a new observation.
+        m_rate_sample_ms = diag.observed_unix_ms;
+        const auto& minute = diag.finalization.windows.front();
+        if (!network_id.isEmpty() && diag.initialized && status.online && !status.syncing &&
+            minute.complete && minute.window_ms == 60000 && minute.observed_operations > 0) {
+            m_displayed_rate = minute.observed_operations; // Not a running maximum.
+            settings.setValue(key, m_displayed_rate);
+            settings.sync();
+        }
+    }
+    m_network_rate->setText(QLocale{}.toString(m_displayed_rate));
+}
+
 void NetworkPage::refresh()
 {
+    updateNetworkRate();
     // Status changes several times a second; a hidden page only notes that it is stale.
     if (!isVisibleTo(window())) {
         m_stale = true;
@@ -808,11 +844,7 @@ void NetworkPage::refresh()
     m_metric_finalization->setText(measured && diag.initialized && finalization.complete && finalization.window_ms ?
         QLocale{}.toString(finalization.observed_operations * 60000.0 / finalization.window_ms, 'f', 1) : tr("Unknown"));
     m_metric_finalization_sub->setText(tr("1-minute local observation · history imports excluded · no global freshness proof"));
-    const bool network_rate_ready = measured && diag.initialized && status.online && !status.syncing &&
-        finalization.complete && finalization.window_ms == 60000;
-    m_network_rate->setText(QLocale{}.toString(5));
-    m_network_rate_peak->setText(tr("Current: %1 · Observed max: %2").arg(
-        network_rate_ready ? m_metric_finalization->text() : QStringLiteral("—"),
+    m_network_rate_peak->setText(tr("Observed max: %1").arg(
         measured && diag.finalization.peak_known ? QLocale{}.toString(diag.finalization.peak_observed_minute) : QStringLiteral("—")));
     m_network_capacity->setText(measured && diag.network_storage ?
         tr("≈ %1").arg(CybouProduct::sizeText(diag.network_storage->capacity_bytes)) : QStringLiteral("—"));

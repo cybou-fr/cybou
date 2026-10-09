@@ -4858,9 +4858,7 @@ L’AUTH ne descend jamais sous 0. Cette opération est signée avec la clé PoA
 </context>
 <context>
     <name>NetworkPage</name>
-<message><source>Base operations / min</source><translation>Cadence de base / min</translation></message>
-<message><source>Current: %1 · Observed max: %2</source><translation>Actuel : %1 · Max. observé : %2</translation></message>
-<message><source>Operator-set base rate: 5 op/min. This is not measured traffic or a maximum; the current observation is shown separately.</source><translation>Cadence de base fixée par l’opérateur : 5 op/min. Ce n’est ni le trafic mesuré ni un maximum ; l’observation actuelle est affichée séparément.</translation></message>
+<message><source>Last positive completed-minute observation, saved for this network. Initially 5; idle or unavailable observations keep the previous value. This is not a capacity ceiling.</source><translation>Dernière observation positive sur une minute complète, enregistrée pour ce réseau. Valeur initiale : 5 ; sans activité ou mesure disponible, la valeur précédente est conservée. Ce n’est pas un plafond de capacité.</translation></message>
 
     <message><source>Observed max: %1</source><translation>Max. observé : %1</translation></message>
     <message><source>Observed maxima since this node started; storage values are approximate.</source><translation>Maximums observés depuis le démarrage de ce nœud ; stockage indicatif.</translation></message>

@@ -438,12 +438,14 @@ void CybouDesktopController::start()
                 const bool syncing = !sync_result.caught_up_with_known_peers;
                 const auto geo_status = geo_policy->Ready() ? CybouGeoAdmissionStatus::Ready : CybouGeoAdmissionStatus::Waiting;
                 QMetaObject::invokeMethod(m_model, [model = m_model, diagnostics, runtime_status, bootstrap_reachable, connected_peer_count, sync_error, syncing, geo_status] {
-                    model->setNetworkDiagnostics(diagnostics);
                     model->setGeoAdmissionStatus(geo_status);
                     model->setSyncing(syncing);
                     model->setSyncError(sync_error);
                     model->setFinalizedHeight(runtime_status.finalized_height);
                     model->setNodeStatus(true, static_cast<int>(connected_peer_count), bootstrap_reachable);
+                    // Publish the observation after its availability/sync state,
+                    // so consumers cannot persist a syncing sample as live traffic.
+                    model->setNetworkDiagnostics(diagnostics);
                     if (bootstrap_reachable) model->setLastSync(QDateTime::currentDateTime());
                 }, Qt::QueuedConnection);
                 return true;

@@ -2,11 +2,15 @@
 
 Status: CURRENT
 
-Operator correction, 2026-10-09: base cadence 5 op/min is a labelled presentation
-reference, with current measured rate and achieved maximum separate. Capacity
-and hosted data remain the other two figures. Summary stays visible above the
-Advanced drawer; compact numbers and larger map. No runtime rate limit of 5
-or measured traffic of 5 is implied by that base.
+Operator correction, 2026-10-09: Network displays one operations/min value.
+Initially 5, it is replaced by each new positive completed-minute observation of
+actually finalized operations and saved in local settings per exact NetworkID.
+Zero, absent/incomplete measurements, offline state and synchronization retain
+the last saved value. The next launch in that network restores it. Initial 5 is
+neither measured traffic nor a runtime limit, and never seeds the observed maximum.
+No separate Base operations/min card or current-rate line is introduced.
+Capacity and hosted data remain the other two figures. Summary stays visible
+above the Advanced drawer; compact numbers and larger map.
 Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
 
 Recorded status: Level 5 product target, reviewed against desktop/core source on
@@ -32,7 +36,7 @@ introduced by these product features.
 ## Network overview
 
 The corrected primary product target is exactly three network-wide figures:
-current finalized operations/min, approximate reported provider capacity and actual
+last positive observed finalized operations/min (initially 5), approximate reported provider capacity and actual
 encrypted data hosted across the network. Definitions, source gaps and delivery
 order are in NETWORK_OBSERVABILITY_PLAN.md. Preserve the full-map composition;
 the rejected local diagnostic card strip above it must not return. Local node
@@ -40,6 +44,17 @@ health, storage and transfer readings belong in Home's future node summary and
 Advanced/Console detail. A local reading cannot fill an absent network aggregate.
 DEC-290 supplies direct indicative storage usage; coverage and freshness are
 explicit, without an assertion that every network participant is reachable.
+
+Only a new positive observation from a completed 60-second FinalizationMeter
+window updates the displayed operations/min, even when Network is hidden.
+Historical block imports, Battle Test references and artificial/theoretical rates
+never supply this value. Its tooltip explains the retained observation/initial
+default; this is not a claim of current traffic during idle time. Save only this
+presentation value in existing local settings keyed by canonical NetworkID hex;
+no new DB, P2P message, telemetry service or consensus field. Observed maxima
+remain independently measured runtime observations and reset with the runtime.
+Acceptance: 5 → 12 → 8 → idle (8) → restart (8) → new observation 17; another
+NetworkID starts at 5 and cannot overwrite the first network's saved value.
 
 DEC-289 and NETWORK_OBSERVABILITY_PLAN.md freeze Beta monitoring to local passive
 metrics plus ordinary chain/P2P/storage evidence. Remote telemetry, resource
