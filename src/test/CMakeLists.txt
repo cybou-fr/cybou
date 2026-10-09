@@ -44,6 +44,7 @@ add_executable(cybou-core-test
   cybou_publication_service_tests.cpp
   cybou_storage_economy_tests.cpp
   cybou_storage_assignment_tests.cpp
+  cybou_storage_assignment_attestation_tests.cpp
   cybou_economics_quote_tests.cpp
   cybou_storage_placement_simulation_tests.cpp
   cybou_storage_service_tests.cpp

@@ -90,6 +90,8 @@ public:
         /// \return `true`, если изменения приняты; для outermost batch это означает запись на диск.
         /// \post При провале все staged plaintext текущего уровня очищаются.
         bool Commit();
+        /// Only the outermost batch can durably commit before an external action.
+        bool IsOutermost() const { return m_outermost; }
 
     private:
         using Staged = std::map<std::string, std::optional<std::vector<unsigned char>>>;

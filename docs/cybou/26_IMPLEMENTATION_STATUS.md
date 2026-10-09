@@ -8,6 +8,32 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Assignment attestation and binding/receipt verification (2026-10-09)
+
+New storage_assignment_attestation helpers check both payout-binding signatures,
+complete eligible-set membership and matching snapshot ID. Signing checks the
+verified genesis NetworkBinding/PoA key, freezes the plan before signing, verifies
+the result, and atomically saves signature plus original signed bindings in
+existing app.db. Cached retry reuses the signature and validates retained proofs;
+reopening can replay proofs against the original finalized registry. Wrong signer,
+tampering, wrong account/storage key or corrupt records fail closed. Exact existing
+receipt verification now also checks the assigned StorageId and genesis-attested
+plan; it grants no interval credit. Calls inside an enclosing store transaction
+are rejected before signing, because a savepoint cannot guarantee durability.
+
+Tests use actual hybrid signatures, real StoragePayoutBinding/receipt generation
+and replayed finalized Identity state on synthetic fixtures. They cover failed
+signing/retry, reopen, exact cached signature, forged inputs, store lock, corrupt
+journal, wrong receipt provider/publication/size/slot. Publication/lease provenance,
+health/budget/independence validation, raw audit/GET ingestion, production PoA
+dispatch and current settlement/state activation remain separate open gates.
+
+Validation: core build passed; focused assignment attestation/assignment, private
+application store, storage service/economy, quote and resource-limit suites passed
+67 cases / 126,847 assertions. The other 234 core cases were skipped. Evidence:
+`artifacts/economics-attestation-core.txt`, baseline `f5cbf610` plus this package.
+No live funded assignment, desktop deployment or network activation is claimed.
+
 ### Assignment-bound evidence accounting (2026-10-09)
 
 The new storage_assignment_evidence module persists interval references under

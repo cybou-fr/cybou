@@ -35,6 +35,11 @@ payout-identity grouping and replayable commitment. Production placement remains
 CSPRNG; proof collection, PoA attestation and evidence/settlement integration are
 not implemented by this helper. DOC-005 and DOC-006 remain open.
 
+Further follow-up: off-chain PoA attestation, both payout-binding signature checks,
+raw binding retention and assignment-scoped receipt verification now have tested
+primitives. Production eligibility/provenance validation, dispatch and assignment
+attestation in canonical settlement remain absent; DOC-005/006 are still open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

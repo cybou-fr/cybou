@@ -184,6 +184,45 @@ payable evidence, PoA aggregation or canonical entitlement.
 
 ## P0-03: protocol and recoverable execution gate
 
+### Off-chain attestation and signed admission verification
+
+`storage_assignment_attestation` now verifies every eligible StoragePayoutBinding
+with both the embedded STORAGE proof and the Authorization key from the supplied
+finalized registry. The snapshot ID must equal the plan's seed, and the verified
+canonical set must exactly match all eligible pairs, not merely selected slots.
+PoA signing checks the plan's NetworkBinding against VerifiedNetworkGenesis and
+the signer public key against its genesis-authorized PoA key.
+
+The unsigned plan is durably frozen before Sign. The returned hybrid signature
+is self-verified, then saved atomically with the original signed binding records.
+Calls from inside an enclosing app.db batch fail before signing: committing a
+savepoint would not make the frozen plan durable before the external signature.
+Retry loads the stored signature and revalidates the retained bindings instead
+of signing again. Corrupt/missing retained evidence fails closed without replacing
+the journal. A failed signing attempt may leave the immutable unsigned plan, but
+returns no attestation. No block signing history or official key material is reset.
+
+Attestation digest is SHA-256 of exact ASCII domain
+`CYBOU/STORAGE-ASSIGNMENT-ATTESTATION` followed by the 32-byte plan commitment,
+without separator/terminator. Local signature record is Ed25519 64 bytes followed
+by ML-DSA-65 3309 bytes, with exact consumption. Binding records use the existing
+StoragePayoutBinding codec unchanged. Reload verifies genesis authority and the
+plan; historical binding replay requires the registry at the original seed,
+not the provider's current rotated Authorization key.
+
+`VerifyAssignedStorageReceipt` verifies this attestation, then the existing
+provider-signed receipt for the exact network, publication, ChunkID and stored
+size, and requires its StorageId to match the selected slot. Valid receipts from
+other storage keys, altered bytes and wrong scope are rejected. Admission is
+not interval evidence: this verifier never infers a duration or appends paid service.
+
+These are callable verification/signing primitives, not a production dispatcher.
+The caller still must independently establish finalized seed/registry provenance,
+active publication/funded term, eligibility/available budget and host independence
+before issuance. Full audit/GET ingestion, cross-epoch exclusion, automatic PoA
+collection, settlement/state schema and live activation remain open. Synthetic
+fixture publications in cryptographic tests are not live leased publications.
+
 Before activating changes, define exact settlement/state serialization and
 vectors, assignment/evidence commitments and cumulative term accounting. Full
 Nodes validate PoA attestation, periods, assignment/economic identity constraints,
