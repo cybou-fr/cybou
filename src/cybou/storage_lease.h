@@ -40,12 +40,13 @@ std::optional<std::array<unsigned char, STORAGE_LEASE_PAYLOAD_SIZE>> SerializeSt
 std::optional<StorageLeasePayload> DeserializeStorageLeasePayload(std::span<const unsigned char> bytes);
 std::optional<IdentityKeyId> ComputeStorageLeasePayloadCommitment(const StorageLeasePayload& lease);
 
-/// \brief Escrow аренды: `ceil(units × replicas × rate × periods × period_seconds / (2048 × 86400))`.
-/// \details Округление вверх: escrow всегда покрывает floor-выплаты; остаток возвращается плательщику.
+/// \brief Escrow: `replicas × ceil(units × rate × periods × period_seconds / (2048 × 86400))`.
+/// \details DEC-292 isolated transition development: one whole-CYBOU share per replica.
+///          Do not deploy before cumulative settlement/state integration is complete.
 /// \return std::nullopt при переполнении или нулевых входах.
 std::optional<uint64_t> ComputeStorageLeaseEscrow(const CybouProtocolParameters& params, uint32_t units,
     uint8_t replicas, uint32_t periods);
-/// \brief Предел выплат одной аренды за один период: escrow одного периода.
+/// \brief Existing combined daily ceiling; pending cumulative-settlement replacement.
 std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParameters& params, uint32_t units,
     uint8_t replicas);
 

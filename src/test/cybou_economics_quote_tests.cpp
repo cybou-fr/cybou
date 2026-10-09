@@ -31,10 +31,10 @@ BOOST_AUTO_TEST_CASE(cost_model_chunk_bounds_include_real_root_index_and_data_ch
         } else BOOST_CHECK_EQUAL(tree->chunk_count, low);
     }
 }
-BOOST_AUTO_TEST_CASE(tiny_lease_daily_ceiling_can_consume_entire_reserved_term)
+BOOST_AUTO_TEST_CASE(tiny_lease_funds_each_replica_but_daily_cap_still_pays_early)
 {
     const auto p = cybou::DevProtocolParameters();
-    BOOST_CHECK_EQUAL(*cybou::ComputeStorageLeaseEscrow(p, 1, 2, 30), 1U);
+    BOOST_CHECK_EQUAL(*cybou::ComputeStorageLeaseEscrow(p, 1, 2, 30), 2U);
     BOOST_CHECK_EQUAL(*cybou::ComputeStorageLeasePeriodCap(p, 1, 2), 1U);
     cybou::StorageRentAccumulator whole, split;
     BOOST_REQUIRE(cybou::AccrueStorageRent(whole, 1, 30 * p.storage_settlement_period_seconds, 2));
@@ -52,7 +52,7 @@ BOOST_AUTO_TEST_CASE(tiny_lease_daily_ceiling_can_consume_entire_reserved_term)
     const auto provider_id = *provider->GetKeyStore().GetAccountId();
     cybou::Hash256 publication_id;
     publication_id.begin()[0] = 1;
-    cybou::FundStorageLease(state, publication_id, payer_id, 1, 2, 30, 1);
+    cybou::FundStorageLease(state, publication_id, payer_id, 1, 2, 30, 2);
     const auto before = cybou::TotalCybou(state);
     const auto provider_before = state.accounts.at(provider_id).system_balance;
     cybou::StorageSettlement settlement{.period = state.settlement.next_period, .period_start_utc = 1700000000,
@@ -64,7 +64,7 @@ BOOST_AUTO_TEST_CASE(tiny_lease_daily_ceiling_can_consume_entire_reserved_term)
     settlement.poa_signature = *signature;
     BOOST_REQUIRE(cybou::ApplyStorageSettlement(settlement, fixture.runtime->GetNetworkBinding(),
         fixture.definition.GetProtocolParameters(), fixture.definition.GetPoaPublicKey(), state) == cybou::StorageSettlementError::NONE);
-    BOOST_CHECK_EQUAL(state.leases.at(publication_id).escrow_onboarding + state.leases.at(publication_id).escrow_locked, 0U);
+    BOOST_CHECK_EQUAL(state.leases.at(publication_id).escrow_onboarding + state.leases.at(publication_id).escrow_locked, 1U);
     BOOST_CHECK_EQUAL(state.accounts.at(provider_id).system_balance - provider_before, 1U);
     BOOST_CHECK(cybou::TotalCybou(state) == before);
 }
@@ -119,69 +119,71 @@ BOOST_AUTO_TEST_CASE(renewal_quote_uses_consensus_parameters_and_fee)
 }
 BOOST_AUTO_TEST_CASE(exact_publication_quote_matches_consensus_debit_and_conservation)
 {
-    CybouServiceTestFixture fixture;
-    auto identity = fixture.CreateIdentity("economics-quote.vault");
-    const auto snapshot = fixture.runtime->GetStore().GetStateSnapshot();
-    BOOST_REQUIRE(snapshot && snapshot.state);
-    auto state = *snapshot.state;
-    const auto account = *identity->GetKeyStore().GetAccountId();
-    const auto* record = state.identities.Find(account);
-    BOOST_REQUIRE(record);
-    cybou::RootPublication publication;
-    publication.root_chunk_id.fill(11);
-    publication.chunk_authorization_root.fill(22);
-    publication.chunk_count = 2048;
-    publication.lease_periods = 30;
-    publication.recipient_capsules.resize(1);
-    const auto commitment = cybou::ComputeRootPublicationPayloadCommitment(publication);
-    BOOST_REQUIRE(commitment);
-    cybou::IdentityOperationAuthorization authorization{.account_id = account, .nonce = record->nonce,
-        .key_epoch = record->key_epoch, .kind = cybou::IdentityOperationKind::ROOT_PUBLICATION,
-        .payload_commitment = *commitment};
-    const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), authorization);
-    BOOST_REQUIRE(digest);
-    const auto signature = identity->GetKeyStore().SignAuthorization(*digest);
-    BOOST_REQUIRE(signature);
-    authorization.signature = *signature;
-    const cybou::AuthorizedRootPublication operation{authorization, publication};
-    const auto& params = fixture.runtime->GetNetworkGenesis().GetProtocolParameters();
-    const auto quote = cybou::QuotePublicationCost(params, operation);
-    BOOST_REQUIRE(quote);
-    const auto before = state.accounts.at(account).system_balance;
-    const auto treasury_before = cybou::FindCentralAuthorityAllocation(state)->balance;
-    const auto total_before = cybou::TotalCybou(state);
-    BOOST_REQUIRE(cybou::ApplyRootPublication(operation, fixture.runtime->GetNetworkBinding(), params, state) == cybou::RootPublicationError::NONE);
-    BOOST_CHECK_EQUAL(before - state.accounts.at(account).system_balance, quote->total_system_debit);
-    BOOST_CHECK_EQUAL(cybou::FindCentralAuthorityAllocation(state)->balance - treasury_before, quote->publication_fee);
-    BOOST_REQUIRE_EQUAL(state.leases.size(), 1U);
-    BOOST_CHECK_EQUAL(state.leases.begin()->second.escrow_onboarding + state.leases.begin()->second.escrow_locked, quote->storage_escrow);
-    BOOST_CHECK(cybou::TotalCybou(state) == total_before);
-    const auto publication_id = cybou::ComputeOperationId(cybou::ProtocolOperation{operation});
-    BOOST_REQUIRE(publication_id);
-    BOOST_REQUIRE(cybou::RecordPublication(state, *publication_id, account, publication.chunk_authorization_root,
-        publication.chunk_count, 1));
-    const cybou::StorageLeasePayload renewal{*publication_id, 90};
-    const auto renewal_commitment = cybou::ComputeStorageLeasePayloadCommitment(renewal);
-    BOOST_REQUIRE(renewal_commitment);
-    authorization.nonce = state.identities.Find(account)->nonce;
-    authorization.kind = cybou::IdentityOperationKind::STORAGE_LEASE;
-    authorization.payload_commitment = *renewal_commitment;
-    const auto renewal_digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), authorization);
-    BOOST_REQUIRE(renewal_digest);
-    const auto renewal_signature = identity->GetKeyStore().SignAuthorization(*renewal_digest);
-    BOOST_REQUIRE(renewal_signature);
-    authorization.signature = *renewal_signature;
-    const auto renewal_quote = cybou::QuoteStorageLeaseCost(params, publication.chunk_count, params.storage_replica_target, 90);
-    BOOST_REQUIRE(renewal_quote);
-    const auto before_renewal = state.accounts.at(account).system_balance;
-    const auto treasury_before_renewal = cybou::FindCentralAuthorityAllocation(state)->balance;
-    const auto& old_lease = state.leases.at(*publication_id);
-    const auto escrow_before_renewal = old_lease.escrow_onboarding + old_lease.escrow_locked;
-    BOOST_REQUIRE(cybou::ApplyStorageLease({authorization, renewal}, fixture.runtime->GetNetworkBinding(), params, state) == cybou::StorageLeaseError::NONE);
-    BOOST_CHECK_EQUAL(before_renewal - state.accounts.at(account).system_balance, renewal_quote->total_system_debit);
-    BOOST_CHECK_EQUAL(cybou::FindCentralAuthorityAllocation(state)->balance - treasury_before_renewal, renewal_quote->protocol_fee);
-    const auto& renewed = state.leases.at(*publication_id);
-    BOOST_CHECK_EQUAL(renewed.escrow_onboarding + renewed.escrow_locked - escrow_before_renewal, renewal_quote->storage_escrow);
-    BOOST_CHECK(cybou::TotalCybou(state) == total_before);
+    for (const auto units : {1U, 2048U}) {
+        CybouServiceTestFixture fixture;
+        auto identity = fixture.CreateIdentity("economics-quote.vault");
+        const auto snapshot = fixture.runtime->GetStore().GetStateSnapshot();
+        BOOST_REQUIRE(snapshot && snapshot.state);
+        auto state = *snapshot.state;
+        const auto account = *identity->GetKeyStore().GetAccountId();
+        const auto* record = state.identities.Find(account);
+        BOOST_REQUIRE(record);
+        cybou::RootPublication publication;
+        publication.root_chunk_id.fill(11);
+        publication.chunk_authorization_root.fill(22);
+        publication.chunk_count = units;
+        publication.lease_periods = 30;
+        publication.recipient_capsules.resize(1);
+        const auto commitment = cybou::ComputeRootPublicationPayloadCommitment(publication);
+        BOOST_REQUIRE(commitment);
+        cybou::IdentityOperationAuthorization authorization{.account_id = account, .nonce = record->nonce,
+            .key_epoch = record->key_epoch, .kind = cybou::IdentityOperationKind::ROOT_PUBLICATION,
+            .payload_commitment = *commitment};
+        const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), authorization);
+        BOOST_REQUIRE(digest);
+        const auto signature = identity->GetKeyStore().SignAuthorization(*digest);
+        BOOST_REQUIRE(signature);
+        authorization.signature = *signature;
+        const cybou::AuthorizedRootPublication operation{authorization, publication};
+        const auto& params = fixture.runtime->GetNetworkGenesis().GetProtocolParameters();
+        const auto quote = cybou::QuotePublicationCost(params, operation);
+        BOOST_REQUIRE(quote);
+        const auto before = state.accounts.at(account).system_balance;
+        const auto treasury_before = cybou::FindCentralAuthorityAllocation(state)->balance;
+        const auto total_before = cybou::TotalCybou(state);
+        BOOST_REQUIRE(cybou::ApplyRootPublication(operation, fixture.runtime->GetNetworkBinding(), params, state) == cybou::RootPublicationError::NONE);
+        BOOST_CHECK_EQUAL(before - state.accounts.at(account).system_balance, quote->total_system_debit);
+        BOOST_CHECK_EQUAL(cybou::FindCentralAuthorityAllocation(state)->balance - treasury_before, quote->publication_fee);
+        BOOST_REQUIRE_EQUAL(state.leases.size(), 1U);
+        BOOST_CHECK_EQUAL(state.leases.begin()->second.escrow_onboarding + state.leases.begin()->second.escrow_locked, quote->storage_escrow);
+        BOOST_CHECK(cybou::TotalCybou(state) == total_before);
+        const auto publication_id = cybou::ComputeOperationId(cybou::ProtocolOperation{operation});
+        BOOST_REQUIRE(publication_id);
+        BOOST_REQUIRE(cybou::RecordPublication(state, *publication_id, account, publication.chunk_authorization_root,
+            publication.chunk_count, 1));
+        const cybou::StorageLeasePayload renewal{*publication_id, 90};
+        const auto renewal_commitment = cybou::ComputeStorageLeasePayloadCommitment(renewal);
+        BOOST_REQUIRE(renewal_commitment);
+        authorization.nonce = state.identities.Find(account)->nonce;
+        authorization.kind = cybou::IdentityOperationKind::STORAGE_LEASE;
+        authorization.payload_commitment = *renewal_commitment;
+        const auto renewal_digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), authorization);
+        BOOST_REQUIRE(renewal_digest);
+        const auto renewal_signature = identity->GetKeyStore().SignAuthorization(*renewal_digest);
+        BOOST_REQUIRE(renewal_signature);
+        authorization.signature = *renewal_signature;
+        const auto renewal_quote = cybou::QuoteStorageLeaseCost(params, publication.chunk_count, params.storage_replica_target, 90);
+        BOOST_REQUIRE(renewal_quote);
+        const auto before_renewal = state.accounts.at(account).system_balance;
+        const auto treasury_before_renewal = cybou::FindCentralAuthorityAllocation(state)->balance;
+        const auto& old_lease = state.leases.at(*publication_id);
+        const auto escrow_before_renewal = old_lease.escrow_onboarding + old_lease.escrow_locked;
+        BOOST_REQUIRE(cybou::ApplyStorageLease({authorization, renewal}, fixture.runtime->GetNetworkBinding(), params, state) == cybou::StorageLeaseError::NONE);
+        BOOST_CHECK_EQUAL(before_renewal - state.accounts.at(account).system_balance, renewal_quote->total_system_debit);
+        BOOST_CHECK_EQUAL(cybou::FindCentralAuthorityAllocation(state)->balance - treasury_before_renewal, renewal_quote->protocol_fee);
+        const auto& renewed = state.leases.at(*publication_id);
+        BOOST_CHECK_EQUAL(renewed.escrow_onboarding + renewed.escrow_locked - escrow_before_renewal, renewal_quote->storage_escrow);
+        BOOST_CHECK(cybou::TotalCybou(state) == total_before);
+    }
 }
 BOOST_AUTO_TEST_SUITE_END()

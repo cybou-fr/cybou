@@ -207,6 +207,12 @@ open. DEC-279's current deployed funding/cap rules stay explicitly documented
 until a separately reviewed protocol transition. This decision does not authorize
 cutover, genesis replacement, signer duplication or historical-state deletion.
 
+Operator approval on 2026-10-09 permits developing canonical StorageLease,
+StorageSettlement and CybouState changes and checking them in isolated fixtures.
+It does not authorize deployment or modifying the running DEVNET. Partial
+implementation commits are development checkpoints, not an activated supported
+network format or completed economics acceptance.
+
 See [documentation conflict register](DOCUMENTATION_CONFLICT_REGISTER.md).
 Resolve architecture/code gaps explicitly before release; do not rewrite accepted
 requirements merely because code differs. Historical records never create tasks.

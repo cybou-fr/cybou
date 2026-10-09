@@ -7,6 +7,7 @@
 
 #include <cybou/crypto/sha256.h>
 #include <cybou/protocol_limits.h>
+#include <cybou/storage_economy.h>
 
 #include <algorithm>
 #include <limits>
@@ -125,7 +126,9 @@ std::optional<IdentityKeyId> ComputeStorageLeasePayloadCommitment(const StorageL
 std::optional<uint64_t> ComputeStorageLeaseEscrow(const CybouProtocolParameters& params, uint32_t units,
     uint8_t replicas, uint32_t periods)
 {
-    return RentCeil(params, units, replicas, periods);
+    const auto budget = ComputeAssignedStorageBudget(units, replicas, periods,
+        params.storage_settlement_period_seconds, params.storage_rate_per_gib_day_replica);
+    return budget ? std::optional<uint64_t>{budget->total} : std::nullopt;
 }
 
 std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParameters& params, uint32_t units,

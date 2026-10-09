@@ -8,6 +8,33 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Approved isolated canonical funding change (2026-10-09)
+
+Operator approved consensus-code development in isolated fixtures, without
+deployment or changing running DEVNET. ComputeStorageLeaseEscrow now uses
+ComputeAssignedStorageBudget's separately rounded replica shares in the source
+tree. Existing ApplyRootPublication and ApplyStorageLease call this same function,
+as do application publication/renewal quotes. One chunk, two replicas and 30
+periods now reserve two CYBOU rather than one. Fees/rate parameters, operation
+bytes, official genesis and live processes are unchanged.
+
+This is a partial protocol-development checkpoint and must not be deployed:
+current settlement still uses its old daily cap, leases still merge renewals,
+and separate canonical term/assignment/service/paid records plus proof/batch
+validation remain pending. The early-payment regression remains explicitly
+visible, rather than being presented as solved by larger escrow. This package
+does not close DOC-005/006/020 or establish completed economics acceptance.
+
+Validation: core build passed. Focused economy/quotes, state, RootPublication,
+runtime/PoA, operation serialization, storage/publication/application suites
+passed 113 cases / 129,556 assertions; 199 other core cases were skipped.
+Signed initial-publication and renewal regressions check both one and 2048
+chunks, quote/debit/escrow agreement, Treasury fees and conservation. Arithmetic
+vectors cover 1–2048 units over 1/2/30/365 periods. Evidence:
+`artifacts/economics-canonical-funding-core.txt`, baseline `326addb2` plus this
+package. Isolated test genesis/state fixtures, not live independent-host payout
+or CI/Desktop acceptance. No desktop executable or node was deployed/restarted.
+
 ### Complete funded-term quote (2026-10-09)
 
 storage_assignment_payout now prepares all funded replica slots under one outer

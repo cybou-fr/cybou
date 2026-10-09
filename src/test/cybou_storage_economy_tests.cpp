@@ -125,8 +125,13 @@ BOOST_AUTO_TEST_CASE(two_replica_funding_adds_at_most_one_cybou_per_term)
             const auto target = cybou::ComputeAssignedStorageBudget(units, 2, periods,
                 params.storage_settlement_period_seconds, params.storage_rate_per_gib_day_replica);
             BOOST_REQUIRE(current && target);
-            BOOST_CHECK_GE(target->total, *current);
-            BOOST_CHECK_LE(target->total - *current, 1U);
+            BOOST_CHECK_EQUAL(target->total, *current);
+            const auto numerator = static_cast<std::uint64_t>(units) * 2 * periods *
+                params.storage_settlement_period_seconds * params.storage_rate_per_gib_day_replica;
+            const auto denominator = 2048ULL * 86400;
+            const auto combined_ceil = numerator / denominator + (numerator % denominator != 0);
+            BOOST_CHECK_GE(*current, combined_ceil);
+            BOOST_CHECK_LE(*current - combined_ceil, 1U);
             BOOST_CHECK_EQUAL(target->total, 2 * target->per_replica);
         }
     }

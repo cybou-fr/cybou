@@ -3,7 +3,10 @@
 Status: CURRENT
 Scope: Operator-authorized implementation target, 2026-10-09. Current DEVNET
 wire, genesis and canonical execution remain unchanged until a separate,
-reviewed protocol transition. This is not evidence of completed payouts.
+reviewed protocol transition. Operator approved canonical-code development in
+isolated fixtures on 2026-10-09, without deployment or changing running DEVNET.
+This is not evidence of completed payouts. Intermediate core builds are not
+deployable while funding and cumulative settlement rules remain inconsistent.
 
 ## Delivery order
 
@@ -263,7 +266,11 @@ rebalancing remains a separate decision, not an implicit parameter change.
 
 `ComputeAssignedStorageBudget` and `ComputeAssignedStoragePayout` implement
 these pure target calculations. They are deliberately not called by deployed
-lease funding or settlement execution yet. Current canonical entries cannot
+lease funding or settlement execution in the running DEVNET. The approved
+isolated development implementation now calls the budget calculation from
+ComputeStorageLeaseEscrow, shared by initial publication funding, renewal and
+application cost quotes. The old period cap/executor remains pending replacement;
+this partial funding change must not be deployed. Current canonical entries cannot
 prove an assignment, term or accumulated service. DOC-020 stays open until those
 inputs and cumulative paid limits are enforced by canonical execution.
 

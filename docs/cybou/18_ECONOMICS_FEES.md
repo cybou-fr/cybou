@@ -170,6 +170,14 @@ that exhausts one-unit 30-period escrow. Whole-interval floor accrual predicts
 zero whole CYBOU for the same service interval. This discrepancy is recorded as
 DOC-020; an explicit consensus specification is needed before changing payouts.
 
+Approved isolated development on 2026-10-09 changes the source-tree funding
+calculation to reserve a separately rounded share per replica (two CYBOU for
+that tiny two-replica term). The deployed audit/simulation above remains dated
+evidence. The old daily payout validator is not yet replaced; the source-tree
+transition is incomplete and must not be deployed. See the
+[integration checkpoint](ECONOMICS_SETTLEMENT_COMPLETION.md) and implementation
+status for test scope and remaining canonical-term/settlement work.
+
 A node offering 100 GiB of provider capacity at full demand earns about what
 50 GiB of two-replica storage costs. This is never a guarantee: without demand
 no foreign chunks are assigned.

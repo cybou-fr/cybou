@@ -91,6 +91,15 @@ verified-service entitlement (DEC-292). Pure target arithmetic and explicit
 preparation overflow rejection are implemented. Canonical term/assignment/evidence
 inputs and cumulative paid enforcement remain open; DOC-020 is not marked closed.
 
+Approved isolated-development follow-up: canonical initial/renewal funding in
+the source tree now reserves N separately rounded replica shares through the
+existing ComputeStorageLeaseEscrow call sites. One unit/two replicas/30 periods
+reserves two CYBOU. The regression still demonstrates premature day-one payment
+under the unchanged daily cap (one paid, one remains), so this partial transition
+must not be deployed and does not close DOC-020. The earlier one-CYBOU escrow
+description above records the audited deployed baseline, not the new development
+funding formula. Separate canonical terms, paid/evidence and settlement remain open.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.
