@@ -8,6 +8,40 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Verified observations to service intervals (2026-10-10)
+
+The operator adopted isolated Beta checks every 12 hours, maximum credited gap
+24 hours, and first/replacement plus every-eighth-success full GET. The existing
+observation collector now accepts a funded evidence scope and derives period-split
+service claims in the existing assignment-evidence journal. First checks earn no
+time; failures/long gaps/interrupted requests break continuity. Failed checks
+preserve the successful ordinal and GET deadline, including across store reopen.
+Planned-check cadence is a constant, not an implemented production scheduler.
+
+A 41-byte checkpoint intent in existing encrypted app.db is durably committed
+before I/O, with successful predecessor cleared. Successful raw observations,
+index, interval claims and completed checkpoint commit atomically after I/O;
+shared-claim overlap or completion failure rolls them back together, leaving
+the conservative pending intent. Missing/corrupt checkpoints and bad scope fail
+closed. Network calls hold no DB transaction. No database/service/worker, wire,
+canonical state or live process changed. Caller-funded-term/seed/historical-key
+provenance, canonical service/paid, cumulative settlement and exact signed
+settlement-operation recovery remain open. DOC-020 is not accepted by this change.
+
+Native Windows core target built. The final assignment-attestation, assignment
+and StorageService regression passed 53 cases / 1,453 assertions; 266 unrelated
+cases skipped. Three new tests exercise real GET/audit ingestion into the existing
+cumulative quote (day one zero; complete 30-day replica term one CYBOU), failure
+and gap boundaries, GET deadline/store reopen, new-epoch first GET, interrupted
+intent and atomic rollback on overlapping claims. These are controlled transport
+fixtures with signed assignment/receipt; not finalized payout, verified active
+publication, independent-host or live DEVNET acceptance. Evidence:
+`artifacts/economics-service-policy-build-final-check.txt` and
+`artifacts/economics-service-policy-regression.txt`. The initial fixture build
+failed due to std::array CTAD producing a ChunkId instead of a one-element
+manifest; fixed explicit type, with diagnostic excerpt retained in
+`artifacts/economics-service-policy-build-initial-fail.txt` (no tests ran then).
+
 ### Portable assignment-attestation encoding (2026-10-10)
 
 The audit at `5d10a355` still correctly identifies the missing cumulative

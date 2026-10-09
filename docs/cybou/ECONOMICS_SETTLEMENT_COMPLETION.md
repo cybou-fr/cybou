@@ -170,8 +170,13 @@ successful checks of the same active chunk/slot/provider, within the funded term
 with explicit maximum gap/full-GET cadence and failure/replacement boundaries.
 No first-check credit, extrapolation or credit over a failed check. Split at period
 boundaries; replay derives the same disjoint claims from retained observations.
-Cadence/max-gap values are deliberately undecided: the diagnostic one-day bound
-does not authorize a payment policy. Retention must preserve all unsettled proof
+The operator adopted the isolated Beta policy on 2026-10-10: plan checks every
+12 hours; credit only two-success intervals of at most 24 hours; require exact
+GET on initial/replacement assignment and every eighth successful check. Failed
+checks do not reset the GET success ordinal. A gap beyond 24 hours receives no
+catch-up credit. This authorizes isolated implementation, not live deployment;
+future activated payment-policy changes require an explicit protocol decision.
+Retention must preserve all unsettled proof
 material, plus finalized term replay/dispute material for an agreed horizon.
 Compaction needs canonical paid checkpoints and atomic recoverable replacement;
 capacity pressure must produce an explicit retryable error before losing evidence.
@@ -498,7 +503,7 @@ per claim), integers LE, exact consumption. This complements the existing local
 record without a version discriminator or legacy decoder. Previously standalone
 local fixture records cannot supply payable totals without matching shared claims;
 they fail closed. No deployed accounting migration or live activation is claimed.
-Proof authentication, audit cadence/gap policy, active epoch time boundaries,
+Proof authentication, canonical enforcement of the adopted audit policy, active epoch time boundaries,
 observation-to-interval derivation and canonical payout/state integration remain
 open. This change prevents local duplicate funded-slot credit, not all provenance
 or physical host/replica independence errors.
@@ -572,7 +577,8 @@ Shared claim streams are also compared across the two replica slots for each
 chunk: overlapping service must use distinct StorageIds and payout accounts even
 when the claims refer to different assignment epochs. This checks necessary
 storage/economic identity separation, not independent machines/operators.
-Caller provenance, audit interval policy and canonical format/activation gates remain.
+Caller provenance, canonical enforcement of the adopted interval policy and
+canonical format/activation gates remain.
 
 ### Off-chain attestation and signed admission verification
 
@@ -636,11 +642,55 @@ The returned audit answer is not a standalone provider-signed proof; it is a
 local observation tied to an authenticated transport request. The helper does not
 persist observations, append duration intervals, discover providers or dispatch
 production PoA work. The durable collector below provides local retention/replay;
-interval policy and aggregation remain open. A successful instantaneous check never establishes uninterrupted
+the scoped policy ingestion below implements local interval derivation, while
+production dispatch and canonical aggregation remain open. A successful instantaneous check never establishes uninterrupted
 service or authorizes a payout by itself. Tests exercise signed assignment/receipt
 fixtures through a controlled transport, not live remote funded leases.
 
 ### Durable local observation collector
+
+#### Operator-adopted service policy integration (2026-10-10)
+
+The same collector now accepts a funded `StorageAssignmentEvidenceScope` to
+connect verified observations to the existing assignment evidence journal and
+cumulative quote. Calls without a scope retain their diagnostic semantics.
+No new service, worker or database is introduced. Production placement and
+canonical settlement have not been switched to this path.
+
+The scoped path performs an exact GET for the first success of each assignment
+and success ordinals 8, 16, etc. Failures preserve the ordinal, so a failed due
+GET stays due. Planned checks are 12 hours apart; this scheduling constant does
+not prevent extra manual checks and is not yet a production dispatcher.
+The first success pays no interval. Only two successful observations within
+24 hours credit the intervening seconds; exactly 24 hours is permitted, longer
+gaps pay zero. Failed checks break continuity. Intervals are bounded by the
+caller-supplied funded term and split across settlement-period boundaries.
+
+Before I/O, app.db durably writes a service-checkpoint intent with the successful
+predecessor cleared. Crashes, transport exceptions or failed completion therefore
+cannot bridge the unchecked gap on retry. The prior successful ordinal is kept.
+After a successful check, the raw observation, UTC index, service intervals and
+completed checkpoint commit in one outermost batch. Shared-claim overlap or
+capacity/commit errors roll back those changes together; the pre-I/O intent
+remains, conservatively breaking continuity. No DB lock spans network I/O.
+
+Checkpoint key is the existing observation prefix plus `/service-checkpoint`;
+layout is LE u64 term UTC anchor, period seconds, last attempt, last success,
+successful ordinal, followed by pending u8 (0/1), 41 bytes exactly. Counts must
+match the retained success index. Missing checkpoints with existing observations,
+corruption, wrong scope and out-of-order attempts fail closed. The latest committed exact
+retry is read-only. Replacement starts a new assignment checkpoint with mandatory
+GET and no extrapolated service from the previous assignment.
+
+The local interval reference is SHA-256 of length-delimited prior/current
+observation bytes (LE u32 lengths), followed by LE u64 UTC anchor, period seconds,
+period index, interval start and end. This is a content fingerprint for replay,
+not a provider-signed time/custody proof or new wire/hash-signature domain.
+Receipts/GET/audits still use their existing cryptographic verification.
+The funded term, historical binding and finalized-seed provenance remain caller
+validation requirements. Local UTC is not canonical time; service ingestion and
+quotes do not establish canonical paid or authorize a balance mutation. DOC-020
+remains open until the cumulative settlement executor enforces these inputs.
 
 `ObserveAndStoreAssignedStorageReplica` calls that transport boundary and retains
 successful observations under `storage/assignment-observations/<commitment>/<slot>`
@@ -674,7 +724,7 @@ provider-signed proof that remote data was held at the recorded time. These reco
 do not themselves generate service intervals or survive as usable payable evidence
 when the exact local reference bytes are unavailable. Production dispatcher,
 collector authenticity/provenance aggregation, retention/compaction policy and
-evidence-to-interval-to-settlement wiring remain open.
+canonical integration of the locally derived intervals into settlement remain open.
 
 Before activating changes, define exact settlement/state serialization and
 vectors, assignment/evidence commitments and cumulative term accounting. Full

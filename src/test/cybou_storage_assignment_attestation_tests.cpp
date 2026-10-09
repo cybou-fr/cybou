@@ -6,6 +6,7 @@
 #include <cybou/storage_assignment_payout.h>
 #include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
+#include <cybou/binary_codec.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
@@ -455,6 +456,143 @@ BOOST_AUTO_TEST_CASE(observation_journal_rejects_invalid_time_nested_locked_and_
     BOOST_CHECK(!collect(11, 11));
     BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 10, f.ciphertext));
 }
+BOOST_AUTO_TEST_CASE(service_observations_feed_cumulative_quote_without_first_check_or_early_payment)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4)); BOOST_REQUIRE(receipt);
+    ObservedTransport transport;
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    cybou::StorageAssignmentEvidenceScope scope{f.plan, 0, 1000, 86400};
+    const auto observe = [&](std::uint64_t time) {
+        return cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+            f.service.definition, *assignment, 0, *receipt, 4, time, time, f.ciphertext, false, &scope);
+    };
+    BOOST_REQUIRE(observe(1000));
+    BOOST_CHECK_EQUAL(transport.gets, 1U); // Admission starts with an exact GET.
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 0U);
+    BOOST_REQUIRE(observe(44200));
+    BOOST_CHECK_EQUAL(transport.audits, 1U);
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 43200U);
+    const auto requests = transport.gets + transport.audits;
+    BOOST_REQUIRE(observe(44200)); // Exact durable retry is read-only.
+    BOOST_CHECK_EQUAL(transport.gets + transport.audits, requests);
+    const std::array scopes{scope}; const std::array<cybou::ChunkId, 1> chunks{f.plan.context.chunk};
+    const auto quote = [&](std::uint64_t period) {
+        return cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition,
+            scopes, chunks, 5, period, {}, f.RegistrySnapshots());
+    };
+    BOOST_REQUIRE(observe(87400));
+    const auto day = quote(0); BOOST_REQUIRE(day);
+    BOOST_CHECK_EQUAL(day->verified_unit_seconds, 86400U);
+    BOOST_CHECK_EQUAL(day->payout, 0U);
+    for (std::uint64_t half_day{3}; half_day <= 60; ++half_day) {
+        if (half_day == 17) {
+            f.db.reset();
+            f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+        }
+        BOOST_REQUIRE(observe(1000 + half_day * cybou::STORAGE_ASSIGNMENT_CHECK_INTERVAL_SECONDS));
+    }
+    const auto complete = quote(29); BOOST_REQUIRE(complete);
+    BOOST_CHECK_EQUAL(complete->verified_unit_seconds, 30U * 86400U);
+    BOOST_CHECK_EQUAL(complete->payout, 1U);
+    BOOST_CHECK_EQUAL(transport.gets, 8U); // First success, then 8,16,...,56.
+    BOOST_CHECK_EQUAL(transport.audits, 53U);
+    BOOST_CHECK_EQUAL(quote(0)->payout, 0U); // No future-service import into day one.
+}
+
+BOOST_AUTO_TEST_CASE(service_failures_gaps_and_crash_intents_break_credit_without_resetting_get_deadline)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4)); BOOST_REQUIRE(receipt);
+    ObservedTransport transport;
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    cybou::StorageAssignmentEvidenceScope scope{f.plan, 0, 1000, 86400};
+    const auto observe = [&](std::uint64_t time) {
+        return cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+            f.service.definition, *assignment, 0, *receipt, 4, time, time, f.ciphertext, false, &scope);
+    };
+    for (unsigned i{0}; i < 7; ++i) BOOST_REQUIRE(observe(1000 + i * 100));
+    BOOST_CHECK_EQUAL(transport.gets, 1U);
+    transport.unavailable = true;
+    BOOST_CHECK(!observe(1700));
+    BOOST_CHECK(!observe(1800));
+    BOOST_CHECK_EQUAL(transport.gets, 3U); // Failed eighth-success GET remains due.
+    f.db.reset();
+    f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    transport.unavailable = false;
+    BOOST_REQUIRE(observe(1900));
+    BOOST_CHECK_EQUAL(transport.gets, 4U);
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 600U);
+    BOOST_REQUIRE(observe(2000));
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 700U);
+    BOOST_REQUIRE(observe(2000 + 86400)); // Exactly 24 hours is payable and split by period.
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 1), 87100U);
+    BOOST_REQUIRE(observe(2001 + 2 * 86400)); // More than 24 hours pays none of the gap.
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 2), 87100U);
+    const auto key = "storage/assignment-observations/" +
+        cybou::Hash256{std::span<const unsigned char, 32>{f.plan.commitment}}.GetHex() + "/0/service-checkpoint";
+    const auto checkpoint = f.db->Get(key); BOOST_REQUIRE(checkpoint);
+    auto interrupted = *checkpoint;
+    std::fill_n(interrupted.begin() + 24, 8, 0); // Durable pre-I/O intent has no successful predecessor.
+    interrupted.back() = 1;
+    BOOST_REQUIRE(f.db->Put(key, interrupted));
+    f.db.reset();
+    f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    BOOST_REQUIRE(observe(2101 + 2 * 86400));
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 2), 87100U);
+    BOOST_REQUIRE(observe(2201 + 2 * 86400));
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 2), 87200U);
+    auto replacement_context = f.plan.context; ++replacement_context.epoch;
+    const auto replacement_plan = cybou::PrepareStorageAssignment(replacement_context, f.plan.eligible);
+    BOOST_REQUIRE(replacement_plan);
+    f.plan = *replacement_plan;
+    const auto replacement = f.Attest(); BOOST_REQUIRE(replacement);
+    cybou::StorageAssignmentEvidenceScope replacement_scope{f.plan, 0, 1000, 86400};
+    const auto gets_before_replacement = transport.gets;
+    BOOST_REQUIRE(cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+        f.service.definition, *replacement, 0, *receipt, 4, 2251 + 2 * 86400, 2251 + 2 * 86400,
+        f.ciphertext, false, &replacement_scope));
+    BOOST_CHECK_EQUAL(transport.gets, gets_before_replacement + 1);
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, replacement_scope, 2), 0U);
+    BOOST_REQUIRE(f.db->Erase(key)); // Missing checkpoint with retained observations is corruption.
+    const auto requests = transport.gets + transport.audits;
+    BOOST_CHECK(!observe(2301 + 2 * 86400));
+    BOOST_CHECK_EQUAL(transport.gets + transport.audits, requests);
+}
+
+BOOST_AUTO_TEST_CASE(service_credit_and_observation_commit_roll_back_together_on_overlap)
+{
+    Fixture f;
+    const auto assignment = f.Attest(); BOOST_REQUIRE(assignment);
+    const auto publication = cybou::Hash256{std::span<const unsigned char, 32>{f.plan.context.publication}};
+    const auto receipt = f.service.runtime->SignStorageProof(cybou::StorageReceiptMessage(
+        f.service.runtime->GetNetworkBinding(), publication, f.plan.context.chunk, 4)); BOOST_REQUIRE(receipt);
+    ObservedTransport transport;
+    cybou::StorageEndpoint endpoint{.storage_id = f.plan.selected[0].storage_id};
+    cybou::StorageAssignmentEvidenceScope scope{f.plan, 0, 1000, 86400};
+    const auto observe = [&](std::uint64_t time) {
+        return cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+            f.service.definition, *assignment, 0, *receipt, 4, time, time, f.ciphertext, false, &scope);
+    };
+    BOOST_REQUIRE(observe(1000));
+    cybou::StorageAssignmentInterval conflict{0, 1000, 1100}; conflict.proof_commitment.fill(9);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scope, conflict, 1100) == cybou::StorageEvidenceAppendResult::ADDED);
+    BOOST_CHECK(!observe(1200));
+    BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 1200, f.ciphertext));
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 100U);
+    BOOST_REQUIRE(observe(1300)); // Uncommitted prior result cannot become a successful predecessor.
+    BOOST_CHECK_EQUAL(*cybou::StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 100U);
+    auto invalid_scope = scope; invalid_scope.term_start_utc = std::numeric_limits<std::uint64_t>::max();
+    BOOST_CHECK(!cybou::ObserveAndStoreAssignedStorageReplica(*f.db, transport, endpoint,
+        f.service.definition, *assignment, 0, *receipt, 4, 1400, 1400, f.ciphertext, false, &invalid_scope));
+}
+
 BOOST_AUTO_TEST_CASE(slot_payout_quote_uses_cumulative_evidence_finality_and_survives_reopen)
 {
     Fixture f;

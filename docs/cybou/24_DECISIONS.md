@@ -213,6 +213,15 @@ It does not authorize deployment or modifying the running DEVNET. Partial
 implementation commits are development checkpoints, not an activated supported
 network format or completed economics acceptance.
 
+Operator clarification on 2026-10-10 adopts the isolated Beta service policy:
+planned checks every 12 hours per paid chunk/slot/provider; maximum credited
+two-success gap 24 hours; exact GET at initial/replacement assignment and at
+least every eighth successful check. Any failure breaks the credited interval
+without resetting the GET success counter. Gaps beyond 24 hours receive no
+automatic catch-up credit. This is isolated-test authorization only; activated
+payment-policy changes require an explicit protocol decision. It does not close
+assignment provenance, canonical service/paid, settlement or deployment gates.
+
 See [documentation conflict register](DOCUMENTATION_CONFLICT_REGISTER.md).
 Resolve architecture/code gaps explicitly before release; do not rewrite accepted
 requirements merely because code differs. Historical records never create tasks.

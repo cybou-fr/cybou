@@ -3,9 +3,13 @@
 #ifndef CYBOU_STORAGE_ASSIGNMENT_OBSERVATION_STORE_H
 #define CYBOU_STORAGE_ASSIGNMENT_OBSERVATION_STORE_H
 #include <cybou/storage_assignment_observer.h>
+#include <cybou/storage_assignment_evidence.h>
 
 namespace cybou {
 inline constexpr std::size_t MAX_STORAGE_ASSIGNMENT_OBSERVATIONS{4096};
+inline constexpr std::uint64_t STORAGE_ASSIGNMENT_CHECK_INTERVAL_SECONDS{12 * 60 * 60};
+inline constexpr std::uint64_t STORAGE_ASSIGNMENT_MAX_SERVICE_GAP_SECONDS{24 * 60 * 60};
+inline constexpr std::uint64_t STORAGE_ASSIGNMENT_FULL_GET_EVERY_SUCCESSES{8};
 struct StoredStorageAssignmentObservation {
     std::uint64_t observed_at_utc{0};
     std::uint32_t stored_size{0};
@@ -22,12 +26,19 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreAssignedStorage
     const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
     std::uint8_t slot, std::span<const unsigned char> receipt, std::uint32_t stored_size,
     std::uint64_t observed_at_utc, std::uint64_t verified_through_utc,
-    std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
+    std::span<const unsigned char> expected_bytes = {}, bool force_full = false,
+    const StorageAssignmentEvidenceScope* service_scope = nullptr);
+
+/// With service_scope: enforce first/eighth-success GET, persist an attempt
+/// BEFORE I/O (crash/failure breaks continuity), then atomically retain the
+/// successful observation, completed service intervals and success counter.
+/// The supplied funded scope/seed/bindings still require independent provenance
+/// validation. This off-chain path never modifies canonical paid or balances.
 
 /// Reload checks assignment, receipt and audit hash against exact local bytes.
 /// GET bodies remain in the content store, not this metadata journal. A stored
 /// GET result is the trusted collector's assertion, not a remotely signed proof.
-/// No elapsed-time credit, interval generation or payment occurs on either path.
+/// Reload never generates service intervals or issues payments.
 std::optional<StoredStorageAssignmentObservation> LoadAssignedStorageObservation(
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     const AttestedStorageAssignment& assignment, std::uint8_t slot,

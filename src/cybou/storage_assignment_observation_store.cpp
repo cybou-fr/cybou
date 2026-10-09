@@ -3,7 +3,9 @@
 #include <cybou/storage_assignment_observation_store.h>
 #include <cybou/binary_codec.h>
 #include <cybou/encrypted_chunk.h>
+#include <cybou/crypto/sha256.h>
 #include <algorithm>
+#include <limits>
 
 namespace cybou {
 namespace {
@@ -89,6 +91,136 @@ bool Verify(const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignme
     const auto hash = ComputeStorageAuditResponse(reference, o.challenge->byte_offset, o.challenge->nonce);
     return hash && *hash == o.answer->response_hash;
 }
+
+struct ServiceCheckpoint {
+    std::uint64_t anchor{0}, seconds{0}, last_attempt{0}, last_success{0}, successes{0};
+    bool pending{false};
+};
+std::vector<unsigned char> EncodeCheckpoint(const ServiceCheckpoint& c)
+{
+    BinaryWriter out;
+    out.U64(c.anchor); out.U64(c.seconds); out.U64(c.last_attempt);
+    out.U64(c.last_success); out.U64(c.successes); out.U8(c.pending ? 1 : 0);
+    return out.Take();
+}
+std::optional<ServiceCheckpoint> DecodeCheckpoint(std::span<const unsigned char> bytes)
+{
+    try {
+        BinaryReader in{bytes};
+        ServiceCheckpoint c{in.U64(), in.U64(), in.U64(), in.U64(), in.U64(), in.Flag()};
+        in.Finish();
+        if (!c.anchor || !c.seconds || !c.last_attempt || c.last_success > c.last_attempt ||
+            (c.pending && c.last_success)) return std::nullopt;
+        return c;
+    } catch (const std::invalid_argument&) { return std::nullopt;
+    } catch (const std::length_error&) { return std::nullopt; }
+}
+
+std::optional<StoredStorageAssignmentObservation> ObserveService(
+    PrivateApplicationStore& db, StorageTransport& transport, const StorageEndpoint& provider,
+    const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
+    std::uint8_t slot, std::span<const unsigned char> receipt, std::uint32_t size,
+    std::uint64_t time, std::uint64_t through, std::span<const unsigned char> reference,
+    bool force_full, const StorageAssignmentEvidenceScope& scope)
+{
+    const auto& c = scope.assignment.context;
+    if (!time || time > through || !size || size > ENCRYPTED_CHUNK_MAX_STORED_BYTES ||
+        scope.assignment != assignment.plan || scope.replica_slot != slot ||
+        !scope.term_start_utc || !scope.period_seconds || c.term_end <= c.term_start ||
+        c.term_end - c.term_start > (std::numeric_limits<std::uint64_t>::max() - scope.term_start_utc) / scope.period_seconds ||
+        time < scope.term_start_utc || time > scope.term_start_utc + (c.term_end - c.term_start) * scope.period_seconds ||
+        slot >= assignment.plan.selected.size() || provider.storage_id != assignment.plan.selected[slot].storage_id ||
+        !VerifyAssignedStorageReceipt(genesis, assignment, slot, receipt, size) ||
+        (!reference.empty() && (reference.size() != size || ComputeChunkId(reference) != c.chunk))) return std::nullopt;
+    const auto prefix = Prefix(assignment, slot);
+    const auto checkpoint_key = prefix + "/service-checkpoint";
+    ServiceCheckpoint prior{scope.term_start_utc, scope.period_seconds};
+    std::optional<std::vector<unsigned char>> previous_record;
+    std::vector<unsigned char> intent;
+    {
+        PrivateApplicationStore::Batch prepare{db};
+        if (!prepare.IsOutermost() || !AssignmentValid(db, genesis, assignment, slot)) return std::nullopt;
+        const auto index = Index(db, prefix); if (!index) return std::nullopt;
+        if (const auto bytes = db.Get(checkpoint_key)) {
+            const auto decoded = DecodeCheckpoint(*bytes);
+            if (!decoded) return std::nullopt;
+            prior = *decoded;
+        } else if (db.Has(checkpoint_key) || !index->empty()) return std::nullopt;
+        if (prior.anchor != scope.term_start_utc || prior.seconds != scope.period_seconds ||
+            prior.successes != index->size() ||
+            (!index->empty() && (index->back() > prior.last_attempt ||
+                (prior.last_success && index->back() != prior.last_success)))) return std::nullopt;
+        // Exact committed retry is read-only; do not issue a fresh random audit.
+        if (std::binary_search(index->begin(), index->end(), time)) {
+            if (!prior.pending && prior.last_success == time)
+                return LoadAssignedStorageObservation(db, genesis, assignment, slot, time, reference);
+            return std::nullopt;
+        }
+        if (time <= prior.last_attempt || index->size() >= MAX_STORAGE_ASSIGNMENT_OBSERVATIONS) return std::nullopt;
+        if (prior.last_success) {
+            previous_record = db.Get(prefix + '/' + std::to_string(prior.last_success));
+            const auto previous = previous_record ? Decode(*previous_record) : std::nullopt;
+            if (!previous || previous->observed_at_utc != prior.last_success ||
+                (!reference.empty() && !Verify(genesis, assignment, slot, *previous, reference))) return std::nullopt;
+        }
+        // The durable intent has no successful predecessor. An interrupted or
+        // failed completion therefore cannot later bridge this unchecked gap.
+        auto pending = prior;
+        pending.last_attempt = time; pending.last_success = 0; pending.pending = true;
+        intent = EncodeCheckpoint(pending);
+        if (!db.Put(checkpoint_key, intent) || !prepare.Commit()) return std::nullopt;
+    }
+    const bool required_get = prior.successes == 0 ||
+        prior.successes % STORAGE_ASSIGNMENT_FULL_GET_EVERY_SUCCESSES == STORAGE_ASSIGNMENT_FULL_GET_EVERY_SUCCESSES - 1;
+    const auto observation = ObserveAssignedStorageReplica(transport, provider, genesis, assignment,
+        slot, receipt, size, reference, force_full || required_get);
+    PrivateApplicationStore::Batch complete{db};
+    if (!complete.IsOutermost() || !AssignmentValid(db, genesis, assignment, slot) ||
+        db.Get(checkpoint_key) != intent) return std::nullopt;
+    auto next = prior;
+    next.last_attempt = time; next.last_success = 0; next.pending = false;
+    if (!observation) {
+        // Failed checks preserve the success ordinal (and hence the GET deadline).
+        if (!db.Put(checkpoint_key, EncodeCheckpoint(next)) || !complete.Commit()) return std::nullopt;
+        return std::nullopt;
+    }
+    StoredStorageAssignmentObservation record{time, size, *observation};
+    const auto verified_bytes = observation->kind == StorageAssignmentObservationKind::FULL_GET ?
+        std::span<const unsigned char>{observation->retrieved_bytes} : reference;
+    if (!Verify(genesis, assignment, slot, record, verified_bytes)) return std::nullopt;
+    auto index = Index(db, prefix);
+    if (!index || index->size() != prior.successes || (!index->empty() && index->back() >= time)) return std::nullopt;
+    const auto encoded = Encode(record);
+    const auto key = prefix + '/' + std::to_string(time);
+    if (db.Has(key)) return std::nullopt;
+    if (prior.last_success && time - prior.last_success <= STORAGE_ASSIGNMENT_MAX_SERVICE_GAP_SECONDS) {
+        const auto previous = Decode(*previous_record);
+        if (!previous || !Verify(genesis, assignment, slot, *previous, verified_bytes)) return std::nullopt;
+        auto start = prior.last_success;
+        while (start < time) {
+            const auto period_offset = (start - scope.term_start_utc) / scope.period_seconds;
+            const auto end = std::min(time, scope.term_start_utc + (period_offset + 1) * scope.period_seconds);
+            StorageAssignmentInterval interval{c.term_start + period_offset, start, end};
+            // Local content fingerprint of the two retained observations and
+            // this exact period slice; no new signature/KDF domain or wire proof.
+            BinaryWriter proof;
+            proof.Bytes(*previous_record, 16384); proof.Bytes(encoded, 16384);
+            proof.U64(scope.term_start_utc); proof.U64(scope.period_seconds);
+            proof.U64(interval.period); proof.U64(start); proof.U64(end);
+            const auto proof_bytes = proof.Take();
+            if (!crypto::ComputeSha256({std::span<const unsigned char>{proof_bytes}}, interval.proof_commitment.data()) ||
+                AppendStorageAssignmentEvidence(db, scope, interval, through) != StorageEvidenceAppendResult::ADDED) return std::nullopt;
+            start = end;
+        }
+    }
+    index->push_back(time);
+    BinaryWriter index_bytes; index_bytes.U32(static_cast<std::uint32_t>(index->size()));
+    for (const auto observed_time : *index) index_bytes.U64(observed_time);
+    next.last_success = time; ++next.successes;
+    if (!db.Put(key, encoded) || !db.Put(prefix + "/index", index_bytes.Take()) ||
+        !db.Put(checkpoint_key, EncodeCheckpoint(next)) || !complete.Commit()) return std::nullopt;
+    return record;
+}
 }
 
 std::optional<StoredStorageAssignmentObservation> ObserveAndStoreAssignedStorageReplica(
@@ -96,8 +228,11 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreAssignedStorage
     const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
     const std::uint8_t slot, const std::span<const unsigned char> receipt, const std::uint32_t stored_size,
     const std::uint64_t observed_at_utc, const std::uint64_t verified_through_utc,
-    const std::span<const unsigned char> expected_bytes, const bool force_full)
+    const std::span<const unsigned char> expected_bytes, const bool force_full,
+    const StorageAssignmentEvidenceScope* service_scope)
 {
+    if (service_scope) return ObserveService(db, transport, provider, genesis, assignment, slot,
+        receipt, stored_size, observed_at_utc, verified_through_utc, expected_bytes, force_full, *service_scope);
     if (!observed_at_utc || observed_at_utc > verified_through_utc) return std::nullopt;
     {
         PrivateApplicationStore::Batch check{db};
