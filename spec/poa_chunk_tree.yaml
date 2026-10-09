@@ -1,7 +1,7 @@
 status: CURRENT
-scope: P2P_storage_economics_chain_PoA_source_review_with_explicit_gaps
-remaining_review: identity_crypto_tree_and_recovery_integration
-reviewed_revision: ee9d721a
+scope: protocol_content_KEM_recovery_source_review_with_explicit_acceptance_gaps
+remaining_review: signing_roles_vault_full_standards_and_clean_GUI_acceptance
+reviewed_revision: 531dc0da
 sources:
   - docs/cybou/24_DECISIONS.md
   - docs/cybou/P2P_TRANSPORT.md
@@ -15,6 +15,12 @@ sources:
   - src/cybou/state.cpp
   - src/cybou/poa_finality.cpp
   - src/cybou/state_store.cpp
+  - src/cybou/encrypted_chunk.cpp
+  - src/cybou/encrypted_chunk_tree.cpp
+  - src/cybou/identity_kem.cpp
+  - src/cybou/root_recipient_capsule.cpp
+  - src/cybou/application_service.cpp
+  - src/cybou/publication_service.cpp
 full_node:
   type: Full_Node
   hello_fields: [network_binding, finalized_height, finalized_tip, nonce, listen_port]
@@ -103,15 +109,16 @@ chunks:
     content_key_generation: OpenSSL_CSPRNG
     node_key_kdf: HKDF-SHA256
     node_key_kdf_salt: random_32_bytes_per_node
-    node_key_kdf_info: "CYBOU/CHUNK-KEY || NetworkID"
+    node_key_kdf_info: "CYBOU/CHUNK-KEY || NetworkBinding"
     nonce: random_12_bytes_per_node
-    associated_data: "CYBOU/CHUNK-AAD || header || NetworkID"
+    associated_data: "CYBOU/CHUNK-AAD || header || NetworkBinding"
     plaintext_frame: uint32_be_plaintext_length || plaintext_bytes || random_padding
     padding_bucket_bytes: [1024, 4096, 16384, 65536, 262144, 524288]
     plaintext_max_bytes: 524284
     random_extra_padding_max_bytes: 262144
     padding_bucket_selection: random_smallest_or_next_if_extra_within_limit
     aead_tag_bytes: 16
+    min_stored_bytes: 1088
     max_stored_bytes: 524352
     chunk_id_covers: entire_stored_envelope
   encrypted_tree:
@@ -132,7 +139,10 @@ chunks:
     chunk_boundaries: cryptographically_randomized
     empty_payload_representation: ROOT_with_zero_children
     child_order: array_order
-    cycles: rejected
+    cycles: rejected_by_current_path_check
+    fetch_total_visit_bound: caller_visitor_responsibility
+    fetch_duplicate_refs_outside_path: caller_visitor_responsibility
+    enumeration_unique_ids: O_N_in_memory_set
   chunk_authorization:
     hash: BLAKE3-256
     leaf_preimage: "CYBOU/CHUNK-AUTH/LEAF || ChunkID"
@@ -169,13 +179,16 @@ publication:
   recipient_count_leakage: accepted
   capsule_fields: [kem_profile_u16, recipient_key_epoch_u64, xwing_draft05_enc_1120, wrapped_content_key_60]
   capsule_kem_profile: 0x647a
+  capsule_transcript: CYBOU_XWing_HKDF_AEAD_wrapper_not_HPKE_base_mode_wire
+  capsule_context_integer_encoding: big_endian
+  payload_commitment_domain_exact: CYBOU/ROOT-PUBLICATION/P4
   capsule_wrapped_content_key: nonce_12 || ciphertext_32 || tag_16
   capsule_kdf: HKDF-SHA256
   capsule_kdf_input: XWing_shared_secret
-  capsule_kdf_salt: NetworkID
+  capsule_kdf_salt: NetworkBinding
   capsule_kdf_info: "CYBOU/ROOT-CAPSULE-KEY || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   capsule_aead: ChaCha20-Poly1305
-  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD || NetworkID || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
+  capsule_aad: "CYBOU/ROOT-CAPSULE-AAD || NetworkBinding || root_chunk_id || sender_account_id || sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be"
   operation_fee: "4 * ceil(full_canonical_operation_bytes / 1024) + 4 * chunk_count"
   priority_fee: disabled
   fee_split: absent
@@ -218,7 +231,12 @@ relay_proof_of_work:
   transport: OP_META_size_u32_nonce_u64
   in_block: false
 recovery:
-  publication_scanner: local_rebuildable_index
+  publication_scanner: implemented_sparse_finalized_coordinates_and_encrypted_positive_records
+  unavailable_roots: retried_without_blocking_later_publications
+  historical_seed_import: must_reproduce_canonical_epoch_package
+  after_rotation_requires: accessible_bridge_for_old_epochs
+  content_requires: retrievable_encrypted_chunks
+  revoked_publications: skipped_on_clean_recovery
   clean_machine_requires_prior_client_database: false
   restore_and_recursive_fetch_acceptance_required: true
 
@@ -312,3 +330,16 @@ state_snapshot_wire:
   usage_section: absent
   parameters: supplied_by_verified_genesis_not_snapshot
   state_root: SHA256_domain_CYBOU_STATE_then_canonical_snapshot_bytes
+
+identity_kem_package:
+  profile_id: 0x647a
+  profile_status: existing_DEV_experimental_pin_not_current_standards_assurance
+  package_bytes: 1218
+  public_key_bytes: 1216
+  ciphertext_bytes: 1120
+  commitment: SHA256_domain_CYBOU_IDENTITY_KEM_PACKAGE_then_zero_byte_then_NetworkBinding_then_AccountID_then_epoch_u64le_then_package_length_u16le_then_package
+  runtime_lookup: current_and_historical_finalized_epochs
+  future_epoch_lookup: rejected
+  seed_kdf: HKDF_SHA256_recovery_entropy_salt_CYBOU_IDENTITY_KEM_info_XWing_recipient_key_seed
+  component_vector_sources: concrete_hybrid_KEM_drafts_03_and_04
+  full_HPKE_draft_05_equivalence: unverified

@@ -19,11 +19,11 @@ editing an included file.
 | docs/cybou/05_CHAIN_STATE.md | 132 | 588f9bb210fc0ec6 |
 | docs/cybou/06_BOOTSTRAP_STATE_SYNC.md | 57 | 0619f949af157c63 |
 | docs/cybou/08_P2P.md | 165 | 565385191d231da0 |
-| docs/cybou/09_CRYPTO_PQ.md | 30 | 9f5e53a85552aca4 |
-| docs/cybou/10_IDENTITY_NAMES.md | 44 | 44643d669f7147a7 |
+| docs/cybou/09_CRYPTO_PQ.md | 30 | 19efa9522d437b99 |
+| docs/cybou/10_IDENTITY_NAMES.md | 44 | d893c1f1f9dbbfd3 |
 | docs/cybou/18_ECONOMICS_FEES.md | 200 | 043335e3a9b18227 |
 | docs/cybou/19_SECURITY_THREAT_MODEL.md | 105 | 29fcf619984c72c0 |
-| docs/cybou/20_PROTOCOL_SERIALIZATION.md | 78 | 86a69066ee84bbe7 |
+| docs/cybou/20_PROTOCOL_SERIALIZATION.md | 82 | 56758a627985874d |
 | docs/cybou/21_RELEASE_SECURITY.md | 32 | 93acfc8f43ed64d7 |
 | docs/cybou/22_ROADMAP.md | 110 | f7cf4706c9f575ab |
 | docs/cybou/24_DECISIONS.md | 191 | 5459b18408c6e19b |
@@ -56,7 +56,7 @@ editing an included file.
 | docs/cybou/85_BETA_UI_ACCEPTANCE.md | 389 | eaee7ca4d255599d |
 | docs/cybou/86_IDENTITY_SECURITY_SUBSTRATE.md | 116 | 5229d115140b529b |
 | docs/cybou/87_IDENTITY_OPERATION_COORDINATOR.md | 38 | 1e282b60972ecb8d |
-| docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 37 | 63cd68eea8aed773 |
+| docs/cybou/89_IDENTITY_KEM_PUBLICATION.md | 55 | 9047fc777a2b8e0e |
 | docs/cybou/APPLICATION_DATA_PLANE.md | 539 | 6eb712da9190cd8d |
 | docs/cybou/BETA_FILES_CLEAN_RESTORE_ACCEPTANCE.md | 63 | 7344fcf1a99203d9 |
 | docs/cybou/BETA_IDENTITY_SESSION_ACCEPTANCE.md | 54 | 209e179b17659299 |
@@ -70,10 +70,10 @@ editing an included file.
 | docs/cybou/DEVNET_DEVELOPMENT.md | 90 | 498657a3c401e607 |
 | docs/cybou/DEVNET_LIVE_ACCEPTANCE.md | 101 | 8b1d4626739c7124 |
 | docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 10 | f1c6610bf943e798 |
-| docs/cybou/DOCUMENTATION_CONFLICT_REGISTER.md | 30 | d325df663fd61e9e |
-| docs/cybou/DOCUMENTATION_REFACTOR_PLAN.md | 32 | 9a73c0724c3b6d36 |
-| docs/cybou/ENCRYPTED_CHUNK_TREE.md | 93 | bba10f5f24d96a7a |
-| docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 94 | 835918675371d0ae |
+| docs/cybou/DOCUMENTATION_CONFLICT_REGISTER.md | 31 | ee9afbded90919c5 |
+| docs/cybou/DOCUMENTATION_REFACTOR_PLAN.md | 32 | 317e3adfa5e2fc51 |
+| docs/cybou/ENCRYPTED_CHUNK_TREE.md | 119 | ec292d49f114797c |
+| docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 121 | 74b158df77a65108 |
 | docs/cybou/LOGGING_RETENTION_AND_EXPORT.md | 109 | 36fd44482b35a090 |
 | docs/cybou/NETWORK_AND_ADVANCED_UX.md | 386 | d0e562d31090ef1f |
 | docs/cybou/NETWORK_OBSERVABILITY_PLAN.md | 69 | cff720d4c7ada24c |
@@ -81,7 +81,7 @@ editing an included file.
 | docs/cybou/POA_FINALITY.md | 136 | 0af13202cabad88b |
 | docs/cybou/POA_FINALITY_VECTORS.md | 50 | c167ee4b144a0c09 |
 | docs/cybou/README.md | 151 | dc252d47d2f7f57e |
-| docs/cybou/ROOT_PUBLICATION.md | 141 | b628d9df60782f45 |
+| docs/cybou/ROOT_PUBLICATION.md | 171 | 54df4a50202cf5a7 |
 | docs/cybou/SECURITY_GOVERNANCE.md | 78 | 38836e413593f9b5 |
 | docs/cybou/SECURITY_STANDARDS.md | 68 | 9be3829d5ca46abe |
 | docs/cybou/STORAGE_ADMISSION.md | 209 | df32db511b5b521a |
@@ -104,6 +104,6 @@ editing an included file.
 | spec/market_strategy.yaml | 78 | 16037da9584d7687 |
 | spec/monetary_model.yaml | 73 | 4cdfe745bd4bc963 |
 | spec/onboarding.yaml | 39 | 166c32c5e31ff2f2 |
-| spec/poa_chunk_tree.yaml | 314 | 7c3b41e2b00b66b2 |
+| spec/poa_chunk_tree.yaml | 345 | 1fa9208357c45beb |
 | spec/protocol_fee_test_vectors.csv | 9 | 015632764e9a0078 |
 | www/llms.txt | 78 | 5844e331185118f7 |

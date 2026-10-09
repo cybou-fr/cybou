@@ -1,7 +1,7 @@
 # Post-quantum cryptography profile
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: KEM/application integration claims corrected from source at 531dc0da, 2026-10-09. Full role/standards review remains pending; no conformity claim.
 
 Applicable published standards take precedence under
 [`SECURITY_STANDARDS.md`](SECURITY_STANDARDS.md). ML-KEM and ML-DSA primitive
@@ -12,7 +12,7 @@ until the construction/vector review and any required transition are specified.
 
 Identity key roles are derived from the 24-word recovery entropy with separate domain-separated derivation labels. Recovery uses Ed25519 + ML-DSA-65. Account authorization uses Ed25519 + ML-DSA-44. Recipient key agreement uses a separate X-Wing seed (ML-KEM-768 + X25519). Signing and KEM keys are never reused across roles.
 
-The DEV X-Wing publication profile pins draft-05 and is bound to AccountID and key_epoch by the finalized Identity state commitment. Beta and Mainnet remain disabled until separately approved. Mail must remain fail-closed until the vetted HPKE backend, exact envelope transcript, evidence verification, and desktop send/receive flow are integrated.
+The DEV X-Wing publication profile pins draft-05 and is bound to AccountID and key_epoch by the finalized Identity state commitment. Beta and Mainnet remain disabled until separately approved. The CYBOU capsule transcript and Mail/Files construction/scanning are implemented; see [RootPublication](ROOT_PUBLICATION.md) and [KEM evidence limits](89_IDENTITY_KEM_PUBLICATION.md). This source review does not validate the custom composition against HPKE or close clean desktop send/receive acceptance. Malformed ciphertext, wrong context and unavailable keys remain fail-closed.
 
 No protocol-level device identity exists. An Identity record has one current Recovery key, one current Authorization key, one current KEM package commitment, one account-wide nonce, and one key_epoch. IdentityRotate atomically replaces all public roles and the package commitment. It requires the old Recovery signature and new Recovery and Authorization proofs of possession.
 

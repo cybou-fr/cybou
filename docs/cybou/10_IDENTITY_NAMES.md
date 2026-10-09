@@ -27,13 +27,13 @@ The AccountCreate authorization descriptor is fixed-size with one canonical wire
 
 A clean-machine restore derives all current key roles from the phrase, resolves RecoveryKeyID in verified state, and checks the derived recovery key, authorization key, and KEM package against the current Identity record. It then writes and reopens a portable CYBV vault locally. Restore does not submit an authorization operation or alter consensus state.
 
-IdentityRotate is one atomic operation. It binds NetworkID, AccountID, the current nonce and key_epoch, the next key_epoch, the new recovery and authorization public keys, and the new KEM package. The old recovery key signs the transition; the new recovery and authorization keys prove possession. Finalization replaces all roles and the package commitment together, increments the shared nonce, advances key_epoch, and updates the RecoveryKeyID index. AccountID and account-owned state remain unchanged. A phrase from an earlier key epoch cannot authorize the current account after rotation.
+IdentityRotate is one atomic operation. It binds NetworkBinding, AccountID, the current nonce and key_epoch, the next key_epoch, the new recovery and authorization public keys, and the new KEM package. The old recovery key signs the transition; the new recovery and authorization keys prove possession. Finalization replaces all roles and the package commitment together, increments the shared nonce, advances key_epoch, and updates the RecoveryKeyID index. AccountID and account-owned state remain unchanged. A phrase from an earlier key epoch cannot authorize the current account after rotation.
 
 User-authorized operations use the current authorization key, current key_epoch, and shared nonce. One durable coordinator serializes operations and journals exact bytes before submission. It never signs a replacement while delivery is uncertain.
 
 ## Mail key capability
 
-Mail encryption keys are separate derived roles. Identity publishes one X-Wing package per account/key_epoch; the commitment is bound to NetworkID, AccountID, key_epoch, and canonical package bytes. Initial Mail is one recipient, text-only, and uses one recipient capsule. The selected draft-05 X-Wing profile is DEV-only. Device registration and per-device key distribution are not protocol concepts.
+Mail encryption keys are separate derived roles. Identity publishes one X-Wing package per account/key_epoch; the commitment is bound to NetworkBinding, AccountID, key_epoch, and canonical package bytes. Current Mail uses one recipient plus an owner self capsule for Sent/recovery; attachments use the shared encrypted-tree substrate. Multi-recipient To/Cc/Bcc remains a separate product target. The selected draft-05 X-Wing profile is DEV-only. Device registration and per-device key distribution are not protocol concepts.
 
 ## Names
 

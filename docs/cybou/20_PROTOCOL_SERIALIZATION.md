@@ -1,7 +1,7 @@
 # 20 — Protocol serialization
 
 Status: CURRENT
-Scope: Block/state/PoA and storage serialization reviewed at ee9d721a, 2026-10-09. Identity/encrypted-content details remain under separate review.
+Scope: Block/state/PoA/storage audit at ee9d721a; encrypted-content and KEM transcript audit at 531dc0da, 2026-10-09. Signing-role/vault and standards acceptance remain separate.
 
 ## Canonical bytes
 
@@ -24,7 +24,11 @@ ROOT/INDEX metadata and private Mail/Files/RecoveryBridge use typed binary
 schema. Integers are little-endian; optional fields use a strict
 0/1 presence byte, followed by their typed value when present. Strings are
 length-prefixed UTF-8; invalid UTF-8, unknown types and trailing bytes fail.
-The encrypted-content schema remains opaque to consensus and is parsed only
+The encrypted frame length and capsule KDF/AAD nonce/epoch context integers
+are big-endian exceptions, defined by [chunk format](ENCRYPTED_CHUNK_TREE.md)
+and [capsule transcript](ROOT_PUBLICATION.md#recipient-capsule). Network context
+in these cryptographic inputs is the 32-byte NetworkBinding, not the full
+Network Public Key. The encrypted-content schema remains opaque to consensus and is parsed only
 after successful local decryption.
 
 ## Signing boundary

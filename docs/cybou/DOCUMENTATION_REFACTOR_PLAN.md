@@ -11,9 +11,9 @@ GUI fixes are a separate code package, never an implicit documentation change.
 | Package | Result | State |
 |---|---|---|
 | 01 authority | Mandatory AGENTS, one classified index, cancelled decisions archived, conflict register, historical plan/cutover redirects | Implemented; structural checks pass (86 classified/indexed documents), manifest/diff checks pass |
-| 02 protocol | Exact P2P/HELLO, chain/PoA and chunk layouts, off-chain audit, actual settlement wire | P2P/HELLO, audit, settlement, block/state/PoA source layouts reviewed; encrypted chunk-tree audit remains. DOC-005/006/015 gaps stay open |
+| 02 protocol | Exact P2P/HELLO, chain/PoA and chunk layouts, off-chain audit, actual settlement wire | P2P/HELLO, audit, settlement, block/state/PoA and encrypted-content layouts reviewed; DOC-005/006/015/017 gaps and independent interoperability acceptance stay open |
 | 03 economics | Current Treasury/System Balance/lease/settlement rules and YAML mirrors | Current flows, lease/settlement wire and YAML mirrors reviewed; DOC-009 corrected. DOC-005/006 accepted design gaps remain open |
-| 04 identity/crypto | Actual KEM publication/recovery integration, source/vector limits, privacy | Pending; DOC-007 |
+| 04 identity/crypto | Actual KEM publication/recovery integration, source/vector limits, privacy | KEM package/capsule construction, discovery and bridge recovery source review done; DOC-007 corrected. Signing-role/vault review, DOC-016 composition/vector review and clean GUI acceptance remain |
 | 05 product | One latest Network contract; current Mail/Files versus future multi-recipient/Backup | Pending; DOC-010/012 |
 | 06 status/work | Current source/test/live/remaining matrix; archive dated status and old roadmap; only open questions | Pending; DOC-013 |
 | 07 operations/governance | Current DEVNET runbook, dated legal/security primary-source review; preserved FAIL reports | Pending review; old cutover already quarantined; DOC-014 |

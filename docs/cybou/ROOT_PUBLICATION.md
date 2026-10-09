@@ -1,7 +1,7 @@
 # RootPublication
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Encrypted-content/KEM and application recovery source audit at 531dc0da, 2026-10-09. Existing component regressions are identified; no fresh C++ suite, live acceptance or standards conformity is claimed.
 
 RootPublication is the single generic application-content protocol operation.
 
@@ -35,7 +35,9 @@ repeat capsule_count:
 ```
 
 The body is bounded to 128 KiB. Invalid profiles, zero roots,
-zero chunk counts and trailing bytes are rejected. The public operation admits
+zero chunk counts and trailing bytes are rejected. The codec checks shape;
+execution/fee validation enforces the global chunk bound and lease-period bound.
+The public operation admits
 at most 1,048,576 chunks. Payload commitment is SHA-256 over
 `CYBOU/ROOT-PUBLICATION/P4 || canonical_payload_bytes`.
 
@@ -57,7 +59,19 @@ nonce and key epoch.
 ## Recipient capsule
 
 A capsule wraps the main root ContentKey to a recipient KEM capability and is
-bound to network/publication/sender authorization context.
+bound to network/publication/sender authorization context. The implemented wrapper
+is X-Wing encapsulation plus a CYBOU HKDF/AEAD transcript; it is not a serialized
+HPKE base-mode message merely because the KEM profile uses an HPKE KEM identifier.
+
+HKDF-SHA256 takes the X-Wing shared secret as input, NetworkBinding as salt,
+and `"CYBOU/ROOT-CAPSULE-KEY" || root_chunk_id || sender_account_id ||
+sender_nonce_u64be || sender_key_epoch_u64be || recipient_key_epoch_u64be` as info.
+AEAD associated data is `"CYBOU/ROOT-CAPSULE-AAD" || NetworkBinding ||
+root_chunk_id || sender_account_id || sender_nonce_u64be ||
+sender_key_epoch_u64be || recipient_key_epoch_u64be`.
+ChaCha20-Poly1305 wraps 32 bytes of ContentKey into nonce[12], ciphertext[32],
+tag[16]. Context integers are big-endian even though capsule wire integers are
+little-endian. No terminator/separator is appended to these domain strings.
 
 Failed unwrap means the publication is not accessible with that local key
 epoch; do not retain a negative discovery record.
@@ -138,4 +152,20 @@ reports the required remote durability state.
 `lease_periods` makes publication and payment one atomic operation (DEC-279):
 the author pays the fee to Treasury and `ceil(chunk_count x replicas x rate x
 periods / 2048)` CYBOU into StorageEscrow from System Balance, or the whole
-publication is rejected. Providers admit chunks only while the lease is active.
+publication is rejected. Providers admit chunks only while the lease is active. With zero initial periods
+no lease is funded; finality alone does not allow remote admission. The displayed
+formula assumes the current 86400-second period; generic escrow arithmetic also
+multiplies by period length and divides by 86400.
+
+## Defining source and regression boundary
+
+[root_publication.cpp](../../src/cybou/root_publication.cpp) defines the wire and
+exact `CYBOU/ROOT-PUBLICATION/P4` commitment bytes. `/P4` here is an existing
+cryptographic domain, not a selectable wire-version field; preserve it.
+[root_recipient_capsule.cpp](../../src/cybou/root_recipient_capsule.cpp) defines
+the wrapper transcript. [PublicationService](../../src/cybou/publication_service.cpp)
+creates recipient/self capsules and resumable local publication jobs today.
+Existing [publication regressions](../../src/test/cybou_publication_service_tests.cpp)
+cover recipient plus owner capsules, finality wait, exact-operation retry,
+corrupt jobs and pin cleanup. Generic RootPublication parsing does not prove
+that any capsule can be opened; that is a recipient-side check.

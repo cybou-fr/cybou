@@ -1,9 +1,9 @@
 # Identity publication discovery and recovery
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Encrypted-content/KEM and application recovery source audit at 531dc0da, 2026-10-09. Existing component regressions are identified; no fresh C++ suite, live acceptance or standards conformity is claimed.
 
-Every client scans canonical finalized RootPublications and builds only the
+ApplicationService scans canonical finalized RootPublications and builds only the
 private application state accessible to its Identity.
 
 ## Scanner
@@ -88,7 +88,34 @@ From the current mnemonic and verified network history:
 7. retrieve large child content on demand.
 
 The old Application DB, old chunk cache and old provider-placement metadata are
-not recovery requirements.
+not required inputs. Recovery still requires available canonical history, an
+accessible capsule and retrievable encrypted chunks. A self capsule does not
+recreate deleted/lost ciphertext. After rotation, unavailable or absent bridges
+can prevent recovery of publications addressed to old KEM epochs.
 
 Provider placement need not be recovered. A client may query discovered storage
 peers by ChunkID and re-establish current durability after recovery.
+
+## Current implementation and component evidence
+
+[ApplicationService](../../src/cybou/application_service.cpp) uses the sparse
+finalized-publication index, starting no earlier than Identity creation. Accessible
+records and relevant-block checkpoints commit together in encrypted DB batches.
+Unopenable capsules create no permanent negative record. Temporarily unavailable
+roots are retried with bounded backoff while later publications continue scanning.
+An imported bridge triggers another pass over earlier publications; subsequent
+Scan calls continue bounded work. Revoked publications are skipped on clean
+recovery; previously indexed local content is a separate cache concern.
+
+A bridge is accepted only for this Identity's own publication. Each historical
+seed must reproduce the canonical package at its epoch before being imported;
+current mnemonic alone does not derive earlier seeds. PublicationService builds
+a bridge with current self and future-epoch capsules and verifies opening with
+the proposed new mnemonic. Finality/durability must precede irreversible rotation
+under [the recovery contract](76_IDENTITY_VAULT_RECOVERY.md).
+
+Existing [application regressions](../../src/test/cybou_application_service_tests.cpp)
+cover offline Mail/Sent rebuild, unavailable roots, Files rebuild, interrupted
+indexing, clean rotation bridge recovery and bridge construction after Application
+DB loss. These are component fixtures, not proof of live multi-host durability,
+full clean GUI acceptance or recovery after every possible data loss.

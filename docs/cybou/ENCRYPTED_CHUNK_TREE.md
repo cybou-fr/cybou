@@ -1,7 +1,7 @@
 # Encrypted chunk tree
 
 Status: CURRENT
-Scope: Classification only; dated evidence and pending requirements retain their stated limits. Content review follows the documentation refactor plan.
+Scope: Encrypted-content/KEM and application recovery source audit at 531dc0da, 2026-10-09. Existing component regressions are identified; no fresh C++ suite, live acceptance or standards conformity is claimed.
 
 Recorded status: active DEV content format. Cross-implementation vectors and tested
 storage durability remain Beta readiness gates. This is the shared encrypted
@@ -25,14 +25,17 @@ ChaCha20-Poly1305, HKDF-SHA256, and X-Wing draft-05 profiles.
 
 Each encrypted chunk uses the `CYCH` envelope: four-byte magic, a 32-byte random KDF
 salt, 12-byte nonce, ciphertext, and 16-byte tag. HKDF-SHA256 derives a
-per-chunk key from the tree content key, salt, and NetworkID. ChaCha20-Poly1305
-authenticates `CYBOU/CHUNK-AAD || header || NetworkID`. ChunkID hashes the
+per-chunk key using the tree ContentKey as input, the random salt, and
+info `CYBOU/CHUNK-KEY || NetworkBinding` (32-byte binding). ChaCha20-Poly1305
+authenticates `CYBOU/CHUNK-AAD || header || NetworkBinding`. ChunkID hashes the
 entire stored envelope.
 
 The encrypted frame is `uint32_be plaintext_length || plaintext || random
 padding`. Plaintext is bounded to 512 KiB minus the four-byte length. Padding
 uses the configured buckets and may select the next bucket when it adds no
-more than 256 KiB. The crypto API accepts and returns bytes; it does not parse application schemas.
+more than 256 KiB beyond the length-prefixed frame. Buckets are 1024, 4096,
+16384, 65536, 262144 and 524288 bytes. Stored sizes range from 1088 to
+524352 bytes; plaintext is at most 524284 bytes. The crypto API accepts and returns bytes; it does not parse application schemas.
 
 The tree is immutable and ordered:
 
@@ -69,15 +72,20 @@ staging.
 
 The reader fetches one encrypted chunk at a time, verifies its full BLAKE3
 address, authenticates and decrypts it, then writes DATA bytes to a caller
-sink and clears the temporary buffer. The caller supplies a disk-backed
-unique-ID visitor so duplicate references and cycles fail without retaining
-every visited ID in RAM. A caller-provided output/entitlement limit and local
+sink and clears the temporary buffer. The caller supplies a unique-ID visitor; the streaming reader additionally
+tracks its current path to reject cycles. Duplicate references outside that
+path and a total-node bound depend on the visitor. A disk-backed visitor can
+avoid retaining all visited IDs in RAM, but the API does not enforce that choice. A caller-provided output/entitlement limit and local
 disk capacity bound the transfer. Sink output may be partial when a later
 chunk fails, so callers write to local staging and expose the result only after the complete tree traversal succeeds. The protocol has no
-artificial 256 MiB per-file limit; primitive chunk, tree depth, count, and
-uint64 byte-counter bounds remain enforced.
+artificial 256 MiB per-file limit. Chunk bounds, maximum depth of 32 nodes
+including ROOT and uint64 byte/output bounds are enforced. The builder caps
+publication chunks at 1,048,576; fetch callers must enforce any global visit/count
+limit. `EnumerateEncryptedTreeChunks` retains an O(N) in-memory unique-ID set;
+it is not the streaming reader's path-only memory model.
 
-Providers admit a chunk only after a finalized RootPublication and a valid
+Providers admit a chunk only after a finalized RootPublication, an active funded
+lease and a valid
 Merkle inclusion proof for that ChunkID. The leaf needs no separate size field:
 ChunkID commits to the complete stored encrypted bytes. RootPublication does
 not publish the complete chunk-ID list. Each provider enforces its own physical
@@ -91,3 +99,21 @@ child kind is INDEX=1 or DATA=2. Fanout is at most 128 and INDEX is nonempty.
 ROOT appends `private_metadata_length:u32 LE, private_metadata:bytes`, bounded
 to 240 KiB. INDEX appends nothing. Parsers reject unknown kinds, invalid
 kinds, truncated lengths and trailing bytes. DATA remains raw application bytes.
+
+## Defining sources and acceptance
+
+[encrypted_chunk.h](../../src/cybou/encrypted_chunk.h) and
+[encrypted_chunk.cpp](../../src/cybou/encrypted_chunk.cpp) define CYCH, buckets,
+KDF/AAD and the big-endian encrypted frame length. Tree metadata integers remain
+little-endian under [encrypted_chunk_tree.cpp](../../src/cybou/encrypted_chunk_tree.cpp).
+[ChunkAuthorizationAccumulator](../../src/cybou/chunk_authorization.h) retains
+32 frontier slots; staging callbacks enforce duplicate rejection. Full transient
+proof construction is separately O(N), not part of that streaming accumulator.
+
+Existing [chunk regressions](../../src/test/cybou_encrypted_chunk_tests.cpp)
+cover round trips, randomness, wrong binding/key/address, tampering and oversize.
+[Tree regressions](../../src/test/cybou_encrypted_chunk_tree_tests.cpp) cover empty
+and multiple chunks, INDEX fanout, missing chunks, wrong key, sink overflow and
+staging failure. Independent implementation vectors, malformed-tree resource
+coverage and clean GUI recovery acceptance remain distinct gates. Encryption
+hides plaintext metadata, not ciphertext lengths, request timing or peer IPs.
