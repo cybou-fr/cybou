@@ -73,10 +73,7 @@ std::vector<unsigned char> Encode(const StorageAssignmentEvidenceScope& scope,
     }
     return out.Take();
 }
-struct Claim {
-    StorageAssignmentId assignment{};
-    StorageAssignmentInterval interval;
-};
+using Claim = StorageFundedSlotClaim;
 std::string FundedKey(const StorageAssignmentEvidenceScope& scope)
 {
     const auto hex = [](const auto& id) { return Hash256{std::span<const unsigned char, 32>{id}}.GetHex(); };
@@ -185,5 +182,14 @@ std::optional<std::uint64_t> StorageAssignmentVerifiedSeconds(PrivateApplication
     }
     // Non-overlap plus validated term bounds limits sum to the representable term duration.
     return seconds;
+}
+std::optional<std::vector<StorageFundedSlotClaim>> LoadStorageFundedSlotClaims(
+    PrivateApplicationStore& db, const StorageAssignmentEvidenceScope& scope)
+{
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!ScopeValid(db, scope)) return std::nullopt;
+    const auto local = Read(db, scope);
+    const auto claims = Claims(db, scope);
+    return local && claims && Consistent(scope, *local, *claims) ? claims : std::nullopt;
 }
 }

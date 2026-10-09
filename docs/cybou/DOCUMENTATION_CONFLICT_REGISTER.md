@@ -57,6 +57,12 @@ local interval records. This does not establish audit interval policy, active
 epoch authority, canonical lease provenance or settlement activation. DOC-005/006
 and the rounding/state transition gap DOC-020 remain open.
 
+Payout preparation follow-up: stored interval journals now feed a read-only
+single-slot cumulative target quote with complete chunk/epoch resolution,
+provider-specific floors and canonical-paid inputs. No current wire/state rules
+or live payout path were changed; provenance, policy and activation gates keep
+DOC-005/006/020 open.
+
 ### DOC-020 — rent accrual versus period payout ceiling (2026-10-09)
 
 Classification: accepted economic target / implementation gap. Whole-interval

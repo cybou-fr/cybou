@@ -18,6 +18,14 @@ struct StorageAssignmentEvidenceScope {
     std::uint64_t term_start_utc{0}, period_seconds{0};
 };
 enum class StorageEvidenceAppendResult { ADDED, DUPLICATE, REJECTED };
+struct StorageFundedSlotClaim {
+    StorageAssignmentId assignment{};
+    StorageAssignmentInterval interval;
+};
+/// Reads shared claims, checking frozen scope and the current assignment's mirror.
+/// Settlement callers must resolve EVERY referenced assignment, not only the newest.
+std::optional<std::vector<StorageFundedSlotClaim>> LoadStorageFundedSlotClaims(
+    PrivateApplicationStore& db, const StorageAssignmentEvidenceScope& scope);
 
 /// Internal accounting of previously verified evidence, not a raw-proof verifier.
 /// Caller must verify assignment attestation, binding, proof and UTC policy first.

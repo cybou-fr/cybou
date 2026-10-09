@@ -218,6 +218,41 @@ payable evidence, PoA aggregation or canonical entitlement.
 
 ## P0-03: protocol and recoverable execution gate
 
+### Read-only slot payout preparation
+
+`PrepareStorageAssignmentSlotPayouts` connects stored assignment interval journals
+to the accepted cumulative target arithmetic for one funded replica slot across
+all authorized chunks and replacement epochs. Caller supplies the finalized
+chunk manifest, immutable term rate/UTC and canonical paid history; this helper
+does not prove those inputs or activate canonical funding/settlement rules.
+
+All scopes must agree on network/publication/payer, funded period range, replica
+count, slot and UTC policy. Each supplied plan must have its stored genesis-PoA
+attestation and a consistent local/shared interval journal. Authorized chunks and
+plans cannot repeat; every manifest chunk needs a representative, and every
+assignment commitment referenced by shared claims must resolve to a supplied plan
+for the same chunk. Omitting an older epoch fails rather than losing its service.
+Future-period claims must still resolve but contribute no earlier-period credit.
+
+The single slot share B and denominator T are computed from the complete manifest
+using the accepted funded-term formula. Service sums by exact StorageId/payout
+AccountID pair across chunks/epochs; each pair receives its own cumulative floor.
+The same pair across epochs retains one floor; different storage-key/payout pairs
+retain separate floors. No provider receives a fresh B because of replacement.
+Finalized paid inputs cannot duplicate a pair, reference an unresolved provider or
+exceed its entitlement. Total entitlement/paid/new payout cannot exceed B. More
+than 1024 provider/payment inputs fails without truncation. Missing/corrupt/locked
+state, inconsistent terms, invalid attestations and arithmetic overflow fail.
+
+The sorted result includes per-pair service, entitlement, canonical paid and due,
+plus the single-slot budget/totals. It never writes paid history, advances a period,
+signs a settlement or emits current wire entries. All reads run under one local DB
+snapshot. Repeating preparation and reopening retain the same quote; only a new
+canonical finalized-paid input reduces due. Physical independence, lease/manifest
+and paid provenance, historical binding verification, audit-to-interval policy,
+active epoch boundaries, full multi-slot operation/state format and separately
+authorized activation remain explicit gates.
+
 ### Off-chain attestation and signed admission verification
 
 `storage_assignment_attestation` now verifies every eligible StoragePayoutBinding

@@ -8,6 +8,28 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Read-only cumulative slot payout preparation (2026-10-09)
+
+New storage_assignment_payout joins the complete authorized chunk/epoch manifest,
+stored genesis-attested plans and shared/local interval accounting. Unresolved
+old epochs, duplicate chunks/plans, mixed funded scopes and corrupt state fail.
+Service is grouped by StorageId/payout account across epochs and chunks, while
+all providers share one funded slot budget. Provider-specific cumulative floors
+minus caller-supplied finalized paid produce sorted entries; paid input conflicts,
+overpayment and aggregate budget overflow fail, without partial truncation.
+It is read-only target preparation, with no mutation of paid, period advancement
+or wire submission. Canonical manifest/rate/paid provenance, full historical binding
+validation, interval policy and production/state activation remain open.
+
+Validation: core build passed; focused assignment/attestation, private store,
+storage service/economy, quotes and resource limits passed 76 cases / 128,716
+assertions; 234 other core cases were skipped. Quote regressions cover day-one
+zero versus full 30-period entitlement, future-period exclusion, read-only retries,
+reopen/finalized paid, overpayment/duplicate paid, omitted epoch/chunk, duplicate
+manifest, mixed policy and separate provider floors under one replacement budget.
+Evidence: `artifacts/economics-slot-payout-core.txt`, baseline `c7540f61` plus this
+package. Fixture publications/intervals are synthetic, not live funded acceptance.
+
 ### Cross-epoch funded-slot exclusion (2026-10-09)
 
 Assignment interval accounting now atomically maintains a shared funded-slot

@@ -3,6 +3,7 @@
 #include <cybou/storage_assignment_attestation.h>
 #include <cybou/storage_assignment_observer.h>
 #include <cybou/storage_assignment_observation_store.h>
+#include <cybou/storage_assignment_payout.h>
 #include <cybou/block_executor.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
@@ -386,5 +387,111 @@ BOOST_AUTO_TEST_CASE(observation_journal_rejects_invalid_time_nested_locked_and_
     f.payer->GetKeyStore().Clear();
     BOOST_CHECK(!collect(11, 11));
     BOOST_CHECK(!cybou::LoadAssignedStorageObservation(*f.db, f.service.definition, *assignment, 0, 10, f.ciphertext));
+}
+BOOST_AUTO_TEST_CASE(slot_payout_quote_uses_cumulative_evidence_finality_and_survives_reopen)
+{
+    Fixture f;
+    const auto attested = f.Attest(); BOOST_REQUIRE(attested);
+    cybou::StorageAssignmentEvidenceScope scope{f.plan, 0, 1000, 86400};
+    std::array scopes{scope}; std::array<cybou::ChunkId, 1> chunks{f.plan.context.chunk};
+    const auto quote = [&](std::uint64_t period, const std::vector<cybou::StorageAssignmentPaid>& paid = {}) {
+        return cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, scopes, chunks, 5, period, paid);
+    };
+    auto empty = quote(0); BOOST_REQUIRE(empty); BOOST_CHECK_EQUAL(empty->payout, 0U);
+    cybou::StorageAssignmentInterval first{0, 1000, 87400}; first.proof_commitment.fill(1);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scope, first, 87400) == cybou::StorageEvidenceAppendResult::ADDED);
+    auto day = quote(0); BOOST_REQUIRE(day); BOOST_REQUIRE_EQUAL(day->entries.size(), 1U);
+    BOOST_CHECK_EQUAL(day->budget.per_replica, 1U); BOOST_CHECK_EQUAL(day->payout, 0U);
+    BOOST_CHECK_EQUAL(day->verified_unit_seconds, 86400U);
+    BOOST_CHECK(!quote(0, {{f.plan.selected[0], 1}})); // Paid cannot exceed accrued floor.
+    for (std::uint64_t period{1}; period < 30; ++period) {
+        cybou::StorageAssignmentInterval interval{period, 1000 + period * 86400, 1000 + (period + 1) * 86400};
+        interval.proof_commitment.fill(static_cast<unsigned char>(period + 1));
+        BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scope, interval, interval.end_utc) == cybou::StorageEvidenceAppendResult::ADDED);
+    }
+    auto complete = quote(29); BOOST_REQUIRE(complete); BOOST_CHECK_EQUAL(complete->payout, 1U);
+    BOOST_CHECK_EQUAL(complete->finalized_paid, 0U);
+    BOOST_CHECK_EQUAL(quote(0)->payout, 0U); // Future evidence never pays an earlier period.
+    BOOST_CHECK_EQUAL(quote(29)->payout, 1U); // Preparing twice never marks paid.
+    f.db.reset();
+    f.db = std::make_unique<cybou::PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    BOOST_CHECK_EQUAL(quote(29)->payout, 1U);
+    const std::vector<cybou::StorageAssignmentPaid> paid{{f.plan.selected[0], 1}};
+    auto finalized = quote(29, paid); BOOST_REQUIRE(finalized);
+    BOOST_CHECK_EQUAL(finalized->payout, 0U); BOOST_CHECK_EQUAL(finalized->finalized_paid, 1U);
+    BOOST_CHECK(!quote(29, {{f.plan.selected[0], 2}}));
+    BOOST_CHECK(!quote(29, {{f.plan.selected[0], 0}, {f.plan.selected[0], 0}}));
+    BOOST_CHECK(!quote(30));
+    f.payer->GetKeyStore().Clear(); BOOST_CHECK(!quote(29));
+}
+
+BOOST_AUTO_TEST_CASE(slot_payout_quote_requires_complete_epoch_and_chunk_manifest)
+{
+    Fixture f;
+    BOOST_REQUIRE(f.Attest());
+    auto context = f.plan.context; ++context.epoch;
+    const auto replacement = cybou::PrepareStorageAssignment(context, f.plan.eligible); BOOST_REQUIRE(replacement);
+    BOOST_REQUIRE(cybou::AttestStorageAssignment(*f.db, f.service.definition, *replacement, f.registry,
+        *f.service.runtime->GetFinalizedTip(), f.proofs, f.signer));
+    cybou::StorageAssignmentEvidenceScope old_scope{f.plan, 0, 1000, 100}, new_scope{*replacement, 0, 1000, 100};
+    cybou::StorageAssignmentInterval early{0, 1000, 1050}; early.proof_commitment.fill(1);
+    auto late = early; late.start_utc = 1050; late.end_utc = 1100; late.proof_commitment.fill(2);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, old_scope, early, 1100) == cybou::StorageEvidenceAppendResult::ADDED);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, new_scope, late, 1100) == cybou::StorageEvidenceAppendResult::ADDED);
+    std::array<cybou::ChunkId, 1> chunks{f.plan.context.chunk};
+    std::array all{old_scope, new_scope}; std::array newest{new_scope};
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, newest, chunks, 5, 0, {}));
+    const auto combined = cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, all, chunks, 5, 0, {});
+    BOOST_REQUIRE(combined); BOOST_REQUIRE_EQUAL(combined->entries.size(), 1U);
+    BOOST_CHECK_EQUAL(combined->verified_unit_seconds, 100U);
+    BOOST_CHECK_EQUAL(combined->entries[0].verified_unit_seconds, 100U); // Same provider across epochs retains one floor.
+    std::array duplicated{old_scope, old_scope};
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, duplicated, chunks, 5, 0, {}));
+    std::array duplicate_chunks{f.plan.context.chunk, f.plan.context.chunk};
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, all, duplicate_chunks, 5, 0, {}));
+    auto unknown = f.plan.context.chunk; unknown[0] ^= 1;
+    std::array incomplete{f.plan.context.chunk, unknown};
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, all, incomplete, 5, 0, {}));
+    auto bad = all; ++bad[1].period_seconds;
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, bad, chunks, 5, 0, {}));
+    auto foreign = f.plan.selected[0]; foreign.storage_id[0] ^= 1;
+    std::array paid{cybou::StorageAssignmentPaid{foreign, 1}};
+    BOOST_CHECK(!cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, all, chunks, 5, 0, paid));
+}
+BOOST_AUTO_TEST_CASE(slot_payout_provider_replacement_preserves_separate_floors_under_one_budget)
+{
+    Fixture f;
+    auto context = f.plan.context; context.term_end = 1;
+    const auto initial = cybou::PrepareStorageAssignment(context, f.plan.eligible); BOOST_REQUIRE(initial);
+    f.plan = *initial; BOOST_REQUIRE(f.Attest());
+    cybou::CybouNodeRuntime foreign{{.network_genesis = f.service.definition,
+        .data_dir = f.service.directory / "replacement-storage", .memory_only = true, .wipe_data = true}};
+    BOOST_REQUIRE(foreign.InitializeGenesis(f.service.genesis));
+    foreign.SetIdentitySigner(std::make_shared<cybou::CybouKeyStoreIdentitySigner>(f.provider->GetKeyStore()));
+    const auto binding = foreign.LocalStoragePayoutBinding(); const auto storage = foreign.LocalStorageId();
+    BOOST_REQUIRE(binding); BOOST_REQUIRE(storage);
+    cybou::StorageAssignmentProvider replacement_provider{.storage_id = *storage};
+    std::copy_n(binding->payout_account.Value().begin(), 32, replacement_provider.payout_account.begin());
+    ++context.epoch;
+    const auto replacement = cybou::PrepareStorageAssignment(context, {replacement_provider}); BOOST_REQUIRE(replacement);
+    std::array proofs{cybou::StorageAssignmentBindingProof{*storage, *binding}};
+    BOOST_REQUIRE(cybou::AttestStorageAssignment(*f.db, f.service.definition, *replacement, f.registry,
+        *f.service.runtime->GetFinalizedTip(), proofs, f.signer));
+    std::array scopes{cybou::StorageAssignmentEvidenceScope{f.plan, 0, 1000, 86400},
+        cybou::StorageAssignmentEvidenceScope{*replacement, 0, 1000, 86400}};
+    cybou::StorageAssignmentInterval early{0, 1000, 44200}; early.proof_commitment.fill(1);
+    auto late = early; late.start_utc = 44200; late.end_utc = 87400; late.proof_commitment.fill(2);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scopes[0], early, 87400) == cybou::StorageEvidenceAppendResult::ADDED);
+    BOOST_REQUIRE(cybou::AppendStorageAssignmentEvidence(*f.db, scopes[1], late, 87400) == cybou::StorageEvidenceAppendResult::ADDED);
+    std::array<cybou::ChunkId, 1> chunks{f.plan.context.chunk};
+    const auto quote = cybou::PrepareStorageAssignmentSlotPayouts(*f.db, f.service.definition, scopes, chunks, 5, 0, {});
+    BOOST_REQUIRE(quote); BOOST_REQUIRE_EQUAL(quote->entries.size(), 2U);
+    BOOST_CHECK_EQUAL(quote->budget.per_replica, 1U); BOOST_CHECK_EQUAL(quote->verified_unit_seconds, 86400U);
+    BOOST_CHECK_EQUAL(quote->payout, 0U);
+    for (const auto& entry : quote->entries) {
+        BOOST_CHECK_EQUAL(entry.verified_unit_seconds, 43200U); BOOST_CHECK_EQUAL(entry.entitlement, 0U);
+    }
+    // Merging providers' fractions would incorrectly pay one CYBOU.
+    BOOST_CHECK_EQUAL(*cybou::ComputeAssignedStoragePayout(quote->budget, quote->verified_unit_seconds, 0), 1U);
 }
 BOOST_AUTO_TEST_SUITE_END()
