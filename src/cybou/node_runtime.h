@@ -336,6 +336,8 @@ public:
     std::optional<uint64_t> PrepareOperationWork(const ProtocolOperation& op);
     /// Signs without submission; caller must durably save exact bytes before admission.
     std::optional<StorageSettlement> SignStorageSettlement(StorageSettlement settlement);
+    /// Read-only preflight against the latest finalized state, not admission/finality.
+    StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& settlement) const;
     /// \brief Возвращает локально известный статус операции.
     /// \param op_id Искомый OperationID.
     /// \return Snapshot локального знания о candidate/finalized состоянии этой операции.

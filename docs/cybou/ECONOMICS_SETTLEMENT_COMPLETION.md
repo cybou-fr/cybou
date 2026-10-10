@@ -258,6 +258,17 @@ This covers the current settlement format only. Target cumulative evidence
 references, batch identity, competing-period reconciliation and retention policy
 remain open; no cumulative settlement or production recovery acceptance follows.
 
+Fresh settlement input now passes read-only validation against latest finalized
+state before occupying a period's app.db record. The runtime repeats this check
+before signing. Preparation and canonical execution share the same input checker
+(period/start, lease activity, payer/recipient constraints, active funded-term
+budget and escrow); execution still verifies the genesis PoA signature first.
+An invalid fresh request neither persists preparation nor calls the signer, so
+corrected input can use that period. Retained operations are not discarded or
+rewritten if state advances: they keep the exact replay/reconciliation path.
+This preflight is not candidate admission, finality or cumulative evidence
+validation. It does not replace the old daily cap or close DOC-020.
+
 Required durable lifecycle in existing app.db, scoped by NetworkBinding and
 canonical period/batch identity:
 

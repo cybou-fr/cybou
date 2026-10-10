@@ -79,6 +79,9 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
     const auto retained = PreparedSettlement(period);
     if (retained && PreparedBytes(*retained) != prepared_bytes)
         throw std::runtime_error{"different settlement already prepared for this period"};
+    // Invalid fresh input must not freeze the period. Retained exact operations
+    // still follow replay/reconciliation, even if canonical state has advanced.
+    if (!retained && m_runtime.CheckStorageSettlementInputs(requested) != StorageSettlementError::NONE) return {};
     {
         PrivateApplicationStore::Batch prepare{m_db};
         if (!prepare.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement journal unavailable"};

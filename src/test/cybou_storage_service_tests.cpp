@@ -189,6 +189,55 @@ BOOST_AUTO_TEST_CASE(settlement_signature_save_failure_never_submits_and_retains
     BOOST_CHECK(db.Get(key + "/signed") == std::vector<unsigned char>({1, 2, 3}));
 }
 
+BOOST_AUTO_TEST_CASE(settlement_invalid_fresh_input_never_signs_or_freezes_the_period)
+{
+    CybouServiceTestFixture f;
+    auto owner = f.CreateIdentity("preflight-owner.vault");
+    auto provider = f.CreateIdentity("preflight-provider.vault");
+    cybou::PrivateApplicationStore db{owner->GetKeyStore(), f.directory / "preflight-app"};
+    const auto content = Publish(f, *owner, db, true);
+    cybou::RuntimeStorageTransport transport{*f.runtime};
+    cybou::StorageService service{*f.runtime, transport, db, 1};
+    const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
+    BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
+    const auto root = f.runtime->GetStateRoot();
+    const cybou::StorageSettlement valid{.period = 0, .period_start_utc = 1700000000,
+        .entries = {{content.operation_id, *provider->GetAccountId(), 1}}};
+    BOOST_CHECK(f.runtime->CheckStorageSettlementInputs(valid) == cybou::StorageSettlementError::NONE);
+    std::vector<std::pair<cybou::StorageSettlement, cybou::StorageSettlementError>> invalid;
+    auto candidate = valid; candidate.entries[0].payout_account = *owner->GetAccountId();
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::SELF_PAYOUT);
+    candidate = valid; candidate.entries[0].payout_account = cybou::AccountId{cybou::Hash256{123}};
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::PAYOUT_ACCOUNT_NOT_FOUND);
+    candidate = valid; candidate.entries[0].publication_id = cybou::Hash256{123};
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::LEASE_NOT_FOUND);
+    candidate = valid; candidate.entries[0].amount = std::numeric_limits<std::uint64_t>::max();
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::PAYOUT_EXCEEDS_ESCROW);
+    candidate = valid; candidate.period = 1;
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::WRONG_PERIOD);
+    for (const auto& [operation, expected] : invalid) {
+        BOOST_CHECK(f.runtime->CheckStorageSettlementInputs(operation) == expected);
+        BOOST_CHECK(!f.runtime->SignStorageSettlement(operation));
+        BOOST_CHECK(!service.SubmitSettlement(operation.period, operation.period_start_utc, operation.entries));
+        BOOST_CHECK(!service.PreparedSettlement(operation.period));
+        BOOST_CHECK_EQUAL(signer->calls, 0U);
+        BOOST_CHECK(f.runtime->GetStateRoot() == root);
+    }
+    // Preflight is not authorization: canonical execution still rejects unsigned input.
+    auto state = f.genesis;
+    const auto original = state;
+    const cybou::StorageSettlement unsigned_empty{.period = 0, .period_start_utc = 1700000000};
+    BOOST_CHECK(cybou::CheckStorageSettlementInputs(unsigned_empty, f.definition.GetProtocolParameters(), state) ==
+        cybou::StorageSettlementError::NONE);
+    BOOST_CHECK(cybou::ApplyStorageSettlement(unsigned_empty, f.runtime->GetNetworkBinding(),
+        f.definition.GetProtocolParameters(), f.definition.GetPoaPublicKey(), state) ==
+        cybou::StorageSettlementError::INVALID_SIGNATURE);
+    BOOST_CHECK(cybou::SerializeCybouState(state) == cybou::SerializeCybouState(original));
+    // Invalid attempts have not poisoned recovery: corrected input can still be submitted.
+    BOOST_REQUIRE(service.SubmitSettlement(valid.period, valid.period_start_utc, valid.entries));
+    BOOST_CHECK_EQUAL(signer->calls, 1U);
+}
+
 BOOST_AUTO_TEST_CASE(evidence_intervals_do_not_rewind_duplicate_or_credit_long_gaps)
 {
     CybouServiceTestFixture fixture;

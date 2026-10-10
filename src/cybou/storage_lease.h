@@ -118,6 +118,11 @@ enum class StorageSettlementError : uint8_t {
     BALANCE_OVERFLOW,
 };
 
+/// Read-only economic/period validation shared by preparation and execution.
+/// Does not verify a signature or authorize admission; execution always verifies PoA.
+StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& settlement,
+    const CybouProtocolParameters& params, const CybouState& state);
+
 /// \brief Выплачивает providers из escrow, продвигает курсор и возвращает escrow закончившихся аренд.
 /// \details Onboarding-часть escrow расходуется первой и зачисляется в System Balance provider'а,
 ///          locked-часть — в его Balance (DEC-281).

@@ -28,7 +28,7 @@ editing an included file.
 | docs/cybou/22_ROADMAP.md | 157 | 794d9ee096e6e827 |
 | docs/cybou/24_DECISIONS.md | 227 | 0fb7979fffd179b0 |
 | docs/cybou/25_OPEN_QUESTIONS.md | 140 | 9850f43c1f622766 |
-| docs/cybou/26_IMPLEMENTATION_STATUS.md | 2218 | d8ececd44ce9fc0b |
+| docs/cybou/26_IMPLEMENTATION_STATUS.md | 2245 | 8e7c9ae12b61f67c |
 | docs/cybou/37_FRANCE_SOVEREIGN_NETWORK_POLICY.md | 76 | 6276cf42c21f9c83 |
 | docs/cybou/38_SOVEREIGNTY_DEFINITION.md | 92 | b8e2c4a8b67c349c |
 | docs/cybou/39_GO_TO_MARKET_AND_PILOTS.md | 146 | 4742ef1fa929f27b |
@@ -72,7 +72,7 @@ editing an included file.
 | docs/cybou/DEVNET_STORAGE_ECONOMY_CUTOVER.md | 10 | f1c6610bf943e798 |
 | docs/cybou/DOCUMENTATION_CONFLICT_REGISTER.md | 118 | 6739904c62e13bee |
 | docs/cybou/DOCUMENTATION_REFACTOR_PLAN.md | 32 | 79bb541b22cda245 |
-| docs/cybou/ECONOMICS_SETTLEMENT_COMPLETION.md | 764 | cbb4831ef6d429ba |
+| docs/cybou/ECONOMICS_SETTLEMENT_COMPLETION.md | 775 | 017884957ca32cca |
 | docs/cybou/ECONOMICS_SIMULATION_2026_10_09.md | 74 | b552b409318f675d |
 | docs/cybou/ENCRYPTED_CHUNK_TREE.md | 119 | ec292d49f114797c |
 | docs/cybou/IDENTITY_DISCOVERY_AND_RECOVERY.md | 121 | 74b158df77a65108 |

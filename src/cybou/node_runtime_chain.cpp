@@ -197,15 +197,22 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
     return SubmitOperationInternal(std::move(op), *nonce, std::nullopt);
 }
 
+StorageSettlementError CybouNodeRuntime::CheckStorageSettlementInputs(const StorageSettlement& settlement) const
+{
+    std::lock_guard lock(m_chain.mutex);
+    const auto loaded = m_chain.store.GetStateSnapshot();
+    if (!loaded || !loaded.state) return StorageSettlementError::INVALID_PAYLOAD;
+    return cybou::CheckStorageSettlementInputs(settlement, m_config.network_genesis.GetProtocolParameters(), *loaded.state);
+}
+
 std::optional<StorageSettlement> CybouNodeRuntime::SignStorageSettlement(StorageSettlement settlement)
 {
     std::lock_guard lock(m_chain.mutex);
     if (!m_chain.poa_finalizer || !m_chain.poa_finalizer->SignerEnabled() ||
         m_chain.store.PoaSafetyHalted() || m_chain.poa_finalizer->SafetyHalted()) return std::nullopt;
     const auto loaded = m_chain.store.GetStateSnapshot();
-    if (!loaded || !loaded.state || settlement.period != loaded.state->settlement.next_period ||
-        (loaded.state->settlement.next_period_start_utc &&
-            settlement.period_start_utc != loaded.state->settlement.next_period_start_utc) ||
+    if (!loaded || !loaded.state || cybou::CheckStorageSettlementInputs(settlement,
+            m_config.network_genesis.GetProtocolParameters(), *loaded.state) != StorageSettlementError::NONE ||
         !m_chain.poa_finalizer->SignStorageSettlement(settlement)) return std::nullopt;
     return settlement;
 }

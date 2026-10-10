@@ -267,16 +267,13 @@ std::optional<StorageSettlement> DeserializeStorageSettlement(std::span<const un
     return settlement;
 }
 
-StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlement,
-    const cybou::Hash256& network_binding, const CybouProtocolParameters& params,
-    const IdentityHybridPublicKey& poa_key, CybouState& state)
+namespace {
+struct LeaseTotals { uint64_t amount{0}; uint32_t payouts{0}; size_t term_index{0}; };
+StorageSettlementError CheckSettlementInputs(const StorageSettlement& settlement,
+    const CybouProtocolParameters& params, const CybouState& state,
+    std::map<cybou::Hash256, LeaseTotals>& totals)
 {
-    const auto digest = ComputeStorageSettlementDigest(network_binding, settlement);
-    if (!digest) return StorageSettlementError::INVALID_PAYLOAD;
-    if (poa_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
-        !VerifyIdentityMessage(poa_key, settlement.poa_signature, *digest)) {
-        return StorageSettlementError::INVALID_SIGNATURE;
-    }
+    if (!SerializeSettlementBody(settlement)) return StorageSettlementError::INVALID_PAYLOAD;
     // Периоды строго непрерывны: replay или пропуск периода невозможны.
     if (settlement.period != state.settlement.next_period) return StorageSettlementError::WRONG_PERIOD;
     if (state.settlement.next_period_start_utc != 0 &&
@@ -289,8 +286,6 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
     }
 
     // Сначала полная проверка всех выплат, затем применение: settlement атомарен.
-    struct LeaseTotals { uint64_t amount{0}; uint32_t payouts{0}; size_t term_index{0}; };
-    std::map<cybou::Hash256, LeaseTotals> totals;
     for (const auto& entry : settlement.entries) {
         const auto lease = state.leases.find(entry.publication_id);
         if (lease == state.leases.end()) return StorageSettlementError::LEASE_NOT_FOUND;
@@ -322,6 +317,31 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
         }
         total.amount += entry.amount;
     }
+
+    return StorageSettlementError::NONE;
+}
+} // namespace
+
+StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& settlement,
+    const CybouProtocolParameters& params, const CybouState& state)
+{
+    std::map<cybou::Hash256, LeaseTotals> totals;
+    return CheckSettlementInputs(settlement, params, state, totals);
+}
+
+StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlement,
+    const cybou::Hash256& network_binding, const CybouProtocolParameters& params,
+    const IdentityHybridPublicKey& poa_key, CybouState& state)
+{
+    const auto digest = ComputeStorageSettlementDigest(network_binding, settlement);
+    if (!digest) return StorageSettlementError::INVALID_PAYLOAD;
+    if (poa_key.purpose != IdentityKeyPurpose::POA_FINALIZER ||
+        !VerifyIdentityMessage(poa_key, settlement.poa_signature, *digest)) {
+        return StorageSettlementError::INVALID_SIGNATURE;
+    }
+    std::map<cybou::Hash256, LeaseTotals> totals;
+    const auto checked = CheckSettlementInputs(settlement, params, state, totals);
+    if (checked != StorageSettlementError::NONE) return checked;
 
     // Переводы внутри TotalCybou < 2^64 не могут переполнить ни один баланс.
     for (const auto& entry : settlement.entries) {

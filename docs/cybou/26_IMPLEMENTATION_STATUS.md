@@ -8,6 +8,33 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Settlement preflight before durable preparation (2026-10-10)
+
+Fresh StorageService submission now checks economic inputs against latest
+finalized state before writing the period's exact journal. The runtime repeats
+validation before signing. The shared read-only checker is also used by
+ApplyStorageSettlement; canonical execution still requires the genesis PoA
+signature. Wrong periods, missing/inactive leases, missing payout accounts,
+self payouts, excess recipients and active-term/escrow excess are rejected
+without a fresh prepared record or signature. Corrected input can then use
+the period. Retained records still follow exact replay/reconciliation and are
+never silently replaced if state advances after preparation.
+
+No wire/state layout, current cap, balance semantics, DB/service/worker or live
+DEVNET changes. Cumulative service/paid and exact assignment/evidence witness
+contracts remain open; this is not cumulative payout acceptance.
+
+Windows core and native Qt test targets built. StorageService, economics quotes,
+resource limits, runtime and PoA regression passed 79 cases / 8,540 assertions
+(243 unrelated cases skipped). The new fixture rejects self payout, missing
+account/lease, escrow excess and wrong period before signing or preparation,
+preserves the state root and then accepts corrected input. It also checks that
+read-only preflight does not authorize unsigned canonical execution. Qt authority
+review passed (3 results including setup/cleanup). Ignored evidence:
+`artifacts/economics-settlement-preflight-{core,qt}.txt`, final build log and
+the separately retained initial build FAIL from a corrected test-only Hash256
+narrowing initializer. No runtime failure or live network acceptance is claimed.
+
 ### Exact settlement operation retention (2026-10-10)
 
 The isolated source tree routes desktop settlement review/submission through the
