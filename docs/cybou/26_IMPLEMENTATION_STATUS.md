@@ -8,6 +8,31 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Approved atomic slice: parent execution context (2026-10-10)
+
+The operator approved the concrete atomic PREPARE/ACTIVATE/PAY contract and its
+effective-epoch rule for isolated implementation. This closes the placement
+approval gate only; canonical action codecs, accepted declarations/allocation
+state, cumulative PAY, collector provenance and action-scoped journal integration
+remain unfinished. The dated proposal review below predates that approval.
+
+BlockExecutor now receives the chain-supplied parent BlockID in candidate pool
+execution, candidate root calculation, finalized execution and deterministic
+conflict re-execution. Its seed check permits only preparation_height + 2,
+rejecting missing parent IDs, earlier/later heights and arithmetic overflow.
+This supplies execution context for future ACTIVATE enforcement; no existing
+operation yet creates an accepted assignment or calls that check. No wire/state
+layout or running DEVNET change is claimed by this prerequisite.
+
+
+Core target rebuilt successfully. State, runtime, PoA and resource-limit
+regressions passed 56 cases (267 unrelated cases skipped), including the new
+exact-height/missing-parent/overflow fixture. Ignored evidence:
+`artifacts/economics-assignment-parent-build.txt` and
+`artifacts/economics-assignment-parent-core.txt`. Documentation manifest/link
+checks also passed. This is execution-context evidence, not atomic settlement
+acceptance.
+
 ### Assignment/witness protocol gate review (2026-10-10)
 
 The current registry retains current keys, not a verified registry at every

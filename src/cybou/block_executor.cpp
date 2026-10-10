@@ -16,11 +16,13 @@ namespace cybou {
 BlockExecutor::BlockExecutor(const CybouState& parent,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
-    const IdentityHybridPublicKey* poa_key)
+    const IdentityHybridPublicKey* poa_key,
+    const cybou::Hash256& verified_parent_id)
     : m_parent{&parent},
       m_candidate{parent},
       m_network_binding{network_binding},
       m_block_height{block_height},
+      m_verified_parent_id{verified_parent_id},
       m_params{params},
       m_poa_key{poa_key}
 {
@@ -199,11 +201,20 @@ BlockExecutionResult BlockExecutor::Finalize() &&
     return success;
 }
 
+std::optional<cybou::Hash256> BlockExecutor::StorageAssignmentSeed(const uint64_t preparation_height) const noexcept
+{
+    if (!m_valid || m_verified_parent_id.IsNull() ||
+        preparation_height > std::numeric_limits<uint64_t>::max() - 2 ||
+        m_block_height != preparation_height + 2) return std::nullopt;
+    return m_verified_parent_id;
+}
+
 BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
-    const IdentityHybridPublicKey* poa_key)
+    const IdentityHybridPublicKey* poa_key,
+    const cybou::Hash256& verified_parent_id)
 {
     const auto creates = std::count_if(operations.begin(), operations.end(), [](const auto& operation) {
         return std::holds_alternative<AccountCreateOp>(operation);
@@ -214,7 +225,7 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
         return result;
     }
 
-    BlockExecutor executor(parent, network_binding, block_height, params, poa_key);
+    BlockExecutor executor(parent, network_binding, block_height, params, poa_key, verified_parent_id);
     if (!executor.IsValid()) {
         BlockExecutionResult result{};
         result.error = executor.InitError();

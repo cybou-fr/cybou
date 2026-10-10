@@ -225,10 +225,11 @@ assignment provenance, canonical service/paid, settlement or deployment gates.
 The 2026-10-10 [concrete atomic contract for review](ECONOMICS_SETTLEMENT_COMPLETION.md#concrete-atomic-assignmentsettlement-contract-for-review-2026-10-10)
 proposes finalized PREPARE/ACTIVATE actions inside StorageSettlement before PAY,
 with a strictly later seed and retained canonical binding/allocation summaries.
-These additional actions and their effective-epoch rule are not adopted by this
-decision. Their exact placement gate remains open. The reviewed atomic proof
-layout fits only 20 eligible bindings and 3988 manifest chunks; it is an isolated
-small-fixture proposal, not scalable Beta or deployment acceptance.
+The operator explicitly approved these actions and their effective-epoch rule
+on 2026-10-10 for implementation and verification in isolated tests. The placement
+gate is closed for this atomic slice only. The reviewed atomic proof layout fits
+only 20 eligible bindings and 3988 manifest chunks; approval does not imply
+completed implementation, scalable Beta acceptance or deployment authorization.
 
 See [documentation conflict register](DOCUMENTATION_CONFLICT_REGISTER.md).
 Resolve architecture/code gaps explicitly before release; do not rewrite accepted

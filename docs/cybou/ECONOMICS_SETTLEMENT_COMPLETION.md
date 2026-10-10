@@ -125,10 +125,11 @@ no new wire entity or cryptographic domain is implemented by this checkpoint.
 
 #### Concrete atomic assignment/settlement contract for review (2026-10-10)
 
-Status: PROPOSAL. The operator has authorized isolated canonical-code development,
-but the placement/effective-epoch approval gate below remains unresolved. This
-section makes that choice reviewable; it does not adopt a format or authorize
-implementation of these additional finalized actions, deployment or migration.
+Status: CURRENT isolated implementation contract. On 2026-10-10 the operator
+explicitly approved the atomic PREPARE/ACTIVATE/PAY slice, including finalized
+action placement and the effective-epoch rule below. Implementation and isolated
+verification are authorized; deployment, live DEVNET changes and migration are not.
+The scalable bounded-batch contract remains separate, unimplemented work.
 
 Two inspected constraints determine the design: IdentityRegistry keeps current
 Authorization keys, not a historical registry at every seed; and a complete
@@ -136,7 +137,7 @@ Authorization keys, not a historical registry at every seed; and a complete
 Passing a caller-created historical registry or a hash of unavailable proofs
 into canonical execution cannot close either gap.
 
-Proposed first vertical slice: three actual actions inside the existing
+Approved first vertical slice: three actual actions inside the existing
 PoA-signed StorageSettlement operation. They are semantic actions, not a version,
 new operation type, provider registry, service or P2P entity. Only PAY advances
 the settlement cursor or moves money. The two other actions change state only

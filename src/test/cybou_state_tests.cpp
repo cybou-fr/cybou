@@ -17,6 +17,26 @@
 
 BOOST_AUTO_TEST_SUITE(cybou_state_tests)
 
+BOOST_AUTO_TEST_CASE(assignment_seed_requires_exact_later_finalized_parent)
+{
+    using namespace cybou;
+    CybouState state{};
+    const Hash256 binding{1};
+    const Hash256 parent{2};
+    const auto params = DevProtocolParameters();
+    BlockExecutor activation(state, binding, 12, params, nullptr, parent);
+    BOOST_REQUIRE(activation.IsValid());
+    BOOST_REQUIRE(activation.StorageAssignmentSeed(10));
+    BOOST_CHECK(*activation.StorageAssignmentSeed(10) == parent);
+    BOOST_CHECK(!activation.StorageAssignmentSeed(11)); // declaration's next block is too early
+    BOOST_CHECK(!activation.StorageAssignmentSeed(9)); // missed activation height
+    BOOST_CHECK(!activation.StorageAssignmentSeed(std::numeric_limits<uint64_t>::max()));
+    BlockExecutor missing_parent(state, binding, 12, params);
+    BOOST_CHECK(!missing_parent.StorageAssignmentSeed(10));
+    BlockExecutor invalid_height(state, binding, 0, params, nullptr, parent);
+    BOOST_CHECK(!invalid_height.StorageAssignmentSeed(std::numeric_limits<uint64_t>::max() - 1));
+}
+
 BOOST_AUTO_TEST_CASE(support_mail_pads_to_the_support_rate)
 {
     using namespace cybou;

@@ -66,7 +66,7 @@ void OperationPool::EnsureWorkingContext(const FinalizedHead& head)
     const auto& binding = m_store.GetNetworkBinding();
 
     auto executor = std::make_unique<BlockExecutor>(
-        *loaded.state, binding, head.height + 1, params, &poa_key);
+        *loaded.state, binding, head.height + 1, params, &poa_key, head.block_id);
     if (!executor->IsValid()) {
         m_working.reset();
         return;

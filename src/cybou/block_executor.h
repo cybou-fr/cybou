@@ -97,7 +97,8 @@ public:
                   const cybou::Hash256& network_binding,
                   uint64_t block_height,
                   const CybouProtocolParameters& params,
-                  const IdentityHybridPublicKey* poa_key = nullptr);
+                  const IdentityHybridPublicKey* poa_key = nullptr,
+                  const cybou::Hash256& verified_parent_id = {});
 
     /// \brief Устанавливает указатель на родительское состояние при перемещении внешнего контекста.
     void SetParent(const CybouState& parent) noexcept { m_parent = &parent; }
@@ -124,6 +125,10 @@ public:
     /// \brief Базовое родительское состояние.
     const CybouState& GetParent() const noexcept { return *m_parent; }
     uint64_t GetBlockHeight() const noexcept { return m_block_height; }
+    /// Chain-supplied parent; never taken from an operation payload.
+    const cybou::Hash256& GetVerifiedParentId() const noexcept { return m_verified_parent_id; }
+    /// ACTIVATE is permitted only two heights after finalized PREPARE.
+    std::optional<cybou::Hash256> StorageAssignmentSeed(uint64_t preparation_height) const noexcept;
     size_t GetAccountCreates() const noexcept { return m_account_creates; }
 
 private:
@@ -131,6 +136,7 @@ private:
     CybouState m_candidate;
     cybou::Hash256 m_network_binding;
     uint64_t m_block_height{0};
+    cybou::Hash256 m_verified_parent_id;
     uint64_t m_initial_supply{0};
     size_t m_account_creates{0};
     CybouProtocolParameters m_params;
@@ -154,7 +160,8 @@ BlockExecutionResult ExecuteBlockOperations(const CybouState& parent,
     const std::vector<ProtocolOperation>& operations,
     const cybou::Hash256& network_binding, uint64_t block_height,
     const CybouProtocolParameters& params,
-    const IdentityHybridPublicKey* poa_key = nullptr);
+    const IdentityHybridPublicKey* poa_key = nullptr,
+    const cybou::Hash256& verified_parent_id = {});
 
 } // namespace cybou
 #endif // CYBOU_BLOCK_EXECUTOR_H

@@ -91,7 +91,7 @@ std::optional<cybou::Hash256> CybouStateStore::ComputeCandidateStateRoot(
         return GetStateRoot();
     }
     const auto execution = ExecuteBlockOperations(*loaded.state, operations, m_network_binding, height,
-        m_network_genesis.GetProtocolParameters(), &m_network_genesis.GetPoaPublicKey());
+        m_network_genesis.GetProtocolParameters(), &m_network_genesis.GetPoaPublicKey(), head->block_id);
     return execution ? execution.state_root : std::nullopt;
 }
 
@@ -298,7 +298,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
 
         const auto& params = m_network_genesis.GetProtocolParameters();
         auto execution = ExecuteBlockOperations(*parent_state, block.operations, m_network_binding,
-            block.height, params, &m_network_genesis.GetPoaPublicKey());
+            block.height, params, &m_network_genesis.GetPoaPublicKey(), block.parent_block_id);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
@@ -366,7 +366,7 @@ BlockTransitionResult CybouStateStore::CommitFinalizedBlock(
         candidate_root = *current_root;
     } else {
         auto execution = ExecuteBlockOperations(*loaded.state, block.operations, m_network_binding, block.height, params,
-            &m_network_genesis.GetPoaPublicKey());
+            &m_network_genesis.GetPoaPublicKey(), block.parent_block_id);
         if (!execution) {
             if (execution.error == BlockExecutionError::TOO_MANY_ACCOUNT_CREATES) return {BlockTransitionError::TOO_MANY_ACCOUNT_CREATES};
             return BlockTransitionResult{.error = BlockTransitionError::INVALID_OPERATION, .op_result = execution};
