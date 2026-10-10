@@ -8,6 +8,39 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Canonical assignment replica observations (2026-10-11)
+
+ObserveCanonicalStorageReplica now resolves the exact finalized ACTIVATE body
+from this Full Node's accepted block and the matching funded term/latest accepted
+epoch from its state snapshot. It reconstructs the per-chunk deterministic plan
+from retained PREPARE eligible bindings, accepted seed and immutable term context.
+Only an active funded term with a present publication is eligible for new checks;
+unknown actions, non-manifest chunks, wrong funding/slots/providers and receipts
+fail before I/O. Historical Authorization keys are not requested or reverified
+against today's rotated registry; their acceptance is retained canonical state.
+
+The canonical path executes the existing receipt-bound exact GET/random offset
+audit through StorageTransport, sharing the byte verifier with the preceding
+attestation component. No fabricated per-chunk signature, new hash domain,
+registry, wire or service is introduced. An explicit negative audit remains a
+failure without GET masking; full GET is the default for this raw call.
+
+Verification: core target rebuilt; all 53 selected assignment-attestation and
+StorageService cases passed, 2071/2071 assertions. The other 278 core cases were
+not selected in this focused run. The two-node fixture checks canonical GET/audit
+after payout-key rotation, rejected IDs/slots/receipts before I/O and negative audit
+without GET masking. Transport is an exact-byte in-memory fixture, not VPS evidence.
+Ignored logs: artifacts/economics-canonical-observer-build.txt and
+artifacts/economics-canonical-observer-tests.txt.
+
+This is the canonical raw-observation boundary, not durable interval integration:
+checks use the captured finalized snapshot, do not persist an attempt/success,
+schedule 12-hour checks, enforce eighth-success GET or credit/pay elapsed service.
+The durable collector must revalidate epoch/time when committing observations.
+Its old per-chunk attestation prerequisite and quote consumer remain to be replaced;
+that preceding component path is temporary integration work, not a second permanent
+production authority path. No deployment or physical custody claim is made.
+
 ### PAY interval-reference retention (2026-10-11)
 
 Complete PAY submission now freezes the exact sorted unique raw32 reference list

@@ -138,6 +138,9 @@ witnesses. Prior period-only records require explicit reconciliation and remain
 untouched. The exact interval-reference list is now frozen with PAY preparation
 and root-checked on recovery. Collector source-proof/canonical assignment
 provenance and scalable batches still block DOC-005/006/020 closure; no live migration is authorized.
+The raw replica observer now resolves canonical PREPARE/ACTIVATE and performs
+receipt-bound GET/audit without a caller historical registry/per-chunk signature.
+Durable collector intervals and the payout consumer still require that integration.
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative

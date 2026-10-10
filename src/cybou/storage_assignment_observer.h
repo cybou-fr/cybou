@@ -30,5 +30,15 @@ std::optional<StorageAssignmentObservation> ObserveAssignedStorageReplica(
     const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
     std::uint8_t slot, std::span<const unsigned char> receipt, std::uint32_t stored_size,
     std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
+/// Resolves the exact finalized ACTIVATE manifest and accepted PREPARE bindings
+/// from this Full Node, never a caller-created historical registry or signature.
+/// Only the active term/latest epoch can receive new observations. This raw I/O
+/// boundary does not yet persist attempts, schedule checks or credit intervals.
+std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
+    CybouNodeRuntime& runtime, StorageTransport& transport, const StorageEndpoint& provider,
+    const Hash256& funding_operation_id, const Hash256& activation_operation_id,
+    const ChunkId& chunk, std::uint8_t slot, std::span<const unsigned char> receipt,
+    std::uint32_t stored_size, std::span<const unsigned char> expected_bytes = {},
+    bool force_full = true);
 }
 #endif

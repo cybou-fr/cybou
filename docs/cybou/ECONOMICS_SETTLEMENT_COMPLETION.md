@@ -140,7 +140,10 @@ StorageService now retains full action-scoped prepared/signed bodies and reuses
 exact finalized OperationIDs. It rejects prior period-only records explicitly
 without migration. The interval-reference list is now frozen atomically alongside
 PAY and checked against evidence_root during recovery; loading/verifying its
-source observations against canonical assignments remains open.
+source observations against canonical assignments remains open. The raw GET/audit
+consumer now resolves finalized ACTIVATE and retained PREPARE directly from the
+Full Node; durable observation/interval and payout preparation consumers still
+require consolidation onto this canonical provenance path.
 This checkpoint must not be deployed; it does not close the vertical-slice
 acceptance below. In particular, the two-node PAY regression uses PoA-attested
 service totals, not the requested end-to-end collector integration.

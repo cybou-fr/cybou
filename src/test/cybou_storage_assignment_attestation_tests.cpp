@@ -290,6 +290,45 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     const auto reopened = DeserializeCybouState(*exact); BOOST_REQUIRE(reopened);
     BOOST_CHECK(CybouStateHash(*reopened) == f.service.runtime->GetStateRoot());
 
+    // Canonical observations use the accepted activation, not f.Attest() or a
+    // historical caller registry. The transport is an isolated exact-byte fixture.
+    ObservedTransport canonical_transport;
+    for (const auto& allocation : term.assignments[0].allocations) {
+        auto& provider_node = allocation.storage_id == f.proofs[0].storage_id ?
+            *f.service.runtime : *verifier.runtime;
+        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+        BOOST_REQUIRE(receipt);
+        StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
+        for (auto* node : {f.service.runtime.get(), verifier.runtime.get()}) {
+            const auto observed = ObserveCanonicalStorageReplica(*node, canonical_transport, endpoint,
+                *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk,
+                allocation.slot, *receipt, 4, f.ciphertext);
+            BOOST_REQUIRE(observed); BOOST_CHECK(observed->kind == StorageAssignmentObservationKind::FULL_GET);
+            BOOST_CHECK(observed->retrieved_bytes == f.ciphertext);
+            const auto audited = ObserveCanonicalStorageReplica(*node, canonical_transport, endpoint,
+                *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk,
+                allocation.slot, *receipt, 4, f.ciphertext, false);
+            BOOST_REQUIRE(audited); BOOST_CHECK(audited->kind == StorageAssignmentObservationKind::OFFSET_AUDIT);
+        }
+        const auto gets = canonical_transport.gets, audits = canonical_transport.audits;
+        BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
+            CounterHash(123), *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, *receipt, 4));
+        BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_prepare}), chunk, allocation.slot, *receipt, 4));
+        BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, 2, *receipt, 4));
+        auto bad_receipt = *receipt; bad_receipt.back() ^= 1;
+        BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, bad_receipt, 4));
+        BOOST_CHECK_EQUAL(canonical_transport.gets, gets); BOOST_CHECK_EQUAL(canonical_transport.audits, audits);
+        canonical_transport.missing = true;
+        BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot,
+            *receipt, 4, f.ciphertext, false));
+        BOOST_CHECK_EQUAL(canonical_transport.gets, gets); // Negative audit is never hidden by GET.
+        canonical_transport.missing = false;
+    }
+
     // Real PAY finality on both nodes; tiny terms accumulate service before
     // whole CYBOU entitlement. This tests PoA-attested totals, not raw audits.
     const auto activation_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
