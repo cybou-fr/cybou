@@ -123,6 +123,169 @@ Verifier caches are local only and never substitute signature checks. Exact
 hash domains, leaf ordering, padding and byte codec require approval and vectors;
 no new wire entity or cryptographic domain is implemented by this checkpoint.
 
+#### Concrete atomic assignment/settlement contract for review (2026-10-10)
+
+Status: PROPOSAL. The operator has authorized isolated canonical-code development,
+but the placement/effective-epoch approval gate below remains unresolved. This
+section makes that choice reviewable; it does not adopt a format or authorize
+implementation of these additional finalized actions, deployment or migration.
+
+Two inspected constraints determine the design: IdentityRegistry keeps current
+Authorization keys, not a historical registry at every seed; and a complete
+6344-byte StoragePayoutBinding repeated for 1024 candidates cannot fit 128 KiB.
+Passing a caller-created historical registry or a hash of unavailable proofs
+into canonical execution cannot close either gap.
+
+Proposed first vertical slice: three actual actions inside the existing
+PoA-signed StorageSettlement operation. They are semantic actions, not a version,
+new operation type, provider registry, service or P2P entity. Only PAY advances
+the settlement cursor or moves money. The two other actions change state only
+after ordinary PoA finality; no submitted/provisional state becomes canonical.
+The payer cannot submit an eligibility choice with RootPublication/StorageLease.
+
+| Action | Exact body after common prefix | Effect |
+|---|---|---|
+| PREPARE = 1 | funded_term_id raw32; epoch u64; eligible_count u32; repeated StorageId raw32, binding_length u32, exact existing binding | Validate and finalize eligible input before seed |
+| ACTIVATE = 2 | preparation OperationID raw32; chunk_count u32; complete ordered ChunkID raw32 manifest | Independently derive finalized seed and every chunk/slot assignment |
+| PAY = 3 | period_end_utc u64; evidence_root raw32; entry_count u32; 113-byte entries; witness_count u32; sorted unique activation OperationID raw32 witnesses | Validate cumulative service/paid and origin-preserving transfers atomically |
+
+Common prefix is period u64, period_start_utc u64, action u8. Integers are LE;
+identifiers are raw32; consume all bytes. The existing operation-kind byte and
+Ed25519-64/ML-DSA-65-3309 PoA signature wrap each body. Retain the existing
+CYBOU/STORAGE-SETTLEMENT signing domain and NetworkBinding; do not rename any
+assignment, binding or chunk-authorization domains. OperationID is computed by
+the existing canonical operation identity algorithm, not a new batch hash.
+All counts are checked against byte availability before allocation.
+
+PREPARE validates active funded term, monotonically increasing per-term epoch,
+canonical order/unique StorageIds and the existing assignment eligibility rules.
+Verify every STORAGE signature and payout Authorization signature against the
+registry in the execution state at this finalized declaration. Rotation after
+that point does not invalidate accepted historical bindings. Retain the accepted
+pair, key epoch and declaration height inside this funded term, together with
+the preparation OperationID; do not retain an unscoped global provider registry.
+Existing host/availability/behaviour eligibility is a PoA-attested local input,
+not independently proved physical independence or a consensus role.
+
+For PREPARE finalized at height h, ACTIVATE is valid only in block h+2. Its seed
+is that block's independently verified parent BlockID, hence finalized block h+1,
+strictly later than the eligibility declaration. Candidate/block execution must
+receive the verified parent ID and height from existing chain execution, not
+from operation payload or an off-chain lookup. An activation in h+1, a substituted
+seed or a later activation fails. Missing the h+2 slot requires a new finalized
+PREPARE with a greater epoch; it cannot rewrite the old declaration or change an
+already active assignment. The original block-signing history is preserved.
+This fixes ordering, not adversarial randomness: the sole PoA can influence block
+contents/ordering and therefore the seed. Do not claim unpredictable randomness
+or resistance to a malicious PoA's grinding from this rule.
+
+ACTIVATE checks exact full manifest count against funded units/publication count,
+nonzero unique chunks and the existing authorization root in its original leaf
+order. Do not sort the manifest: the current chunk tree preserves leaf order.
+For every chunk, use the existing PrepareStorageAssignment algorithm with the
+canonical seed, fixed eligible transcript, network/publication/payer/term range
+and declared epoch. Count assigned chunk units per (slot, StorageId, payout).
+Full Nodes derive these counts themselves, check each slot sums to funded U,
+and retain this accepted summary under activation OperationID. The signed
+activation bytes commit the complete manifest and inputs; PAY witnesses resolve
+these canonical summaries, so no new assignment Merkle/hash domain or repeated
+binding signatures are needed for this atomic slice. This is an alternative to
+the larger assignment-Merkle batch proposal above, not its claimed implementation.
+The production consumer must resolve this canonical epoch material in the
+existing collector/payout path, replacing the current caller-snapshot and
+per-chunk PoA-attestation prerequisite. Do not keep two permanent verification
+paths or fabricate legacy signatures to reuse that prerequisite.
+
+Epoch changes take effect at the current canonical period boundary; previous
+allocation capacity ends there. Initial/replacement observations start afresh
+and receive no first-check credit. An epoch change never replenishes B or T.
+Anchor period_start_utc when the first valid PREPARE/PAY finalizes if the canonical
+cursor start is still zero; later actions must equal the canonical start. Compute
+term UTC bounds by checked period-offset arithmetic using immutable S. ACTIVATE
+cannot backdate assignment, cross a funded boundary or replace allocation after
+service for that period has already finalized. Missed scheduling never earns time.
+
+Canonical funded-term state retains: next assignment epoch; accepted declaration
+(OperationID, epoch, height, eligible pairs with accepted key epoch/height);
+accepted epoch summaries (activation/preparation IDs, seed, epoch, effective
+period and per-slot/provider assigned units); and a sorted cumulative ledger
+keyed by (slot u8, StorageId raw32, payout raw32), with verified unit-seconds u64,
+finalized paid u64 and closed-epoch allocation capacity u64. All collections have
+count prefixes, exact byte bounds and canonical order. Detailed state byte layout
+and golden state-root vectors are required in the subsequent isolated code change.
+
+PAY entries are (funding OperationID32, slot1, StorageId32, payout32, cumulative
+verified unit-seconds8, amount8), ordered strictly by that complete key. Each
+positive service increment resolves applicable accepted allocation summaries
+through the witnesses; reject unknown, duplicate or unused witness IDs. Require
+monotonic service, strict service increase for a zero-amount entry, slot service
+sum <= T, and provider service within its canonical allocation/time upper bound.
+Elapsed allocation time is ONLY an upper bound: actual credited totals must come
+from the retained verified collector and PoA attestation, never a clock estimate.
+Raw two-success/12-hour/24-hour/eighth-GET policy remains off-chain; Full Nodes
+verify the signed totals, accepted assignments and arithmetic, not physical
+continuous custody or every raw audit.
+For this slice, evidence_root is the SHA-256 fingerprint of LE u32 count followed
+by sorted unique raw32 collector interval references (the existing verified
+observation-pair references). Freeze that exact list with preparation in app.db.
+It is a signed retention commitment, not an independently verified audit proof
+or new signature domain. Missing reference material fails preparation explicitly.
+
+For every entry, amount must equal floor(B * cumulative_service / T) minus this
+term/slot/provider's canonical paid. No daily ceil cap, provider ranking or
+replica-count limit on historical recipients. Replacements may create additional
+legitimate recipients; all still share the same immutable per-slot B and T.
+Prevalidate the entire operation, then update service/paid, debit only this term,
+credit onboarding-origin to System Balance and locked-origin to Balance, and
+check TotalCybou unchanged. Preparation/retry never advances paid.
+
+At expiry/revocation closure, refund unused origins without rescaling T/B. Retain
+closed term/assignment/paid checkpoints and add refunded_onboarding/refunded_locked
+counters: lease residual escrow equals sum(initial - paid - refunded) by origin.
+A closed record cannot authorize admission or further payment, including when
+its publication was revoked. Do not erase its only replay/accounting checkpoint.
+No compaction or retention horizon is silently chosen; deployment requires a
+reviewed bounded retention policy and exact closed-state vectors.
+
+Exact-operation journal keys must include NetworkBinding, action, period, funded
+term and epoch/preparation identity as applicable: the current period-only key
+cannot hold three different legitimate actions. Keep prepared/signed bytes and
+reconcile exact finality before progressing. Do not migrate or reinterpret old
+journal records in the live DEVNET. Interrupted/stale activation is an explicit
+reconciliation case; no new signing history, second signer or silent replacement.
+
+Payload sizes INCLUDING kind/signature, from inspected existing crypto codecs:
+Storage proof = 32+1312+64+2420 = 3828; binding = 32+64+2420+3828 = 6344.
+
+| Atomic action | Tagged size | Boundary examples |
+|---|---:|---|
+| PREPARE | 3435 + 6380*E | E=2: 16195; E=20: 131035; E=21: 137415 (reject) |
+| ACTIVATE | 3427 + 32*U | U=1000: 35427; U=3988: 131043; U=3989: 131075 (reject) |
+| PAY | 3439 + 113*N + 32*W | N=1024,W=372: 131055; W=373: 131087 (reject) |
+
+Keep existing limits E<=1024 and PAY N<=1024 plus exact 131072-byte payload limit;
+never truncate to fit. This atomic slice therefore cannot accept more than 20
+complete binding proofs or 3988 manifest chunks. It is deliberately an isolated
+small-fixture contract, NOT scalable Beta acceptance. Larger eligible/manifests
+and payment sets need separately defined bounded pages/batches; the proposal
+does not pretend the block's 32-MiB limit overrides the operation limit. Failed
+oversized preparation must retain obligations and never submit an empty payment
+or advance the cursor. Full Nodes cannot independently prove completeness of
+unsubmitted raw observations; do not claim otherwise.
+An arithmetic-only dummy-byte encoding check confirmed all eight table examples
+and three limit boundaries in ignored
+`artifacts/economics-atomic-contract-layout-review.txt`. These are size examples,
+not valid protocol vectors, signature verification or runtime acceptance.
+
+Implementation acceptance after this gate: independent in-memory Full Nodes;
+real authorized publication/funding and two provider bindings; PREPARE -> later
+finalized seed -> ACTIVATE; verified collector intervals -> PAY. Check day-one
+zero and full-term one CYBOU per replica, split-provider floors/refund, deleted
+chunk/unavailable provider unpaid, no early/future/duplicate service, key rotation,
+renewal, exact restart and equal roots. Inspect 128-KiB boundary rejections before
+cursor changes. The existing standalone helpers and preflight tests do not close
+this vertical slice. No live cutover is authorized.
+
 #### Minimal protocol change proposal — not an adopted wire/state format
 
 The following proposal is inside this CURRENT implementation plan for review;

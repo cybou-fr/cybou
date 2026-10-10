@@ -8,6 +8,25 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Assignment/witness protocol gate review (2026-10-10)
+
+The current registry retains current keys, not a verified registry at every
+historical seed. Existing encoded binding size is 6344 bytes; repeating 1024
+complete binding proofs exceeds one 128-KiB operation. The economics plan now
+contains a concrete PROPOSAL for existing StorageSettlement PREPARE/ACTIVATE/PAY
+actions and canonical accepted binding/allocation summaries, not runtime changes.
+Bindings would be validated before the later finalized seed; payment witnesses
+would resolve retained canonical activation records rather than caller snapshots
+or unavailable off-chain hashes. Placement/effective-epoch approval remains open.
+
+An arithmetic-only dummy-byte check confirmed eight sizes and three exact
+128-KiB boundaries. Evidence: ignored
+`artifacts/economics-atomic-contract-layout-review.txt`. It is not a parser,
+signature, state-root or runtime test. Atomic proposal capacity is only 20
+complete eligible bindings / 3988 manifest chunks; bounded batches and scalable
+Beta remain unresolved. No runtime, wire, crypto, state, genesis or live process
+was changed by this review; DEC-292/DOC-020 acceptance is not claimed.
+
 ### Settlement preflight before durable preparation (2026-10-10)
 
 Fresh StorageService submission now checks economic inputs against latest
