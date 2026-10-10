@@ -10,6 +10,10 @@
 #include <cybou/root_publication.h>
 #include <cybou/crypto/sha256.h>
 #include <cybou/binary_codec.h>
+#include <cybou/storage_assignment_observation_store.h>
+#include <cybou/storage_economy.h>
+#include <set>
+#include <tuple>
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -117,6 +121,130 @@ std::optional<StorageSettlement> StorageService::PreparedSettlement(const Storag
             !VerifyIdentityMessage(m_runtime.GetNetworkGenesis().GetPoaPublicKey(), result->poa_signature, *digest))
             throw std::runtime_error{"corrupt signed settlement"};
     } else if (m_db.Has(key + "/signed")) throw std::runtime_error{"unreadable signed settlement"};
+    return result;
+}
+
+StorageService::CanonicalSettlementPreparation StorageService::PrepareSettlement(const uint64_t period)
+{
+    // Never rebase an exact operation, including an already-finalized period.
+    if (const auto retained = PreparedSettlement(period)) {
+        PrivateApplicationStore::Batch snapshot{m_db};
+        if (!snapshot.IsOutermost()) throw std::runtime_error{"settlement journal unavailable"};
+        const auto bytes = m_db.Get(SettlementJournalKey(m_runtime, *retained) + "/evidence");
+        if (!bytes || !EvidenceValid(*bytes, *retained)) throw std::runtime_error{"settlement evidence unavailable"};
+        CanonicalSettlementPreparation result{*retained, {}};
+        const auto count = ReadLittleEndian<uint32_t>(std::span<const unsigned char>{*bytes}.first(4));
+        for (uint32_t i = 0; i < count; ++i)
+            result.evidence_references.emplace_back(std::span<const unsigned char,32>{bytes->data() + 4 + size_t{i} * 32, 32});
+        return result;
+    }
+    const auto root = m_runtime.GetStateRoot();
+    const auto state = m_runtime.GetStore().GetStateSnapshot();
+    if (!state || CybouStateHash(*state.state) != root || period != state.state->settlement.next_period ||
+        period == std::numeric_limits<uint64_t>::max()) throw std::runtime_error{"settlement cursor unavailable"};
+    const auto start = state.state->settlement.next_period_start_utc;
+    const auto seconds = m_runtime.GetNetworkGenesis().GetProtocolParameters().storage_settlement_period_seconds;
+    if (!start || !seconds || start > std::numeric_limits<uint64_t>::max() - seconds)
+        throw std::runtime_error{"settlement time anchor unavailable"};
+    PrivateApplicationStore::Batch snapshot{m_db};
+    if (!snapshot.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement evidence unavailable"};
+    CanonicalSettlementPreparation result;
+    auto& pay = result.settlement;
+    pay.period = period; pay.period_start_utc = start; pay.period_end_utc = start + seconds;
+    using Key = std::tuple<uint8_t, std::array<unsigned char,32>, AccountId>;
+    struct Service { uint64_t seconds{0}; std::vector<Hash256> references; };
+    std::set<Hash256> witnesses;
+    size_t reference_count{0};
+    for (const auto& [publication, lease] : state.state->leases) {
+        for (const auto& term : lease.funded_terms) {
+            if (period < term.first_period || period >= std::min(term.end_period, lease.end_period)) continue;
+            if (term.refunded_onboarding || term.refunded_locked || term.period_seconds != seconds || term.assignments.empty())
+                throw std::runtime_error{"active funded assignment unavailable"};
+            std::vector<ChunkId> manifest;
+            for (size_t i = 0; i < term.assignments.size(); ++i) {
+                const auto& epoch = term.assignments[i];
+                const auto end = std::min({term.end_period, lease.end_period,
+                    i + 1 < term.assignments.size() ? term.assignments[i + 1].effective_period : term.end_period});
+                if (end <= epoch.effective_period) continue;
+                const auto status = m_runtime.GetOperationStatus(epoch.operation_id);
+                if (status.kind != OperationStatusKind::FINALIZED) throw std::runtime_error{"activation not finalized"};
+                const auto block = m_runtime.GetBlockAtHeight(status.finalized_height);
+                if (!block) throw std::runtime_error{"activation block unavailable"};
+                const StorageSettlement* activation{nullptr};
+                for (const auto& operation : block->block.operations)
+                    if (ComputeOperationId(operation) == epoch.operation_id) activation = std::get_if<StorageSettlement>(&operation);
+                if (!activation || activation->action != StorageSettlementAction::ACTIVATE ||
+                    activation->preparation_id != epoch.preparation_id || activation->manifest.size() != lease.units)
+                    throw std::runtime_error{"canonical manifest unavailable"};
+                if (manifest.empty()) manifest = activation->manifest;
+                else if (manifest != activation->manifest) throw std::runtime_error{"canonical manifests disagree"};
+            }
+            if (manifest.empty()) throw std::runtime_error{"canonical manifest unavailable"};
+            std::map<Key, Service> services;
+            for (const auto& chunk : manifest) {
+                const auto bytes = m_runtime.GetChunkBlobStore().Get(chunk);
+                if (!bytes) throw std::runtime_error{"settlement reference chunk unavailable"};
+                for (uint8_t slot = 0; slot < lease.replicas; ++slot) {
+                    const auto verified = detail::LoadCanonicalStorageServiceSnapshot(m_db, m_runtime,
+                        term.funding_operation_id, chunk, slot, period, *bytes);
+                    if (!verified) throw std::runtime_error{"canonical service evidence incomplete"};
+                    for (const auto& item : *verified) {
+                        const auto payout = AccountId::FromBytes(item.provider.payout_account);
+                        if (!payout) throw std::runtime_error{"canonical payout account unavailable"};
+                        auto& accumulated = services[{slot, item.provider.storage_id, *payout}];
+                        if (item.verified_unit_seconds > std::numeric_limits<uint64_t>::max() - accumulated.seconds)
+                            throw std::runtime_error{"canonical service overflow"};
+                        accumulated.seconds += item.verified_unit_seconds;
+                        if (item.evidence_references.size() > (EVIDENCE_BYTES_LIMIT - 4) / 32 - reference_count)
+                            throw std::runtime_error{"settlement evidence exceeds atomic bound"};
+                        reference_count += item.evidence_references.size();
+                        accumulated.references.insert(accumulated.references.end(), item.evidence_references.begin(), item.evidence_references.end());
+                    }
+                }
+            }
+            for (const auto& ledger : term.service_payments) {
+                const auto found = services.find({ledger.slot, ledger.storage_id, ledger.payout_account});
+                if (found == services.end() || found->second.seconds < ledger.verified_unit_seconds)
+                    throw std::runtime_error{"collector service regresses canonical ledger"};
+            }
+            const AssignedStorageBudget budget{term.replica_share, term.initial_onboarding + term.initial_locked,
+                term.contracted_unit_seconds};
+            for (const auto& [key, service] : services) {
+                const auto& [slot, storage, payout] = key;
+                const auto ledger = std::find_if(term.service_payments.begin(), term.service_payments.end(), [&](const auto& paid) {
+                    return std::tie(paid.slot, paid.storage_id, paid.payout_account) == key;
+                });
+                const auto prior_service = ledger == term.service_payments.end() ? 0 : ledger->verified_unit_seconds;
+                if (service.seconds == prior_service) continue;
+                const auto due = ComputeAssignedStoragePayout(budget, service.seconds,
+                    ledger == term.service_payments.end() ? 0 : ledger->paid);
+                if (!due || pay.entries.size() == MAX_STORAGE_SETTLEMENT_ENTRIES)
+                    throw std::runtime_error{"settlement payout exceeds atomic bound"};
+                pay.entries.push_back({term.funding_operation_id, payout, *due, slot, storage, service.seconds});
+                result.evidence_references.insert(result.evidence_references.end(), service.references.begin(), service.references.end());
+                for (size_t i = 0; i < term.assignments.size(); ++i) {
+                    const auto& epoch = term.assignments[i];
+                    const auto end = std::min({period + 1, term.end_period, lease.end_period,
+                        i + 1 < term.assignments.size() ? term.assignments[i + 1].effective_period : term.end_period});
+                    if (end > epoch.effective_period && std::any_of(epoch.allocations.begin(), epoch.allocations.end(), [&](const auto& a) {
+                        return std::tie(a.slot, a.storage_id, a.payout_account) == key;
+                    })) witnesses.insert(epoch.operation_id);
+                }
+            }
+        }
+    }
+    std::sort(pay.entries.begin(), pay.entries.end(), [](const auto& a, const auto& b) {
+        return std::tie(a.funding_operation_id, a.slot, a.storage_id, a.payout_account) <
+            std::tie(b.funding_operation_id, b.slot, b.storage_id, b.payout_account);
+    });
+    pay.activation_witnesses.assign(witnesses.begin(), witnesses.end());
+    auto& refs = result.evidence_references;
+    std::sort(refs.begin(), refs.end()); refs.erase(std::unique(refs.begin(), refs.end()), refs.end());
+    const auto encoded = EvidenceBytes(refs);
+    if (!encoded || !crypto::ComputeSha256({std::span<const unsigned char>{*encoded}}, pay.evidence_root.begin()) ||
+        !PreparedBytes(pay) || m_runtime.GetStateRoot() != root ||
+        m_runtime.CheckStorageSettlementInputs(pay) != StorageSettlementError::NONE || m_runtime.GetStateRoot() != root)
+        throw std::runtime_error{"canonical settlement preparation rejected"};
     return result;
 }
 

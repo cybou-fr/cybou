@@ -8,6 +8,44 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Complete atomic PAY preparation in StorageService (2026-10-11)
+
+StorageService::PrepareSettlement now derives a complete atomic PAY from every
+currently payable canonical funded term, all leaves of the exact finalized
+ACTIVATE manifest and every replica slot. It reads verified service across all
+positive-duration historical epochs in one read-only existing app.db snapshot,
+aggregates by funding/slot/StorageId/payout, rejects regression against canonical
+service, and calculates floor(B*S/T)-canonical_paid using immutable funded terms.
+Only strictly increased service emits an entry; an unchanged complete journal
+may produce an actual empty period, without resetting prior service or paid.
+
+Witnesses cover every positive-duration canonical allocation contributing to each
+entry's key, even when an epoch produced no service. Entries/references/witnesses
+are sorted, the exact reference list is hashed, and full wire size plus canonical
+inputs are checked before return. Missing assignments, source proofs or exact
+local chunks, disagreement between epoch manifests, oversized atomic operations,
+wrong cursor/time anchor or changed canonical state throw without freezing a
+journal or advancing the period. No network I/O or balance mutation occurs here.
+SubmitSettlement remains responsible for exact durable preparation/signing/relay.
+
+Recovery returns the existing validated prepared/signed PAY and retained references
+before considering new collector observations or the current canonical cursor.
+It never recalculates a retained operation. The older entry-only GUI bridge still
+fails closed; production dispatcher activation is outside this isolated slice.
+
+Verification: rebuilt core; all 53 selected assignment-attestation/StorageService
+cases passed, 2245/2245 assertions; 278 other core cases were not selected. The
+fixture covers full preparation and independent finalization on two Full Nodes,
+both slots and a two-leaf manifest,
+incomplete second-leaf rejection, missing blob/proof, unchanged-service empty PAY,
+canonical-service regression rejection and exact journal recovery after reopening.
+Final logs: artifacts/economics-complete-pay-build-verified.txt and
+artifacts/economics-complete-pay-tests.txt (ignored). Earlier compile failures
+remain retained separately; no test is disabled. Documentation/MANIFEST checks
+pass; these structural checks do not establish protocol/physical Beta acceptance.
+Replacement/renewal and nonzero canonical-paid preparation coverage, scalable
+batches and production scheduling/dispatch remain open. No live DEVNET change.
+
 ### Collector service into finalized PAY (2026-10-11)
 
 LoadCanonicalStorageService reads one authorized chunk/slot across every

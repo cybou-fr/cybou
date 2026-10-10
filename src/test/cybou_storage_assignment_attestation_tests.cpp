@@ -5,6 +5,7 @@
 #include <cybou/storage_assignment_observation_store.h>
 #include <cybou/storage_assignment_payout.h>
 #include <cybou/storage_economy.h>
+#include <cybou/encrypted_chunk.h>
 #include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/binary_codec.h>
@@ -207,6 +208,8 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
 {
     using namespace cybou;
     Fixture f;
+    f.ciphertext.resize(ENCRYPTED_CHUNK_MIN_STORED_BYTES, 0x42);
+    const auto stored_size = static_cast<uint32_t>(f.ciphertext.size());
     auto provider2 = f.service.CreateIdentity("finalized-provider2.cybou");
     CybouServiceTestFixture verifier;
     verifier.runtime->DisablePoaSigner();
@@ -293,39 +296,39 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
 
     // Canonical observations use the accepted activation, not f.Attest() or a
     // historical caller registry. The transport is an isolated exact-byte fixture.
-    ObservedTransport canonical_transport;
+    ObservedTransport canonical_transport; canonical_transport.bytes = f.ciphertext;
     for (const auto& allocation : term.assignments[0].allocations) {
         auto& provider_node = allocation.storage_id == f.proofs[0].storage_id ?
             *f.service.runtime : *verifier.runtime;
-        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, stored_size));
         BOOST_REQUIRE(receipt);
         StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
         for (auto* node : {f.service.runtime.get(), verifier.runtime.get()}) {
             const auto observed = ObserveCanonicalStorageReplica(*node, canonical_transport, endpoint,
                 *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk,
-                allocation.slot, *receipt, 4, f.ciphertext);
+                allocation.slot, *receipt, stored_size, f.ciphertext);
             BOOST_REQUIRE(observed); BOOST_CHECK(observed->kind == StorageAssignmentObservationKind::FULL_GET);
             BOOST_CHECK(observed->retrieved_bytes == f.ciphertext);
             const auto audited = ObserveCanonicalStorageReplica(*node, canonical_transport, endpoint,
                 *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk,
-                allocation.slot, *receipt, 4, f.ciphertext, false);
+                allocation.slot, *receipt, stored_size, f.ciphertext, false);
             BOOST_REQUIRE(audited); BOOST_CHECK(audited->kind == StorageAssignmentObservationKind::OFFSET_AUDIT);
         }
         const auto gets = canonical_transport.gets, audits = canonical_transport.audits;
         BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
-            CounterHash(123), *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, *receipt, 4));
+            CounterHash(123), *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, *receipt, stored_size));
         BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
-            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_prepare}), chunk, allocation.slot, *receipt, 4));
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_prepare}), chunk, allocation.slot, *receipt, stored_size));
         BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
-            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, 2, *receipt, 4));
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, 2, *receipt, stored_size));
         auto bad_receipt = *receipt; bad_receipt.back() ^= 1;
         BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
-            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, bad_receipt, 4));
+            *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot, bad_receipt, stored_size));
         BOOST_CHECK_EQUAL(canonical_transport.gets, gets); BOOST_CHECK_EQUAL(canonical_transport.audits, audits);
         canonical_transport.missing = true;
         BOOST_CHECK(!ObserveCanonicalStorageReplica(*f.service.runtime, canonical_transport, endpoint,
             *publication_id, *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk, allocation.slot,
-            *receipt, 4, f.ciphertext, false));
+            *receipt, stored_size, f.ciphertext, false));
         BOOST_CHECK_EQUAL(canonical_transport.gets, gets); // Negative audit is never hidden by GET.
         canonical_transport.missing = false;
     }
@@ -338,13 +341,13 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         const auto resolved = ResolveCanonicalStorageAssignment(*f.service.runtime, *publication_id, active_id, chunk);
         BOOST_REQUIRE(resolved); BOOST_CHECK_EQUAL(resolved->term_start_utc, 100000U);
         auto& provider_node = allocation.storage_id == f.proofs[0].storage_id ? *f.service.runtime : *verifier.runtime;
-        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, stored_size));
         BOOST_REQUIRE(receipt);
         StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
         const StorageAssignmentEvidenceScope scope{resolved->plan, allocation.slot, resolved->term_start_utc, resolved->period_seconds};
         const auto observe = [&](uint64_t offset) {
             return ObserveAndStoreCanonicalStorageReplica(*f.db, *f.service.runtime, canonical_transport, endpoint,
-                *publication_id, active_id, chunk, allocation.slot, *receipt, 4, 100000 + offset, 200000, f.ciphertext);
+                *publication_id, active_id, chunk, allocation.slot, *receipt, stored_size, 100000 + offset, 200000, f.ciphertext);
         };
         const auto root_before_checks = f.service.runtime->GetStateRoot();
         const auto initial_gets = canonical_transport.gets;
@@ -419,12 +422,12 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         const auto active_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
         if (allocation.slot != term.assignments[0].allocations.front().slot) {
             auto& node = allocation.storage_id == f.proofs[0].storage_id ? *f.service.runtime : *verifier.runtime;
-            const auto receipt = node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+            const auto receipt = node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, stored_size));
             BOOST_REQUIRE(receipt);
             StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
             for (uint64_t time : {100000U, 143200U})
                 BOOST_REQUIRE(ObserveAndStoreCanonicalStorageReplica(*f.db, *f.service.runtime, canonical_transport,
-                    endpoint, *publication_id, active_id, chunk, allocation.slot, *receipt, 4, time, 200000, f.ciphertext));
+                    endpoint, *publication_id, active_id, chunk, allocation.slot, *receipt, stored_size, time, 200000, f.ciphertext));
         }
         const auto services = LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
             chunk, allocation.slot, 0, f.ciphertext);
@@ -442,6 +445,32 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     }
     std::sort(collected_references.begin(), collected_references.end());
     collected_references.erase(std::unique(collected_references.begin(), collected_references.end()), collected_references.end());
+
+    BOOST_CHECK_THROW(journal->PrepareSettlement(0), std::runtime_error); // Missing exact reference blob.
+    BOOST_CHECK(!journal->PreparedSettlement(0));
+    BOOST_REQUIRE(f.service.runtime->GetChunkBlobStore().Put(chunk, f.ciphertext) == ChunkBlobPutStatus::STORED);
+    const auto canonical_preparation = journal->PrepareSettlement(0);
+    BOOST_CHECK(canonical_preparation.evidence_references == collected_references);
+    BOOST_CHECK(!journal->PreparedSettlement(0)); // Read-only until SubmitSettlement.
+    const auto resolved_for_loss = ResolveCanonicalStorageHistory(*f.service.runtime, *publication_id,
+        *ComputeOperationId(ProtocolOperation{*signed_activate}), chunk); BOOST_REQUIRE(resolved_for_loss);
+    const auto slot_for_loss = term.assignments[0].allocations.front().slot;
+    const StorageAssignmentEvidenceScope loss_scope{resolved_for_loss->plan, slot_for_loss,
+        resolved_for_loss->term_start_utc, resolved_for_loss->period_seconds};
+    const auto loss_claims = LoadStorageFundedSlotClaims(*f.db, loss_scope); BOOST_REQUIRE(loss_claims);
+    const auto loss_key = "storage/assignment-observations/" + Hash256{std::span<const unsigned char,32>{resolved_for_loss->plan.commitment}}.GetHex() +
+        '/' + std::to_string(slot_for_loss) + "/interval-proof/" + Hash256{std::span<const unsigned char,32>{loss_claims->front().interval.proof_commitment}}.GetHex();
+    const auto lost_proof = f.db->Get(loss_key); BOOST_REQUIRE(lost_proof);
+    BOOST_REQUIRE(f.db->Erase(loss_key));
+    BOOST_CHECK_THROW(journal->PrepareSettlement(0), std::runtime_error);
+    BOOST_CHECK(!journal->PreparedSettlement(0));
+    BOOST_REQUIRE(f.db->Put(loss_key, *lost_proof));
+    BOOST_CHECK(journal->PrepareSettlement(0).settlement == canonical_preparation.settlement);
+    BOOST_CHECK_THROW(journal->PrepareSettlement(1), std::runtime_error);
+    {
+        PrivateApplicationStore::Batch staged{*f.db};
+        BOOST_CHECK_THROW(journal->PrepareSettlement(0), std::runtime_error);
+    }
 
     // First PAY uses the real collector above. Later PAYs use explicit synthetic
     // PoA-attested totals to retain full-term arithmetic/conservation coverage.
@@ -468,6 +497,10 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         std::sort(pay.entries.begin(), pay.entries.end(), [](const auto& a, const auto& b) {
             return std::tie(a.funding_operation_id,a.slot,a.storage_id,a.payout_account) <
                 std::tie(b.funding_operation_id,b.slot,b.storage_id,b.payout_account); });
+        if (period == 0) {
+            BOOST_CHECK(pay == canonical_preparation.settlement);
+            pay = canonical_preparation.settlement;
+        }
         const auto before = f.service.runtime->GetStateRoot();
         auto bad = pay; bad.entries[0].amount += 1;
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
@@ -510,6 +543,15 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         const auto restored = DeserializeCybouState(*serialized); BOOST_REQUIRE(restored);
         BOOST_CHECK(CybouStateHash(*restored) == verifier.runtime->GetStateRoot());
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(*signed_pay));
+        if (period == 0) {
+            const auto unchanged = journal->PrepareSettlement(1);
+            BOOST_CHECK(unchanged.settlement.entries.empty());
+            BOOST_CHECK(unchanged.evidence_references.empty());
+            BOOST_CHECK(!journal->PreparedSettlement(1));
+            BOOST_CHECK(journal->PrepareSettlement(0).settlement == *signed_pay);
+        }
+        if (period == 1) BOOST_CHECK_THROW(journal->PrepareSettlement(2), std::runtime_error);
+
     }
     const auto final = verifier.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(final);
     const auto& closed = final.state->leases.at(*publication_id);
@@ -534,10 +576,94 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     BOOST_CHECK(journal->SubmitSettlement(prepare).status == OperationSubmitStatus::ALREADY_FINALIZED);
     BOOST_CHECK(journal->SubmitSettlement(activate).status == OperationSubmitStatus::ALREADY_FINALIZED);
     BOOST_CHECK(journal->SubmitSettlement(std::get<StorageSettlement>(*first_pay)).status == OperationSubmitStatus::ALREADY_FINALIZED);
+    const auto recovered_pay = journal->PrepareSettlement(0);
+    BOOST_CHECK(recovered_pay.settlement == std::get<StorageSettlement>(*first_pay));
+    BOOST_CHECK(recovered_pay.evidence_references == collected_references);
+
     BOOST_CHECK(journal->PreparedSettlement(prepare) == signed_prepare);
     BOOST_CHECK(journal->PreparedSettlement(activate) == signed_activate);
     BOOST_CHECK(f.service.runtime->SubmitOperation(*first_pay).status == OperationSubmitStatus::ALREADY_FINALIZED);
     BOOST_CHECK(f.service.runtime->GetStateRoot() == final_root);
+
+    // Complete manifest coverage: a second publication has two distinct leaves.
+    const std::array<std::vector<unsigned char>,2> blobs{
+        std::vector<unsigned char>(ENCRYPTED_CHUNK_MIN_STORED_BYTES, 0x53),
+        std::vector<unsigned char>(ENCRYPTED_CHUNK_MIN_STORED_BYTES, 0x54)};
+    const std::array ids{ComputeChunkId(blobs[0]), ComputeChunkId(blobs[1])};
+    const std::array multi_leaves{AuthorizedChunk{ids[0]}, AuthorizedChunk{ids[1]}};
+    const auto multi_tree = BuildChunkAuthorizationTree(multi_leaves); BOOST_REQUIRE(multi_tree);
+    auto multi_publication = publication;
+    multi_publication.root_chunk_id = ids[0]; multi_publication.chunk_authorization_root = multi_tree->root;
+    multi_publication.chunk_count = 2; multi_publication.lease_periods = 2;
+    const auto current = f.service.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(current);
+    const auto* current_identity = current.state->identities.Find(payer); BOOST_REQUIRE(current_identity);
+    auto multi_auth = auth; multi_auth.nonce = current_identity->nonce; multi_auth.key_epoch = current_identity->key_epoch;
+    multi_auth.payload_commitment = *ComputeRootPublicationPayloadCommitment(multi_publication);
+    const auto multi_signature = author.SignAuthorization(*ComputeIdentityOperationDigest(network, multi_auth)); BOOST_REQUIRE(multi_signature);
+    multi_auth.signature = *multi_signature;
+    const ProtocolOperation multi_root{AuthorizedRootPublication{multi_auth, multi_publication}};
+    const auto multi_funding = ComputeOperationId(multi_root); BOOST_REQUIRE(multi_funding);
+    BOOST_REQUIRE(f.service.runtime->SubmitOperation(multi_root)); BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    const auto multi_start = current.state->settlement.next_period_start_utc;
+    StorageSettlement multi_prepare{.period = 30, .period_start_utc = multi_start};
+    multi_prepare.action = StorageSettlementAction::PREPARE; multi_prepare.funded_term_id = *multi_funding;
+    multi_prepare.assignment_epoch = 1;
+    const auto current_binding = verifier.runtime->LocalStoragePayoutBinding(); BOOST_REQUIRE(current_binding);
+    multi_prepare.eligible = {{f.proofs[0].storage_id, f.proofs[0].binding}, {*second_storage, *current_binding}};
+    std::sort(multi_prepare.eligible.begin(), multi_prepare.eligible.end(), [](const auto& a, const auto& b) { return a.storage_id < b.storage_id; });
+    BOOST_REQUIRE(journal->SubmitSettlement(multi_prepare)); BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    const auto signed_multi_prepare = journal->PreparedSettlement(multi_prepare); BOOST_REQUIRE(signed_multi_prepare);
+    const auto entropy2 = GenerateRecoveryEntropy(); BOOST_REQUIRE(entropy2);
+    BOOST_REQUIRE(provider2->RotateIdentitySync(EncodeRecoveryWords(*entropy2), "correct horse battery staple").phase == IdentityOperationPhase::ACCEPTED);
+    BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    BOOST_REQUIRE(provider2->ResumeIdentityRotationSync("correct horse battery staple").phase == IdentityOperationPhase::FINALIZED);
+    StorageSettlement multi_activate{.period = 30, .period_start_utc = multi_start};
+    multi_activate.action = StorageSettlementAction::ACTIVATE;
+    multi_activate.preparation_id = *ComputeOperationId(ProtocolOperation{*signed_multi_prepare});
+    multi_activate.manifest.assign(ids.begin(), ids.end());
+    BOOST_REQUIRE(journal->SubmitSettlement(multi_activate)); BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    const auto signed_multi_activate = journal->PreparedSettlement(multi_activate); BOOST_REQUIRE(signed_multi_activate);
+    const auto multi_activation = *ComputeOperationId(ProtocolOperation{*signed_multi_activate});
+    for (auto h = *verifier.runtime->GetFinalizedHeight() + 1; h <= *f.service.runtime->GetFinalizedHeight(); ++h)
+        BOOST_REQUIRE(verifier.runtime->CommitBlock(*f.service.runtime->GetBlockAtHeight(h)));
+    for (size_t leaf = 0; leaf < ids.size(); ++leaf) {
+        BOOST_REQUIRE(f.service.runtime->GetChunkBlobStore().Put(ids[leaf], blobs[leaf]) == ChunkBlobPutStatus::STORED);
+        canonical_transport.bytes = blobs[leaf];
+        const auto assignment = ResolveCanonicalStorageAssignment(*f.service.runtime, *multi_funding, multi_activation, ids[leaf]);
+        BOOST_REQUIRE(assignment);
+        for (uint8_t slot = 0; slot < 2; ++slot) {
+            const auto storage = assignment->plan.selected[slot].storage_id;
+            auto& node = storage == f.proofs[0].storage_id ? *f.service.runtime : *verifier.runtime;
+            const auto receipt = node.SignStorageProof(StorageReceiptMessage(network, *multi_funding, ids[leaf], stored_size));
+            BOOST_REQUIRE(receipt); StorageEndpoint endpoint{storage, "fixture", 29461};
+            for (uint64_t offset : {0U, 43200U, 86400U})
+                BOOST_REQUIRE(ObserveAndStoreCanonicalStorageReplica(*f.db, *f.service.runtime, canonical_transport,
+                    endpoint, *multi_funding, multi_activation, ids[leaf], slot, *receipt, stored_size,
+                    multi_start + offset, multi_start + 86400, blobs[leaf]));
+        }
+        if (leaf == 0) {
+            BOOST_CHECK_THROW(journal->PrepareSettlement(30), std::runtime_error);
+            BOOST_CHECK(!journal->PreparedSettlement(30)); // Incomplete second leaf cannot be skipped.
+        }
+    }
+    const auto complete = journal->PrepareSettlement(30);
+    BOOST_CHECK_EQUAL(complete.evidence_references.size(), 8U);
+    std::array<uint64_t,2> slot_service{};
+    for (const auto& entry : complete.settlement.entries) {
+        BOOST_CHECK(entry.funding_operation_id == *multi_funding);
+        slot_service[entry.slot] += entry.verified_unit_seconds;
+    }
+    BOOST_CHECK_EQUAL(slot_service[0], 2 * 86400U); BOOST_CHECK_EQUAL(slot_service[1], 2 * 86400U);
+    BOOST_REQUIRE(f.service.runtime->GetChunkBlobStore().Remove(ids[1]));
+    BOOST_CHECK_THROW(journal->PrepareSettlement(30), std::runtime_error);
+    BOOST_REQUIRE(f.service.runtime->GetChunkBlobStore().Put(ids[1], blobs[1]) == ChunkBlobPutStatus::STORED);
+    const auto multi_total = TotalCybou(*f.service.runtime->GetStore().GetStateSnapshot().state);
+    BOOST_REQUIRE(journal->SubmitSettlement(complete.settlement, complete.evidence_references));
+    const auto multi_pay_block = f.service.runtime->ProduceBlock(); BOOST_REQUIRE(multi_pay_block);
+    BOOST_REQUIRE(verifier.runtime->CommitBlock(*multi_pay_block));
+    BOOST_CHECK(f.service.runtime->GetStateRoot() == verifier.runtime->GetStateRoot());
+    BOOST_CHECK_EQUAL(TotalCybou(*verifier.runtime->GetStore().GetStateSnapshot().state), multi_total);
+    BOOST_CHECK(journal->PrepareSettlement(31).settlement.entries.empty());
 }
 
 BOOST_AUTO_TEST_CASE(atomic_assignment_wire_limits_and_exact_consumption)

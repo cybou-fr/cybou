@@ -153,6 +153,13 @@ material. Complete all-chunk preparation, canonical paid reconciliation,
 replacement coverage and production dispatch remain open; these conflicts are
 not closed by the partial-term fixture.
 
+StorageService now has complete atomic PAY preparation over all active funded
+terms, finalized manifests and slots, with canonical service/paid reconciliation,
+full witnesses and exact journal recovery. Missing data/regression/oversize fail
+before preparation is retained. Replacement/renewal and nonzero-paid preparation
+coverage, scalable batches and production dispatch still block closure; this
+isolated implementation authorizes no deployment or live record migration.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

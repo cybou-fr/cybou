@@ -10,6 +10,26 @@ deployable while funding and cumulative settlement rules remain inconsistent.
 
 ## Delivery order
 
+### Complete atomic PAY preparer checkpoint (2026-10-11)
+
+StorageService::PrepareSettlement now gathers every active payable funded term,
+all finalized manifest chunks/replica slots, verified historical service and exact
+references in one read-only app.db snapshot. It reconciles against canonical
+service/paid, computes immutable B/T entitlement, emits only service increases,
+constructs all required allocation witnesses and checks the full atomic payload
+and canonical inputs. A missing chunk/assignment/proof or regressing service
+rejects preparation; it is never an empty fallback or truncated payable set.
+An actually unchanged complete journal can prepare an empty contiguous period.
+Retained exact PAY/signature/reference bytes take precedence over recalculation,
+including after finalization/reopening. SubmitSettlement owns durable publication.
+
+This closes the missing complete atomic preparer implementation step, not its
+full acceptance: replacement/renewal and nonzero canonical-paid preparation
+coverage, crash/batch scalability and production scheduling/dispatch still need
+verification. The fixture uses two Full Nodes and a two-leaf manifest; it is not
+physical-host custody or deployment evidence. No protocol/DB/P2P change is added
+by the preparer. The old entry-only GUI wrapper remains fail-closed.
+
 ### Collector-to-PAY isolated checkpoint (2026-10-11)
 
 The first PAY in the two-Full-Node canonical fixture now uses actual retained

@@ -426,7 +426,7 @@ bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntim
         db, runtime, funding, activation, chunk, slot, interval, reference);
 }
 
-std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorageService(
+std::optional<std::vector<VerifiedCanonicalStorageService>> detail::LoadCanonicalStorageServiceSnapshot(
     PrivateApplicationStore& db, CybouNodeRuntime& runtime, const Hash256& funding,
     const ChunkId& chunk, uint8_t slot, uint64_t through, std::span<const unsigned char> reference)
 {
@@ -435,7 +435,7 @@ std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorage
     if (!state || through > state.state->settlement.next_period || reference.empty() ||
         ComputeChunkId(reference) != chunk) return std::nullopt;
     PrivateApplicationStore::Batch snapshot{db};
-    if (!snapshot.IsOutermost() || !db.IsUnlocked()) return std::nullopt;
+    if (!db.IsUnlocked()) return std::nullopt;
     std::vector<CanonicalStorageAssignment> epochs;
     std::vector<VerifiedCanonicalStorageService> result;
     for (const auto& [publication, lease] : state.state->leases) {
@@ -483,6 +483,15 @@ std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorage
             service.evidence_references.end()), service.evidence_references.end());
     }
     return runtime.GetStateRoot() == root ? std::optional{result} : std::nullopt;
+}
+
+std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorageService(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, const Hash256& funding,
+    const ChunkId& chunk, uint8_t slot, uint64_t through, std::span<const unsigned char> reference)
+{
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost()) return std::nullopt;
+    return detail::LoadCanonicalStorageServiceSnapshot(db, runtime, funding, chunk, slot, through, reference);
 }
 
 }

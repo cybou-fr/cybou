@@ -299,6 +299,16 @@ public:
     /// advancing a period with an empty fallback. No daily ranking path exists.
     std::vector<StorageSettlementEntry> SettlementEntries(std::uint64_t period, std::int64_t verified_since_ms,
         std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
+    struct CanonicalSettlementPreparation {
+        StorageSettlement settlement;
+        std::vector<Hash256> evidence_references;
+    };
+    /// Complete atomic PAY from all active canonical funded terms/manifests and
+    /// verified collector intervals. Exact retained PAY wins over recalculation.
+    /// Read-only; SubmitSettlement freezes/signs/relays the returned body/references.
+    /// Missing evidence/bytes, regressing service, oversized payload or changed
+    /// canonical state throw; never truncate obligations or use an empty fallback.
+    CanonicalSettlementPreparation PrepareSettlement(std::uint64_t period);
     /// Retained exact input/signature in existing app.db; corruption throws.
     std::optional<StorageSettlement> PreparedSettlement(std::uint64_t period);
     /// Action-scoped recovery of exact PREPARE/ACTIVATE/PAY bytes. Request selects

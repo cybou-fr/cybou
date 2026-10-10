@@ -69,6 +69,14 @@ std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorage
     const ChunkId& chunk, std::uint8_t slot, std::uint64_t through_period,
     std::span<const unsigned char> reference_bytes);
 
+namespace detail {
+/// Internal composition only: caller owns an outermost read-only app.db snapshot.
+std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorageServiceSnapshot(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, const Hash256& funding,
+    const ChunkId& chunk, std::uint8_t slot, std::uint64_t through_period,
+    std::span<const unsigned char> reference_bytes);
+}
+
 /// Reconstructs the exact retained observation pair and period-slice fingerprint,
 /// checks both records/receipts/audit hashes and canonical historical time bounds.
 /// GET remains the trusted collector assertion over the supplied exact chunk bytes.
