@@ -138,6 +138,14 @@ remain open. The intermediate payment path rejects all accepted assignment
 records rather than paying or erasing them using the old rules. This checkpoint
 must not be deployed; it does not close the vertical-slice acceptance below.
 
+PAY prerequisite checkpoint: `ComputeAcceptedStorageCapacity` derives a provider's
+unit-second upper bound from retained accepted epoch allocations. Replacement
+ends the prior allocation at its effective period; returning providers accumulate
+only their assigned intervals. The exclusive observation boundary, immutable
+term end and lease closure bound the calculation. Checked arithmetic rejects
+overflow. This is not observed service and is not yet wired into cumulative PAY;
+the old payment path remains fail-closed for accepted assignment records.
+
 Two inspected constraints determine the design: IdentityRegistry keeps current
 Authorization keys, not a historical registry at every seed; and a complete
 6344-byte StoragePayoutBinding repeated for 1024 candidates cannot fit 128 KiB.

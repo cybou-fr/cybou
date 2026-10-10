@@ -8,6 +8,27 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### PAY capacity prerequisite (2026-10-10)
+
+`ComputeAcceptedStorageCapacity` derives a per-term/slot/StorageId/payout
+unit-second upper bound from retained canonical assignment epochs. It excludes
+periods before first assignment and after replacement, permits later reassignment
+without resetting the funded B/T, and clips at the exclusive requested boundary,
+term expiry and lease closure. Invalid ordering, duplicate matching allocations
+and arithmetic overflow fail closed. It neither mutates state nor treats capacity
+as service evidence. Cumulative PAY and closed-term refund integration remain
+open; the existing assignment-aware payment rejection stays in force.
+
+Core build passed; four focused suites passed 45 cases and 128826 assertions
+(283 unrelated cases skipped). Build and regression evidence are recorded in
+`artifacts/economics-pay-capacity-build.txt` and
+`artifacts/economics-pay-capacity-core.txt`. The initial FAIL is retained as
+`artifacts/economics-pay-capacity-initial-fail.txt`: the earlier renewal codec
+test still used the pre-assignment 112-byte term size and damaged an unrelated
+byte instead of the count. The corrected test uses the current 128-byte empty
+term layout and first asserts the count is two. This isolated helper checkpoint
+changes no wire/state layout or live DEVNET process.
+
 ### Canonical eligibility and activation checkpoint (2026-10-10)
 
 Isolated source development now includes PREPARE and ACTIVATE in the existing

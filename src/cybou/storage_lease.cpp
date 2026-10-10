@@ -178,6 +178,41 @@ std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParamete
     return RentCeil(params, units, replicas, 1);
 }
 
+std::optional<uint64_t> ComputeAcceptedStorageCapacity(const StorageFundedTerm& term,
+    const uint8_t slot, const std::array<unsigned char, 32>& storage_id,
+    const AccountId& payout_account, const uint64_t through_period, const uint64_t closure_period)
+{
+    if (!term.period_seconds || term.end_period <= term.first_period ||
+        storage_id == std::array<unsigned char, 32>{} || payout_account.IsNull() ||
+        through_period < term.first_period || closure_period < term.first_period) return std::nullopt;
+    const auto end = std::min({through_period, closure_period, term.end_period});
+    uint64_t capacity{0};
+    for (size_t i = 0; i < term.assignments.size(); ++i) {
+        const auto& epoch = term.assignments[i];
+        if (!epoch.epoch || epoch.effective_period < term.first_period || epoch.effective_period >= term.end_period ||
+            (i && (epoch.epoch <= term.assignments[i - 1].epoch ||
+                   epoch.effective_period < term.assignments[i - 1].effective_period))) return std::nullopt;
+        uint32_t units{0};
+        bool found{false};
+        for (const auto& allocation : epoch.allocations) {
+            if (allocation.slot != slot || allocation.storage_id != storage_id || allocation.payout_account != payout_account) continue;
+            if (found || !allocation.units) return std::nullopt;
+            units = allocation.units;
+            found = true;
+        }
+        const auto epoch_end = i + 1 < term.assignments.size()
+            ? std::min(end, term.assignments[i + 1].effective_period) : end;
+        if (epoch_end <= epoch.effective_period || !units) continue;
+        uint64_t seconds{0}, increment{0};
+        if (!CheckedMul(epoch_end - epoch.effective_period, term.period_seconds, seconds) ||
+            !CheckedMul(seconds, units, increment) || increment > std::numeric_limits<uint64_t>::max() - capacity)
+            return std::nullopt;
+        capacity += increment;
+    }
+    if (capacity > term.contracted_unit_seconds) return std::nullopt;
+    return capacity;
+}
+
 void FundStorageLease(CybouState& state, const cybou::Hash256& publication_id, const AccountId& payer,
     const uint32_t units, const uint8_t replicas, const uint32_t periods, const uint64_t escrow,
     const CybouProtocolParameters& params, const cybou::Hash256& funding_operation_id)

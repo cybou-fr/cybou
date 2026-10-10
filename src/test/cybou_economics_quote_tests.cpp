@@ -10,6 +10,43 @@
 #include <limits>
 
 BOOST_AUTO_TEST_SUITE(cybou_economics_quote_tests)
+BOOST_AUTO_TEST_CASE(accepted_epoch_capacity_ends_on_replacement_and_closure)
+{
+    using namespace cybou;
+    std::array<unsigned char, 32> storage{}, replacement{}, account_bytes{};
+    storage[0] = 1; replacement[0] = 2; account_bytes[0] = 3;
+    const AccountId account = *AccountId::FromBytes(account_bytes);
+    StorageFundedTerm term{.first_period = 10, .end_period = 40, .period_seconds = 86400,
+        .replica_share = 1, .contracted_unit_seconds = 30 * 86400};
+    term.assignments = {
+        StorageAcceptedAssignment{.epoch = 1, .effective_period = 10,
+            .allocations = {{0, storage, account, 1}}},
+        StorageAcceptedAssignment{.epoch = 2, .effective_period = 25,
+            .allocations = {{0, replacement, account, 1}}},
+        StorageAcceptedAssignment{.epoch = 3, .effective_period = 30,
+            .allocations = {{0, storage, account, 1}}}};
+    const auto original = term;
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 0, storage, account, 10, 40), 0U);
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 0, storage, account, 26, 40), 15 * 86400U);
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 0, storage, account, 100, 40), 25 * 86400U);
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 0, replacement, account, 40, 40), 5 * 86400U);
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 0, storage, account, 40, 20), 10 * 86400U);
+    BOOST_CHECK_EQUAL(*ComputeAcceptedStorageCapacity(term, 1, storage, account, 40, 40), 0U);
+    BOOST_CHECK(term == original);
+    // Capacity alone cannot produce rent: a zero evidence counter pays zero.
+    const AssignedStorageBudget budget{1, 2, term.contracted_unit_seconds};
+    BOOST_CHECK_EQUAL(*ComputeAssignedStoragePayout(budget, 0, 0), 0U);
+    BOOST_CHECK_EQUAL(*ComputeAssignedStoragePayout(budget, 15 * 86400, 0), 0U);
+    BOOST_CHECK(!ComputeAcceptedStorageCapacity(term, 0, storage, account, 9, 40));
+    term.assignments[1].effective_period = 9;
+    BOOST_CHECK(!ComputeAcceptedStorageCapacity(term, 0, storage, account, 40, 40));
+    term = original;
+    term.assignments[0].allocations.push_back(term.assignments[0].allocations.front());
+    BOOST_CHECK(!ComputeAcceptedStorageCapacity(term, 0, storage, account, 40, 40));
+    term = original;
+    term.period_seconds = std::numeric_limits<uint64_t>::max();
+    BOOST_CHECK(!ComputeAcceptedStorageCapacity(term, 0, storage, account, 40, 40));
+}
 BOOST_AUTO_TEST_CASE(cost_model_chunk_bounds_include_real_root_index_and_data_chunks)
 {
     std::array<unsigned char, 32> binding{};
@@ -304,10 +341,13 @@ BOOST_AUTO_TEST_CASE(exact_publication_quote_matches_consensus_debit_and_conserv
         truncated.pop_back();
         BOOST_CHECK(!cybou::DeserializeCybouState(truncated));
         auto missing_terms = *bytes;
-        missing_terms.resize(missing_terms.size() - 4 - 2 * 112);
+        // Two terms with no declarations/assignments: ID32 + eleven u64 + two u32 counts.
+        constexpr size_t empty_term_bytes{32 + 11 * 8 + 2 * 4};
+        const auto count_offset = bytes->size() - 4 - 2 * empty_term_bytes;
+        BOOST_REQUIRE_EQUAL((*bytes)[count_offset], 2U);
+        missing_terms.resize(count_offset);
         BOOST_CHECK(!cybou::DeserializeCybouState(missing_terms));
         auto oversized_count = *bytes;
-        const auto count_offset = oversized_count.size() - 4 - 2 * 112;
         oversized_count[count_offset] = 3;
         BOOST_CHECK(!cybou::DeserializeCybouState(oversized_count));
         BOOST_CHECK_THROW(cybou::FundStorageLease(state, *publication_id, account, units, params.storage_replica_target,

@@ -78,6 +78,14 @@ inline constexpr size_t MAX_STORAGE_SETTLEMENT_ENTRIES{1024};
 /// \brief Размер одной записи settlement: publication 32 + payout AccountID 32 + amount 8.
 inline constexpr size_t STORAGE_SETTLEMENT_ENTRY_SIZE{32 + 32 + 8};
 
+/// Upper bound on service for one accepted (slot, StorageId, payout) through an
+/// exclusive period boundary. Epoch replacement ends the previous allocation;
+/// closure can shorten a term but never changes its funded B/T. This is capacity,
+/// not evidence of service and never authorizes a payment on its own.
+std::optional<uint64_t> ComputeAcceptedStorageCapacity(const StorageFundedTerm& term,
+    uint8_t slot, const std::array<unsigned char, 32>& storage_id,
+    const AccountId& payout_account, uint64_t through_period, uint64_t closure_period);
+
 /// \brief Одна выплата provider'у за проверенное хранение по аренде публикации.
 struct StorageSettlementEntry {
     cybou::Hash256 publication_id; ///< Ключ аренды.
