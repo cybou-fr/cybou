@@ -145,6 +145,9 @@ consumer now resolves finalized ACTIVATE and retained PREPARE directly from the
 Full Node. Durable observation/interval collection now derives canonical scopes
 and revalidates the active epoch before commit; historical source-proof resolution,
 payout preparation and production scheduling/dispatch still require integration.
+Historical interval verification now resolves accepted epochs and exact retained
+observation pairs, with compact local references and original fingerprints;
+canonical complete-term PAY preparation remains the next consumer gap.
 This checkpoint must not be deployed; it does not close the vertical-slice
 acceptance below. In particular, the two-node PAY regression uses PoA-attested
 service totals, not the requested end-to-end collector integration.

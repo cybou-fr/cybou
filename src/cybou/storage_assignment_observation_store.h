@@ -53,5 +53,12 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorag
     const ChunkId& chunk, std::uint8_t slot, std::span<const unsigned char> receipt,
     std::uint32_t stored_size, std::uint64_t observed_at_utc, std::uint64_t verified_through_utc,
     std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
+/// Reconstructs the exact retained observation pair and period-slice fingerprint,
+/// checks both records/receipts/audit hashes and canonical historical time bounds.
+/// GET remains the trusted collector assertion over the supplied exact chunk bytes.
+/// Does not infer service from time, accept missing proof material or issue PAY.
+bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntime& runtime,
+    const Hash256& funding, const Hash256& activation, const ChunkId& chunk, std::uint8_t slot,
+    const StorageAssignmentInterval& interval, std::span<const unsigned char> reference_bytes);
 }
 #endif

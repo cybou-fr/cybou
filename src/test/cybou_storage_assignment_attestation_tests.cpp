@@ -366,6 +366,28 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         BOOST_REQUIRE(observe(72000)); BOOST_CHECK_EQUAL(canonical_transport.gets, gets_before_eighth + 1);
         BOOST_REQUIRE(observe(75600));
         BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 61200U);
+        const auto claims = LoadStorageFundedSlotClaims(*f.db, scope); BOOST_REQUIRE(claims);
+        BOOST_REQUIRE(!claims->empty());
+        for (const auto& claim : *claims) {
+            BOOST_CHECK(VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
+                chunk, allocation.slot, claim.interval, f.ciphertext));
+            BOOST_CHECK(VerifyCanonicalStorageInterval(*f.db, *verifier.runtime, *publication_id, active_id,
+                chunk, allocation.slot, claim.interval, f.ciphertext));
+        }
+        auto bad_interval = claims->front().interval; ++bad_interval.end_utc;
+        BOOST_CHECK(!VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
+            chunk, allocation.slot, bad_interval, f.ciphertext));
+        const auto proof_key = "storage/assignment-observations/" + Hash256{std::span<const unsigned char,32>{resolved->plan.commitment}}.GetHex() +
+            '/' + std::to_string(allocation.slot) + "/interval-proof/" + Hash256{std::span<const unsigned char,32>{claims->front().interval.proof_commitment}}.GetHex();
+        const auto original_proof = f.db->Get(proof_key); BOOST_REQUIRE(original_proof);
+        BOOST_REQUIRE(f.db->Erase(proof_key));
+        BOOST_CHECK(!VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
+            chunk, allocation.slot, claims->front().interval, f.ciphertext));
+        auto corrupt_proof = *original_proof; corrupt_proof.back() ^= 1;
+        BOOST_REQUIRE(f.db->Put(proof_key, corrupt_proof));
+        BOOST_CHECK(!VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
+            chunk, allocation.slot, claims->front().interval, f.ciphertext));
+        BOOST_REQUIRE(f.db->Put(proof_key, *original_proof));
         BOOST_CHECK(f.service.runtime->GetStateRoot() == root_before_checks);
     }
 
@@ -432,6 +454,17 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     BOOST_CHECK_EQUAL(closed.escrow_onboarding + closed.escrow_locked, 0U);
     for (const auto& [account, balance] : provider_before)
         BOOST_CHECK_EQUAL(final.state->accounts.at(account).onboarding_system_balance, balance + 1);
+    const auto historical = ResolveCanonicalStorageHistory(*f.service.runtime, *publication_id, activation_id, chunk);
+    BOOST_REQUIRE(historical);
+    BOOST_CHECK(!ResolveCanonicalStorageAssignment(*f.service.runtime, *publication_id, activation_id, chunk));
+    const auto historical_slot = term.assignments[0].allocations.front().slot;
+    const StorageAssignmentEvidenceScope historical_scope{historical->plan, historical_slot,
+        historical->term_start_utc, historical->period_seconds};
+    const auto historical_claims = LoadStorageFundedSlotClaims(*f.db, historical_scope); BOOST_REQUIRE(historical_claims);
+    BOOST_REQUIRE(!historical_claims->empty());
+    for (const auto& claim : *historical_claims)
+        BOOST_CHECK(VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, activation_id,
+            chunk, historical_slot, claim.interval, f.ciphertext));
     const auto final_root = f.service.runtime->GetStateRoot();
     journal.reset(); f.db.reset();
     f.db = std::make_unique<PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");

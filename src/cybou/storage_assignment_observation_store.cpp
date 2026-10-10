@@ -267,7 +267,13 @@ std::optional<StoredStorageAssignmentObservation> ObserveService(
             proof.U64(scope.term_start_utc); proof.U64(scope.period_seconds);
             proof.U64(interval.period); proof.U64(start); proof.U64(end);
             const auto proof_bytes = proof.Take();
+            BinaryWriter pair;
+            pair.U64(previous->observed_at_utc); pair.U64(time);
+            pair.U64(scope.term_start_utc); pair.U64(scope.period_seconds);
+            pair.U64(interval.period); pair.U64(start); pair.U64(end);
+            const auto pair_bytes = pair.Take();
             if (!crypto::ComputeSha256({std::span<const unsigned char>{proof_bytes}}, interval.proof_commitment.data()) ||
+                !db.Put(prefix + "/interval-proof/" + Hash256{std::span<const unsigned char,32>{interval.proof_commitment}}.GetHex(), pair_bytes) ||
                 AppendStorageAssignmentEvidence(db, scope, interval, through) != StorageEvidenceAppendResult::ADDED) return std::nullopt;
             start = end;
         }
@@ -350,5 +356,65 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorag
     const StorageAssignmentEvidenceScope scope{resolved->plan, slot, resolved->term_start_utc, resolved->period_seconds};
     return ObserveService(db, transport, provider, runtime.GetNetworkGenesis(), assignment,
         slot, receipt, size, time, through, expected, force_full, scope);
+}
+
+bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntime& runtime,
+    const Hash256& funding, const Hash256& activation, const ChunkId& chunk, uint8_t slot,
+    const StorageAssignmentInterval& interval, std::span<const unsigned char> reference)
+{
+    const auto resolved = ResolveCanonicalStorageHistory(runtime, funding, activation, chunk);
+    if (!resolved || slot >= resolved->plan.selected.size()) return false;
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost() || !db.IsUnlocked() ||
+        LoadStorageAssignment(db, resolved->plan.context) != resolved->plan) return false;
+    CanonicalObservation assignment{resolved->plan, *resolved, &runtime, funding, activation};
+    const auto prefix = Prefix(assignment, slot);
+    const auto bytes = db.Get(prefix + "/interval-proof/" + Hash256{std::span<const unsigned char,32>{interval.proof_commitment}}.GetHex());
+    if (!bytes) return false;
+    try {
+        BinaryReader in{*bytes, 56};
+        const auto previous_time = in.U64(), current_time = in.U64();
+        if (in.U64() != resolved->term_start_utc || in.U64() != resolved->period_seconds ||
+            in.U64() != interval.period || in.U64() != interval.start_utc || in.U64() != interval.end_utc) return false;
+        in.Finish();
+        const auto previous_bytes = db.Get(prefix + '/' + std::to_string(previous_time));
+        const auto current_bytes = db.Get(prefix + '/' + std::to_string(current_time));
+        if (!previous_bytes || !current_bytes) return false;
+        BinaryWriter proof;
+        proof.Bytes(*previous_bytes, 16384); proof.Bytes(*current_bytes, 16384);
+        proof.U64(resolved->term_start_utc); proof.U64(resolved->period_seconds);
+        proof.U64(interval.period); proof.U64(interval.start_utc); proof.U64(interval.end_utc);
+        const auto proof_bytes = proof.Take();
+        StorageAssignmentId fingerprint{};
+        if (!crypto::ComputeSha256({std::span<const unsigned char>{proof_bytes}}, fingerprint.data()) ||
+            fingerprint != interval.proof_commitment) return false;
+        const auto previous = Decode(*previous_bytes), current = Decode(*current_bytes);
+        if (!previous || !current || previous->observed_at_utc != previous_time || current->observed_at_utc != current_time) return false;
+        if (!previous || !current || !Verify(runtime.GetNetworkGenesis(), assignment, slot, *previous, reference) ||
+            !Verify(runtime.GetNetworkGenesis(), assignment, slot, *current, reference) ||
+            previous->observed_at_utc < resolved->effective_start_utc || current->observed_at_utc > resolved->end_utc ||
+            current->observed_at_utc <= previous->observed_at_utc ||
+            current->observed_at_utc - previous->observed_at_utc > STORAGE_ASSIGNMENT_MAX_SERVICE_GAP_SECONDS ||
+            interval.period < resolved->plan.context.term_start || interval.period >= resolved->plan.context.term_end) return false;
+        if (interval.period - resolved->plan.context.term_start >=
+            (std::numeric_limits<uint64_t>::max() - resolved->term_start_utc) / resolved->period_seconds) return false;
+        const StorageAssignmentEvidenceScope scope{resolved->plan, slot, resolved->term_start_utc, resolved->period_seconds};
+        const auto claims = LoadStorageFundedSlotClaims(db, scope);
+        if (!claims || std::none_of(claims->begin(), claims->end(), [&](const auto& claim) {
+            return claim.assignment == resolved->plan.commitment && claim.interval == interval;
+        })) return false;
+        const auto period_start = resolved->term_start_utc +
+            (interval.period - resolved->plan.context.term_start) * resolved->period_seconds;
+        if (interval.start_utc != std::max(previous->observed_at_utc, period_start) ||
+            interval.end_utc != std::min(current->observed_at_utc, period_start + resolved->period_seconds) ||
+            interval.end_utc <= interval.start_utc) return false;
+        const auto index = Index(db, prefix);
+        if (!index) return false;
+        const auto pos = std::lower_bound(index->begin(), index->end(), previous->observed_at_utc);
+        if (pos == index->end() || *pos != previous->observed_at_utc || std::next(pos) == index->end() ||
+            *std::next(pos) != current->observed_at_utc) return false;
+        return true;
+    } catch (const std::invalid_argument&) { return false;
+    } catch (const std::length_error&) { return false; }
 }
 }

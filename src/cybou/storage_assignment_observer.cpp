@@ -63,8 +63,8 @@ std::optional<StorageAssignmentObservation> ObserveAssignedStorageReplica(
     return ObservePlan(transport, provider, assignment.plan, slot, receipt, size, expected, force_full);
 }
 
-std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
-    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk)
+static std::optional<CanonicalStorageAssignment> ResolveAssignment(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk, bool historical)
 {
     const auto snapshot = runtime.GetStore().GetStateSnapshot();
     if (!snapshot) return std::nullopt;
@@ -80,12 +80,15 @@ std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
     if (!action || action->action != StorageSettlementAction::ACTIVATE ||
         std::find(action->manifest.begin(), action->manifest.end(), chunk) == action->manifest.end()) return std::nullopt;
     for (const auto& [publication, lease] : state.leases) {
-        if (!state.publications.contains(publication) ||
-            state.settlement.next_period >= lease.end_period) continue;
+        if (!historical && (!state.publications.contains(publication) ||
+            state.settlement.next_period >= lease.end_period)) continue;
         for (const auto& term : lease.funded_terms) {
             if (term.funding_operation_id != funding || term.assignments.empty() ||
-                state.settlement.next_period < term.first_period || state.settlement.next_period >= term.end_period) continue;
-            const auto& accepted = term.assignments.back(); // Superseded epochs cannot receive new checks.
+                state.settlement.next_period < term.first_period || (!historical && state.settlement.next_period >= term.end_period)) continue;
+            const auto found = std::find_if(term.assignments.begin(), term.assignments.end(),
+                [&](const auto& a) { return a.operation_id == activation; });
+            if (found == term.assignments.end() || (!historical && found != std::prev(term.assignments.end()))) return std::nullopt;
+            const auto& accepted = *found;
             if (accepted.operation_id != activation || accepted.preparation_id != action->preparation_id ||
                 accepted.effective_period > state.settlement.next_period) return std::nullopt;
             const auto declaration = std::find_if(term.declarations.begin(), term.declarations.end(),
@@ -112,7 +115,9 @@ std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
             const auto elapsed = (state.settlement.next_period - term.first_period) * seconds;
             if (state.settlement.next_period_start_utc <= elapsed) return std::nullopt;
             const auto anchor = state.settlement.next_period_start_utc - elapsed;
-            const auto closure = std::min(term.end_period, lease.end_period);
+            auto closure = std::min(term.end_period, lease.end_period);
+            if (std::next(found) != term.assignments.end()) closure = std::min(closure, std::next(found)->effective_period);
+            if (closure <= accepted.effective_period) return std::nullopt;
             if (closure - term.first_period > (std::numeric_limits<uint64_t>::max() - anchor) / seconds)
                 return std::nullopt;
             return CanonicalStorageAssignment{*plan, anchor,
@@ -122,6 +127,14 @@ std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
     }
     return std::nullopt;
 }
+
+std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk)
+{ return ResolveAssignment(runtime, funding, activation, chunk, false); }
+
+std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageHistory(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk)
+{ return ResolveAssignment(runtime, funding, activation, chunk, true); }
 
 std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
     CybouNodeRuntime& runtime, StorageTransport& transport, const StorageEndpoint& provider,

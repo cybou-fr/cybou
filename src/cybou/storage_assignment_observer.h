@@ -40,6 +40,11 @@ struct CanonicalStorageAssignment {
 std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
     CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk);
 
+/// Historical read-only scope ends at replacement/closure. Never authorizes new
+/// observations; raw/durable collection always uses the active-only resolver.
+std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageHistory(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk);
+
 /// Resolves the exact finalized ACTIVATE manifest and accepted PREPARE bindings
 /// from this Full Node, never a caller-created historical registry or signature.
 /// Only the active term/latest epoch can receive new observations. This raw I/O

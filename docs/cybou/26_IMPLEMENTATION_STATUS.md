@@ -8,6 +8,43 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Canonical historical interval verification (2026-10-11)
+
+Collector completion now atomically retains a compact 56-byte observation-pair
+reference with each credited interval: two observed UTC values, term anchor,
+period seconds, period number and slice bounds (seven LE u64 values). Receipts
+and observation records remain stored once. Recovery loads the exact two source
+records and reconstructs the existing observation-pair SHA-256 fingerprint; no
+hash domain, receipt format, wire, database or canonical field changes.
+
+VerifyCanonicalStorageInterval requires the exact frozen plan, shared/local claim
+agreement, both indexed adjacent observation records, their receipts and audit
+hashes against exact chunk bytes, a positive <=24-hour gap, exact period slicing
+and historical epoch time bounds. Missing pair metadata/source records, corrupted
+bytes, nonmatching fingerprints or interval arguments fail without inventing zero
+service or reconstructing an unavailable commitment from elapsed time. GET remains
+the trusted collector assertion, not a provider-signed proof of custody. The pair
+reference is local retained metadata, not proof against a malicious key-holding
+collector that can rewrite its entire authenticated local journal.
+
+ResolveCanonicalStorageHistory permits read-only accepted epochs after replacement
+or lease closure, bounded by the next epoch/closure. New observations still use
+only the active resolver. Both reuse the exact finalized ACTIVATE body and accepted
+PREPARE inputs; historical resolution cannot authorize new checks or payments.
+No old journal is migrated or silently repaired: missing pair references fail.
+Verification: rebuilt core; all 53 selected assignment-attestation/StorageService
+cases passed, 2133/2133 assertions; 278 other core cases were not selected. The
+fixture verifies retained pairs on two independent Full Nodes, rejects changed
+slice arguments/missing/corrupt references, and verifies service after lease
+expiry while the active resolver rejects new checks. Canonical roots remain
+unchanged. Transport and UTC are isolated fixture inputs, not physical/VPS proof.
+Ignored final logs: artifacts/economics-canonical-proof-build-final.txt and
+artifacts/economics-canonical-proof-tests-final.txt; preceding checked runs are
+retained separately. No test is disabled.
+
+The complete canonical quote, PAY preparation and production scheduling/dispatch
+remain open, so this does not close DOC-005/006/020 or physical Beta acceptance.
+
 ### Durable canonical observation collector (2026-10-11)
 
 ObserveAndStoreCanonicalStorageReplica now derives the assignment and immutable
