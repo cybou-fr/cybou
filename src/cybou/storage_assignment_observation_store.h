@@ -43,5 +43,15 @@ std::optional<StoredStorageAssignmentObservation> LoadAssignedStorageObservation
     PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
     const AttestedStorageAssignment& assignment, std::uint8_t slot,
     std::uint64_t observed_at_utc, std::span<const unsigned char> reference_bytes);
+/// Durable canonical collector: derives scope/time from finalized state, journals
+/// intent before I/O and re-resolves the active epoch before atomic completion.
+/// Uses the same first/eighth-success GET and two-success/max-24-hour gap policy.
+/// Caller supplies observation UTC; this does not schedule checks or issue PAY.
+std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorageReplica(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, StorageTransport& transport,
+    const StorageEndpoint& provider, const Hash256& funding, const Hash256& activation,
+    const ChunkId& chunk, std::uint8_t slot, std::span<const unsigned char> receipt,
+    std::uint32_t stored_size, std::uint64_t observed_at_utc, std::uint64_t verified_through_utc,
+    std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
 }
 #endif

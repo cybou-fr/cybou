@@ -142,8 +142,9 @@ without migration. The interval-reference list is now frozen atomically alongsid
 PAY and checked against evidence_root during recovery; loading/verifying its
 source observations against canonical assignments remains open. The raw GET/audit
 consumer now resolves finalized ACTIVATE and retained PREPARE directly from the
-Full Node; durable observation/interval and payout preparation consumers still
-require consolidation onto this canonical provenance path.
+Full Node. Durable observation/interval collection now derives canonical scopes
+and revalidates the active epoch before commit; historical source-proof resolution,
+payout preparation and production scheduling/dispatch still require integration.
 This checkpoint must not be deployed; it does not close the vertical-slice
 acceptance below. In particular, the two-node PAY regression uses PoA-attested
 service totals, not the requested end-to-end collector integration.

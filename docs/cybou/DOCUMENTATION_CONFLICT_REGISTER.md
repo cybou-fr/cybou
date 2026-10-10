@@ -140,7 +140,9 @@ and root-checked on recovery. Collector source-proof/canonical assignment
 provenance and scalable batches still block DOC-005/006/020 closure; no live migration is authorized.
 The raw replica observer now resolves canonical PREPARE/ACTIVATE and performs
 receipt-bound GET/audit without a caller historical registry/per-chunk signature.
-Durable collector intervals and the payout consumer still require that integration.
+Durable collector intervals now share the intent/success/gap/GET policy with
+canonical scope and active-epoch revalidation. Historical source-proof resolution,
+the payout consumer and production dispatch remain open.
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative

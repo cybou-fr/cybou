@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <cybou/storage_assignment_observation_store.h>
 #include <cybou/binary_codec.h>
+#include <cybou/node_runtime.h>
 #include <cybou/encrypted_chunk.h>
 #include <cybou/crypto/sha256.h>
 #include <algorithm>
@@ -10,7 +11,8 @@
 namespace cybou {
 namespace {
 constexpr std::size_t MAX_RECEIPT_BYTES{8192};
-std::string Prefix(const AttestedStorageAssignment& assignment, std::uint8_t slot)
+template<typename Assignment>
+std::string Prefix(const Assignment& assignment, std::uint8_t slot)
 {
     return "storage/assignment-observations/" +
         Hash256{std::span<const unsigned char, 32>{assignment.plan.commitment}}.GetHex() +
@@ -22,6 +24,44 @@ bool AssignmentValid(PrivateApplicationStore& db, const VerifiedNetworkGenesis& 
     return db.IsUnlocked() && slot < assignment.plan.selected.size() &&
         LoadStorageAssignmentAttestation(db, genesis, assignment.plan.context) == assignment;
 }
+struct CanonicalObservation {
+    StorageAssignmentPlan plan;
+    CanonicalStorageAssignment resolved;
+    CybouNodeRuntime* runtime;
+    Hash256 funding, activation;
+};
+bool AssignmentValid(PrivateApplicationStore& db, const VerifiedNetworkGenesis&,
+    const CanonicalObservation& assignment, uint8_t slot)
+{
+    const auto current = ResolveCanonicalStorageAssignment(*assignment.runtime,
+        assignment.funding, assignment.activation, assignment.plan.context.chunk);
+    return current && *current == assignment.resolved && slot < assignment.plan.selected.size() &&
+        db.IsUnlocked() && LoadStorageAssignment(db, assignment.plan.context) == assignment.plan;
+}
+bool ReceiptValid(const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
+    uint8_t slot, std::span<const unsigned char> receipt, uint32_t size)
+{ return VerifyAssignedStorageReceipt(genesis, assignment, slot, receipt, size); }
+bool ReceiptValid(const VerifiedNetworkGenesis&, const CanonicalObservation& assignment,
+    uint8_t slot, std::span<const unsigned char> receipt, uint32_t size)
+{
+    if (!size || slot >= assignment.plan.selected.size()) return false;
+    const auto& context = assignment.plan.context;
+    const auto storage = VerifyStorageReceipt(receipt,
+        Hash256{std::span<const unsigned char,32>{context.network_binding}},
+        Hash256{std::span<const unsigned char,32>{context.publication}}, context.chunk, size);
+    return storage && *storage == assignment.plan.selected[slot].storage_id;
+}
+std::optional<StorageAssignmentObservation> Observe(StorageTransport& transport, const StorageEndpoint& provider,
+    const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
+    uint8_t slot, std::span<const unsigned char> receipt, uint32_t size,
+    std::span<const unsigned char> reference, bool full)
+{ return ObserveAssignedStorageReplica(transport, provider, genesis, assignment, slot, receipt, size, reference, full); }
+std::optional<StorageAssignmentObservation> Observe(StorageTransport& transport, const StorageEndpoint& provider,
+    const VerifiedNetworkGenesis&, const CanonicalObservation& assignment,
+    uint8_t slot, std::span<const unsigned char> receipt, uint32_t size,
+    std::span<const unsigned char> reference, bool full)
+{ return ObserveCanonicalStorageReplica(*assignment.runtime, transport, provider,
+    assignment.funding, assignment.activation, assignment.plan.context.chunk, slot, receipt, size, reference, full); }
 std::optional<std::vector<std::uint64_t>> Index(PrivateApplicationStore& db, const std::string& prefix)
 {
     const auto bytes = db.Get(prefix + "/index");
@@ -76,7 +116,8 @@ std::optional<StoredStorageAssignmentObservation> Decode(std::span<const unsigne
     } catch (const std::invalid_argument&) { return std::nullopt;
     } catch (const std::length_error&) { return std::nullopt; }
 }
-bool Verify(const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
+template<typename Assignment>
+bool Verify(const VerifiedNetworkGenesis& genesis, const Assignment& assignment,
     std::uint8_t slot, const StoredStorageAssignmentObservation& record, std::span<const unsigned char> reference)
 {
     const auto& o = record.observation;
@@ -84,12 +125,29 @@ bool Verify(const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignme
         reference.size() != record.stored_size || ComputeChunkId(reference) != assignment.plan.context.chunk ||
         o.assignment_commitment != assignment.plan.commitment || o.replica_slot != slot ||
         slot >= assignment.plan.selected.size() || o.storage_id != assignment.plan.selected[slot].storage_id ||
-        !VerifyAssignedStorageReceipt(genesis, assignment, slot, o.receipt, record.stored_size)) return false;
+        !ReceiptValid(genesis, assignment, slot, o.receipt, record.stored_size)) return false;
     if (o.kind == StorageAssignmentObservationKind::FULL_GET) return !o.challenge && !o.answer;
     if (o.kind != StorageAssignmentObservationKind::OFFSET_AUDIT || !o.challenge || !o.answer ||
         !o.answer->held || o.challenge->chunk_id != assignment.plan.context.chunk) return false;
     const auto hash = ComputeStorageAuditResponse(reference, o.challenge->byte_offset, o.challenge->nonce);
     return hash && *hash == o.answer->response_hash;
+}
+
+template<typename Assignment>
+std::optional<StoredStorageAssignmentObservation> LoadObservation(
+    PrivateApplicationStore& db, const VerifiedNetworkGenesis& genesis,
+    const Assignment& assignment, uint8_t slot, uint64_t observed_at_utc,
+    std::span<const unsigned char> reference_bytes)
+{
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!AssignmentValid(db, genesis, assignment, slot)) return std::nullopt;
+    const auto prefix = Prefix(assignment, slot);
+    const auto index = Index(db, prefix);
+    if (!index || !std::binary_search(index->begin(), index->end(), observed_at_utc)) return std::nullopt;
+    const auto bytes = db.Get(prefix + '/' + std::to_string(observed_at_utc));
+    const auto record = bytes ? Decode(*bytes) : std::nullopt;
+    return record && record->observed_at_utc == observed_at_utc &&
+        Verify(genesis, assignment, slot, *record, reference_bytes) ? record : std::nullopt;
 }
 
 struct ServiceCheckpoint {
@@ -116,9 +174,10 @@ std::optional<ServiceCheckpoint> DecodeCheckpoint(std::span<const unsigned char>
     } catch (const std::length_error&) { return std::nullopt; }
 }
 
+template<typename Assignment>
 std::optional<StoredStorageAssignmentObservation> ObserveService(
     PrivateApplicationStore& db, StorageTransport& transport, const StorageEndpoint& provider,
-    const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
+    const VerifiedNetworkGenesis& genesis, const Assignment& assignment,
     std::uint8_t slot, std::span<const unsigned char> receipt, std::uint32_t size,
     std::uint64_t time, std::uint64_t through, std::span<const unsigned char> reference,
     bool force_full, const StorageAssignmentEvidenceScope& scope)
@@ -130,7 +189,7 @@ std::optional<StoredStorageAssignmentObservation> ObserveService(
         c.term_end - c.term_start > (std::numeric_limits<std::uint64_t>::max() - scope.term_start_utc) / scope.period_seconds ||
         time < scope.term_start_utc || time > scope.term_start_utc + (c.term_end - c.term_start) * scope.period_seconds ||
         slot >= assignment.plan.selected.size() || provider.storage_id != assignment.plan.selected[slot].storage_id ||
-        !VerifyAssignedStorageReceipt(genesis, assignment, slot, receipt, size) ||
+        !ReceiptValid(genesis, assignment, slot, receipt, size) ||
         (!reference.empty() && (reference.size() != size || ComputeChunkId(reference) != c.chunk))) return std::nullopt;
     const auto prefix = Prefix(assignment, slot);
     const auto checkpoint_key = prefix + "/service-checkpoint";
@@ -153,7 +212,7 @@ std::optional<StoredStorageAssignmentObservation> ObserveService(
         // Exact committed retry is read-only; do not issue a fresh random audit.
         if (std::binary_search(index->begin(), index->end(), time)) {
             if (!prior.pending && prior.last_success == time)
-                return LoadAssignedStorageObservation(db, genesis, assignment, slot, time, reference);
+                return LoadObservation(db, genesis, assignment, slot, time, reference);
             return std::nullopt;
         }
         if (time <= prior.last_attempt || index->size() >= MAX_STORAGE_ASSIGNMENT_OBSERVATIONS) return std::nullopt;
@@ -172,7 +231,7 @@ std::optional<StoredStorageAssignmentObservation> ObserveService(
     }
     const bool required_get = prior.successes == 0 ||
         prior.successes % STORAGE_ASSIGNMENT_FULL_GET_EVERY_SUCCESSES == STORAGE_ASSIGNMENT_FULL_GET_EVERY_SUCCESSES - 1;
-    const auto observation = ObserveAssignedStorageReplica(transport, provider, genesis, assignment,
+    const auto observation = Observe(transport, provider, genesis, assignment,
         slot, receipt, size, reference, force_full || required_get);
     PrivateApplicationStore::Batch complete{db};
     if (!complete.IsOutermost() || !AssignmentValid(db, genesis, assignment, slot) ||
@@ -269,14 +328,27 @@ std::optional<StoredStorageAssignmentObservation> LoadAssignedStorageObservation
     const AttestedStorageAssignment& assignment, const std::uint8_t slot,
     const std::uint64_t observed_at_utc, const std::span<const unsigned char> reference_bytes)
 {
-    PrivateApplicationStore::Batch snapshot{db};
-    if (!AssignmentValid(db, genesis, assignment, slot)) return std::nullopt;
-    const auto prefix = Prefix(assignment, slot);
-    const auto index = Index(db, prefix);
-    if (!index || !std::binary_search(index->begin(), index->end(), observed_at_utc)) return std::nullopt;
-    const auto bytes = db.Get(prefix + '/' + std::to_string(observed_at_utc));
-    const auto record = bytes ? Decode(*bytes) : std::nullopt;
-    return record && record->observed_at_utc == observed_at_utc &&
-        Verify(genesis, assignment, slot, *record, reference_bytes) ? record : std::nullopt;
+    return LoadObservation(db, genesis, assignment, slot, observed_at_utc, reference_bytes);
+}
+
+std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorageReplica(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, StorageTransport& transport,
+    const StorageEndpoint& provider, const Hash256& funding, const Hash256& activation,
+    const ChunkId& chunk, uint8_t slot, std::span<const unsigned char> receipt, uint32_t size,
+    uint64_t time, uint64_t through, std::span<const unsigned char> expected, bool force_full)
+{
+    const auto resolved = ResolveCanonicalStorageAssignment(runtime, funding, activation, chunk);
+    if (!resolved || time < resolved->effective_start_utc || time > resolved->end_utc || time > through ||
+        slot >= resolved->plan.selected.size()) return std::nullopt;
+    {
+        PrivateApplicationStore::Batch check{db};
+        if (!check.IsOutermost() || !db.IsUnlocked()) return std::nullopt;
+    }
+    CanonicalObservation assignment{resolved->plan, *resolved, &runtime, funding, activation};
+    if (!ReceiptValid(runtime.GetNetworkGenesis(), assignment, slot, receipt, size) ||
+        !FreezeStorageAssignment(db, resolved->plan)) return std::nullopt;
+    const StorageAssignmentEvidenceScope scope{resolved->plan, slot, resolved->term_start_utc, resolved->period_seconds};
+    return ObserveService(db, transport, provider, runtime.GetNetworkGenesis(), assignment,
+        slot, receipt, size, time, through, expected, force_full, scope);
 }
 }

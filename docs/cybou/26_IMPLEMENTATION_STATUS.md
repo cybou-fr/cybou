@@ -8,6 +8,44 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Durable canonical observation collector (2026-10-11)
+
+ObserveAndStoreCanonicalStorageReplica now derives the assignment and immutable
+term UTC anchor/period, effective-epoch start and lease closure from finalized
+Full Node state. Checked arithmetic rejects impossible anchors/overflow. It freezes
+the deterministic plan in existing app.db without creating a per-chunk attestation
+signature or requesting caller historical keys. Calls outside the effective funded
+window, invalid receipts and enclosing store transactions fail before collection.
+
+The preceding service collector is shared rather than copied: durable attempt
+before transport; no DB transaction spans I/O; active canonical epoch is re-resolved
+before atomic observation/interval/success-counter completion. First and every
+eighth successful check require full GET. Failure/crash intent breaks continuity
+without resetting the successful-check ordinal; at most 24 hours between successful
+checks can be credited. Exact committed retries perform no I/O. The same shared
+funded-slot exclusion journal and local mirror retain interval references; failure
+or corruption never evicts obligations or becomes zero service.
+
+Verification: rebuilt core; all 53 selected assignment-attestation/StorageService
+cases passed, 2100/2100 assertions; the other 278 core cases were not selected.
+The canonical fixture verifies zero first-check credit, a two-success 12-hour
+interval, failure gaps, app.db reopen/exact retry without I/O, and failed eighth
+GET followed by required full GET. It retains 61200 seconds instead of counting
+unverified gaps, and canonical roots/balances remain unchanged. Existing component
+policy regressions use the same collector implementation. These are in-memory
+transport tests, not VPS/physical custody or scheduler evidence. Ignored logs:
+artifacts/economics-canonical-collector-build.txt, build-checked.txt and
+artifacts/economics-canonical-collector-tests.txt (full prefix for build-checked).
+
+This closes canonical durable observation input, not the entire payment path.
+Caller UTC and authenticated transport remain trusted local inputs. The API does
+not itself schedule the planned 12-hour checks, infer physical continuity, prepare
+PAY, or change canonical service/paid/balances. Historical epoch/source-proof
+resolution and canonical quote/production dispatch remain open. The preceding
+attestation collector API remains temporary component comparison coverage until
+consumer consolidation; no duplicate permanent authority path is accepted.
+No live deployment, DB migration or retention horizon is authorized.
+
 ### Canonical assignment replica observations (2026-10-11)
 
 ObserveCanonicalStorageReplica now resolves the exact finalized ACTIVATE body

@@ -4,6 +4,7 @@
 #include <cybou/encrypted_chunk.h>
 #include <cybou/node_runtime.h>
 #include <algorithm>
+#include <limits>
 #include <openssl/rand.h>
 
 namespace cybou {
@@ -62,11 +63,8 @@ std::optional<StorageAssignmentObservation> ObserveAssignedStorageReplica(
     return ObservePlan(transport, provider, assignment.plan, slot, receipt, size, expected, force_full);
 }
 
-std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
-    CybouNodeRuntime& runtime, StorageTransport& transport, const StorageEndpoint& provider,
-    const Hash256& funding, const Hash256& activation, const ChunkId& chunk, uint8_t slot,
-    std::span<const unsigned char> receipt, uint32_t size,
-    std::span<const unsigned char> expected, bool force_full)
+std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk)
 {
     const auto snapshot = runtime.GetStore().GetStateSnapshot();
     if (!snapshot) return std::nullopt;
@@ -82,7 +80,7 @@ std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
     if (!action || action->action != StorageSettlementAction::ACTIVATE ||
         std::find(action->manifest.begin(), action->manifest.end(), chunk) == action->manifest.end()) return std::nullopt;
     for (const auto& [publication, lease] : state.leases) {
-        if (!state.publications.contains(publication) || slot >= lease.replicas ||
+        if (!state.publications.contains(publication) ||
             state.settlement.next_period >= lease.end_period) continue;
         for (const auto& term : lease.funded_terms) {
             if (term.funding_operation_id != funding || term.assignments.empty() ||
@@ -108,9 +106,30 @@ std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
             }
             const auto plan = PrepareStorageAssignment(context, std::move(eligible));
             if (!plan) return std::nullopt;
-            return ObservePlan(transport, provider, *plan, slot, receipt, size, expected, force_full);
+            const auto seconds = term.period_seconds;
+            if (!seconds || state.settlement.next_period - term.first_period >
+                std::numeric_limits<uint64_t>::max() / seconds) return std::nullopt;
+            const auto elapsed = (state.settlement.next_period - term.first_period) * seconds;
+            if (state.settlement.next_period_start_utc <= elapsed) return std::nullopt;
+            const auto anchor = state.settlement.next_period_start_utc - elapsed;
+            const auto closure = std::min(term.end_period, lease.end_period);
+            if (closure - term.first_period > (std::numeric_limits<uint64_t>::max() - anchor) / seconds)
+                return std::nullopt;
+            return CanonicalStorageAssignment{*plan, anchor,
+                anchor + (accepted.effective_period - term.first_period) * seconds,
+                anchor + (closure - term.first_period) * seconds, seconds};
         }
     }
     return std::nullopt;
+}
+
+std::optional<StorageAssignmentObservation> ObserveCanonicalStorageReplica(
+    CybouNodeRuntime& runtime, StorageTransport& transport, const StorageEndpoint& provider,
+    const Hash256& funding, const Hash256& activation, const ChunkId& chunk, uint8_t slot,
+    std::span<const unsigned char> receipt, uint32_t size,
+    std::span<const unsigned char> expected, bool force_full)
+{
+    const auto resolved = ResolveCanonicalStorageAssignment(runtime, funding, activation, chunk);
+    return resolved ? ObservePlan(transport, provider, resolved->plan, slot, receipt, size, expected, force_full) : std::nullopt;
 }
 }

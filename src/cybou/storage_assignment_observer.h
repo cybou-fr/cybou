@@ -30,6 +30,16 @@ std::optional<StorageAssignmentObservation> ObserveAssignedStorageReplica(
     const VerifiedNetworkGenesis& genesis, const AttestedStorageAssignment& assignment,
     std::uint8_t slot, std::span<const unsigned char> receipt, std::uint32_t stored_size,
     std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
+struct CanonicalStorageAssignment {
+    StorageAssignmentPlan plan;
+    std::uint64_t term_start_utc{0}, effective_start_utc{0}, end_utc{0}, period_seconds{0};
+    friend bool operator==(const CanonicalStorageAssignment&, const CanonicalStorageAssignment&) = default;
+};
+/// Read-only material from this Full Node's finalized chain/state, not an authority
+/// token supplied by callers. Consumers re-resolve it before committing evidence.
+std::optional<CanonicalStorageAssignment> ResolveCanonicalStorageAssignment(
+    CybouNodeRuntime& runtime, const Hash256& funding, const Hash256& activation, const ChunkId& chunk);
+
 /// Resolves the exact finalized ACTIVATE manifest and accepted PREPARE bindings
 /// from this Full Node, never a caller-created historical registry or signature.
 /// Only the active term/latest epoch can receive new observations. This raw I/O

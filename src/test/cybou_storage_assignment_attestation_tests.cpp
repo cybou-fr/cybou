@@ -329,6 +329,46 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         canonical_transport.missing = false;
     }
 
+    {
+        const auto& allocation = term.assignments[0].allocations.front();
+        const auto active_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
+        const auto resolved = ResolveCanonicalStorageAssignment(*f.service.runtime, *publication_id, active_id, chunk);
+        BOOST_REQUIRE(resolved); BOOST_CHECK_EQUAL(resolved->term_start_utc, 100000U);
+        auto& provider_node = allocation.storage_id == f.proofs[0].storage_id ? *f.service.runtime : *verifier.runtime;
+        const auto receipt = provider_node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+        BOOST_REQUIRE(receipt);
+        StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
+        const StorageAssignmentEvidenceScope scope{resolved->plan, allocation.slot, resolved->term_start_utc, resolved->period_seconds};
+        const auto observe = [&](uint64_t offset) {
+            return ObserveAndStoreCanonicalStorageReplica(*f.db, *f.service.runtime, canonical_transport, endpoint,
+                *publication_id, active_id, chunk, allocation.slot, *receipt, 4, 100000 + offset, 200000, f.ciphertext);
+        };
+        const auto root_before_checks = f.service.runtime->GetStateRoot();
+        const auto initial_gets = canonical_transport.gets;
+        BOOST_REQUIRE(observe(0)); BOOST_CHECK_EQUAL(canonical_transport.gets, initial_gets + 1);
+        BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 0U);
+        BOOST_REQUIRE(observe(43200));
+        BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 43200U);
+        canonical_transport.missing = true; BOOST_CHECK(!observe(46800)); canonical_transport.missing = false;
+        BOOST_REQUIRE(observe(50400));
+        BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 43200U);
+        journal.reset(); f.db.reset();
+        f.db = std::make_unique<PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+        journal = std::make_unique<StorageService>(*f.service.runtime, transport, *f.db, 2);
+        BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 43200U);
+        const auto gets_before_retry = canonical_transport.gets, audits_before_retry = canonical_transport.audits;
+        BOOST_REQUIRE(observe(50400)); // Exact committed retry after reopen does no I/O.
+        BOOST_CHECK_EQUAL(canonical_transport.gets, gets_before_retry);
+        BOOST_CHECK_EQUAL(canonical_transport.audits, audits_before_retry);
+        for (uint64_t time : {54000U, 57600U, 61200U, 64800U}) BOOST_REQUIRE(observe(time));
+        canonical_transport.unavailable = true; BOOST_CHECK(!observe(68400)); canonical_transport.unavailable = false;
+        const auto gets_before_eighth = canonical_transport.gets;
+        BOOST_REQUIRE(observe(72000)); BOOST_CHECK_EQUAL(canonical_transport.gets, gets_before_eighth + 1);
+        BOOST_REQUIRE(observe(75600));
+        BOOST_CHECK_EQUAL(*StorageAssignmentVerifiedSeconds(*f.db, scope, 0), 61200U);
+        BOOST_CHECK(f.service.runtime->GetStateRoot() == root_before_checks);
+    }
+
     // Real PAY finality on both nodes; tiny terms accumulate service before
     // whole CYBOU entitlement. This tests PoA-attested totals, not raw audits.
     const auto activation_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
