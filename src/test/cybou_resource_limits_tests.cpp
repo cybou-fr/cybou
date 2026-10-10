@@ -139,6 +139,35 @@ struct LimitsFixture {
 
 BOOST_AUTO_TEST_SUITE(cybou_resource_limits_tests)
 
+BOOST_AUTO_TEST_CASE(accepted_assignment_state_codec_vectors)
+{
+    // Fixed key/account fixture: byte-layout vectors, independent of randomized runtime identities.
+    LimitsFixture f;
+    const Hash256 publication{91}; ChunkId root{}; root[0] = 7;
+    BOOST_REQUIRE(RecordPublication(f.state, publication, f.account, root, 1, 1));
+    const auto escrow = ComputeStorageLeaseEscrow(f.params, 1, 1, 30); BOOST_REQUIRE(escrow);
+    FundStorageLease(f.state, publication, f.account, 1, 1, 30, *escrow, f.params, publication);
+    auto& term = f.state.leases.at(publication).funded_terms[0];
+    std::array<unsigned char,32> storage{}; storage[0] = 8;
+    term.declarations.push_back({Hash256{93}, 1, 10, {{storage, f.other, 0, 10}}});
+    term.next_assignment_epoch = 2;
+    BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
+    const auto prepared = CybouStateHash(f.state); BOOST_REQUIRE(prepared);
+    BOOST_CHECK_EQUAL(prepared->GetHex(), "1ea29a211823069e662449359a6cdc7961d91fe15b91f30d156925cbb3d943ca");
+    term.assignments.push_back({Hash256{92}, Hash256{93}, Hash256{94}, 1, 0, {{0,storage,f.other,1}}});
+    BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
+    const auto activated = CybouStateHash(f.state); BOOST_REQUIRE(activated);
+    BOOST_CHECK_EQUAL(activated->GetHex(), "ee36e5d86903cc6945f584861b6d9a4f98ee07a076f69853e9bbfdc9dda37843");
+    const auto bytes = SerializeCybouState(f.state); BOOST_REQUIRE(bytes);
+    const auto decoded = DeserializeCybouState(*bytes); BOOST_REQUIRE(decoded);
+    BOOST_CHECK(CybouStateHash(*decoded) == activated);
+    BOOST_CHECK(SerializeCybouState(*decoded) == bytes);
+    auto corrupt = *bytes; corrupt.push_back(0); BOOST_CHECK(!DeserializeCybouState(corrupt));
+    corrupt = *bytes; corrupt.pop_back(); BOOST_CHECK(!DeserializeCybouState(corrupt));
+    corrupt = *bytes; std::fill_n(corrupt.end() - 69 - 4, 4, 255); BOOST_CHECK(!DeserializeCybouState(corrupt));
+    corrupt = *bytes; std::fill_n(corrupt.end() - 4, 4, 0); BOOST_CHECK(!DeserializeCybouState(corrupt));
+}
+
 BOOST_AUTO_TEST_CASE(publications_are_not_limited_by_auth)
 {
     // DEC-274: a T0 Identity publishes beyond the former 5 GiB credit; only the safety bound applies.

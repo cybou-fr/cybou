@@ -202,7 +202,10 @@ StorageSettlementError CybouNodeRuntime::CheckStorageSettlementInputs(const Stor
     std::lock_guard lock(m_chain.mutex);
     const auto loaded = m_chain.store.GetStateSnapshot();
     if (!loaded || !loaded.state) return StorageSettlementError::INVALID_PAYLOAD;
-    return cybou::CheckStorageSettlementInputs(settlement, m_config.network_genesis.GetProtocolParameters(), *loaded.state);
+    const auto head = m_chain.store.GetFinalizedHead();
+    if (!head || head->height == std::numeric_limits<uint64_t>::max()) return StorageSettlementError::INVALID_PAYLOAD;
+    return cybou::CheckStorageSettlementInputs(settlement, m_config.network_genesis.GetProtocolParameters(), *loaded.state,
+        m_network_binding, head->height + 1, head->block_id);
 }
 
 std::optional<StorageSettlement> CybouNodeRuntime::SignStorageSettlement(StorageSettlement settlement)
@@ -211,8 +214,11 @@ std::optional<StorageSettlement> CybouNodeRuntime::SignStorageSettlement(Storage
     if (!m_chain.poa_finalizer || !m_chain.poa_finalizer->SignerEnabled() ||
         m_chain.store.PoaSafetyHalted() || m_chain.poa_finalizer->SafetyHalted()) return std::nullopt;
     const auto loaded = m_chain.store.GetStateSnapshot();
-    if (!loaded || !loaded.state || cybou::CheckStorageSettlementInputs(settlement,
-            m_config.network_genesis.GetProtocolParameters(), *loaded.state) != StorageSettlementError::NONE ||
+    const auto head = m_chain.store.GetFinalizedHead();
+    if (!loaded || !loaded.state || !head || head->height == std::numeric_limits<uint64_t>::max() ||
+        cybou::CheckStorageSettlementInputs(settlement,
+            m_config.network_genesis.GetProtocolParameters(), *loaded.state, m_network_binding,
+            head->height + 1, head->block_id) != StorageSettlementError::NONE ||
         !m_chain.poa_finalizer->SignStorageSettlement(settlement)) return std::nullopt;
     return settlement;
 }

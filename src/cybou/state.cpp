@@ -14,13 +14,14 @@
 #include <map>
 #include <set>
 #include <string_view>
+#include <tuple>
 
 namespace cybou {
 namespace {
 constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
 constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 4};
-constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 10};
+constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 11 + 4 + 4};
 constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -124,7 +125,13 @@ size_t SerializedStateSize(const CybouState& state,
     }
     total_size += 4 + state.publications.size() * PUBLICATION_SIZE;
     total_size += 8 + 8 + 4 + state.leases.size() * LEASE_SIZE;
-    for (const auto& [id, lease] : state.leases) total_size += lease.funded_terms.size() * FUNDED_TERM_SIZE;
+    for (const auto& [id, lease] : state.leases) {
+        total_size += lease.funded_terms.size() * FUNDED_TERM_SIZE;
+        for (const auto& term : lease.funded_terms) {
+            for (const auto& d : term.declarations) total_size += 52 + 80 * d.eligible.size();
+            for (const auto& a : term.assignments) total_size += 116 + 69 * a.allocations.size();
+        }
+    }
     return total_size;
 }
 
@@ -466,7 +473,7 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
         }
     }
     // Аренда: плательщик существует, период непуст и начинается не позже курсора settlement.
-    std::set<cybou::Hash256> funding_ids;
+    std::set<cybou::Hash256> funding_ids, assignment_operation_ids;
     for (const auto& [id, lease] : state.leases) {
         if (id.IsNull() || !state.accounts.contains(lease.payer) || lease.units == 0 || lease.replicas == 0 ||
             lease.replicas > MAX_STORAGE_LEASE_REPLICAS || lease.first_period >= lease.end_period ||
@@ -492,6 +499,47 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
                 term.paid_onboarding > term.initial_onboarding || term.paid_locked > term.initial_locked ||
                 (term.paid_locked != 0 && term.paid_onboarding != term.initial_onboarding))
                 return StateValidationError::INVALID_STORAGE_LEASE;
+            if (!term.next_assignment_epoch || term.declarations.size() > std::numeric_limits<uint32_t>::max() ||
+                term.assignments.size() > std::numeric_limits<uint32_t>::max()) return StateValidationError::INVALID_STORAGE_LEASE;
+            uint64_t prior_epoch{0}, prior_height{0};
+            std::set<Hash256> declaration_ids, activation_ids;
+            for (const auto& d : term.declarations) {
+                if (d.operation_id.IsNull() || !assignment_operation_ids.insert(d.operation_id).second || !declaration_ids.insert(d.operation_id).second || d.epoch <= prior_epoch ||
+                    d.epoch >= term.next_assignment_epoch || !d.height || d.height < prior_height || lease.replicas > 2 || d.eligible.empty() || d.eligible.size() > 20)
+                    return StateValidationError::INVALID_STORAGE_LEASE;
+                prior_epoch = d.epoch; prior_height = d.height;
+                std::set<AccountId> payouts;
+                const StorageAcceptedBinding* prior{nullptr};
+                for (const auto& e : d.eligible) {
+                    if (e.storage_id == std::array<unsigned char,32>{} || e.payout_account == lease.payer ||
+                        !state.accounts.contains(e.payout_account) || e.key_epoch > state.identities.Find(e.payout_account)->key_epoch || e.accepted_height != d.height ||
+                        (prior && !(prior->storage_id < e.storage_id))) return StateValidationError::INVALID_STORAGE_LEASE;
+                    prior = &e; payouts.insert(e.payout_account);
+                }
+                if (payouts.size() < lease.replicas) return StateValidationError::INVALID_STORAGE_LEASE;
+            }
+            if ((term.declarations.empty() && term.next_assignment_epoch != 1) ||
+                (!term.declarations.empty() && term.next_assignment_epoch != prior_epoch + 1)) return StateValidationError::INVALID_STORAGE_LEASE;
+            prior_epoch = 0; uint64_t prior_period{0};
+            for (const auto& a : term.assignments) {
+                const auto d = std::find_if(term.declarations.begin(), term.declarations.end(), [&](const auto& d) { return d.operation_id == a.preparation_id; });
+                if (a.operation_id.IsNull() || a.seed.IsNull() || !assignment_operation_ids.insert(a.operation_id).second || !activation_ids.insert(a.operation_id).second ||
+                    d == term.declarations.end() || a.epoch != d->epoch || a.epoch <= prior_epoch ||
+                    a.effective_period < term.first_period || a.effective_period >= term.end_period || a.effective_period > state.settlement.next_period ||
+                    (!prior_epoch ? false : a.effective_period < prior_period) || a.allocations.empty() ||
+                    a.allocations.size() > 20 * lease.replicas) return StateValidationError::INVALID_STORAGE_LEASE;
+                prior_epoch = a.epoch; prior_period = a.effective_period;
+                std::vector<uint64_t> sums(lease.replicas);
+                const StorageAssignedUnits* prior{nullptr};
+                for (const auto& u : a.allocations) {
+                    if (u.slot >= lease.replicas || !u.units || u.units > lease.units ||
+                        (prior && !(std::tie(prior->slot, prior->storage_id, prior->payout_account) < std::tie(u.slot, u.storage_id, u.payout_account))) ||
+                        std::none_of(d->eligible.begin(), d->eligible.end(), [&](const auto& e) { return e.storage_id == u.storage_id && e.payout_account == u.payout_account; }))
+                        return StateValidationError::INVALID_STORAGE_LEASE;
+                    prior = &u; sums[u.slot] += u.units;
+                }
+                if (std::any_of(sums.begin(), sums.end(), [&](const auto sum) { return sum != lease.units; })) return StateValidationError::INVALID_STORAGE_LEASE;
+            }
             remaining_onboarding += term.initial_onboarding - term.paid_onboarding;
             remaining_locked += term.initial_locked - term.paid_locked;
             end = term.end_period;
@@ -584,8 +632,31 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
             out.insert(out.end(), term.funding_operation_id.begin(), term.funding_operation_id.end());
             for (const auto value : {term.first_period, term.end_period, term.rate, term.period_seconds,
                     term.replica_share, term.contracted_unit_seconds, term.initial_onboarding, term.initial_locked,
-                    term.paid_onboarding, term.paid_locked})
+                    term.paid_onboarding, term.paid_locked, term.next_assignment_epoch})
                 Write64(out, value);
+            Write32(out, static_cast<uint32_t>(term.declarations.size()));
+            for (const auto& d : term.declarations) {
+                out.insert(out.end(), d.operation_id.begin(), d.operation_id.end());
+                Write64(out, d.epoch); Write64(out, d.height);
+                Write32(out, static_cast<uint32_t>(d.eligible.size()));
+                for (const auto& e : d.eligible) {
+                    out.insert(out.end(), e.storage_id.begin(), e.storage_id.end());
+                    out.insert(out.end(), e.payout_account.Value().begin(), e.payout_account.Value().end());
+                    Write64(out, e.key_epoch); Write64(out, e.accepted_height);
+                }
+            }
+            Write32(out, static_cast<uint32_t>(term.assignments.size()));
+            for (const auto& a : term.assignments) {
+                for (const auto& id : {a.operation_id, a.preparation_id, a.seed}) out.insert(out.end(), id.begin(), id.end());
+                Write64(out, a.epoch); Write64(out, a.effective_period);
+                Write32(out, static_cast<uint32_t>(a.allocations.size()));
+                for (const auto& u : a.allocations) {
+                    out.push_back(u.slot);
+                    out.insert(out.end(), u.storage_id.begin(), u.storage_id.end());
+                    out.insert(out.end(), u.payout_account.Value().begin(), u.payout_account.Value().end());
+                    Write32(out, u.units);
+                }
+            }
         }
     }
     return out;
@@ -714,12 +785,51 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
             std::copy(funding->begin(), funding->end(), term.funding_operation_id.begin());
             for (auto* value : {&term.first_period, &term.end_period, &term.rate, &term.period_seconds,
                     &term.replica_share, &term.contracted_unit_seconds, &term.initial_onboarding, &term.initial_locked,
-                    &term.paid_onboarding, &term.paid_locked}) {
+                    &term.paid_onboarding, &term.paid_locked, &term.next_assignment_epoch}) {
                 const auto parsed = reader.U64();
                 if (!parsed) return std::nullopt;
                 *value = *parsed;
             }
-            lease.funded_terms.push_back(term);
+            const auto declaration_count = reader.U32();
+            if (!declaration_count || *declaration_count > reader.Remaining() / 52) return std::nullopt;
+            for (uint32_t k{0}; k < *declaration_count; ++k) {
+                StorageAssignmentDeclaration d;
+                const auto id = reader.Bytes(32); const auto epoch = reader.U64(); const auto height = reader.U64();
+                const auto eligible = reader.U32();
+                if (!id || !epoch || !height || !eligible || *eligible > 20 || *eligible > reader.Remaining() / 80) return std::nullopt;
+                std::copy(id->begin(), id->end(), d.operation_id.begin()); d.epoch = *epoch; d.height = *height;
+                for (uint32_t n{0}; n < *eligible; ++n) {
+                    StorageAcceptedBinding e;
+                    const auto storage = reader.Bytes(32); const auto payout = reader.Bytes(32);
+                    const auto key_epoch = reader.U64(); const auto accepted = reader.U64();
+                    const auto account = payout ? AccountId::FromBytes(*payout) : std::nullopt;
+                    if (!storage || !account || !key_epoch || !accepted) return std::nullopt;
+                    std::copy(storage->begin(), storage->end(), e.storage_id.begin()); e.payout_account = *account;
+                    e.key_epoch = *key_epoch; e.accepted_height = *accepted; d.eligible.push_back(e);
+                }
+                term.declarations.push_back(std::move(d));
+            }
+            const auto assignment_count = reader.U32();
+            if (!assignment_count || *assignment_count > reader.Remaining() / 116) return std::nullopt;
+            for (uint32_t k{0}; k < *assignment_count; ++k) {
+                StorageAcceptedAssignment a;
+                for (auto* id : {&a.operation_id, &a.preparation_id, &a.seed}) {
+                    const auto bytes = reader.Bytes(32); if (!bytes) return std::nullopt;
+                    std::copy(bytes->begin(), bytes->end(), id->begin());
+                }
+                const auto epoch = reader.U64(); const auto period = reader.U64(); const auto count = reader.U32();
+                if (!epoch || !period || !count || *count > 20 * MAX_STORAGE_LEASE_REPLICAS || *count > reader.Remaining() / 69) return std::nullopt;
+                a.epoch = *epoch; a.effective_period = *period;
+                for (uint32_t n{0}; n < *count; ++n) {
+                    const auto slot = reader.U8(); const auto storage = reader.Bytes(32); const auto payout = reader.Bytes(32); const auto units = reader.U32();
+                    const auto account = payout ? AccountId::FromBytes(*payout) : std::nullopt;
+                    if (!slot || !storage || !account || !units) return std::nullopt;
+                    StorageAssignedUnits u{.slot = *slot, .payout_account = *account, .units = *units};
+                    std::copy(storage->begin(), storage->end(), u.storage_id.begin()); a.allocations.push_back(u);
+                }
+                term.assignments.push_back(std::move(a));
+            }
+            lease.funded_terms.push_back(std::move(term));
         }
         state.leases.emplace(id, std::move(lease));
     }

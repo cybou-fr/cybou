@@ -59,6 +59,34 @@ struct PublicationRecord {
 /// \brief Финализированная аренда хранения одной публикации (DEC-279).
 /// \details Покрывает settlement-периоды `[first_period, end_period)`. Escrow хранится раздельно по
 ///          происхождению, чтобы onboarding-часть платилась providers только в System Balance (DEC-281).
+/// Accepted eligibility is term-scoped; rotation cannot rewrite its historical pair.
+struct StorageAcceptedBinding {
+    std::array<unsigned char, 32> storage_id{};
+    AccountId payout_account;
+    uint64_t key_epoch{0};
+    uint64_t accepted_height{0};
+    friend bool operator==(const StorageAcceptedBinding&, const StorageAcceptedBinding&) = default;
+};
+struct StorageAssignmentDeclaration {
+    Hash256 operation_id;
+    uint64_t epoch{0}, height{0};
+    std::vector<StorageAcceptedBinding> eligible;
+    friend bool operator==(const StorageAssignmentDeclaration&, const StorageAssignmentDeclaration&) = default;
+};
+struct StorageAssignedUnits {
+    uint8_t slot{0};
+    std::array<unsigned char, 32> storage_id{};
+    AccountId payout_account;
+    uint32_t units{0};
+    friend bool operator==(const StorageAssignedUnits&, const StorageAssignedUnits&) = default;
+};
+struct StorageAcceptedAssignment {
+    Hash256 operation_id, preparation_id, seed;
+    uint64_t epoch{0}, effective_period{0};
+    std::vector<StorageAssignedUnits> allocations;
+    friend bool operator==(const StorageAcceptedAssignment&, const StorageAcceptedAssignment&) = default;
+};
+
 struct StorageFundedTerm {
     cybou::Hash256 funding_operation_id;
     uint64_t first_period{0};
@@ -73,6 +101,9 @@ struct StorageFundedTerm {
     // Finalized debits of this term only; renewal never rescales or resets them.
     uint64_t paid_onboarding{0};
     uint64_t paid_locked{0};
+    uint64_t next_assignment_epoch{1};
+    std::vector<StorageAssignmentDeclaration> declarations;
+    std::vector<StorageAcceptedAssignment> assignments;
     friend bool operator==(const StorageFundedTerm&, const StorageFundedTerm&) = default;
 };
 

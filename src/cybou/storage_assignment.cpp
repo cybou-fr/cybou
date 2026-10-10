@@ -10,7 +10,6 @@
 
 namespace cybou {
 namespace {
-bool Empty(const StorageAssignmentId& id) { return std::all_of(id.begin(), id.end(), [](auto b) { return b == 0; }); }
 StorageAssignmentId Digest(std::string_view domain, std::span<const unsigned char> bytes)
 {
     StorageAssignmentId result{};
@@ -45,54 +44,7 @@ std::string Key(const StorageAssignmentContext& c)
     const auto digest = Digest("CYBOU/STORAGE-ASSIGNMENT-KEY", out.Take());
     return "storage/assignment/" + Hash256{std::span<const unsigned char, 32>{digest}}.GetHex();
 }
-template <typename T> void Shuffle(std::vector<T>& items, const StorageAssignmentId& input, std::uint64_t& counter)
-{
-    for (std::size_t size = items.size(); size > 1; --size) {
-        const std::uint64_t bound = size;
-        const auto limit = std::numeric_limits<std::uint64_t>::max() -
-            std::numeric_limits<std::uint64_t>::max() % bound;
-        std::uint64_t draw;
-        do {
-            if (counter == std::numeric_limits<std::uint64_t>::max()) throw std::overflow_error{"assignment draw overflow"};
-            BinaryWriter out; out.Fixed(input); out.U64(counter++);
-            const auto hash = Digest("CYBOU/STORAGE-ASSIGNMENT-DRAW", out.Take());
-            draw = ReadLittleEndian<std::uint64_t>(hash);
-        } while (draw >= limit);
-        std::swap(items[size - 1], items[draw % bound]);
-    }
-}
-}
 
-std::optional<StorageAssignmentPlan> PrepareStorageAssignment(StorageAssignmentContext context,
-    std::vector<StorageAssignmentProvider> eligible)
-{
-    if (Empty(context.network_binding) || Empty(context.publication) || Empty(context.chunk) ||
-        Empty(context.finalized_seed) || Empty(context.payer) || context.term_end <= context.term_start ||
-        context.replicas == 0 || context.replicas > 2 || eligible.empty() ||
-        eligible.size() > MAX_STORAGE_ASSIGNMENT_CANDIDATES) return std::nullopt;
-    std::sort(eligible.begin(), eligible.end());
-    eligible.erase(std::unique(eligible.begin(), eligible.end()), eligible.end());
-    std::map<StorageAssignmentId, std::vector<StorageAssignmentProvider>> groups;
-    for (std::size_t i{0}; i < eligible.size(); ++i) {
-        const auto& p = eligible[i];
-        if (Empty(p.storage_id) || Empty(p.payout_account) || p.payout_account == context.payer ||
-            (i && eligible[i - 1].storage_id == p.storage_id)) return std::nullopt;
-        groups[p.payout_account].push_back(p);
-    }
-    if (groups.size() < context.replicas) return std::nullopt;
-    StorageAssignmentPlan plan{.context = context, .eligible = std::move(eligible)};
-    const auto input = Digest("CYBOU/STORAGE-ASSIGNMENT-INPUT", Encode(plan, false));
-    std::vector<StorageAssignmentId> accounts;
-    for (const auto& [account, _] : groups) accounts.push_back(account);
-    std::uint64_t counter{0};
-    Shuffle(accounts, input, counter); // One chance per payout identity, not per endpoint/key.
-    for (std::size_t i{0}; i < context.replicas; ++i) {
-        auto& providers = groups.at(accounts[i]);
-        Shuffle(providers, input, counter);
-        plan.selected.push_back(providers.front());
-    }
-    plan.commitment = Digest("CYBOU/STORAGE-ASSIGNMENT-COMMITMENT", Encode(plan, true));
-    return plan;
 }
 
 bool FreezeStorageAssignment(PrivateApplicationStore& db, const StorageAssignmentPlan& plan)

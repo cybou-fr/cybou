@@ -7,6 +7,7 @@
 #include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/binary_codec.h>
+#include <cybou/chunk_authorization.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
 #include <functional>
@@ -99,6 +100,212 @@ struct ObservedTransport final : cybou::StorageTransport {
 };
 }
 BOOST_AUTO_TEST_SUITE(cybou_storage_assignment_attestation_tests)
+
+BOOST_AUTO_TEST_CASE(canonical_prepare_activate_retains_verified_bindings_and_allocation)
+{
+    using namespace cybou;
+    Fixture f;
+    auto provider2 = f.service.CreateIdentity("canonical-provider2.cybou");
+    CybouServiceTestFixture other_host;
+    other_host.runtime->DisablePoaSigner();
+    other_host.runtime->SetIdentitySigner(std::make_shared<CybouKeyStoreIdentitySigner>(provider2->GetKeyStore()));
+    const auto binding2 = other_host.runtime->LocalStoragePayoutBinding(); BOOST_REQUIRE(binding2);
+    const auto storage2 = other_host.runtime->LocalStorageId(); BOOST_REQUIRE(storage2);
+    auto state = *f.service.runtime->GetStore().GetStateSnapshot().state;
+    const auto network = f.service.runtime->GetNetworkBinding();
+    const auto& params = f.service.definition.GetProtocolParameters();
+    const auto& poa = f.service.definition.GetPoaPublicKey();
+    const auto payer = *f.payer->GetKeyStore().GetAccountId();
+    const Hash256 publication{91};
+    const std::array leaves{AuthorizedChunk{ComputeChunkId(f.ciphertext)}, AuthorizedChunk{ComputeChunkId(std::array<unsigned char,1>{9})}};
+    const auto tree = BuildChunkAuthorizationTree(leaves); BOOST_REQUIRE(tree);
+    BOOST_REQUIRE(RecordPublication(state, publication, payer, tree->root, 2, 1));
+    const auto escrow = ComputeStorageLeaseEscrow(params, 2, 2, 30); BOOST_REQUIRE(escrow);
+    FundStorageLease(state, publication, payer, 2, 2, 30, *escrow, params, publication);
+    BOOST_REQUIRE(ValidateCybouState(state) == StateValidationError::NONE);
+    const auto sign = [&](StorageSettlement op) {
+        const auto digest = ComputeStorageSettlementDigest(network, op); BOOST_REQUIRE(digest);
+        const auto signature = SignIdentityMessage(f.service.validator_seed, IdentityKeyPurpose::POA_FINALIZER, *digest);
+        BOOST_REQUIRE(signature); op.poa_signature = *signature; return op;
+    };
+    StorageSettlement prepare{.period_start_utc = 100000};
+    prepare.action = StorageSettlementAction::PREPARE; prepare.funded_term_id = publication;
+    prepare.assignment_epoch = 1; prepare.eligible.push_back({f.proofs[0].storage_id, f.proofs[0].binding});
+    prepare.eligible.push_back({*storage2, *binding2});
+    std::sort(prepare.eligible.begin(), prepare.eligible.end(), [](const auto& a, const auto& b) { return a.storage_id < b.storage_id; });
+    prepare = sign(prepare);
+    const auto bytes = SerializeProtocolOperation(ProtocolOperation{prepare}); BOOST_REQUIRE(bytes);
+    BOOST_CHECK_EQUAL(bytes->size(), 3435U + 2U * 6380U);
+    BOOST_REQUIRE(DeserializeProtocolOperation(*bytes));
+    BOOST_CHECK(std::get<StorageSettlement>(*DeserializeProtocolOperation(*bytes)) == prepare);
+    const auto original_root = CybouStateHash(state); BOOST_REQUIRE(original_root);
+    auto bad = prepare; bad.poa_signature.ed25519[0] ^= 1;
+    BOOST_CHECK(ApplyStorageSettlement(bad, network, params, poa, state, 10, Hash256{2}) == StorageSettlementError::INVALID_SIGNATURE);
+    BOOST_CHECK(CybouStateHash(state) == original_root);
+    bad = prepare; bad.eligible[0].binding.authorization.ed25519[0] ^= 1; bad = sign(bad);
+    BOOST_CHECK(ApplyStorageSettlement(bad, network, params, poa, state, 10, Hash256{2}) == StorageSettlementError::INVALID_ASSIGNMENT);
+    BOOST_CHECK(CybouStateHash(state) == original_root);
+    BlockExecutor first(state, network, 10, params, &poa, Hash256{2});
+    BlockExecutor second(state, network, 10, params, &poa, Hash256{2});
+    BOOST_REQUIRE(first.ApplyOperation(ProtocolOperation{prepare}).IsOk());
+    BOOST_REQUIRE(second.ApplyOperation(ProtocolOperation{prepare}).IsOk());
+    const auto one = first.Finalize(), two = second.Finalize(); BOOST_REQUIRE(one); BOOST_REQUIRE(two);
+    BOOST_CHECK(one.state_root == two.state_root); state = *one.state;
+    BOOST_CHECK_EQUAL(state.settlement.next_period, 0U);
+    BOOST_CHECK_EQUAL(state.settlement.next_period_start_utc, 100000U);
+    auto& term = state.leases.at(publication).funded_terms.front();
+    BOOST_REQUIRE_EQUAL(term.declarations.size(), 1U);
+    BOOST_CHECK_EQUAL(term.declarations[0].eligible[0].accepted_height, 10U);
+    BOOST_CHECK_EQUAL(term.next_assignment_epoch, 2U);
+    const auto prepared_root = CybouStateHash(state);
+    BOOST_CHECK(ApplyStorageSettlement(prepare, network, params, poa, state, 10, Hash256{2}) == StorageSettlementError::INVALID_ASSIGNMENT);
+    BOOST_CHECK(CybouStateHash(state) == prepared_root);
+    StorageSettlement activate{.period_start_utc = 100000}; activate.action = StorageSettlementAction::ACTIVATE;
+    activate.preparation_id = *ComputeOperationId(ProtocolOperation{prepare});
+    for (const auto& leaf : leaves) activate.manifest.push_back(leaf.id);
+    activate = sign(activate);
+    BOOST_CHECK_EQUAL(SerializeProtocolOperation(ProtocolOperation{activate})->size(), 3427U + 64U);
+    for (const auto height : {11U,13U}) {
+        BOOST_CHECK(ApplyStorageSettlement(activate, network, params, poa, state, height, Hash256{3}) == StorageSettlementError::WRONG_ACTIVATION_HEIGHT);
+        BOOST_CHECK(CybouStateHash(state) == prepared_root);
+    }
+    BOOST_CHECK(ApplyStorageSettlement(activate, network, params, poa, state, 12, {}) == StorageSettlementError::WRONG_ACTIVATION_HEIGHT);
+    bad = activate; std::reverse(bad.manifest.begin(), bad.manifest.end()); bad = sign(bad);
+    BOOST_CHECK(ApplyStorageSettlement(bad, network, params, poa, state, 12, Hash256{3}) == StorageSettlementError::INVALID_ASSIGNMENT);
+    BOOST_CHECK(CybouStateHash(state) == prepared_root);
+    // Accepted bindings are historical facts; ACTIVATE does not need fresh signatures.
+    BOOST_REQUIRE(ApplyStorageSettlement(activate, network, params, poa, state, 12, Hash256{3}) == StorageSettlementError::NONE);
+    BOOST_REQUIRE_EQUAL(term.assignments.size(), 1U);
+    BOOST_CHECK(term.assignments[0].seed == Hash256{3});
+    std::array<uint32_t,2> units{};
+    for (const auto& allocation : term.assignments[0].allocations) units[allocation.slot] += allocation.units;
+    BOOST_CHECK_EQUAL(units[0], 2U); BOOST_CHECK_EQUAL(units[1], 2U);
+    BOOST_CHECK_EQUAL(TotalCybou(state), TotalCybou(*one.state));
+    const auto encoded = SerializeCybouState(state); BOOST_REQUIRE(encoded);
+    const auto reopened = DeserializeCybouState(*encoded); BOOST_REQUIRE(reopened);
+    BOOST_CHECK(CybouStateHash(*reopened) == CybouStateHash(state));
+    BOOST_CHECK(reopened->leases.at(publication).funded_terms == state.leases.at(publication).funded_terms);
+    auto corrupt = state; ++corrupt.leases.at(publication).funded_terms[0].assignments[0].allocations[0].units;
+    BOOST_CHECK(ValidateCybouState(corrupt) == StateValidationError::INVALID_STORAGE_LEASE);
+    corrupt = state; corrupt.leases.at(publication).funded_terms[0].declarations[0].eligible.push_back(term.declarations[0].eligible[0]);
+    BOOST_CHECK(ValidateCybouState(corrupt) == StateValidationError::INVALID_STORAGE_LEASE);
+    StorageSettlement pay{.period_start_utc = 100000}; pay = sign(pay);
+    const auto activated_root = CybouStateHash(state);
+    BOOST_CHECK(ApplyStorageSettlement(pay, network, params, poa, state) == StorageSettlementError::INVALID_ASSIGNMENT);
+    BOOST_CHECK(CybouStateHash(state) == activated_root);
+}
+
+BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation)
+{
+    using namespace cybou;
+    Fixture f;
+    auto provider2 = f.service.CreateIdentity("finalized-provider2.cybou");
+    CybouServiceTestFixture verifier;
+    verifier.runtime->DisablePoaSigner();
+    verifier.runtime->SetIdentitySigner(std::make_shared<CybouKeyStoreIdentitySigner>(provider2->GetKeyStore()));
+    const auto second_binding = verifier.runtime->LocalStoragePayoutBinding(); BOOST_REQUIRE(second_binding);
+    const auto second_storage = verifier.runtime->LocalStorageId(); BOOST_REQUIRE(second_storage);
+    const auto network = f.service.runtime->GetNetworkBinding();
+    const auto payer = *f.payer->GetKeyStore().GetAccountId();
+    const auto snapshot = f.service.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(snapshot);
+    const auto* identity = snapshot.state->identities.Find(payer); BOOST_REQUIRE(identity);
+    const auto chunk = ComputeChunkId(f.ciphertext);
+    const std::array leaves{AuthorizedChunk{chunk}};
+    const auto tree = BuildChunkAuthorizationTree(leaves); BOOST_REQUIRE(tree);
+    RootPublication publication;
+    publication.root_chunk_id = chunk; publication.chunk_authorization_root = tree->root;
+    publication.chunk_count = 1; publication.lease_periods = 30;
+    RootRecipientCapsule capsule; capsule.encapsulation.fill(0x53); capsule.wrapped_content_key.fill(0x64);
+    publication.recipient_capsules.push_back(capsule);
+    IdentityOperationAuthorization auth{.account_id = payer, .nonce = identity->nonce, .key_epoch = identity->key_epoch,
+        .kind = IdentityOperationKind::ROOT_PUBLICATION, .payload_commitment = *ComputeRootPublicationPayloadCommitment(publication)};
+    CybouKeyStoreIdentitySigner author{f.payer->GetKeyStore()};
+    const auto signature = author.SignAuthorization(*ComputeIdentityOperationDigest(network, auth)); BOOST_REQUIRE(signature);
+    auth.signature = *signature;
+    const ProtocolOperation root{AuthorizedRootPublication{auth, publication}};
+    const auto publication_id = ComputeOperationId(root); BOOST_REQUIRE(publication_id);
+    BOOST_REQUIRE(f.service.runtime->SubmitOperation(root)); BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    StorageSettlement prepare{.period_start_utc = 100000}; prepare.action = StorageSettlementAction::PREPARE;
+    prepare.funded_term_id = *publication_id; prepare.assignment_epoch = 1;
+    prepare.eligible = {{f.proofs[0].storage_id, f.proofs[0].binding}, {*second_storage, *second_binding}};
+    std::sort(prepare.eligible.begin(), prepare.eligible.end(), [](const auto& a, const auto& b) { return a.storage_id < b.storage_id; });
+    const auto unsigned_root = f.service.runtime->GetStateRoot();
+    const auto signed_prepare = f.service.runtime->SignStorageSettlement(prepare); BOOST_REQUIRE(signed_prepare);
+    BOOST_CHECK(f.service.runtime->GetStateRoot() == unsigned_root); // Signing does not finalize.
+    BOOST_REQUIRE(f.service.runtime->SubmitOperation(ProtocolOperation{*signed_prepare}));
+    BOOST_CHECK(f.service.runtime->GetStateRoot() == unsigned_root); // Candidate is volatile.
+    BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    const auto prepare_height = *f.service.runtime->GetFinalizedHeight();
+    StorageSettlement activate{.period_start_utc = 100000}; activate.action = StorageSettlementAction::ACTIVATE;
+    activate.preparation_id = *ComputeOperationId(ProtocolOperation{*signed_prepare}); activate.manifest = {chunk};
+    BOOST_CHECK(!f.service.runtime->SignStorageSettlement(activate)); // h+1 is too early.
+    const auto rotation_entropy = GenerateRecoveryEntropy(); BOOST_REQUIRE(rotation_entropy);
+    const auto rotating = provider2->RotateIdentitySync(EncodeRecoveryWords(*rotation_entropy), "correct horse battery staple");
+    BOOST_REQUIRE(rotating.phase == IdentityOperationPhase::ACCEPTED);
+    BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    BOOST_REQUIRE(provider2->ResumeIdentityRotationSync("correct horse battery staple").phase == IdentityOperationPhase::FINALIZED);
+    const auto seed = *f.service.runtime->GetFinalizedTip();
+    BOOST_CHECK_EQUAL(*f.service.runtime->GetFinalizedHeight(), prepare_height + 1);
+    const auto signed_activate = f.service.runtime->SignStorageSettlement(activate); BOOST_REQUIRE(signed_activate);
+    BOOST_REQUIRE(f.service.runtime->SubmitOperation(ProtocolOperation{*signed_activate}));
+    BOOST_REQUIRE(f.service.runtime->ProduceBlock());
+    for (uint64_t h{1}; h <= *f.service.runtime->GetFinalizedHeight(); ++h)
+        BOOST_REQUIRE(verifier.runtime->CommitBlock(*f.service.runtime->GetBlockAtHeight(h)));
+    BOOST_CHECK(f.service.runtime->GetStateRoot() == verifier.runtime->GetStateRoot());
+    const auto accepted = verifier.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(accepted);
+    const auto& term = accepted.state->leases.at(*publication_id).funded_terms.front();
+    BOOST_REQUIRE_EQUAL(term.declarations.size(), 1U); BOOST_REQUIRE_EQUAL(term.assignments.size(), 1U);
+    BOOST_CHECK(term.assignments[0].seed == seed);
+    const auto* rotated = accepted.state->identities.Find(second_binding->payout_account); BOOST_REQUIRE(rotated);
+    BOOST_CHECK_EQUAL(rotated->key_epoch, 1U);
+    BOOST_CHECK(!VerifyIdentityMessage(rotated->authorization_key, second_binding->authorization,
+        StoragePayoutBindingDigest(network, *second_storage, second_binding->payout_account)));
+    const auto frozen = std::find_if(term.declarations[0].eligible.begin(), term.declarations[0].eligible.end(),
+        [&](const auto& e) { return e.storage_id == *second_storage; });
+    BOOST_REQUIRE(frozen != term.declarations[0].eligible.end()); BOOST_CHECK_EQUAL(frozen->key_epoch, 0U);
+    BOOST_CHECK_EQUAL(term.declarations[0].height, prepare_height);
+    BOOST_CHECK_EQUAL(accepted.state->settlement.next_period, 0U);
+    BOOST_CHECK(!f.service.runtime->SignStorageSettlement(activate)); // Cannot replay in h+3.
+    const auto exact = SerializeCybouState(*accepted.state); BOOST_REQUIRE(exact);
+    const auto reopened = DeserializeCybouState(*exact); BOOST_REQUIRE(reopened);
+    BOOST_CHECK(CybouStateHash(*reopened) == f.service.runtime->GetStateRoot());
+}
+
+BOOST_AUTO_TEST_CASE(atomic_assignment_wire_limits_and_exact_consumption)
+{
+    using namespace cybou;
+    Fixture f;
+    StorageSettlement prepare{.period_start_utc = 1}; prepare.action = StorageSettlementAction::PREPARE;
+    prepare.funded_term_id = Hash256{1}; prepare.assignment_epoch = 1;
+    prepare.poa_signature.ml_dsa.resize(3309);
+    for (unsigned i{1}; i <= 20; ++i) {
+        StorageSettlementBinding e{.binding = f.proofs[0].binding}; e.storage_id[0] = i;
+        prepare.eligible.push_back(e);
+    }
+    auto encoded = SerializeProtocolOperation(ProtocolOperation{prepare}); BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 131035U); BOOST_REQUIRE(DeserializeProtocolOperation(*encoded));
+    auto body = *SerializeStorageSettlement(prepare); body.push_back(0);
+    BOOST_CHECK(!DeserializeStorageSettlement(body));
+    body = *SerializeStorageSettlement(prepare); body.resize(body.size() - 1);
+    BOOST_CHECK(!DeserializeStorageSettlement(body));
+    body = *SerializeStorageSettlement(prepare); body[16] = 4;
+    BOOST_CHECK(!DeserializeStorageSettlement(body));
+    body = *SerializeStorageSettlement(prepare); std::fill_n(body.begin() + 57, 4, 255);
+    BOOST_CHECK(!DeserializeStorageSettlement(body));
+    auto extra = prepare.eligible.back(); extra.storage_id[0] = 21; prepare.eligible.push_back(extra);
+    BOOST_CHECK(!SerializeStorageSettlement(prepare));
+    StorageSettlement activate{.period_start_utc = 1}; activate.action = StorageSettlementAction::ACTIVATE;
+    activate.preparation_id = Hash256{2}; activate.poa_signature.ml_dsa.resize(3309);
+    for (unsigned i{1}; i <= 3988; ++i) {
+        ChunkId chunk{}; chunk[0] = i >> 8; chunk[1] = i; activate.manifest.push_back(chunk);
+    }
+    encoded = SerializeProtocolOperation(ProtocolOperation{activate}); BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 131043U); BOOST_REQUIRE(DeserializeProtocolOperation(*encoded));
+    ChunkId extra_chunk{}; extra_chunk[0] = 255; activate.manifest.push_back(extra_chunk);
+    BOOST_CHECK(!SerializeStorageSettlement(activate));
+    activate.manifest.pop_back(); activate.manifest.back() = activate.manifest.front();
+    BOOST_CHECK(!SerializeStorageSettlement(activate));
+}
 
 BOOST_AUTO_TEST_CASE(bindings_require_both_keys_and_the_matching_snapshot)
 {

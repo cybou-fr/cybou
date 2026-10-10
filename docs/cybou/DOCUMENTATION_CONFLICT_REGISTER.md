@@ -113,6 +113,16 @@ ceiling, missing per-provider cumulative service/paid and assignment/evidence
 verification, and closure erasing history remain gaps. DOC-005/006/020 remain open;
 this is approved isolated development with no live deployment.
 
+Approved atomic-assignment follow-up adds isolated canonical PREPARE/ACTIVATE
+execution, term-scoped accepted bindings and allocation summaries. Funded-term
+records now have variable-length assignment data after the original counters;
+the earlier 112-byte description is the preceding checkpoint. New records are
+not interpreted through the old aggregate PAY: that path rejects states with
+accepted assignments/declarations, including empty cursor-advancing payments.
+Cumulative service/paid, retained closure/refunds, canonical collector provenance
+and action-scoped exact journaling remain unfinished. DOC-005/006/020 stay open;
+this intermediate source layout must not be deployed or used to migrate DEVNET.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

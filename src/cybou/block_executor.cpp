@@ -122,7 +122,7 @@ BlockExecutionResult BlockExecutor::ApplyOperation(const ProtocolOperation& oper
         }
     } else if (const auto* settlement = std::get_if<StorageSettlement>(&operation)) {
         const auto result = !m_poa_key ? StorageSettlementError::INVALID_SIGNATURE
-            : ApplyStorageSettlement(*settlement, m_network_binding, m_params, *m_poa_key, m_candidate);
+            : ApplyStorageSettlement(*settlement, m_network_binding, m_params, *m_poa_key, m_candidate, m_block_height, m_verified_parent_id);
         if (result != StorageSettlementError::NONE) {
             auto failure = fail(BlockExecutionError::INVALID_STORAGE_SETTLEMENT);
             failure.settlement_error = result;

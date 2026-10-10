@@ -29,6 +29,8 @@ add_library(cybou_core STATIC
   cybou/block.cpp
   cybou/chunk_id.cpp
   cybou/chunk_authorization.cpp
+  cybou/storage_key_proof.cpp
+  cybou/storage_assignment_algorithm.cpp
   cybou/storage_audit.cpp
   cybou/storage_economy.cpp
   cybou/economics_quote.cpp

@@ -7,6 +7,7 @@
 #define CYBOU_STORAGE_LEASE_H
 
 #include <cybou/state.h>
+#include <cybou/storage_audit.h>
 
 #include <array>
 #include <cstdint>
@@ -86,6 +87,13 @@ struct StorageSettlementEntry {
     friend bool operator==(const StorageSettlementEntry&, const StorageSettlementEntry&) = default;
 };
 
+enum class StorageSettlementAction : uint8_t { PREPARE = 1, ACTIVATE = 2, PAY = 3 };
+struct StorageSettlementBinding {
+    std::array<unsigned char, 32> storage_id{};
+    StoragePayoutBinding binding;
+    friend bool operator==(const StorageSettlementBinding&, const StorageSettlementBinding&) = default;
+};
+
 /// \brief PoA-подписанный итог одного settlement-периода (DEC-282).
 /// \details PoA — канонический агрегатор off-chain evidence и времени: Full Nodes проверяют подпись,
 ///          непрерывность периодов, escrow и арифметику, но не сами аудиты.
@@ -94,6 +102,11 @@ struct StorageSettlement {
     uint64_t period_start_utc{0};                ///< UTC-начало периода, непрерывно с предыдущим.
     std::vector<StorageSettlementEntry> entries; ///< Строго по (publication_id, payout_account).
     IdentityHybridSignature poa_signature;       ///< Подпись genesis PoA key над digest.
+    StorageSettlementAction action{StorageSettlementAction::PAY};
+    Hash256 funded_term_id, preparation_id;
+    uint64_t assignment_epoch{0};
+    std::vector<StorageSettlementBinding> eligible;
+    std::vector<ChunkId> manifest;
 
     friend bool operator==(const StorageSettlement&, const StorageSettlement&) = default;
 };
@@ -116,19 +129,23 @@ enum class StorageSettlementError : uint8_t {
     TOO_MANY_PAYOUTS,
     PAYOUT_EXCEEDS_ESCROW,
     BALANCE_OVERFLOW,
+    INVALID_ASSIGNMENT,
+    WRONG_ACTIVATION_HEIGHT,
 };
 
 /// Read-only economic/period validation shared by preparation and execution.
 /// Does not verify a signature or authorize admission; execution always verifies PoA.
 StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& settlement,
-    const CybouProtocolParameters& params, const CybouState& state);
+    const CybouProtocolParameters& params, const CybouState& state,
+    const Hash256& network_binding = {}, uint64_t block_height = 0, const Hash256& verified_parent_id = {});
 
 /// \brief Выплачивает providers из escrow, продвигает курсор и возвращает escrow закончившихся аренд.
 /// \details Onboarding-часть escrow расходуется первой и зачисляется в System Balance provider'а,
 ///          locked-часть — в его Balance (DEC-281).
 StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlement,
     const cybou::Hash256& network_binding, const CybouProtocolParameters& params,
-    const IdentityHybridPublicKey& poa_key, CybouState& state);
+    const IdentityHybridPublicKey& poa_key, CybouState& state,
+    uint64_t block_height = 0, const Hash256& verified_parent_id = {});
 
 } // namespace cybou
 

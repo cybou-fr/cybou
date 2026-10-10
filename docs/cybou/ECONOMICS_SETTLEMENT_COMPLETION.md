@@ -131,6 +131,13 @@ action placement and the effective-epoch rule below. Implementation and isolated
 verification are authorized; deployment, live DEVNET changes and migration are not.
 The scalable bounded-batch contract remains separate, unimplemented work.
 
+Implementation checkpoint: PREPARE/ACTIVATE execution and term-scoped canonical
+record codecs are now being verified in isolated fixtures. Cumulative PAY,
+closed-term retention, collector provenance and action-scoped exact journaling
+remain open. The intermediate payment path rejects all accepted assignment
+records rather than paying or erasing them using the old rules. This checkpoint
+must not be deployed; it does not close the vertical-slice acceptance below.
+
 Two inspected constraints determine the design: IdentityRegistry keeps current
 Authorization keys, not a historical registry at every seed; and a complete
 6344-byte StoragePayoutBinding repeated for 1024 candidates cannot fit 128 KiB.

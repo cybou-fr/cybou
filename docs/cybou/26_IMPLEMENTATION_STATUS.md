@@ -8,6 +8,65 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Canonical eligibility and activation checkpoint (2026-10-10)
+
+Isolated source development now includes PREPARE and ACTIVATE in the existing
+PoA-signed StorageSettlement kind and signing domain. One action byte follows
+period/start. PREPARE includes the funded term, epoch and exact sorted binding
+proofs (at most 20); both STORAGE and current payout Authorization signatures are
+verified before accepting term-scoped pairs/key epochs/heights. ACTIVATE requires
+the latest declaration, exact height h+2 and chain-supplied nonzero parent seed.
+It checks the ordered full manifest (at most 3988), publication count/root and
+independently derives every chunk/slot assignment with the existing algorithm.
+Accepted allocation summaries enter state serialization/root and survive decoding.
+Neither action advances the payment cursor or moves CYBOU.
+
+This is a partial isolated implementation, not the completed atomic contract.
+The PAY body/checker still uses the earlier publication/account/amount inputs;
+it now explicitly rejects any state containing accepted declarations/assignments.
+It cannot debit or discard these checkpoints under the old daily rules.
+Cumulative PAY/paid ledger, closure/refund retention, action-scoped exact journal
+and canonical collector provenance are still required. Do not deploy this
+intermediate wire/state layout or reinterpret existing live records.
+
+State byte layout appended to each immutable funded term after its ten original
+u64 counters: next_assignment_epoch u64, declaration_count u32 and declarations,
+then assignment_count u32 and assignments. Each declaration is operationID32,
+epoch u64, height u64, eligible_count u32, then sorted StorageId32/payout32/
+key_epoch u64/accepted_height u64 (80 bytes each). Each assignment is activation32,
+preparation32, seed32, epoch u64, effective_period u64, allocation_count u32, then
+sorted slot u8/StorageId32/payout32/units u32 (69 bytes each). Decoder counts are
+checked against remaining bytes before growing collections; semantic validation
+checks ordering, references, foreign payout accounts and exactly U units per slot.
+No provider registry, extra DB, signature/hash domain or P2P message was added.
+The unchanged assignment algorithm and STORAGE proof verification now link from
+the shared core rather than requiring node-local persistence/transport objects.
+This relocation preserves all hash/signature domain bytes and existing wire
+encodings; freeze/load of off-chain plans remains in the node/application layer.
+
+
+Core and native Qt test targets built. The final regression passed 162 core
+cases (165 unrelated cases skipped); native Qt authority review passed three
+results including setup/cleanup. New scenarios cover real funded publication,
+two provider bindings, independent in-memory Full Node finality/replay and equal
+roots, unchanged state after signing/submission, h+1/h+3 rejection, actual payout
+key rotation in h+1, retained accepted key epoch, ordered-root verification,
+wire limits, and exact state reopen/corruption rejection. These are isolated
+nodes, not independent physical host or paid-service acceptance.
+
+Fixed canonical state-layout vectors are asserted in resource-limit tests:
+PREPARE root `1ea29a211823069e662449359a6cdc7961d91fe15b91f30d156925cbb3d943ca`;
+ACTIVATE root `ee36e5d86903cc6945f584861b6d9a4f98ee07a076f69853e9bbfdc9dda37843`.
+These use the fixed key/account component fixture; the real finalized-node
+scenario separately verifies execution provenance and equal roots.
+
+Ignored evidence: `artifacts/economics-canonical-assignment-core.txt`,
+`artifacts/economics-canonical-assignment-qt.txt`, checked/regression build logs
+and the vector derivation log. Initial build FAIL (Hash256/array conversion)
+and initial regression FAIL (negative test assigned an already possible unit
+count) remain retained separately; the corrected test increments the actual
+allocation instead. No runtime deployment or complete PAY acceptance is claimed.
+
 ### Approved atomic slice: parent execution context (2026-10-10)
 
 The operator approved the concrete atomic PREPARE/ACTIVATE/PAY contract and its
