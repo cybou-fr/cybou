@@ -8,6 +8,36 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Exact action submission journal (2026-10-11)
+
+StorageService now accepts complete PREPARE/ACTIVATE/PAY operations, retaining
+exact prepared and signed bytes in the existing encrypted app.db. Journal scope
+includes NetworkBinding, action and period; PREPARE adds funded term/epoch,
+ACTIVATE adds preparation OperationID. PAY spans the whole period, so no term
+suffix is appropriate. The existing entry-only caller delegates to this path.
+Changed bytes in an occupied scope fail explicitly; retry reuses the retained
+signature and checks exact finalized OperationID before candidate submission.
+No DB transaction spans signing or relay. Stored unsigned input is not finality.
+
+An existing period-only prepared/signed record blocks preparation for that period
+with an explicit reconciliation error. Its bytes are neither interpreted,
+migrated, overwritten nor deleted. This is isolated source development, not an
+approved live-journal cutover or migration mechanism.
+
+Verification: the rebuilt core target passed all 52 targeted StorageService and
+assignment-attestation cases / 1915 assertions, including signature-save failure,
+changed-body conflicts, prior-record preservation, app.db reopen, two-node PAY
+finality and ALREADY_FINALIZED recovery of all three actions. This does not
+exercise physical custody or the production collector scheduler. Evidence is
+retained in ignored artifacts/economics-action-journal-targeted.txt. The complete
+Windows core regression also passed 330/330 cases and 154274/154274 assertions;
+see artifacts/economics-action-journal-full-core.txt. No tests were disabled.
+
+This closes action separation and complete-body submission, not the complete
+evidence journal: freezing/resolving the exact collector interval-reference list
+with evidence_root, canonical collector provenance and production dispatch remain
+open. The two-node scenario still uses PoA-attested fixture service totals.
+
 ### Canonical cumulative PAY development (2026-10-11)
 
 The approved isolated source layout now replaces the aggregate daily PAY body

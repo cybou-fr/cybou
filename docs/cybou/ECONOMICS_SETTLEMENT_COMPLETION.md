@@ -135,7 +135,10 @@ Implementation checkpoint: PREPARE/ACTIVATE and cumulative PAY execution now
 retain term-scoped assignment and service/paid/refund records in isolated source.
 PAY resolves activation witnesses and checks the cumulative entitlement and
 accepted capacity; no daily-ranking payment path remains. Collector provenance,
-observation-to-PAY preparation and action-scoped exact journaling remain open.
+observation-to-PAY preparation and retained collector-reference reconciliation remain open.
+StorageService now retains full action-scoped prepared/signed bodies and reuses
+exact finalized OperationIDs. It rejects prior period-only records explicitly
+without migration; the interval-reference list is not yet frozen alongside PAY.
 This checkpoint must not be deployed; it does not close the vertical-slice
 acceptance below. In particular, the two-node PAY regression uses PoA-attested
 service totals, not the requested end-to-end collector integration.

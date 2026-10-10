@@ -132,6 +132,12 @@ batches remain open, so DOC-005/006/020 are not closed by this checkpoint. The
 old local-provider ranking producer now rejects preparation rather than inventing
 service counters; no live deployment/migration is authorized.
 
+The action-journal follow-up separates PREPARE/ACTIVATE/PAY scopes in existing
+app.db and retains full prepared/signed bodies, including PAY evidence root and
+witnesses. Prior period-only records require explicit reconciliation and remain
+untouched. Collector provenance, the frozen interval-reference list and scalable
+batches still block DOC-005/006/020 closure; no live migration is authorized.
+
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
 layout; this register never silently introduces a migration.

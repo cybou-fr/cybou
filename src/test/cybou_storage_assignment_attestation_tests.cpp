@@ -235,8 +235,18 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     prepare.funded_term_id = *publication_id; prepare.assignment_epoch = 1;
     prepare.eligible = {{f.proofs[0].storage_id, f.proofs[0].binding}, {*second_storage, *second_binding}};
     std::sort(prepare.eligible.begin(), prepare.eligible.end(), [](const auto& a, const auto& b) { return a.storage_id < b.storage_id; });
+    RuntimeStorageTransport transport{*f.service.runtime};
+    auto journal = std::make_unique<StorageService>(*f.service.runtime, transport, *f.db, 2);
     const auto unsigned_root = f.service.runtime->GetStateRoot();
-    const auto signed_prepare = f.service.runtime->SignStorageSettlement(prepare); BOOST_REQUIRE(signed_prepare);
+    const auto prepared_submit = journal->SubmitSettlement(prepare); BOOST_REQUIRE(prepared_submit);
+    const auto signed_prepare = journal->PreparedSettlement(prepare); BOOST_REQUIRE(signed_prepare);
+    auto conflicting_prepare = prepare; conflicting_prepare.period_start_utc += 1;
+    BOOST_CHECK_THROW(journal->SubmitSettlement(conflicting_prepare), std::runtime_error);
+    journal.reset(); f.db.reset();
+    f.db = std::make_unique<PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    journal = std::make_unique<StorageService>(*f.service.runtime, transport, *f.db, 2);
+    BOOST_CHECK(journal->PreparedSettlement(prepare) == signed_prepare);
+    BOOST_CHECK(journal->SubmitSettlement(prepare).op_id == prepared_submit.op_id);
     BOOST_CHECK(f.service.runtime->GetStateRoot() == unsigned_root); // Signing does not finalize.
     BOOST_REQUIRE(f.service.runtime->SubmitOperation(ProtocolOperation{*signed_prepare}));
     BOOST_CHECK(f.service.runtime->GetStateRoot() == unsigned_root); // Candidate is volatile.
@@ -252,8 +262,11 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     BOOST_REQUIRE(provider2->ResumeIdentityRotationSync("correct horse battery staple").phase == IdentityOperationPhase::FINALIZED);
     const auto seed = *f.service.runtime->GetFinalizedTip();
     BOOST_CHECK_EQUAL(*f.service.runtime->GetFinalizedHeight(), prepare_height + 1);
-    const auto signed_activate = f.service.runtime->SignStorageSettlement(activate); BOOST_REQUIRE(signed_activate);
-    BOOST_REQUIRE(f.service.runtime->SubmitOperation(ProtocolOperation{*signed_activate}));
+    const auto activated_submit = journal->SubmitSettlement(activate); BOOST_REQUIRE(activated_submit);
+    const auto signed_activate = journal->PreparedSettlement(activate); BOOST_REQUIRE(signed_activate);
+    BOOST_CHECK(journal->PreparedSettlement(prepare) == signed_prepare);
+    auto conflicting_activate = activate; conflicting_activate.period_start_utc += 1;
+    BOOST_CHECK_THROW(journal->SubmitSettlement(conflicting_activate), std::runtime_error);
     BOOST_REQUIRE(f.service.runtime->ProduceBlock());
     for (uint64_t h{1}; h <= *f.service.runtime->GetFinalizedHeight(); ++h)
         BOOST_REQUIRE(verifier.runtime->CommitBlock(*f.service.runtime->GetBlockAtHeight(h)));
@@ -304,7 +317,11 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         bad = pay; bad.activation_witnesses.push_back(CounterHash(999));
         std::sort(bad.activation_witnesses.begin(),bad.activation_witnesses.end());
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
-        const auto signed_pay = f.service.runtime->SignStorageSettlement(pay); BOOST_REQUIRE(signed_pay);
+        const auto pay_submit = journal->SubmitSettlement(pay); BOOST_REQUIRE(pay_submit);
+        const auto signed_pay = journal->PreparedSettlement(pay); BOOST_REQUIRE(signed_pay);
+        BOOST_CHECK(journal->SubmitSettlement(pay).op_id == pay_submit.op_id);
+        auto conflicting_pay = pay; conflicting_pay.evidence_root = CounterHash(123456);
+        BOOST_CHECK_THROW(journal->SubmitSettlement(conflicting_pay), std::runtime_error);
         BOOST_CHECK(f.service.runtime->GetStateRoot() == before);
         const ProtocolOperation operation{*signed_pay}; if (!first_pay) first_pay = operation;
         BOOST_REQUIRE(f.service.runtime->SubmitOperation(operation));
@@ -329,6 +346,14 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     for (const auto& [account, balance] : provider_before)
         BOOST_CHECK_EQUAL(final.state->accounts.at(account).onboarding_system_balance, balance + 1);
     const auto final_root = f.service.runtime->GetStateRoot();
+    journal.reset(); f.db.reset();
+    f.db = std::make_unique<PrivateApplicationStore>(f.payer->GetKeyStore(), f.service.directory / "attest");
+    journal = std::make_unique<StorageService>(*f.service.runtime, transport, *f.db, 2);
+    BOOST_CHECK(journal->SubmitSettlement(prepare).status == OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK(journal->SubmitSettlement(activate).status == OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK(journal->SubmitSettlement(std::get<StorageSettlement>(*first_pay)).status == OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK(journal->PreparedSettlement(prepare) == signed_prepare);
+    BOOST_CHECK(journal->PreparedSettlement(activate) == signed_activate);
     BOOST_CHECK(f.service.runtime->SubmitOperation(*first_pay).status == OperationSubmitStatus::ALREADY_FINALIZED);
     BOOST_CHECK(f.service.runtime->GetStateRoot() == final_root);
 }

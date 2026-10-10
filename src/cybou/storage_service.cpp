@@ -28,8 +28,16 @@ StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& tran
 StorageService::~StorageService() = default;
 
 namespace {
-std::string SettlementJournalKey(const CybouNodeRuntime& runtime, std::uint64_t period)
-{ return "storage/settlement/" + runtime.GetNetworkBinding().GetHex() + '/' + std::to_string(period); }
+std::string SettlementJournalKey(const CybouNodeRuntime& runtime, const StorageSettlement& request)
+{
+    auto key = "storage/settlement/" + runtime.GetNetworkBinding().GetHex() + "/action/" +
+        std::to_string(static_cast<unsigned>(request.action)) + '/' + std::to_string(request.period);
+    if (request.action == StorageSettlementAction::PREPARE)
+        key += '/' + request.funded_term_id.GetHex() + '/' + std::to_string(request.assignment_epoch);
+    else if (request.action == StorageSettlementAction::ACTIVATE)
+        key += '/' + request.preparation_id.GetHex();
+    return key;
+}
 std::optional<std::vector<unsigned char>> PreparedBytes(StorageSettlement settlement)
 {
     settlement.poa_signature = {};
@@ -47,9 +55,17 @@ std::optional<StorageSettlement> DecodeSettlement(const std::vector<unsigned cha
 
 std::optional<StorageSettlement> StorageService::PreparedSettlement(const std::uint64_t period)
 {
+    return PreparedSettlement(StorageSettlement{.period = period});
+}
+
+std::optional<StorageSettlement> StorageService::PreparedSettlement(const StorageSettlement& request)
+{
     PrivateApplicationStore::Batch snapshot{m_db};
     if (!snapshot.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement journal unavailable"};
-    const auto key = SettlementJournalKey(m_runtime, period);
+    const auto key = SettlementJournalKey(m_runtime, request);
+    const auto prior_key = "storage/settlement/" + m_runtime.GetNetworkBinding().GetHex() + '/' + std::to_string(request.period);
+    if (m_db.Has(prior_key + "/prepared") || m_db.Has(prior_key + "/signed"))
+        throw std::runtime_error{"period-only settlement journal requires explicit reconciliation"};
     const auto prepared = m_db.Get(key + "/prepared");
     const auto signed_bytes = m_db.Get(key + "/signed");
     if (!prepared) {
@@ -58,7 +74,7 @@ std::optional<StorageSettlement> StorageService::PreparedSettlement(const std::u
         return std::nullopt;
     }
     auto result = DecodeSettlement(*prepared);
-    if (!result || result->period != period || PreparedBytes(*result) != prepared)
+    if (!result || SettlementJournalKey(m_runtime, *result) != key || PreparedBytes(*result) != prepared)
         throw std::runtime_error{"corrupt settlement preparation"};
     if (signed_bytes) {
         result = DecodeSettlement(*signed_bytes);
@@ -81,12 +97,17 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
     // malformed entries fail serialization; an actual empty period uses SHA256(u32 zero).
     const std::array<unsigned char,4> empty_count{};
     if (!crypto::ComputeSha256({std::span<const unsigned char>{empty_count}}, requested.evidence_root.begin())) return {};
+    return SubmitSettlement(requested);
+}
+
+OperationSubmitResult StorageService::SubmitSettlement(const StorageSettlement& requested)
+{
     const auto prepared_bytes = PreparedBytes(requested);
     if (!prepared_bytes) return {};
-    const auto key = SettlementJournalKey(m_runtime, period);
-    const auto retained = PreparedSettlement(period);
+    const auto key = SettlementJournalKey(m_runtime, requested);
+    const auto retained = PreparedSettlement(requested);
     if (retained && PreparedBytes(*retained) != prepared_bytes)
-        throw std::runtime_error{"different settlement already prepared for this period"};
+        throw std::runtime_error{"different settlement already prepared for this action scope"};
     // Invalid fresh input must not freeze the period. Retained exact operations
     // still follow replay/reconciliation, even if canonical state has advanced.
     if (!retained && m_runtime.CheckStorageSettlementInputs(requested) != StorageSettlementError::NONE) return {};
@@ -99,7 +120,7 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
             (!prior && !m_db.Put(key + "/prepared", *prepared_bytes)) || !prepare.Commit())
             throw std::runtime_error{"cannot persist settlement preparation"};
     }
-    auto settlement = PreparedSettlement(period);
+    auto settlement = PreparedSettlement(requested);
     if (!settlement) throw std::runtime_error{"lost settlement preparation"};
     auto digest = ComputeStorageSettlementDigest(m_runtime.GetNetworkBinding(), *settlement);
     if (!digest) return {};
@@ -117,7 +138,7 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
                 throw std::runtime_error{"cannot persist signed settlement"};
             if (!save.Commit()) throw std::runtime_error{"cannot commit signed settlement"};
         }
-        settlement = PreparedSettlement(period);
+        settlement = PreparedSettlement(requested);
         if (!settlement) throw std::runtime_error{"lost signed settlement"};
     }
     const ProtocolOperation op{*settlement};

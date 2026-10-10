@@ -102,6 +102,24 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
 
+BOOST_AUTO_TEST_CASE(period_only_journal_requires_reconciliation_without_reinterpretation)
+{
+    CybouServiceTestFixture f;
+    auto owner = f.CreateIdentity("journal-prior.vault");
+    cybou::PrivateApplicationStore db{owner->GetKeyStore(), f.directory / "prior-app"};
+    cybou::RuntimeStorageTransport transport{*f.runtime};
+    cybou::StorageService service{*f.runtime, transport, db, 1};
+    const auto old_key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/0/prepared";
+    const std::vector<unsigned char> retained{1, 2, 3};
+    BOOST_REQUIRE(db.Put(old_key, retained));
+    const auto root = f.runtime->GetStateRoot();
+    BOOST_CHECK_THROW(service.PreparedSettlement(0), std::runtime_error);
+    BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000000, {}), std::runtime_error);
+    BOOST_CHECK(db.Get(old_key) == retained);
+    BOOST_CHECK(!db.Has("storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/action/3/0/prepared"));
+    BOOST_CHECK(f.runtime->GetStateRoot() == root);
+}
+
 BOOST_AUTO_TEST_CASE(empty_pay_exact_journal_survives_reopen_without_cursor_replay)
 {
     CybouServiceTestFixture f;
@@ -118,7 +136,7 @@ BOOST_AUTO_TEST_CASE(empty_pay_exact_journal_survives_reopen_without_cursor_repl
     const auto first = service->SubmitSettlement(0, 1700000000, entries); BOOST_REQUIRE(first);
     BOOST_CHECK_EQUAL(signer->calls, 1U);
     BOOST_CHECK(f.runtime->GetStateRoot() == root); // Submission is never payment.
-    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/0";
+    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/action/3/0";
     const auto exact = db->Get(key + "/signed"); BOOST_REQUIRE(exact);
     BOOST_CHECK(first.op_id == cybou::ComputeOperationId(cybou::ProtocolOperation{*service->PreparedSettlement(0)}));
     BOOST_CHECK(service->SubmitSettlement(0, 1700000000, entries).op_id == first.op_id);
@@ -174,7 +192,7 @@ BOOST_AUTO_TEST_CASE(settlement_signature_save_failure_never_submits_and_retains
     BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000000, {}), std::runtime_error);
     BOOST_CHECK(f.runtime->GetStateRoot() == root);
     BOOST_REQUIRE(owner->LoadVault("correct horse battery staple"));
-    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/0";
+    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/action/3/0";
     BOOST_CHECK(!db.Has(key + "/signed"));
     const auto prepared = db.Get(key + "/prepared"); BOOST_REQUIRE(prepared);
     const auto restored = service.PreparedSettlement(0); BOOST_REQUIRE(restored);

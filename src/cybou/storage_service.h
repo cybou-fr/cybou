@@ -301,6 +301,10 @@ public:
         std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
     /// Retained exact input/signature in existing app.db; corruption throws.
     std::optional<StorageSettlement> PreparedSettlement(std::uint64_t period);
+    /// Action-scoped recovery of exact PREPARE/ACTIVATE/PAY bytes. Request selects
+    /// the scope; changing its prepared body is rejected, never silently replaced.
+    std::optional<StorageSettlement> PreparedSettlement(const StorageSettlement& request);
+    OperationSubmitResult SubmitSettlement(const StorageSettlement& request);
     OperationSubmitResult SubmitSettlement(std::uint64_t period, std::uint64_t start,
         std::vector<StorageSettlementEntry> entries);
 
