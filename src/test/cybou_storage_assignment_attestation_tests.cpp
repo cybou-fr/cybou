@@ -4,6 +4,7 @@
 #include <cybou/storage_assignment_observer.h>
 #include <cybou/storage_assignment_observation_store.h>
 #include <cybou/storage_assignment_payout.h>
+#include <cybou/storage_economy.h>
 #include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/binary_codec.h>
@@ -329,6 +330,8 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         canonical_transport.missing = false;
     }
 
+    std::vector<StorageSettlementEntry> collected_entries;
+    std::vector<Hash256> collected_references;
     {
         const auto& allocation = term.assignments[0].allocations.front();
         const auto active_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
@@ -381,6 +384,8 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
             '/' + std::to_string(allocation.slot) + "/interval-proof/" + Hash256{std::span<const unsigned char,32>{claims->front().interval.proof_commitment}}.GetHex();
         const auto original_proof = f.db->Get(proof_key); BOOST_REQUIRE(original_proof);
         BOOST_REQUIRE(f.db->Erase(proof_key));
+        BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, allocation.slot, 0, f.ciphertext));
         BOOST_CHECK(!VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
             chunk, allocation.slot, claims->front().interval, f.ciphertext));
         auto corrupt_proof = *original_proof; corrupt_proof.back() ^= 1;
@@ -388,11 +393,58 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         BOOST_CHECK(!VerifyCanonicalStorageInterval(*f.db, *f.service.runtime, *publication_id, active_id,
             chunk, allocation.slot, claims->front().interval, f.ciphertext));
         BOOST_REQUIRE(f.db->Put(proof_key, *original_proof));
+        const auto services = LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, allocation.slot, 0, f.ciphertext);
+        BOOST_REQUIRE(services); BOOST_REQUIRE_EQUAL(services->size(), 1U);
+        BOOST_CHECK_EQUAL(services->front().verified_unit_seconds, 61200U);
+        BOOST_CHECK_EQUAL(services->front().evidence_references.size(), claims->size());
+        BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, CounterHash(123),
+            chunk, allocation.slot, 0, f.ciphertext));
+        BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, 2, 0, f.ciphertext));
+        auto wrong_bytes = f.ciphertext; wrong_bytes.back() ^= 1;
+        BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, allocation.slot, 0, wrong_bytes));
+        BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, allocation.slot, 1, f.ciphertext)); // No future period credit.
+        {
+            PrivateApplicationStore::Batch pending{*f.db};
+            BOOST_CHECK(!LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+                chunk, allocation.slot, 0, f.ciphertext));
+        }
         BOOST_CHECK(f.service.runtime->GetStateRoot() == root_before_checks);
     }
+    // Both slots contribute verified source intervals to the first finalized PAY.
+    for (const auto& allocation : term.assignments[0].allocations) {
+        const auto active_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
+        if (allocation.slot != term.assignments[0].allocations.front().slot) {
+            auto& node = allocation.storage_id == f.proofs[0].storage_id ? *f.service.runtime : *verifier.runtime;
+            const auto receipt = node.SignStorageProof(StorageReceiptMessage(network, *publication_id, chunk, 4));
+            BOOST_REQUIRE(receipt);
+            StorageEndpoint endpoint{allocation.storage_id, "fixture", 29461};
+            for (uint64_t time : {100000U, 143200U})
+                BOOST_REQUIRE(ObserveAndStoreCanonicalStorageReplica(*f.db, *f.service.runtime, canonical_transport,
+                    endpoint, *publication_id, active_id, chunk, allocation.slot, *receipt, 4, time, 200000, f.ciphertext));
+        }
+        const auto services = LoadCanonicalStorageService(*f.db, *f.service.runtime, *publication_id,
+            chunk, allocation.slot, 0, f.ciphertext);
+        BOOST_REQUIRE(services); BOOST_REQUIRE_EQUAL(services->size(), 1U);
+        const auto& service = services->front();
+        BOOST_CHECK(service.provider.storage_id == allocation.storage_id);
+        const auto due = ComputeAssignedStoragePayout(
+            AssignedStorageBudget{term.replica_share, term.replica_share * 2, term.contracted_unit_seconds},
+            service.verified_unit_seconds, 0);
+        BOOST_REQUIRE(due);
+        collected_entries.push_back({*publication_id, allocation.payout_account, *due,
+            allocation.slot, allocation.storage_id, service.verified_unit_seconds});
+        collected_references.insert(collected_references.end(), service.evidence_references.begin(),
+            service.evidence_references.end());
+    }
+    std::sort(collected_references.begin(), collected_references.end());
+    collected_references.erase(std::unique(collected_references.begin(), collected_references.end()), collected_references.end());
 
-    // Real PAY finality on both nodes; tiny terms accumulate service before
-    // whole CYBOU entitlement. This tests PoA-attested totals, not raw audits.
+    // First PAY uses the real collector above. Later PAYs use explicit synthetic
+    // PoA-attested totals to retain full-term arithmetic/conservation coverage.
     const auto activation_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
     const auto total = TotalCybou(*accepted.state);
     std::map<AccountId, uint64_t> provider_before;
@@ -403,21 +455,23 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         StorageSettlement pay{.period = period, .period_start_utc = 100000 + period * 86400};
         pay.period_end_utc = pay.period_start_utc + 86400;
         // Synthetic references exercise journal retention; this is not collector provenance.
-        const std::array references{CounterHash(period + 100)};
-        BinaryWriter reference_bytes; reference_bytes.U32(1); reference_bytes.Fixed({references[0].begin(), 32});
+        const std::vector<Hash256> references = period == 0 ? collected_references : std::vector<Hash256>{CounterHash(period + 100)};
+        BinaryWriter reference_bytes; reference_bytes.U32(static_cast<uint32_t>(references.size()));
+        for (const auto& ref : references) reference_bytes.Fixed({ref.begin(), 32});
         const auto encoded_references = reference_bytes.Take();
         BOOST_REQUIRE(crypto::ComputeSha256({std::span<const unsigned char>{encoded_references}}, pay.evidence_root.begin()));
         pay.activation_witnesses = {activation_id};
         for (const auto& allocation : term.assignments[0].allocations)
             pay.entries.push_back({*publication_id, allocation.payout_account, period == 29 ? 1U : 0U,
                 allocation.slot, allocation.storage_id, (period + 1) * 86400});
+        if (period == 0) pay.entries = collected_entries;
         std::sort(pay.entries.begin(), pay.entries.end(), [](const auto& a, const auto& b) {
             return std::tie(a.funding_operation_id,a.slot,a.storage_id,a.payout_account) <
                 std::tie(b.funding_operation_id,b.slot,b.storage_id,b.payout_account); });
         const auto before = f.service.runtime->GetStateRoot();
         auto bad = pay; bad.entries[0].amount += 1;
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
-        bad = pay; bad.entries[0].verified_unit_seconds += 1;
+        bad = pay; bad.entries[0].verified_unit_seconds = (period + 1) * 86400 + 1;
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
         bad = pay; bad.activation_witnesses.clear();
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
@@ -443,7 +497,15 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         const auto& retained = paid.state->leases.at(*publication_id).funded_terms.front();
         BOOST_REQUIRE_EQUAL(retained.service_payments.size(), 2U);
         BOOST_CHECK_EQUAL(retained.paid_onboarding, period == 29 ? 2U : 0U);
-        BOOST_CHECK_EQUAL(retained.service_payments[0].verified_unit_seconds, (period + 1) * 86400);
+        if (period == 0) {
+            for (const auto& payment : retained.service_payments) {
+                const auto entry = std::find_if(collected_entries.begin(), collected_entries.end(), [&](const auto& e) {
+                    return e.slot == payment.slot && e.storage_id == payment.storage_id;
+                });
+                BOOST_REQUIRE(entry != collected_entries.end());
+                BOOST_CHECK_EQUAL(payment.verified_unit_seconds, entry->verified_unit_seconds);
+            }
+        } else BOOST_CHECK_EQUAL(retained.service_payments[0].verified_unit_seconds, (period + 1) * 86400);
         const auto serialized = SerializeCybouState(*paid.state); BOOST_REQUIRE(serialized);
         const auto restored = DeserializeCybouState(*serialized); BOOST_REQUIRE(restored);
         BOOST_CHECK(CybouStateHash(*restored) == verifier.runtime->GetStateRoot());

@@ -8,6 +8,36 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Collector service into finalized PAY (2026-10-11)
+
+LoadCanonicalStorageService reads one authorized chunk/slot across every
+positive-duration accepted canonical epoch. It resolves historical ACTIVATE
+material, requires exact frozen plans and all local/shared mirrors, verifies
+every source observation pair, and returns per-epoch provider service plus the
+exact sorted references through the requested period. Unknown assignments,
+missing proofs/plans, wrong chunk bytes, future periods, enclosing application
+transactions or a changed canonical state fail without a partial result.
+The entire read uses one existing app.db snapshot; no new journal or wire field.
+It neither infers service from elapsed time nor modifies canonical paid/balances.
+
+The isolated two-Full-Node fixture now derives the first PAY from the collector:
+61,200 and 43,200 verified unit-seconds for the two replica slots, actual retained
+interval references, and the immutable canonical funded budget. StorageService
+retains/signs/submits that PAY; both nodes finalize identical service ledgers and
+state roots with exact conservation. These tiny partial terms pay zero whole
+CYBOU initially. Later periods intentionally retain synthetic PoA-attested totals
+to test full-term rounding to one CYBOU per slot; those later totals are not raw
+collector evidence. This is not physical-host/VPS custody evidence.
+
+Verification: rebuilt core; all 53 selected assignment-attestation/StorageService
+cases passed, 2160/2160 assertions; 278 other core cases were not selected. Checks
+include missing proof, wrong funding/slot/reference bytes, future-period and
+nested-transaction rejection. Build/test logs are retained under ignored
+artifacts/economics-collector-pay-build-final.txt and
+artifacts/economics-collector-pay-tests-final.txt. The complete all-chunk PAY
+preparer, canonical paid reconciliation, replacement coverage and production
+scheduling/dispatch remain open. No live DEVNET deployment or protocol transition.
+
 ### Canonical historical interval verification (2026-10-11)
 
 Collector completion now atomically retains a compact 56-byte observation-pair

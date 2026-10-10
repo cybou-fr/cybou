@@ -358,14 +358,14 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorag
         slot, receipt, size, time, through, expected, force_full, scope);
 }
 
-bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntime& runtime,
+static bool VerifyCanonicalStorageIntervalSnapshot(PrivateApplicationStore& db, CybouNodeRuntime& runtime,
     const Hash256& funding, const Hash256& activation, const ChunkId& chunk, uint8_t slot,
     const StorageAssignmentInterval& interval, std::span<const unsigned char> reference)
 {
     const auto resolved = ResolveCanonicalStorageHistory(runtime, funding, activation, chunk);
     if (!resolved || slot >= resolved->plan.selected.size()) return false;
     PrivateApplicationStore::Batch snapshot{db};
-    if (!snapshot.IsOutermost() || !db.IsUnlocked() ||
+    if (!db.IsUnlocked() ||
         LoadStorageAssignment(db, resolved->plan.context) != resolved->plan) return false;
     CanonicalObservation assignment{resolved->plan, *resolved, &runtime, funding, activation};
     const auto prefix = Prefix(assignment, slot);
@@ -417,4 +417,72 @@ bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntim
     } catch (const std::invalid_argument&) { return false;
     } catch (const std::length_error&) { return false; }
 }
+bool VerifyCanonicalStorageInterval(PrivateApplicationStore& db, CybouNodeRuntime& runtime,
+    const Hash256& funding, const Hash256& activation, const ChunkId& chunk, uint8_t slot,
+    const StorageAssignmentInterval& interval, std::span<const unsigned char> reference)
+{
+    PrivateApplicationStore::Batch snapshot{db};
+    return snapshot.IsOutermost() && VerifyCanonicalStorageIntervalSnapshot(
+        db, runtime, funding, activation, chunk, slot, interval, reference);
+}
+
+std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorageService(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, const Hash256& funding,
+    const ChunkId& chunk, uint8_t slot, uint64_t through, std::span<const unsigned char> reference)
+{
+    const auto root = runtime.GetStateRoot();
+    const auto state = runtime.GetStore().GetStateSnapshot();
+    if (!state || through > state.state->settlement.next_period || reference.empty() ||
+        ComputeChunkId(reference) != chunk) return std::nullopt;
+    PrivateApplicationStore::Batch snapshot{db};
+    if (!snapshot.IsOutermost() || !db.IsUnlocked()) return std::nullopt;
+    std::vector<CanonicalStorageAssignment> epochs;
+    std::vector<VerifiedCanonicalStorageService> result;
+    for (const auto& [publication, lease] : state.state->leases) {
+        for (const auto& term : lease.funded_terms) {
+            if (term.funding_operation_id != funding) continue;
+            for (auto it = term.assignments.begin(); it != term.assignments.end(); ++it) {
+                auto end = std::min(term.end_period, lease.end_period);
+                if (std::next(it) != term.assignments.end()) end = std::min(end, std::next(it)->effective_period);
+                if (end <= it->effective_period) continue; // Canonically zero-duration epoch.
+                const auto resolved = ResolveCanonicalStorageHistory(runtime, funding, it->operation_id, chunk);
+                if (!resolved || slot >= resolved->plan.selected.size() ||
+                    LoadStorageAssignment(db, resolved->plan.context) != resolved->plan) return std::nullopt;
+                epochs.push_back(*resolved);
+                result.push_back({it->operation_id, resolved->plan.selected[slot], 0, {}});
+            }
+        }
+    }
+    if (epochs.empty()) return std::nullopt;
+    const StorageAssignmentEvidenceScope first{epochs.front().plan, slot,
+        epochs.front().term_start_utc, epochs.front().period_seconds};
+    const auto claims = LoadStorageFundedSlotClaims(db, first);
+    if (!claims) return std::nullopt;
+    // Check every epoch's local mirror, including those without credited service.
+    for (const auto& epoch : epochs) {
+        const StorageAssignmentEvidenceScope scope{epoch.plan, slot, epoch.term_start_utc, epoch.period_seconds};
+        if (!LoadStorageFundedSlotClaims(db, scope)) return std::nullopt;
+    }
+    for (const auto& claim : *claims) {
+        const auto it = std::find_if(epochs.begin(), epochs.end(), [&](const auto& epoch) {
+            return epoch.plan.commitment == claim.assignment;
+        });
+        if (it == epochs.end()) return std::nullopt;
+        const auto index = static_cast<std::size_t>(it - epochs.begin());
+        if (!VerifyCanonicalStorageIntervalSnapshot(db, runtime, funding, result[index].activation,
+            chunk, slot, claim.interval, reference)) return std::nullopt;
+        if (claim.interval.period > through) continue;
+        const auto seconds = claim.interval.end_utc - claim.interval.start_utc;
+        if (seconds > std::numeric_limits<uint64_t>::max() - result[index].verified_unit_seconds) return std::nullopt;
+        result[index].verified_unit_seconds += seconds;
+        result[index].evidence_references.emplace_back(std::span<const unsigned char,32>{claim.interval.proof_commitment});
+    }
+    for (auto& service : result) {
+        std::sort(service.evidence_references.begin(), service.evidence_references.end());
+        service.evidence_references.erase(std::unique(service.evidence_references.begin(),
+            service.evidence_references.end()), service.evidence_references.end());
+    }
+    return runtime.GetStateRoot() == root ? std::optional{result} : std::nullopt;
+}
+
 }

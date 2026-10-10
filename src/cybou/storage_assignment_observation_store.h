@@ -53,6 +53,22 @@ std::optional<StoredStorageAssignmentObservation> ObserveAndStoreCanonicalStorag
     const ChunkId& chunk, std::uint8_t slot, std::span<const unsigned char> receipt,
     std::uint32_t stored_size, std::uint64_t observed_at_utc, std::uint64_t verified_through_utc,
     std::span<const unsigned char> expected_bytes = {}, bool force_full = false);
+struct VerifiedCanonicalStorageService {
+    Hash256 activation;
+    StorageAssignmentProvider provider;
+    std::uint64_t verified_unit_seconds{0};
+    std::vector<Hash256> evidence_references;
+};
+/// Read-only completed-period service for one authorized chunk/slot across ALL
+/// canonical historical epochs. Every shared claim must resolve and verify;
+/// missing plans/proofs fail, never become zero. Caller aggregates chunks and
+/// applies canonical paid/budget arithmetic before submitting PAY.
+/// Rejects enclosing transactions and a canonical state change during the read.
+std::optional<std::vector<VerifiedCanonicalStorageService>> LoadCanonicalStorageService(
+    PrivateApplicationStore& db, CybouNodeRuntime& runtime, const Hash256& funding,
+    const ChunkId& chunk, std::uint8_t slot, std::uint64_t through_period,
+    std::span<const unsigned char> reference_bytes);
+
 /// Reconstructs the exact retained observation pair and period-slice fingerprint,
 /// checks both records/receipts/audit hashes and canonical historical time bounds.
 /// GET remains the trusted collector assertion over the supplied exact chunk bytes.

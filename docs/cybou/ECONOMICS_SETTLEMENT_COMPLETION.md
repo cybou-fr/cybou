@@ -10,6 +10,24 @@ deployable while funding and cumulative settlement rules remain inconsistent.
 
 ## Delivery order
 
+### Collector-to-PAY isolated checkpoint (2026-10-11)
+
+The first PAY in the two-Full-Node canonical fixture now uses actual retained
+collector intervals/references for both replica slots (61,200 and 43,200 service
+seconds), immutable funded-term arithmetic, the existing exact action journal,
+PoA signing and independent finalization. Later synthetic totals retain the
+separate full-term rounding/conservation test and do not claim raw provenance.
+LoadCanonicalStorageService supplies read-only per-epoch provider totals and
+references for one authorized chunk/slot, resolving every positive-duration
+canonical epoch and checking every claim/source pair in a single app.db snapshot.
+Missing evidence fails rather than reducing service to zero. No new DB, service,
+P2P entity, consensus field or deployment is added by this checkpoint.
+
+Still required: complete all-chunk/all-slot StorageService PAY preparation from
+these results, reconciliation against canonical cumulative paid, replacement and
+crash/retry scenarios, bounded operation batches and production scheduling. The
+fixture does not close DOC-005/006/020 or authorize deploying current core changes.
+
 ### Re-audit reconciliation (2026-10-10)
 
 The latest supplied audit reviews `5d10a355` and requires a completed canonical

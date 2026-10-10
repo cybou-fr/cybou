@@ -141,11 +141,17 @@ provenance and scalable batches still block DOC-005/006/020 closure; no live mig
 The raw replica observer now resolves canonical PREPARE/ACTIVATE and performs
 receipt-bound GET/audit without a caller historical registry/per-chunk signature.
 Durable collector intervals now share the intent/success/gap/GET policy with
-canonical scope and active-epoch revalidation. Historical source-proof resolution,
-the payout consumer and production dispatch remain open. The historical interval
+canonical scope and active-epoch revalidation. The complete payout consumer and
+production dispatch remain open. The historical interval
 verifier now checks compact pair references against exact source observations,
 shared/local claims and accepted epoch bounds. Complete-term PAY preparation is
 still missing; no deployment or live record migration is authorized.
+The first PAY in the isolated two-node fixture now uses verified collector service
+and exact references for both replica slots. A snapshot reader resolves all
+positive-duration canonical epochs for one chunk/slot and rejects missing source
+material. Complete all-chunk preparation, canonical paid reconciliation,
+replacement coverage and production dispatch remain open; these conflicts are
+not closed by the partial-term fixture.
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative
