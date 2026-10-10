@@ -135,8 +135,9 @@ service counters; no live deployment/migration is authorized.
 The action-journal follow-up separates PREPARE/ACTIVATE/PAY scopes in existing
 app.db and retains full prepared/signed bodies, including PAY evidence root and
 witnesses. Prior period-only records require explicit reconciliation and remain
-untouched. Collector provenance, the frozen interval-reference list and scalable
-batches still block DOC-005/006/020 closure; no live migration is authorized.
+untouched. The exact interval-reference list is now frozen with PAY preparation
+and root-checked on recovery. Collector source-proof/canonical assignment
+provenance and scalable batches still block DOC-005/006/020 closure; no live migration is authorized.
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative

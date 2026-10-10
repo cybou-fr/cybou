@@ -304,7 +304,10 @@ public:
     /// Action-scoped recovery of exact PREPARE/ACTIVATE/PAY bytes. Request selects
     /// the scope; changing its prepared body is rejected, never silently replaced.
     std::optional<StorageSettlement> PreparedSettlement(const StorageSettlement& request);
-    OperationSubmitResult SubmitSettlement(const StorageSettlement& request);
+    /// PAY freezes sorted unique interval references with its exact body before
+    /// signing. References are collector assertions, not independently proved custody.
+    OperationSubmitResult SubmitSettlement(const StorageSettlement& request,
+        std::span<const Hash256> evidence_references = {});
     OperationSubmitResult SubmitSettlement(std::uint64_t period, std::uint64_t start,
         std::vector<StorageSettlementEntry> entries);
 

@@ -120,6 +120,43 @@ BOOST_AUTO_TEST_CASE(period_only_journal_requires_reconciliation_without_reinter
     BOOST_CHECK(f.runtime->GetStateRoot() == root);
 }
 
+BOOST_AUTO_TEST_CASE(pay_reference_list_is_atomic_immutable_and_required_on_recovery)
+{
+    CybouServiceTestFixture f;
+    auto owner = f.CreateIdentity("journal-references.vault");
+    cybou::PrivateApplicationStore db{owner->GetKeyStore(), f.directory / "references-app"};
+    cybou::RuntimeStorageTransport transport{*f.runtime};
+    cybou::StorageService service{*f.runtime, transport, db, 1};
+    const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
+    BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
+    cybou::StorageSettlement pay{.period_start_utc = 1700000000}; cybou::test::PayWindow(pay);
+    const std::array invalid_zero{cybou::Hash256{}};
+    const std::array invalid_duplicate{cybou::Hash256{1}, cybou::Hash256{1}};
+    const std::array invalid_order{cybou::Hash256{2}, cybou::Hash256{1}};
+    BOOST_CHECK(!service.SubmitSettlement(pay, invalid_zero));
+    BOOST_CHECK(!service.SubmitSettlement(pay, invalid_duplicate));
+    BOOST_CHECK(!service.SubmitSettlement(pay, invalid_order));
+    BOOST_CHECK(!service.SubmitSettlement(pay, std::array{cybou::Hash256{1}})); // Root mismatch.
+    BOOST_CHECK(!service.PreparedSettlement(0)); BOOST_CHECK_EQUAL(signer->calls, 0U);
+    const auto root = f.runtime->GetStateRoot();
+    const auto first = service.SubmitSettlement(pay); BOOST_REQUIRE(first);
+    BOOST_CHECK_EQUAL(signer->calls, 1U);
+    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/action/3/0";
+    const auto prepared = db.Get(key + "/prepared"), signed_bytes = db.Get(key + "/signed");
+    const auto refs = db.Get(key + "/evidence"); BOOST_REQUIRE(refs);
+    BOOST_CHECK(*refs == std::vector<unsigned char>({0, 0, 0, 0}));
+    BOOST_REQUIRE(db.Erase(key + "/evidence"));
+    BOOST_CHECK_THROW(service.PreparedSettlement(0), std::runtime_error);
+    BOOST_CHECK_THROW(service.SubmitSettlement(pay), std::runtime_error);
+    BOOST_CHECK(db.Get(key + "/prepared") == prepared); BOOST_CHECK(db.Get(key + "/signed") == signed_bytes);
+    auto corrupt = *refs; corrupt.push_back(0);
+    BOOST_REQUIRE(db.Put(key + "/evidence", corrupt));
+    BOOST_CHECK_THROW(service.PreparedSettlement(0), std::runtime_error);
+    BOOST_REQUIRE(db.Put(key + "/evidence", *refs));
+    BOOST_CHECK(service.SubmitSettlement(pay).op_id == first.op_id);
+    BOOST_CHECK_EQUAL(signer->calls, 1U); BOOST_CHECK(f.runtime->GetStateRoot() == root);
+}
+
 BOOST_AUTO_TEST_CASE(empty_pay_exact_journal_survives_reopen_without_cursor_replay)
 {
     CybouServiceTestFixture f;

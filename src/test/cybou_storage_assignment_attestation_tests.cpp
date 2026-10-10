@@ -7,6 +7,7 @@
 #include <cybou/block_executor.h>
 #include <cybou/protocol_limits.h>
 #include <cybou/binary_codec.h>
+#include <cybou/crypto/sha256.h>
 #include <cybou/chunk_authorization.h>
 #include <test/cybou_service_test_fixture.h>
 #include <boost/test/unit_test.hpp>
@@ -299,7 +300,12 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     std::optional<ProtocolOperation> first_pay;
     for (uint64_t period = 0; period < 30; ++period) {
         StorageSettlement pay{.period = period, .period_start_utc = 100000 + period * 86400};
-        pay.period_end_utc = pay.period_start_utc + 86400; pay.evidence_root = CounterHash(period + 100);
+        pay.period_end_utc = pay.period_start_utc + 86400;
+        // Synthetic references exercise journal retention; this is not collector provenance.
+        const std::array references{CounterHash(period + 100)};
+        BinaryWriter reference_bytes; reference_bytes.U32(1); reference_bytes.Fixed({references[0].begin(), 32});
+        const auto encoded_references = reference_bytes.Take();
+        BOOST_REQUIRE(crypto::ComputeSha256({std::span<const unsigned char>{encoded_references}}, pay.evidence_root.begin()));
         pay.activation_witnesses = {activation_id};
         for (const auto& allocation : term.assignments[0].allocations)
             pay.entries.push_back({*publication_id, allocation.payout_account, period == 29 ? 1U : 0U,
@@ -317,7 +323,9 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
         bad = pay; bad.activation_witnesses.push_back(CounterHash(999));
         std::sort(bad.activation_witnesses.begin(),bad.activation_witnesses.end());
         BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
-        const auto pay_submit = journal->SubmitSettlement(pay); BOOST_REQUIRE(pay_submit);
+        BOOST_CHECK(!journal->SubmitSettlement(pay)); // Fresh nonempty PAY requires references.
+        BOOST_CHECK(!journal->PreparedSettlement(pay));
+        const auto pay_submit = journal->SubmitSettlement(pay, references); BOOST_REQUIRE(pay_submit);
         const auto signed_pay = journal->PreparedSettlement(pay); BOOST_REQUIRE(signed_pay);
         BOOST_CHECK(journal->SubmitSettlement(pay).op_id == pay_submit.op_id);
         auto conflicting_pay = pay; conflicting_pay.evidence_root = CounterHash(123456);

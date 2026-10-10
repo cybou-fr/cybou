@@ -8,6 +8,36 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### PAY interval-reference retention (2026-10-11)
+
+Complete PAY submission now freezes the exact sorted unique raw32 reference list
+as LE u32 count plus identifiers in the same existing app.db batch as prepared
+bytes, before signing. Recovery verifies exact size/order/nonzero identifiers and
+SHA-256 equality to the signed evidence_root. Fresh nonempty service PAY cannot
+be prepared without references. Retry can reuse the durably retained list; missing,
+corrupt or mismatched lists fail without replacing prepared/signed bytes. PREPARE
+and ACTIVATE cannot carry this PAY-only metadata. Empty PAY retains the exact
+four-byte zero count. No wire, consensus field, hash domain or DB is added.
+
+The list obeys the existing 4-MiB app.db value bound; oversize input is rejected
+before preparation, never truncated. This is a local record bound, not an approved
+retention horizon or scalable evidence batching design. Existing intermediate PAY
+journals without this list fail explicitly; no live migration is authorized.
+
+Verification: rebuilt core target; complete local Windows regression passed
+331/331 cases and 154385/154385 assertions. New cases cover invalid/missing lists,
+exact empty encoding, corruption without replacing signed bytes, signature reuse
+and nonempty-reference recovery in the two-node PAY fixture. Evidence is retained
+in ignored artifacts/economics-pay-references-build.txt and
+artifacts/economics-pay-references-full-core.txt. No test is disabled.
+
+This closes reference-list/body retention, not source-proof resolution. The
+submission boundary still trusts the caller's collector references and service
+claims; it does not load the two observations or prove their canonical assignment
+provenance. The two-node fixture uses explicitly synthetic references. Replacing
+the old caller-snapshot/per-chunk attestation collector prerequisite with accepted
+canonical PREPARE/ACTIVATE material remains required before vertical acceptance.
+
 ### Exact action submission journal (2026-10-11)
 
 StorageService now accepts complete PREPARE/ACTIVATE/PAY operations, retaining

@@ -9,6 +9,7 @@
 #include <cybou/storage_io_scheduler.h>
 #include <cybou/root_publication.h>
 #include <cybou/crypto/sha256.h>
+#include <cybou/binary_codec.h>
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -37,6 +38,34 @@ std::string SettlementJournalKey(const CybouNodeRuntime& runtime, const StorageS
     else if (request.action == StorageSettlementAction::ACTIVATE)
         key += '/' + request.preparation_id.GetHex();
     return key;
+}
+// Existing app.db value bound, not a retention/compaction policy. Oversize lists
+// fail before preparing anything; obligations are never truncated to fit.
+constexpr std::size_t EVIDENCE_BYTES_LIMIT{4 * 1024 * 1024};
+std::optional<std::vector<unsigned char>> EvidenceBytes(std::span<const Hash256> references)
+{
+    if (references.size() > (EVIDENCE_BYTES_LIMIT - 4) / 32) return std::nullopt;
+    BinaryWriter out{EVIDENCE_BYTES_LIMIT}; out.U32(static_cast<uint32_t>(references.size()));
+    const Hash256 zero;
+    for (std::size_t i = 0; i < references.size(); ++i) {
+        if (references[i] == zero || (i && !(references[i - 1] < references[i]))) return std::nullopt;
+        out.Fixed({references[i].begin(), 32});
+    }
+    return out.Take();
+}
+bool EvidenceValid(std::span<const unsigned char> bytes, const StorageSettlement& request)
+{
+    if (bytes.size() < 4 || bytes.size() > EVIDENCE_BYTES_LIMIT) return false;
+    const auto count = ReadLittleEndian<uint32_t>(bytes.first(4));
+    if (count != (bytes.size() - 4) / 32 || bytes.size() != 4 + std::size_t{count} * 32 ||
+        (!request.entries.empty() && !count)) return false;
+    Hash256 prior, digest;
+    for (uint32_t i = 0; i < count; ++i) {
+        const Hash256 ref{std::span<const unsigned char,32>{bytes.data() + 4 + std::size_t{i} * 32, 32}};
+        if (ref == Hash256{} || (i && !(prior < ref))) return false;
+        prior = ref;
+    }
+    return crypto::ComputeSha256({bytes}, digest.begin()) && digest == request.evidence_root;
 }
 std::optional<std::vector<unsigned char>> PreparedBytes(StorageSettlement settlement)
 {
@@ -69,13 +98,18 @@ std::optional<StorageSettlement> StorageService::PreparedSettlement(const Storag
     const auto prepared = m_db.Get(key + "/prepared");
     const auto signed_bytes = m_db.Get(key + "/signed");
     if (!prepared) {
-        if (m_db.Has(key + "/prepared") || m_db.Has(key + "/signed"))
+        if (m_db.Has(key + "/prepared") || m_db.Has(key + "/signed") || m_db.Has(key + "/evidence"))
             throw std::runtime_error{"missing settlement preparation"};
         return std::nullopt;
     }
     auto result = DecodeSettlement(*prepared);
     if (!result || SettlementJournalKey(m_runtime, *result) != key || PreparedBytes(*result) != prepared)
         throw std::runtime_error{"corrupt settlement preparation"};
+    const auto evidence = m_db.Get(key + "/evidence");
+    if (result->action == StorageSettlementAction::PAY) {
+        if (!evidence || !EvidenceValid(*evidence, *result))
+            throw std::runtime_error{"missing or corrupt settlement evidence references"};
+    } else if (m_db.Has(key + "/evidence")) throw std::runtime_error{"unexpected assignment evidence references"};
     if (signed_bytes) {
         result = DecodeSettlement(*signed_bytes);
         const auto digest = result ? ComputeStorageSettlementDigest(m_runtime.GetNetworkBinding(), *result) : std::nullopt;
@@ -100,7 +134,8 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
     return SubmitSettlement(requested);
 }
 
-OperationSubmitResult StorageService::SubmitSettlement(const StorageSettlement& requested)
+OperationSubmitResult StorageService::SubmitSettlement(const StorageSettlement& requested,
+    const std::span<const Hash256> evidence_references)
 {
     const auto prepared_bytes = PreparedBytes(requested);
     if (!prepared_bytes) return {};
@@ -108,6 +143,12 @@ OperationSubmitResult StorageService::SubmitSettlement(const StorageSettlement& 
     const auto retained = PreparedSettlement(requested);
     if (retained && PreparedBytes(*retained) != prepared_bytes)
         throw std::runtime_error{"different settlement already prepared for this action scope"};
+    std::optional<std::vector<unsigned char>> evidence;
+    if (requested.action == StorageSettlementAction::PAY) {
+        if (retained && evidence_references.empty()) evidence = m_db.Get(key + "/evidence");
+        else evidence = EvidenceBytes(evidence_references);
+        if (!evidence || !EvidenceValid(*evidence, requested)) return {};
+    } else if (!evidence_references.empty()) return {};
     // Invalid fresh input must not freeze the period. Retained exact operations
     // still follow replay/reconciliation, even if canonical state has advanced.
     if (!retained && m_runtime.CheckStorageSettlementInputs(requested) != StorageSettlementError::NONE) return {};
@@ -115,9 +156,12 @@ OperationSubmitResult StorageService::SubmitSettlement(const StorageSettlement& 
         PrivateApplicationStore::Batch prepare{m_db};
         if (!prepare.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement journal unavailable"};
         const auto prior = m_db.Get(key + "/prepared");
+        if (prior && evidence && m_db.Get(key + "/evidence") != evidence)
+            throw std::runtime_error{"conflicting settlement evidence references"};
         if (prior && prior != prepared_bytes) throw std::runtime_error{"conflicting settlement preparation"};
         if ((!prior && (m_db.Has(key + "/prepared") || m_db.Has(key + "/signed"))) ||
-            (!prior && !m_db.Put(key + "/prepared", *prepared_bytes)) || !prepare.Commit())
+            (!prior && !m_db.Put(key + "/prepared", *prepared_bytes)) ||
+            (!prior && evidence && !m_db.Put(key + "/evidence", *evidence)) || !prepare.Commit())
             throw std::runtime_error{"cannot persist settlement preparation"};
     }
     auto settlement = PreparedSettlement(requested);
