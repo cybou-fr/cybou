@@ -8,6 +8,75 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Canonical cumulative PAY development (2026-10-11)
+
+The approved isolated source layout now replaces the aggregate daily PAY body
+with period_end_utc, evidence_root, 113-byte entries keyed by funding OperationID,
+slot, StorageId and payout, followed by sorted unique activation witnesses.
+Execution resolves retained canonical assignments, enforces increasing service,
+provider capacity and aggregate slot T, and requires exactly
+`floor(B * cumulative_service / T) - finalized_paid`. Zero-amount entries can
+record strictly increasing service; unchanged counters are rejected. There is
+no recipient ranking, daily ceiling or replica-count limit on historical payees.
+All effects are checked on a candidate state before publishing the result.
+
+Each term retains sorted service/paid/closed-epoch-capacity records (89 bytes),
+refunded onboarding/locked counters and accepted assignment history. The empty
+term codec is 148 bytes; no historical decoder/migration is provided. Refunds
+retain original B/T and origin provenance; term expiry and revocation no longer
+erase financial checkpoints. Renewal can start after an expired retained term
+without reusing its escrow. State validation checks paid against ledger totals,
+entitlement, slot service bounds, capacity and exact residual origins.
+
+This does not complete the whole atomic acceptance contract. The existing
+off-chain observer/quote still requires its caller-snapshot/per-chunk attestation
+inputs; a canonical collector consumer and exact action/evidence journal remain
+open. The former live-provider daily-ranking producer was removed and now fails
+explicitly instead of inventing cumulative counters or silently advancing an
+empty period. The entry-only GUI submission cannot supply a real cumulative PAY.
+The two-node PAY test attests service totals with the fixture PoA; it is not a
+raw-observation-to-payment proof. No deployment or live record interpretation
+is authorized by this source checkpoint.
+
+Windows Qt diagnostic work adds explicit QtTest text and JUnit output files,
+verbose CTest output, reported exit code and always-retained CI artifacts including
+CTest's LastTest/LastTestsFailed logs. No Geo rewrite, timeout increase or disabled
+test is involved; recording diagnostics is not a claim that Windows CI is fixed.
+
+Verification completed 2026-10-11: core and native Qt test targets built; the full
+local Windows core suite passed 329 cases/154174 assertions. Native Windows
+QtTest through CTest passed all 95 results (including setup/cleanup), with no
+failures or skips. The existing GitHub Windows failure was not reproduced here;
+future CI retains the newly configured diagnostic files. The standalone offline
+model also built and confirmed two CYBOU escrow/zero first-period entitlement for
+the tiny two-replica term. The core target now carries its required Windows
+Winsock library dependency, including for standalone consumers.
+
+The finalized-node scenario includes an actual funded RootPublication, two real
+binding proofs, PREPARE, later seed/key rotation, ACTIVATE and 30 signed PAY
+periods on two independent in-memory executors. The first 29 periods retain
+zero-payment service growth; the last pays one onboarding CYBOU per slot. Signing
+and submission leave balances unchanged; finalized replay cannot pay again;
+every imported block has equal roots and every paid snapshot reopens exactly.
+Separate component scenarios verify provider replacement's shared B/T and
+fractional refund, mixed-origin payments/refunds, independent renewal and
+atomic rejection. These are not physical custody/12-hour scheduler acceptance.
+
+Current fixed state-layout vectors (148-byte empty terms plus variable data):
+PREPARE `0762dfdeed75bda796b79112da2c3076d0913729e0435222220de1592066b557`;
+ACTIVATE `3742f90006ab43ac62b1336f93a83260696e9341b75afdafd894eebb14c7bb60`.
+PAY limit vectors exercise 1024 entries/372 witnesses at 131055 tagged bytes;
+373 witnesses exceed the 128 KiB bound. Counts are checked before allocation.
+
+Ignored evidence: `artifacts/economics-cumulative-pay-full-core.txt`,
+`artifacts/economics-cumulative-pay-qt.txt`, corresponding XML/CTest logs,
+build-checked/build-regression logs and the offline model JSON. Preserve the
+initial build FAIL (test Hash256 initializer-list narrowing), model-link FAIL
+(missing standalone Winsock dependency) and core-initial FAIL (stale snapshot
+reference, old codec vectors and obsolete randomized payout inputs). Corrections
+refresh the fixture snapshot, assert new vectors and exercise both unattested
+payout rejection and valid zero-service periods; no test is disabled.
+
 ### PAY capacity prerequisite (2026-10-10)
 
 `ComputeAcceptedStorageCapacity` derives a per-term/slot/StorageId/payout
@@ -43,11 +112,12 @@ Accepted allocation summaries enter state serialization/root and survive decodin
 Neither action advances the payment cursor or moves CYBOU.
 
 This is a partial isolated implementation, not the completed atomic contract.
-The PAY body/checker still uses the earlier publication/account/amount inputs;
-it now explicitly rejects any state containing accepted declarations/assignments.
+At checkpoint `1c93de3f`, the PAY body/checker used the earlier publication/account/amount inputs;
+it explicitly rejected any state containing accepted declarations/assignments.
 It cannot debit or discard these checkpoints under the old daily rules.
-Cumulative PAY/paid ledger, closure/refund retention, action-scoped exact journal
-and canonical collector provenance are still required. Do not deploy this
+Cumulative PAY/paid ledger and closure retention were not yet implemented at that
+checkpoint; the later isolated PAY entry above records their implementation.
+Action-scoped exact journal and canonical collector provenance remain required. Do not deploy this
 intermediate wire/state layout or reinterpret existing live records.
 
 State byte layout appended to each immutable funded term after its ten original

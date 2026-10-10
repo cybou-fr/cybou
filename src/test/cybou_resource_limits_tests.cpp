@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cybou/block_executor.h>
+#include <test/cybou_settlement_test_helpers.h>
 #include <cybou/operation_work.h>
 #include <cybou/protocol_limits.h>
 #include <test/cybou_test_helpers.h>
@@ -119,6 +120,8 @@ struct LimitsFixture {
     {
         StorageSettlement settlement{.period = state.settlement.next_period, .period_start_utc = start_utc,
             .entries = std::move(entries)};
+        test::PayWindow(settlement, params.storage_settlement_period_seconds);
+        test::FixturePayEntries(settlement, state);
         std::array<unsigned char, 32> poa_seed{};
         poa_seed[0] = 0xA7;
         settlement.poa_signature = *SignIdentityMessage(poa_seed, IdentityKeyPurpose::POA_FINALIZER,
@@ -153,19 +156,19 @@ BOOST_AUTO_TEST_CASE(accepted_assignment_state_codec_vectors)
     term.next_assignment_epoch = 2;
     BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
     const auto prepared = CybouStateHash(f.state); BOOST_REQUIRE(prepared);
-    BOOST_CHECK_EQUAL(prepared->GetHex(), "1ea29a211823069e662449359a6cdc7961d91fe15b91f30d156925cbb3d943ca");
+    BOOST_CHECK_EQUAL(prepared->GetHex(), "0762dfdeed75bda796b79112da2c3076d0913729e0435222220de1592066b557");
     term.assignments.push_back({Hash256{92}, Hash256{93}, Hash256{94}, 1, 0, {{0,storage,f.other,1}}});
     BOOST_REQUIRE(ValidateCybouState(f.state) == StateValidationError::NONE);
     const auto activated = CybouStateHash(f.state); BOOST_REQUIRE(activated);
-    BOOST_CHECK_EQUAL(activated->GetHex(), "ee36e5d86903cc6945f584861b6d9a4f98ee07a076f69853e9bbfdc9dda37843");
+    BOOST_CHECK_EQUAL(activated->GetHex(), "3742f90006ab43ac62b1336f93a83260696e9341b75afdafd894eebb14c7bb60");
     const auto bytes = SerializeCybouState(f.state); BOOST_REQUIRE(bytes);
     const auto decoded = DeserializeCybouState(*bytes); BOOST_REQUIRE(decoded);
     BOOST_CHECK(CybouStateHash(*decoded) == activated);
     BOOST_CHECK(SerializeCybouState(*decoded) == bytes);
     auto corrupt = *bytes; corrupt.push_back(0); BOOST_CHECK(!DeserializeCybouState(corrupt));
     corrupt = *bytes; corrupt.pop_back(); BOOST_CHECK(!DeserializeCybouState(corrupt));
-    corrupt = *bytes; std::fill_n(corrupt.end() - 69 - 4, 4, 255); BOOST_CHECK(!DeserializeCybouState(corrupt));
-    corrupt = *bytes; std::fill_n(corrupt.end() - 4, 4, 0); BOOST_CHECK(!DeserializeCybouState(corrupt));
+    corrupt = *bytes; std::fill_n(corrupt.end() - 20 - 69 - 4, 4, 255); BOOST_CHECK(!DeserializeCybouState(corrupt));
+    corrupt = *bytes; std::fill_n(corrupt.end() - 20 - 4, 4, 0); BOOST_CHECK(!DeserializeCybouState(corrupt));
 }
 
 BOOST_AUTO_TEST_CASE(publications_are_not_limited_by_auth)
@@ -309,6 +312,7 @@ BOOST_AUTO_TEST_CASE(storage_lease_locks_rent_in_escrow_and_conserves_cybou)
 BOOST_AUTO_TEST_CASE(settlement_pays_providers_by_origin_and_refunds_expired_escrow)
 {
     LimitsFixture f;
+    f.params.storage_replica_target = 1;
     const auto publication = f.Publish(2048, 0x80);
     const auto publication_id = *ComputeOperationId(publication);
     BOOST_REQUIRE(f.Execute({publication}, 1));
@@ -316,22 +320,23 @@ BOOST_AUTO_TEST_CASE(settlement_pays_providers_by_origin_and_refunds_expired_esc
     auto& owner = f.state.accounts.at(f.account);
     owner.onboarding_system_balance = 5; // 5 onboarding + rest SystemLock origin
     BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 2)}, 2));
+    test::AcceptFixtureAllocation(f.state, publication_id, f.other);
     const auto total = TotalCybou(f.state);
     BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).escrow_onboarding, 4U); // fee took 1 first
 
     const auto provider_before = f.state.accounts.at(f.other);
-    // Period cap: one day of 1 GiB x 2 replicas = 10 CYBOU.
-    BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 11}})}, 3).settlement_error ==
+    // One assigned replica earns five CYBOU from one verified GiB-day.
+    BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 6}})}, 3).settlement_error ==
         StorageSettlementError::PAYOUT_EXCEEDS_ESCROW);
     // The payer is never paid for its own lease.
     BOOST_CHECK(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.account, 1}})}, 3).settlement_error ==
         StorageSettlementError::SELF_PAYOUT);
-    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 10}})}, 3));
+    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 5}})}, 3));
     const auto& provider = f.state.accounts.at(f.other);
-    // 4 onboarding-origin CYBOU credit System Balance; the 6 SystemLock-origin ones become spendable.
+    // Four onboarding CYBOU credit System Balance; one locked CYBOU becomes spendable.
     BOOST_CHECK_EQUAL(provider.system_balance, provider_before.system_balance + 4);
     BOOST_CHECK_EQUAL(provider.onboarding_system_balance, provider_before.onboarding_system_balance + 4);
-    BOOST_CHECK_EQUAL(provider.balance, provider_before.balance + 6);
+    BOOST_CHECK_EQUAL(provider.balance, provider_before.balance + 1);
     BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
     BOOST_CHECK_EQUAL(f.state.settlement.next_period, 1U);
     BOOST_CHECK_EQUAL(f.state.settlement.next_period_start_utc, 1'700'000'000U + 86'400);
@@ -341,8 +346,8 @@ BOOST_AUTO_TEST_CASE(settlement_pays_providers_by_origin_and_refunds_expired_esc
     // The last period pays nothing here; the lease ends and its escrow returns to the payer's System Balance.
     const auto payer_before = f.state.accounts.at(f.account).system_balance;
     BOOST_REQUIRE(f.Execute({f.Settle(1'700'086'400, {})}, 4));
-    BOOST_CHECK(!f.state.leases.contains(publication_id));
-    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 10);
+    BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).escrow_onboarding + f.state.leases.at(publication_id).escrow_locked, 0U);
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 5);
     BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
 
     // A settlement without the genesis PoA signature is refused.
@@ -383,18 +388,20 @@ BOOST_AUTO_TEST_CASE(publication_pays_its_initial_lease_atomically)
 BOOST_AUTO_TEST_CASE(revoked_publication_closes_its_lease_after_the_current_period)
 {
     LimitsFixture f;
+    f.params.storage_replica_target = 1;
     const auto publication = f.Publish(2048, 0x90);
     const auto publication_id = *ComputeOperationId(publication);
     BOOST_REQUIRE(f.Execute({publication}, 1));
     BOOST_REQUIRE(f.Execute({f.Lease(publication_id, 30)}, 2));
+    test::AcceptFixtureAllocation(f.state, publication_id, f.other);
     const auto total = TotalCybou(f.state);
     BOOST_REQUIRE(f.Execute({f.Revoke(publication_id)}, 3));
     BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).end_period, 1U);
     const auto payer_before = f.state.accounts.at(f.account).system_balance;
-    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 10}})}, 4));
-    BOOST_CHECK(!f.state.leases.contains(publication_id));
-    // 30 days were escrowed, one served day paid: 290 CYBOU come back.
-    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 290);
+    BOOST_REQUIRE(f.Execute({f.Settle(1'700'000'000, {{publication_id, f.other, 5}})}, 4));
+    BOOST_CHECK_EQUAL(f.state.leases.at(publication_id).escrow_onboarding + f.state.leases.at(publication_id).escrow_locked, 0U);
+    // One replica funded 150 CYBOU; one verified day earns five and refunds 145.
+    BOOST_CHECK_EQUAL(f.state.accounts.at(f.account).system_balance, payer_before + 145);
     BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
 }
 
@@ -426,9 +433,11 @@ BOOST_AUTO_TEST_CASE(operation_work_is_bound_and_flat)
 BOOST_AUTO_TEST_CASE(settlement_payout_attacks_are_refused)
 {
     LimitsFixture f;
+    f.params.storage_replica_target = 1;
     const auto publication = f.Publish(2048, 0xB0, 3);
     const auto id = *ComputeOperationId(publication);
     BOOST_REQUIRE(f.Execute({publication}, 1));
+    test::AcceptFixtureAllocation(f.state, id, f.other);
     const auto total = TotalCybou(f.state);
     constexpr uint64_t start{1'700'000'000};
     uint64_t height{2};
@@ -455,7 +464,7 @@ BOOST_AUTO_TEST_CASE(settlement_payout_attacks_are_refused)
     zero.entries = {{id, f.other, 0}};
     BOOST_CHECK(!ComputeStorageSettlementDigest(f.network, zero));
     // Period start arithmetic cannot overflow.
-    BOOST_CHECK(refused(f.Settle(std::numeric_limits<uint64_t>::max(), {})) == StorageSettlementError::INVALID_PAYLOAD);
+    BOOST_CHECK(refused(f.Settle(std::numeric_limits<uint64_t>::max() - 10, {})) == StorageSettlementError::INVALID_PAYLOAD);
     // Another key cannot sign settlements, and an executor without the genesis PoA key refuses them.
     auto foreign = std::get<StorageSettlement>(f.Settle(start, {}));
     std::array<unsigned char, 32> foreign_seed{};
@@ -467,17 +476,17 @@ BOOST_AUTO_TEST_CASE(settlement_payout_attacks_are_refused)
     BOOST_CHECK(keyless.settlement_error == StorageSettlementError::INVALID_SIGNATURE);
 
     // A valid settlement cannot be replayed for the same period.
-    const auto good = f.Settle(start, {{id, f.other, 10}});
+    const auto good = f.Settle(start, {{id, f.other, 5}});
     BOOST_REQUIRE(f.Execute({good}, height++));
     BOOST_CHECK(refused(good) == StorageSettlementError::WRONG_PERIOD);
     // Even across many periods a lease never pays out more than its escrow.
-    uint64_t paid{10};
+    uint64_t paid{5};
     for (uint64_t period{1}; period < 3; ++period) {
-        BOOST_REQUIRE(f.Execute({f.Settle(start + period * 86'400, {{id, f.other, 10}})}, height++));
-        paid += 10;
+        BOOST_REQUIRE(f.Execute({f.Settle(start + period * 86'400, {{id, f.other, 5}})}, height++));
+        paid += 5;
     }
-    BOOST_CHECK_EQUAL(paid, 30U);
-    BOOST_CHECK(!f.state.leases.contains(id));
+    BOOST_CHECK_EQUAL(paid, 15U);
+    BOOST_CHECK_EQUAL(f.state.leases.at(id).funded_terms[0].paid_onboarding + f.state.leases.at(id).funded_terms[0].paid_locked, 15U);
     BOOST_CHECK_EQUAL(TotalCybou(f.state), total);
 }
 
@@ -535,6 +544,9 @@ BOOST_AUTO_TEST_CASE(randomized_economy_conserves_cybou_and_valid_state)
                 if (rng() % 2 == 0 || lease.first_period > f.state.settlement.next_period) continue;
                 entries.push_back({id, f.other, 1 + rng() % 12});
             }
+            // Exercise legitimate zero-service periods as well as unattested
+            // payout attacks; absent assignments never authorize a payment.
+            if (height % 2 == 0) entries.clear();
             const auto period_start = f.state.settlement.next_period_start_utc == 0 ? start
                 : f.state.settlement.next_period_start_utc;
             op = f.Settle(period_start, std::move(entries));

@@ -8,6 +8,7 @@
 #include <cybou/node_runtime.h>
 #include <cybou/storage_io_scheduler.h>
 #include <cybou/root_publication.h>
+#include <cybou/crypto/sha256.h>
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -73,6 +74,13 @@ OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t perio
     std::vector<StorageSettlementEntry> entries)
 {
     StorageSettlement requested{.period = period, .period_start_utc = start, .entries = std::move(entries)};
+    const auto seconds = m_runtime.GetNetworkGenesis().GetProtocolParameters().storage_settlement_period_seconds;
+    if (start > std::numeric_limits<uint64_t>::max() - seconds) return {};
+    requested.period_end_utc = start + seconds;
+    // Entry-only UI callers do not supply cumulative evidence/witnesses. Their
+    // malformed entries fail serialization; an actual empty period uses SHA256(u32 zero).
+    const std::array<unsigned char,4> empty_count{};
+    if (!crypto::ComputeSha256({std::span<const unsigned char>{empty_count}}, requested.evidence_root.begin())) return {};
     const auto prepared_bytes = PreparedBytes(requested);
     if (!prepared_bytes) return {};
     const auto key = SettlementJournalKey(m_runtime, period);
@@ -388,79 +396,10 @@ std::vector<StorageSettlementEntry> StorageService::SettlementEntries(const std:
     const std::int64_t verified_since_ms, const std::size_t entry_limit)
 {
     if (entry_limit > MAX_STORAGE_SETTLEMENT_ENTRIES) throw std::invalid_argument{"settlement entry limit exceeds protocol maximum"};
-    // Payout-аккаунты известны только из живых проверенных bindings (в placement они не хранятся).
-    std::map<std::array<unsigned char, 32>, AccountId> payout_by_storage;
-    for (const auto& provider : m_transport.Providers()) {
-        if (!provider.payout_account) continue;
-        if (const auto account = AccountId::FromBytes(*provider.payout_account)) {
-            payout_by_storage.emplace(provider.storage_id, *account);
-        }
-    }
-    std::vector<Placement> placements;
-    {
-        std::lock_guard lock{m_mutex};
-        for (const auto& operation_id : m_placements->PlacementIndex()) {
-            if (auto placement = m_placements->Load(operation_id)) placements.push_back(std::move(*placement));
-        }
-    }
-    const auto& params = m_runtime.GetNetworkGenesis().GetProtocolParameters();
-    std::vector<StorageSettlementEntry> entries;
-    for (const auto& placement : placements) {
-        const auto lease = m_runtime.GetStorageLease(placement.operation_id);
-        if (!lease || lease->replicas == 0 || lease->units == 0 ||
-            period < lease->first_period || period >= lease->end_period) continue;
-        const auto term = std::find_if(lease->funded_terms.begin(), lease->funded_terms.end(), [&](const auto& funded) {
-            return funded.first_period <= period && period < funded.end_period;
-        });
-        if (term == lease->funded_terms.end() || term->paid_onboarding > term->initial_onboarding ||
-            term->paid_locked > term->initial_locked) throw std::runtime_error{"invalid active funded storage term"};
-        std::uint64_t remaining = (term->initial_onboarding - term->paid_onboarding) +
-            (term->initial_locked - term->paid_locked);
-        if (remaining == 0) continue;
-        auto funded_params = params;
-        funded_params.storage_rate_per_gib_day_replica = term->rate;
-        funded_params.storage_settlement_period_seconds = term->period_seconds;
-        const auto cap = ComputeStorageLeasePeriodCap(funded_params, lease->units, lease->replicas);
-        if (!cap) continue;
-        // Число проверенных в этом периоде чанков на каждый payout-аккаунт; одна реплика чанка на аккаунт.
-        const auto verified_chunks = m_evidence->VerifiedChunks(placement, payout_by_storage,
-            lease->payer, verified_since_ms);
-        std::vector<std::pair<std::uint64_t, AccountId>> ranked;
-        for (const auto& [account, chunks] : verified_chunks) ranked.emplace_back(chunks, account);
-        std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
-            return a.first != b.first ? a.first > b.first : a.second < b.second;
-        });
-        if (ranked.size() > lease->replicas) ranked.resize(lease->replicas);
-        if (ranked.empty()) continue;
-        // Cap периода делится по слотам `units × replicas`: аккаунт получает долю своих проверенных слотов.
-        // Целые CYBOU: floor на аккаунт, остаток до floor(cap × verified / slots) раздаётся по одному,
-        // начиная со смещения `period`, чтобы остаток не доставался всегда одному аккаунту.
-        const auto slots = static_cast<unsigned __int128>(lease->units) * lease->replicas;
-        unsigned __int128 verified_slots{0};
-        std::vector<std::uint64_t> amounts;
-        std::uint64_t floor_sum{0};
-        for (const auto& [chunks, account] : ranked) {
-            const auto chunk_count = std::min<std::uint64_t>(chunks, lease->units);
-            verified_slots += chunk_count;
-            amounts.push_back(static_cast<std::uint64_t>(static_cast<unsigned __int128>(*cap) * chunk_count / slots));
-            floor_sum += amounts.back();
-        }
-        auto leftover = static_cast<std::uint64_t>(static_cast<unsigned __int128>(*cap) * verified_slots / slots) - floor_sum;
-        for (std::size_t i{0}; leftover > 0 && i < amounts.size(); ++i, --leftover) {
-            ++amounts[(period + i) % amounts.size()];
-        }
-        for (std::size_t i{0}; i < ranked.size(); ++i) {
-            const auto paid = std::min(amounts[i], remaining);
-            if (paid == 0) continue;
-            remaining -= paid;
-            entries.push_back({.publication_id = placement.operation_id, .payout_account = ranked[i].second, .amount = paid});
-            if (entries.size() > entry_limit) throw std::length_error{"settlement preparation exceeds entry limit; no partial settlement produced"};
-        }
-    }
-    std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
-        return a.publication_id != b.publication_id ? a.publication_id < b.publication_id : a.payout_account < b.payout_account;
-    });
-    return entries;
+    (void)period; (void)verified_since_ms;
+    // A live-provider snapshot is not cumulative assignment-bound service.
+    // Do not fabricate PAY counters or advance a period with an empty fallback.
+    throw std::runtime_error{"canonical cumulative evidence preparation is not connected"};
 }
 
 std::optional<std::uint64_t> StorageService::EstimatedDailyRent()

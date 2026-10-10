@@ -24,8 +24,7 @@
 namespace cybou {
 namespace {
 
-constexpr uint64_t RENT_DENOMINATOR{2048ULL * 86'400ULL};
-constexpr size_t SETTLEMENT_HEADER_SIZE{8 + 8 + 1 + 4};
+constexpr size_t SETTLEMENT_HEADER_SIZE{8 + 8 + 1 + 8 + 32 + 4};
 constexpr size_t POA_SIGNATURE_SIZE{64 + 3309};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -59,25 +58,14 @@ bool CheckedMul(uint64_t a, uint64_t b, uint64_t& out)
     return true;
 }
 
-std::optional<uint64_t> RentCeil(const CybouProtocolParameters& params, uint32_t units, uint8_t replicas,
-    uint64_t periods)
-{
-    if (units == 0 || replicas == 0 || periods == 0) return std::nullopt;
-    uint64_t numerator{units};
-    if (!CheckedMul(numerator, replicas, numerator) ||
-        !CheckedMul(numerator, params.storage_rate_per_gib_day_replica, numerator) ||
-        !CheckedMul(numerator, periods, numerator) ||
-        !CheckedMul(numerator, params.storage_settlement_period_seconds, numerator)) return std::nullopt;
-    return numerator / RENT_DENOMINATOR + (numerator % RENT_DENOMINATOR != 0);
-}
-
 std::optional<std::vector<unsigned char>> SerializeSettlementBody(const StorageSettlement& settlement)
 {
     if (settlement.period_start_utc == 0 || settlement.entries.size() > MAX_STORAGE_SETTLEMENT_ENTRIES) {
         return std::nullopt;
     }
     if (settlement.action != StorageSettlementAction::PAY) {
-        if (!settlement.entries.empty()) return std::nullopt;
+        if (!settlement.entries.empty() || settlement.period_end_utc || !settlement.evidence_root.IsNull() ||
+            !settlement.activation_witnesses.empty()) return std::nullopt;
         try {
             BinaryWriter out{MAX_OPERATION_PAYLOAD_BYTES - 1 - POA_SIGNATURE_SIZE};
             out.U64(settlement.period); out.U64(settlement.period_start_utc); out.U8(static_cast<uint8_t>(settlement.action));
@@ -111,21 +99,37 @@ std::optional<std::vector<unsigned char>> SerializeSettlementBody(const StorageS
     if (!settlement.funded_term_id.IsNull() || !settlement.preparation_id.IsNull() || settlement.assignment_epoch ||
         !settlement.eligible.empty() || !settlement.manifest.empty()) return std::nullopt;
     std::vector<unsigned char> out;
-    out.reserve(SETTLEMENT_HEADER_SIZE + settlement.entries.size() * STORAGE_SETTLEMENT_ENTRY_SIZE);
+    if (settlement.period_end_utc <= settlement.period_start_utc || settlement.evidence_root.IsNull() ||
+        settlement.activation_witnesses.size() > (MAX_OPERATION_PAYLOAD_BYTES / 32)) return std::nullopt;
+    const size_t size = SETTLEMENT_HEADER_SIZE + settlement.entries.size() * STORAGE_SETTLEMENT_ENTRY_SIZE +
+        4 + 32 * settlement.activation_witnesses.size();
+    if (size > MAX_OPERATION_PAYLOAD_BYTES - 1 - POA_SIGNATURE_SIZE) return std::nullopt;
+    out.reserve(size);
     Write64(out, settlement.period);
     Write64(out, settlement.period_start_utc);
     out.push_back(static_cast<uint8_t>(settlement.action));
+    Write64(out, settlement.period_end_utc);
+    out.insert(out.end(), settlement.evidence_root.begin(), settlement.evidence_root.end());
     Write32(out, static_cast<uint32_t>(settlement.entries.size()));
     const StorageSettlementEntry* prior{nullptr};
     for (const auto& entry : settlement.entries) {
-        // Строгий порядок по (publication, payout) делает выплаты уникальными и кодировку однозначной.
-        if (entry.publication_id.IsNull() || entry.payout_account.IsNull() || entry.amount == 0 ||
-            (prior && !(std::tie(prior->publication_id, prior->payout_account) <
-                        std::tie(entry.publication_id, entry.payout_account)))) return std::nullopt;
+        if (entry.funding_operation_id.IsNull() || entry.payout_account.IsNull() ||
+            entry.storage_id == std::array<unsigned char,32>{} || !entry.verified_unit_seconds ||
+            (prior && !(std::tie(prior->funding_operation_id, prior->slot, prior->storage_id, prior->payout_account) <
+                        std::tie(entry.funding_operation_id, entry.slot, entry.storage_id, entry.payout_account)))) return std::nullopt;
         prior = &entry;
-        out.insert(out.end(), entry.publication_id.begin(), entry.publication_id.end());
+        out.insert(out.end(), entry.funding_operation_id.begin(), entry.funding_operation_id.end());
+        out.push_back(entry.slot);
+        out.insert(out.end(), entry.storage_id.begin(), entry.storage_id.end());
         out.insert(out.end(), entry.payout_account.Value().begin(), entry.payout_account.Value().end());
+        Write64(out, entry.verified_unit_seconds);
         Write64(out, entry.amount);
+    }
+    Write32(out, static_cast<uint32_t>(settlement.activation_witnesses.size()));
+    const Hash256* previous{nullptr};
+    for (const auto& id : settlement.activation_witnesses) {
+        if (id.IsNull() || (previous && !(*previous < id))) return std::nullopt;
+        out.insert(out.end(), id.begin(), id.end()); previous = &id;
     }
     return out;
 }
@@ -172,12 +176,6 @@ std::optional<uint64_t> ComputeStorageLeaseEscrow(const CybouProtocolParameters&
     return budget ? std::optional<uint64_t>{budget->total} : std::nullopt;
 }
 
-std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParameters& params, uint32_t units,
-    uint8_t replicas)
-{
-    return RentCeil(params, units, replicas, 1);
-}
-
 std::optional<uint64_t> ComputeAcceptedStorageCapacity(const StorageFundedTerm& term,
     const uint8_t slot, const std::array<unsigned char, 32>& storage_id,
     const AccountId& payout_account, const uint64_t through_period, const uint64_t closure_period)
@@ -220,7 +218,7 @@ void FundStorageLease(CybouState& state, const cybou::Hash256& publication_id, c
     const auto budget = ComputeAssignedStorageBudget(units, replicas, periods,
         params.storage_settlement_period_seconds, params.storage_rate_per_gib_day_replica);
     const auto existing = state.leases.find(publication_id);
-    const auto first = existing == state.leases.end() ? state.settlement.next_period : existing->second.end_period;
+    const auto first = existing == state.leases.end() ? state.settlement.next_period : std::max(state.settlement.next_period, existing->second.end_period);
     if (!budget || budget->total != escrow || funding_operation_id.IsNull() ||
         first > std::numeric_limits<uint64_t>::max() - periods ||
         (existing != state.leases.end() &&
@@ -237,7 +235,7 @@ void FundStorageLease(CybouState& state, const cybou::Hash256& publication_id, c
         .contracted_unit_seconds = budget->contracted_unit_seconds,
         .initial_onboarding = onboarding, .initial_locked = escrow - onboarding};
     if (existing != state.leases.end()) {
-        existing->second.end_period += periods;
+        existing->second.end_period = first + periods;
         existing->second.escrow_onboarding += onboarding;
         existing->second.escrow_locked += escrow - onboarding;
         existing->second.funded_terms.push_back(term);
@@ -268,7 +266,7 @@ StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybo
     if (!escrow || *escrow > std::numeric_limits<uint64_t>::max() - params.payment_fee) {
         return StorageLeaseError::ESCROW_OVERFLOW;
     }
-    const auto first = existing == state.leases.end() ? state.settlement.next_period : existing->second.end_period;
+    const auto first = existing == state.leases.end() ? state.settlement.next_period : std::max(state.settlement.next_period, existing->second.end_period);
     const auto funding_id = ComputeOperationId(ProtocolOperation{op});
     if (!funding_id || (existing != state.leases.end() && existing->second.funded_terms.empty()))
         return StorageLeaseError::INVALID_PAYLOAD;
@@ -347,23 +345,33 @@ std::optional<StorageSettlement> DeserializeStorageSettlement(std::span<const un
         } catch (const std::invalid_argument&) { return std::nullopt;
         } catch (const std::length_error&) { return std::nullopt; }
     }
-    if (bytes.size() < SETTLEMENT_HEADER_SIZE + POA_SIGNATURE_SIZE) return std::nullopt;
-    const uint32_t count = Read32(bytes.subspan(17, 4));
+    if (bytes.size() < SETTLEMENT_HEADER_SIZE + 4 + POA_SIGNATURE_SIZE) return std::nullopt;
+    settlement.period_end_utc = Read64(bytes.subspan(17, 8));
+    std::copy_n(bytes.begin() + 25, 32, settlement.evidence_root.begin());
+    const uint32_t count = Read32(bytes.subspan(57, 4));
     if (count > MAX_STORAGE_SETTLEMENT_ENTRIES ||
-        bytes.size() != SETTLEMENT_HEADER_SIZE + size_t{count} * STORAGE_SETTLEMENT_ENTRY_SIZE + POA_SIGNATURE_SIZE) {
+        count > (bytes.size() - SETTLEMENT_HEADER_SIZE - 4 - POA_SIGNATURE_SIZE) / STORAGE_SETTLEMENT_ENTRY_SIZE)
         return std::nullopt;
-    }
     size_t offset{SETTLEMENT_HEADER_SIZE};
-    settlement.entries.reserve(count);
     for (uint32_t i{0}; i < count; ++i) {
         StorageSettlementEntry entry;
-        std::copy_n(bytes.begin() + offset, 32, entry.publication_id.begin());
-        const auto payout = AccountId::FromBytes(bytes.subspan(offset + 32, 32));
+        std::copy_n(bytes.begin() + offset, 32, entry.funding_operation_id.begin());
+        entry.slot = bytes[offset + 32];
+        std::copy_n(bytes.begin() + offset + 33, 32, entry.storage_id.begin());
+        const auto payout = AccountId::FromBytes(bytes.subspan(offset + 65, 32));
         if (!payout) return std::nullopt;
         entry.payout_account = *payout;
-        entry.amount = Read64(bytes.subspan(offset + 64, 8));
+        entry.verified_unit_seconds = Read64(bytes.subspan(offset + 97, 8));
+        entry.amount = Read64(bytes.subspan(offset + 105, 8));
         settlement.entries.push_back(entry);
         offset += STORAGE_SETTLEMENT_ENTRY_SIZE;
+    }
+    const uint32_t witnesses = Read32(bytes.subspan(offset, 4)); offset += 4;
+    if (witnesses > (bytes.size() - offset - POA_SIGNATURE_SIZE) / 32 ||
+        bytes.size() != offset + size_t{witnesses} * 32 + POA_SIGNATURE_SIZE) return std::nullopt;
+    for (uint32_t i{0}; i < witnesses; ++i) {
+        Hash256 id; std::copy_n(bytes.begin() + offset, 32, id.begin()); offset += 32;
+        settlement.activation_witnesses.push_back(id);
     }
     std::copy_n(bytes.begin() + offset, 64, settlement.poa_signature.ed25519.begin());
     settlement.poa_signature.ml_dsa.assign(bytes.begin() + offset + 64, bytes.end());
@@ -457,69 +465,126 @@ StorageSettlementError ApplyAssignmentInputs(const StorageSettlement& op, const 
         StorageAcceptedAssignment accepted{.preparation_id = op.preparation_id, .seed = parent,
             .epoch = declaration->epoch, .effective_period = op.period};
         for (const auto& [key, units] : counts) accepted.allocations.push_back({std::get<0>(key), std::get<1>(key), std::get<2>(key), units});
-        if (apply) { accepted.operation_id = *operation_id; term->assignments.push_back(std::move(accepted)); }
+        if (apply) {
+            accepted.operation_id = *operation_id;
+            for (auto& e : term->service_payments) {
+                const auto capacity = ComputeAcceptedStorageCapacity(*term, e.slot, e.storage_id, e.payout_account, op.period, lease->end_period);
+                if (!capacity) return StorageSettlementError::INVALID_ASSIGNMENT;
+                e.closed_epoch_capacity = *capacity;
+            }
+            term->assignments.push_back(std::move(accepted));
+        }
     }
     if (apply && !state.settlement.next_period_start_utc) state.settlement.next_period_start_utc = op.period_start_utc;
     return StorageSettlementError::NONE;
 }
 
-struct LeaseTotals { uint64_t amount{0}; uint32_t payouts{0}; size_t term_index{0}; };
-StorageSettlementError CheckSettlementInputs(const StorageSettlement& settlement,
-    const CybouProtocolParameters& params, const CybouState& state,
-    std::map<cybou::Hash256, LeaseTotals>& totals)
+StorageSettlementError ApplyPayInputs(const StorageSettlement& op,
+    const CybouProtocolParameters& params, CybouState& state)
 {
-    if (settlement.action != StorageSettlementAction::PAY || !SerializeSettlementBody(settlement)) return StorageSettlementError::INVALID_PAYLOAD;
-    // Периоды строго непрерывны: replay или пропуск периода невозможны.
-    if (settlement.period != state.settlement.next_period) return StorageSettlementError::WRONG_PERIOD;
-    if (state.settlement.next_period_start_utc != 0 &&
-        settlement.period_start_utc != state.settlement.next_period_start_utc) {
+    if (op.action != StorageSettlementAction::PAY || !SerializeSettlementBody(op)) return StorageSettlementError::INVALID_PAYLOAD;
+    if (op.period != state.settlement.next_period) return StorageSettlementError::WRONG_PERIOD;
+    if (state.settlement.next_period_start_utc && op.period_start_utc != state.settlement.next_period_start_utc)
         return StorageSettlementError::WRONG_PERIOD_START;
-    }
-    if (settlement.period == std::numeric_limits<uint64_t>::max() ||
-        settlement.period_start_utc > std::numeric_limits<uint64_t>::max() - params.storage_settlement_period_seconds) {
+    if (!params.storage_settlement_period_seconds || op.period == std::numeric_limits<uint64_t>::max() ||
+        op.period_start_utc > std::numeric_limits<uint64_t>::max() - params.storage_settlement_period_seconds ||
+        op.period_end_utc != op.period_start_utc + params.storage_settlement_period_seconds)
         return StorageSettlementError::INVALID_PAYLOAD;
-    }
-
-    // Isolated transition fails closed: the old daily payment path must never
-    // debit or erase an accepted assignment before cumulative PAY is integrated.
-    for (const auto& [id, lease] : state.leases) for (const auto& term : lease.funded_terms)
-        if (!term.declarations.empty() || !term.assignments.empty()) return StorageSettlementError::INVALID_ASSIGNMENT;
-
-    // Сначала полная проверка всех выплат, затем применение: settlement атомарен.
-    for (const auto& entry : settlement.entries) {
-        const auto lease = state.leases.find(entry.publication_id);
-        if (lease == state.leases.end()) return StorageSettlementError::LEASE_NOT_FOUND;
-        if (settlement.period < lease->second.first_period || settlement.period >= lease->second.end_period) {
-            return StorageSettlementError::LEASE_NOT_ACTIVE;
-        }
+    std::set<Hash256> used_witnesses;
+    const auto key = [](const auto& e) { return std::tie(e.slot, e.storage_id, e.payout_account); };
+    for (const auto& entry : op.entries) {
+        StorageLeaseRecord* lease{nullptr}; StorageFundedTerm* term{nullptr};
+        for (auto& [id, l] : state.leases) for (auto& t : l.funded_terms)
+            if (t.funding_operation_id == entry.funding_operation_id) {
+                if (term) return StorageSettlementError::INVALID_PAYLOAD;
+                term = &t; lease = &l;
+            }
+        if (!term) return StorageSettlementError::LEASE_NOT_FOUND;
+        if (op.period < term->first_period || op.period >= term->end_period || op.period >= lease->end_period ||
+            term->refunded_onboarding || term->refunded_locked) return StorageSettlementError::LEASE_NOT_ACTIVE;
         if (!state.accounts.contains(entry.payout_account)) return StorageSettlementError::PAYOUT_ACCOUNT_NOT_FOUND;
-        // Плательщик никогда не оплачивает сам себя: это закрывает прямой self-dealing.
-        if (entry.payout_account == lease->second.payer) return StorageSettlementError::SELF_PAYOUT;
-        auto& total = totals[entry.publication_id];
-        if (++total.payouts > lease->second.replicas) return StorageSettlementError::TOO_MANY_PAYOUTS;
-        const auto& terms = lease->second.funded_terms;
-        const auto term = std::find_if(terms.begin(), terms.end(), [&](const auto& funded) {
-            return funded.first_period <= settlement.period && settlement.period < funded.end_period;
-        });
-        if (term == terms.end() || term->paid_onboarding > term->initial_onboarding ||
-            term->paid_locked > term->initial_locked) return StorageSettlementError::INVALID_PAYLOAD;
-        total.term_index = static_cast<size_t>(term - terms.begin());
-        auto funded_params = params;
-        funded_params.storage_rate_per_gib_day_replica = term->rate;
-        funded_params.storage_settlement_period_seconds = term->period_seconds;
-        const auto cap = ComputeStorageLeasePeriodCap(funded_params, lease->second.units, lease->second.replicas);
-        const uint64_t remaining = (term->initial_onboarding - term->paid_onboarding) +
-            (term->initial_locked - term->paid_locked);
-        if (!cap || entry.amount > *cap - std::min(*cap, total.amount) ||
-            entry.amount > remaining - std::min(remaining, total.amount) ||
-            total.amount + entry.amount > lease->second.escrow_onboarding + lease->second.escrow_locked) {
-            return StorageSettlementError::PAYOUT_EXCEEDS_ESCROW;
+        if (entry.payout_account == lease->payer) return StorageSettlementError::SELF_PAYOUT;
+        if (entry.slot >= lease->replicas || term->period_seconds != params.storage_settlement_period_seconds)
+            return StorageSettlementError::INVALID_ASSIGNMENT;
+        auto ledger = std::lower_bound(term->service_payments.begin(), term->service_payments.end(), entry,
+            [&](const auto& a, const auto& b) { return key(a) < key(b); });
+        const bool existing = ledger != term->service_payments.end() && key(*ledger) == key(entry);
+        const auto prior_service = existing ? ledger->verified_unit_seconds : 0;
+        const auto paid = existing ? ledger->paid : 0;
+        if (entry.verified_unit_seconds <= prior_service) return StorageSettlementError::INVALID_PAYLOAD;
+        const auto capacity = ComputeAcceptedStorageCapacity(*term, entry.slot, entry.storage_id,
+            entry.payout_account, op.period + 1, lease->end_period);
+        if (!capacity || entry.verified_unit_seconds > *capacity) return StorageSettlementError::INVALID_ASSIGNMENT;
+        // Every interval capable of contributing to this key resolves a canonical
+        // activation. A witness for a zero-length/superseded epoch is not useful.
+        bool witnessed{false};
+        for (size_t i = 0; i < term->assignments.size(); ++i) {
+            const auto& epoch = term->assignments[i];
+            const auto end = std::min({op.period + 1, lease->end_period, term->end_period,
+                i + 1 < term->assignments.size() ? term->assignments[i + 1].effective_period : term->end_period});
+            if (end <= epoch.effective_period || std::none_of(epoch.allocations.begin(), epoch.allocations.end(),
+                [&](const auto& a) { return key(a) == key(entry); })) continue;
+            if (!std::binary_search(op.activation_witnesses.begin(), op.activation_witnesses.end(), epoch.operation_id))
+                return StorageSettlementError::INVALID_ASSIGNMENT;
+            used_witnesses.insert(epoch.operation_id); witnessed = true;
         }
-        total.amount += entry.amount;
+        if (!witnessed) return StorageSettlementError::INVALID_ASSIGNMENT;
+        const AssignedStorageBudget budget{term->replica_share, term->initial_onboarding + term->initial_locked,
+            term->contracted_unit_seconds};
+        const auto due = ComputeAssignedStoragePayout(budget, entry.verified_unit_seconds, paid);
+        if (!due || entry.amount != *due) return StorageSettlementError::PAYOUT_EXCEEDS_ESCROW;
+        unsigned __int128 slot_service = entry.verified_unit_seconds;
+        for (const auto& e : term->service_payments)
+            if (e.slot == entry.slot && key(e) != key(entry)) slot_service += e.verified_unit_seconds;
+        if (slot_service > term->contracted_unit_seconds) return StorageSettlementError::INVALID_ASSIGNMENT;
+        if (term->paid_onboarding > term->initial_onboarding || term->paid_locked > term->initial_locked ||
+            entry.amount > term->initial_onboarding - term->paid_onboarding + term->initial_locked - term->paid_locked)
+            return StorageSettlementError::PAYOUT_EXCEEDS_ESCROW;
+        const auto onboarding = std::min(entry.amount, term->initial_onboarding - term->paid_onboarding);
+        const auto locked = entry.amount - onboarding;
+        if (onboarding > lease->escrow_onboarding || locked > lease->escrow_locked)
+            return StorageSettlementError::PAYOUT_EXCEEDS_ESCROW;
+        auto& provider = state.accounts.at(entry.payout_account);
+        if (onboarding > std::numeric_limits<uint64_t>::max() - provider.system_balance ||
+            onboarding > std::numeric_limits<uint64_t>::max() - provider.onboarding_system_balance ||
+            locked > std::numeric_limits<uint64_t>::max() - provider.balance) return StorageSettlementError::BALANCE_OVERFLOW;
+        if (!existing) ledger = term->service_payments.insert(ledger,
+            {entry.slot, entry.storage_id, entry.payout_account, 0, 0});
+        const auto closed_capacity = ComputeAcceptedStorageCapacity(*term, entry.slot, entry.storage_id,
+            entry.payout_account, term->assignments.back().effective_period, lease->end_period);
+        if (!closed_capacity) return StorageSettlementError::INVALID_ASSIGNMENT;
+        ledger->closed_epoch_capacity = *closed_capacity;
+        ledger->verified_unit_seconds = entry.verified_unit_seconds; ledger->paid += entry.amount;
+        term->paid_onboarding += onboarding; term->paid_locked += locked;
+        lease->escrow_onboarding -= onboarding; lease->escrow_locked -= locked;
+        provider.system_balance += onboarding; provider.onboarding_system_balance += onboarding; provider.balance += locked;
     }
-
+    if (used_witnesses.size() != op.activation_witnesses.size()) return StorageSettlementError::INVALID_ASSIGNMENT;
+    state.settlement.next_period = op.period + 1;
+    state.settlement.next_period_start_utc = op.period_end_utc;
+    for (auto& [id, lease] : state.leases) for (auto& term : lease.funded_terms) {
+        if (std::min(term.end_period, lease.end_period) > state.settlement.next_period) continue;
+        const auto onboarding = term.initial_onboarding - term.paid_onboarding - term.refunded_onboarding;
+        const auto locked = term.initial_locked - term.paid_locked - term.refunded_locked;
+        auto& payer = state.accounts.at(lease.payer);
+        if (onboarding > lease.escrow_onboarding || locked > lease.escrow_locked ||
+            onboarding > std::numeric_limits<uint64_t>::max() - payer.onboarding_system_balance ||
+            onboarding > std::numeric_limits<uint64_t>::max() - payer.system_balance ||
+            locked > std::numeric_limits<uint64_t>::max() - payer.system_balance - onboarding)
+            return StorageSettlementError::BALANCE_OVERFLOW;
+        payer.system_balance += onboarding + locked; payer.onboarding_system_balance += onboarding;
+        lease.escrow_onboarding -= onboarding; lease.escrow_locked -= locked;
+        term.refunded_onboarding += onboarding; term.refunded_locked += locked;
+        for (auto& e : term.service_payments) {
+            const auto capacity = ComputeAcceptedStorageCapacity(term, e.slot, e.storage_id, e.payout_account,
+                state.settlement.next_period, lease.end_period);
+            if (!capacity) return StorageSettlementError::INVALID_ASSIGNMENT;
+            e.closed_epoch_capacity = *capacity;
+        }
+    }
     return StorageSettlementError::NONE;
 }
+
 } // namespace
 
 StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& settlement,
@@ -530,8 +595,11 @@ StorageSettlementError CheckStorageSettlementInputs(const StorageSettlement& set
         auto candidate = state;
         return ApplyAssignmentInputs(settlement, network_binding, candidate, block_height, verified_parent_id, false);
     }
-    std::map<cybou::Hash256, LeaseTotals> totals;
-    return CheckSettlementInputs(settlement, params, state, totals);
+    auto candidate = state;
+    const auto checked = ApplyPayInputs(settlement, params, candidate);
+    if (checked != StorageSettlementError::NONE) return checked;
+    return ValidateCybouState(candidate) == StateValidationError::NONE && TotalCybou(candidate) == TotalCybou(state)
+        ? StorageSettlementError::NONE : StorageSettlementError::INVALID_PAYLOAD;
 }
 
 StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlement,
@@ -545,36 +613,20 @@ StorageSettlementError ApplyStorageSettlement(const StorageSettlement& settlemen
         !VerifyIdentityMessage(poa_key, settlement.poa_signature, *digest)) {
         return StorageSettlementError::INVALID_SIGNATURE;
     }
-    if (settlement.action != StorageSettlementAction::PAY)
-        return ApplyAssignmentInputs(settlement, network_binding, state, block_height, verified_parent_id, true);
-    std::map<cybou::Hash256, LeaseTotals> totals;
-    const auto checked = CheckSettlementInputs(settlement, params, state, totals);
+    if (settlement.action != StorageSettlementAction::PAY) {
+        auto candidate = state;
+        const auto checked = ApplyAssignmentInputs(settlement, network_binding, candidate, block_height, verified_parent_id, true);
+        if (checked != StorageSettlementError::NONE) return checked;
+        if (ValidateCybouState(candidate) != StateValidationError::NONE) return StorageSettlementError::INVALID_ASSIGNMENT;
+        state = std::move(candidate);
+        return StorageSettlementError::NONE;
+    }
+    auto candidate = state;
+    const auto checked = ApplyPayInputs(settlement, params, candidate);
     if (checked != StorageSettlementError::NONE) return checked;
-
-    // Переводы внутри TotalCybou < 2^64 не могут переполнить ни один баланс.
-    for (const auto& entry : settlement.entries) {
-        auto& lease = state.leases.at(entry.publication_id);
-        auto& term = lease.funded_terms.at(totals.at(entry.publication_id).term_index);
-        auto& provider = state.accounts.at(entry.payout_account);
-        const uint64_t onboarding = std::min(term.initial_onboarding - term.paid_onboarding, entry.amount);
-        term.paid_onboarding += onboarding;
-        term.paid_locked += entry.amount - onboarding;
-        lease.escrow_onboarding -= onboarding;
-        lease.escrow_locked -= entry.amount - onboarding;
-        provider.system_balance += onboarding;
-        provider.onboarding_system_balance += onboarding;
-        provider.balance += entry.amount - onboarding;
-    }
-    state.settlement.next_period = settlement.period + 1;
-    state.settlement.next_period_start_utc = settlement.period_start_utc + params.storage_settlement_period_seconds;
-    // Закончившиеся аренды возвращают остаток escrow в System Balance плательщика, с тем же происхождением.
-    for (auto it = state.leases.begin(); it != state.leases.end();) {
-        if (it->second.end_period > state.settlement.next_period) { ++it; continue; }
-        auto& payer = state.accounts.at(it->second.payer);
-        payer.system_balance += it->second.escrow_onboarding + it->second.escrow_locked;
-        payer.onboarding_system_balance += it->second.escrow_onboarding;
-        it = state.leases.erase(it);
-    }
+    if (ValidateCybouState(candidate) != StateValidationError::NONE || TotalCybou(candidate) != TotalCybou(state))
+        return StorageSettlementError::INVALID_PAYLOAD;
+    state = std::move(candidate);
     return StorageSettlementError::NONE;
 }
 

@@ -47,9 +47,6 @@ std::optional<IdentityKeyId> ComputeStorageLeasePayloadCommitment(const StorageL
 /// \return std::nullopt при переполнении или нулевых входах.
 std::optional<uint64_t> ComputeStorageLeaseEscrow(const CybouProtocolParameters& params, uint32_t units,
     uint8_t replicas, uint32_t periods);
-/// \brief Existing combined daily ceiling; pending cumulative-settlement replacement.
-std::optional<uint64_t> ComputeStorageLeasePeriodCap(const CybouProtocolParameters& params, uint32_t units,
-    uint8_t replicas);
 
 enum class StorageLeaseError : uint8_t {
     NONE,
@@ -75,8 +72,8 @@ StorageLeaseError ApplyStorageLease(const AuthorizedStorageLease& op, const cybo
 
 /// \brief Максимум выплат в одном StorageSettlement.
 inline constexpr size_t MAX_STORAGE_SETTLEMENT_ENTRIES{1024};
-/// \brief Размер одной записи settlement: publication 32 + payout AccountID 32 + amount 8.
-inline constexpr size_t STORAGE_SETTLEMENT_ENTRY_SIZE{32 + 32 + 8};
+/// Exact PAY entry: funding32 + slot1 + StorageId32 + payout32 + service8 + amount8.
+inline constexpr size_t STORAGE_SETTLEMENT_ENTRY_SIZE{32 + 1 + 32 + 32 + 8 + 8};
 
 /// Upper bound on service for one accepted (slot, StorageId, payout) through an
 /// exclusive period boundary. Epoch replacement ends the previous allocation;
@@ -88,9 +85,12 @@ std::optional<uint64_t> ComputeAcceptedStorageCapacity(const StorageFundedTerm& 
 
 /// \brief Одна выплата provider'у за проверенное хранение по аренде публикации.
 struct StorageSettlementEntry {
-    cybou::Hash256 publication_id; ///< Ключ аренды.
+    cybou::Hash256 funding_operation_id; ///< Immutable funded term, not publication.
     AccountId payout_account;      ///< Аккаунт provider'а; никогда не плательщик аренды.
     uint64_t amount{0};            ///< CYBOU из escrow этой аренды.
+    uint8_t slot{0};
+    std::array<unsigned char, 32> storage_id{};
+    uint64_t verified_unit_seconds{0};
 
     friend bool operator==(const StorageSettlementEntry&, const StorageSettlementEntry&) = default;
 };
@@ -108,13 +108,16 @@ struct StorageSettlementBinding {
 struct StorageSettlement {
     uint64_t period{0};                          ///< Номер периода, ровно `state.settlement.next_period`.
     uint64_t period_start_utc{0};                ///< UTC-начало периода, непрерывно с предыдущим.
-    std::vector<StorageSettlementEntry> entries; ///< Строго по (publication_id, payout_account).
+    std::vector<StorageSettlementEntry> entries; ///< Strict funding/slot/StorageId/payout order.
     IdentityHybridSignature poa_signature;       ///< Подпись genesis PoA key над digest.
     StorageSettlementAction action{StorageSettlementAction::PAY};
     Hash256 funded_term_id, preparation_id;
     uint64_t assignment_epoch{0};
     std::vector<StorageSettlementBinding> eligible;
     std::vector<ChunkId> manifest;
+    uint64_t period_end_utc{0};
+    Hash256 evidence_root;
+    std::vector<Hash256> activation_witnesses;
 
     friend bool operator==(const StorageSettlement&, const StorageSettlement&) = default;
 };

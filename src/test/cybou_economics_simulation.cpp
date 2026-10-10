@@ -69,9 +69,10 @@ int main()
                 << ",\"equal_share_floor_max\":" << earned_high / providers << '}';
         }
         const auto tiny_escrow = cybou::ComputeStorageLeaseEscrow(p, 1, p.storage_replica_target, 30);
-        const auto tiny_cap = cybou::ComputeStorageLeasePeriodCap(p, 1, p.storage_replica_target);
+        const auto tiny_budget = cybou::ComputeAssignedStorageBudget(1, p.storage_replica_target, 30, p.storage_settlement_period_seconds, p.storage_rate_per_gib_day_replica);
+        const auto tiny_entitlement = cybou::ComputeAssignedStoragePayout(*tiny_budget, p.storage_settlement_period_seconds, 0);
         std::cout << "],\"onboarding_count\":10000,\"onboarding_treasury_debit\":" << 10000ULL * p.onboarding_bonus
-            << ",\"tiny_30_day_escrow\":" << *tiny_escrow << ",\"tiny_daily_cap\":" << *tiny_cap << "}\n";
+            << ",\"tiny_30_day_escrow\":" << *tiny_escrow << ",\"tiny_first_period_entitlement_per_replica\":" << *tiny_entitlement << "}\n";
         return 0;
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

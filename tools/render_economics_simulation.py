@@ -43,7 +43,7 @@ def render(data, date, revision):
     for row in data["provider_models"]:
         lines.append(f"| {row['providers']} | {interval(row['equal_share_floor_min'], row['equal_share_floor_max'])} |")
     lines += ["", f"{data['onboarding_count']:,} new ordinary Identities transfer {data['onboarding_treasury_debit']:,} CYBOU from Treasury to System Balance; no minting. This measures Treasury exposure, not the full cost of a Sybil attack.", "",
-              f"Rounding finding: one billing unit has {data['tiny_30_day_escrow']} CYBOU escrow for 30 periods and a {data['tiny_daily_cap']} CYBOU current one-period cap. The first period can therefore consume the whole escrow if eligible settlement evidence is accepted. Floor accrual for the complete 30-period interval is zero with a retained fractional remainder. A corrected payout schedule requires an explicit consensus decision; this report changes no tariff or protocol.", "",
+              f"Cumulative rounding: one billing unit reserves {data['tiny_30_day_escrow']} CYBOU across replica shares for 30 periods. The first completed period earns {data['tiny_first_period_entitlement_per_replica']} whole CYBOU per fully verified replica. Later payout is cumulative floor entitlement minus finalized paid; assignment capacity alone is not service evidence. This report does not authorize deployment.", "",
               "Reproduce from a BUILD_TESTS build:", "", "```powershell",
               "cmake --build build_cybou_qt_mingw --target cybou-economics-simulation",
               ".\\build_cybou_qt_mingw\\bin\\cybou-economics-simulation.exe | Out-File -Encoding utf8 artifacts/economics-simulation.json",

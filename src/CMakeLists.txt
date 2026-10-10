@@ -64,6 +64,7 @@ add_library(cybou_core STATIC
 target_link_libraries(cybou_core
   PUBLIC
     cybou_base
+    $<$<PLATFORM_ID:Windows>:ws2_32>
   PRIVATE
     Boost::headers
     OpenSSL::Crypto

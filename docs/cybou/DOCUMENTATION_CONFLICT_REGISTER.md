@@ -117,11 +117,20 @@ Approved atomic-assignment follow-up adds isolated canonical PREPARE/ACTIVATE
 execution, term-scoped accepted bindings and allocation summaries. Funded-term
 records now have variable-length assignment data after the original counters;
 the earlier 112-byte description is the preceding checkpoint. New records are
-not interpreted through the old aggregate PAY: that path rejects states with
+At checkpoint `1c93de3f`, new records were not interpreted through aggregate PAY: that path rejected states with
 accepted assignments/declarations, including empty cursor-advancing payments.
 Cumulative service/paid, retained closure/refunds, canonical collector provenance
 and action-scoped exact journaling remain unfinished. DOC-005/006/020 stay open;
 this intermediate source layout must not be deployed or used to migrate DEVNET.
+
+The following isolated cumulative PAY checkpoint removes that global assignment
+block and the daily-cap execution. Canonical entries resolve term/slot/StorageId/
+payout, retain service/paid/closed capacity and enforce cumulative entitlement.
+Expiry/refunds preserve term/assignment/ledger history and both funding origins.
+Canonical collector provenance, exact action/evidence journaling and scalable
+batches remain open, so DOC-005/006/020 are not closed by this checkpoint. The
+old local-provider ranking producer now rejects preparation rather than inventing
+service counters; no live deployment/migration is authorized.
 
 An accepted requirement with a code gap stays accepted unless an explicit decision
 changes it. Current bytes remain governed by their defining source/normative

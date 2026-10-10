@@ -31,7 +31,7 @@ bool ReviewStorageSettlement(CybouDesktopModel* model, uint64_t period, uint64_t
         const auto provider = QString::fromStdString(entry.payout_account.Value().GetHex());
         providers.insert(provider);
         if (details.size() < 100) details << QStringLiteral("%1 | %2 | %3").arg(
-            QString::fromStdString(entry.publication_id.GetHex()), provider, cybouAmountText(entry.amount));
+            QString::fromStdString(entry.funding_operation_id.GetHex()), provider, cybouAmountText(entry.amount));
     }
     const auto escrow = model->networkAuthority().storage_escrow;
     if (total > escrow) return false;

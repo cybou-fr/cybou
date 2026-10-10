@@ -1,3 +1,4 @@
+#include <test/cybou_settlement_test_helpers.h>
 // Copyright (c) 2026 Stanislav Saveliev
 // SPDX-License-Identifier: Apache-2.0
 
@@ -101,7 +102,7 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
 
-BOOST_AUTO_TEST_CASE(settlement_exact_journal_survives_reopen_and_fresh_pool_without_double_payment)
+BOOST_AUTO_TEST_CASE(empty_pay_exact_journal_survives_reopen_without_cursor_replay)
 {
     CybouServiceTestFixture f;
     auto owner = f.CreateIdentity("journal-owner.vault");
@@ -110,7 +111,7 @@ BOOST_AUTO_TEST_CASE(settlement_exact_journal_survives_reopen_and_fresh_pool_wit
     const auto content = Publish(f, *owner, *db, true);
     cybou::RuntimeStorageTransport transport{*f.runtime};
     auto service = std::make_unique<cybou::StorageService>(*f.runtime, transport, *db, 1);
-    const std::vector<cybou::StorageSettlementEntry> entries{{content.operation_id, *provider->GetAccountId(), 1}};
+    const std::vector<cybou::StorageSettlementEntry> entries{};
     const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
     BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
     const auto root = f.runtime->GetStateRoot();
@@ -123,8 +124,8 @@ BOOST_AUTO_TEST_CASE(settlement_exact_journal_survives_reopen_and_fresh_pool_wit
     BOOST_CHECK(service->SubmitSettlement(0, 1700000000, entries).op_id == first.op_id);
     BOOST_CHECK_EQUAL(signer->calls, 1U);
     BOOST_CHECK_THROW(service->SubmitSettlement(0, 1700000001, entries), std::runtime_error);
-    auto different = entries; different[0].amount = 2;
-    BOOST_CHECK_THROW(service->SubmitSettlement(0, 1700000000, different), std::runtime_error);
+    auto different = entries; different.push_back({content.operation_id, *provider->GetAccountId(), 2});
+    BOOST_CHECK(!service->SubmitSettlement(0, 1700000000, different));
     BOOST_CHECK(db->Get(key + "/signed") == exact);
     std::vector<cybou::FinalizedBlock> blocks;
     for (std::uint64_t h{1}; h <= *f.runtime->GetFinalizedHeight(); ++h) blocks.push_back(*f.runtime->GetBlockAtHeight(h));
@@ -148,7 +149,7 @@ BOOST_AUTO_TEST_CASE(settlement_exact_journal_survives_reopen_and_fresh_pool_wit
     BOOST_REQUIRE(restarted.CommitBlock(*finalized));
     const auto paid_root = restarted.GetStateRoot();
     const auto balance = restarted.GetAccountState(*provider->GetAccountId()); BOOST_REQUIRE(balance);
-    BOOST_CHECK_EQUAL(balance->onboarding_system_balance, 20001U);
+    BOOST_CHECK_EQUAL(balance->onboarding_system_balance, 20000U);
     BOOST_CHECK(recovered.SubmitSettlement(0, 1700000000, entries).status == cybou::OperationSubmitStatus::ALREADY_FINALIZED);
     BOOST_CHECK(restarted.GetStateRoot() == paid_root);
     BOOST_CHECK_EQUAL(restarted.GetStorageSettlementCursor()->next_period, 1U);
@@ -201,18 +202,18 @@ BOOST_AUTO_TEST_CASE(settlement_invalid_fresh_input_never_signs_or_freezes_the_p
     const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
     BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
     const auto root = f.runtime->GetStateRoot();
-    const cybou::StorageSettlement valid{.period = 0, .period_start_utc = 1700000000,
-        .entries = {{content.operation_id, *provider->GetAccountId(), 1}}};
+    cybou::StorageSettlement valid{.period = 0, .period_start_utc = 1700000000};
+    cybou::test::PayWindow(valid);
     BOOST_CHECK(f.runtime->CheckStorageSettlementInputs(valid) == cybou::StorageSettlementError::NONE);
     std::vector<std::pair<cybou::StorageSettlement, cybou::StorageSettlementError>> invalid;
-    auto candidate = valid; candidate.entries[0].payout_account = *owner->GetAccountId();
+    auto candidate = valid; candidate.entries = {{content.operation_id, *provider->GetAccountId(), 0, 0, {}, 1}}; candidate.entries[0].storage_id[0] = 1; candidate.entries[0].payout_account = *owner->GetAccountId();
     invalid.emplace_back(candidate, cybou::StorageSettlementError::SELF_PAYOUT);
-    candidate = valid; candidate.entries[0].payout_account = cybou::AccountId{cybou::Hash256{123}};
+    candidate = invalid[0].first; candidate.entries[0].payout_account = cybou::AccountId{cybou::Hash256{123}};
     invalid.emplace_back(candidate, cybou::StorageSettlementError::PAYOUT_ACCOUNT_NOT_FOUND);
-    candidate = valid; candidate.entries[0].publication_id = cybou::Hash256{123};
+    candidate = invalid[0].first; candidate.entries[0].payout_account = *provider->GetAccountId(); candidate.entries[0].funding_operation_id = cybou::Hash256{123};
     invalid.emplace_back(candidate, cybou::StorageSettlementError::LEASE_NOT_FOUND);
-    candidate = valid; candidate.entries[0].amount = std::numeric_limits<std::uint64_t>::max();
-    invalid.emplace_back(candidate, cybou::StorageSettlementError::PAYOUT_EXCEEDS_ESCROW);
+    candidate = invalid[0].first; candidate.entries[0].payout_account = *provider->GetAccountId(); candidate.entries[0].amount = std::numeric_limits<std::uint64_t>::max();
+    invalid.emplace_back(candidate, cybou::StorageSettlementError::INVALID_ASSIGNMENT);
     candidate = valid; candidate.period = 1;
     invalid.emplace_back(candidate, cybou::StorageSettlementError::WRONG_PERIOD);
     for (const auto& [operation, expected] : invalid) {
@@ -226,7 +227,8 @@ BOOST_AUTO_TEST_CASE(settlement_invalid_fresh_input_never_signs_or_freezes_the_p
     // Preflight is not authorization: canonical execution still rejects unsigned input.
     auto state = f.genesis;
     const auto original = state;
-    const cybou::StorageSettlement unsigned_empty{.period = 0, .period_start_utc = 1700000000};
+    cybou::StorageSettlement unsigned_empty{.period = 0, .period_start_utc = 1700000000};
+    cybou::test::PayWindow(unsigned_empty);
     BOOST_CHECK(cybou::CheckStorageSettlementInputs(unsigned_empty, f.definition.GetProtocolParameters(), state) ==
         cybou::StorageSettlementError::NONE);
     BOOST_CHECK(cybou::ApplyStorageSettlement(unsigned_empty, f.runtime->GetNetworkBinding(),
@@ -606,139 +608,35 @@ BOOST_AUTO_TEST_CASE(corrupt_persisted_evidence_is_not_reused_for_service_or_set
     BOOST_REQUIRE(reopened.DescribePlacement(content.operation_id));
     const auto lease = fixture.runtime->GetStorageLease(content.operation_id);
     BOOST_REQUIRE(lease);
-    BOOST_CHECK(reopened.SettlementEntries(lease->first_period, 0).empty());
+    BOOST_CHECK_THROW(reopened.SettlementEntries(lease->first_period, 0), std::runtime_error);
 }
 
-BOOST_AUTO_TEST_CASE(settlement_pays_verified_replicas_of_leased_publications)
+BOOST_AUTO_TEST_CASE(placement_snapshots_cannot_prepare_cumulative_pay)
 {
-    // DEC-282: each verified replica earns one replica share of the period cap; unverified
-    // replicas, providers without a payout binding and the payer earn nothing.
     CybouServiceTestFixture fixture;
-    auto identity = fixture.CreateIdentity("storage-owner.cybou");
-    ProviderNetwork network{fixture, 2};
-    cybou::PrivateApplicationStore application_db{identity->GetKeyStore(), fixture.directory / "application"};
-    const auto content = Publish(fixture, *identity, application_db, true);
-    network.Sync();
-    const auto lease = fixture.runtime->GetStorageLease(content.operation_id);
-    BOOST_REQUIRE(lease);
-    const auto endpoints = network.Endpoints();
-    std::array<unsigned char, 32> first{}, second{};
-    first.fill(0x11);
-    second.fill(0x22);
-    network.payout[endpoints[0].storage_id] = first;
-    network.payout[endpoints[1].storage_id] = second;
-    cybou::StorageService storage{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
-    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
-    const auto period = lease->first_period;
-    BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
-    const auto cap = cybou::ComputeStorageLeasePeriodCap(
-        fixture.runtime->GetNetworkGenesis().GetProtocolParameters(), lease->units, lease->replicas);
-    BOOST_REQUIRE(cap && *cap > 0);
-    // Every slot is verified: the whole period cap is paid, split between the two accounts.
-    const auto entries = storage.SettlementEntries(period, 0);
-    BOOST_CHECK_THROW(storage.SettlementEntries(period, 0, 0), std::length_error);
-    BOOST_CHECK_THROW(storage.SettlementEntries(period, 0, cybou::MAX_STORAGE_SETTLEMENT_ENTRIES + 1), std::invalid_argument);
-    BOOST_CHECK(storage.SettlementEntries(period, 0, entries.size()) == entries);
-    BOOST_REQUIRE(!entries.empty() && entries.size() <= 2U);
-    std::uint64_t total{0};
-    for (const auto& entry : entries) {
-        BOOST_CHECK(entry.publication_id == content.operation_id);
-        BOOST_CHECK(entry.payout_account != identity->GetKeyStore().GetAccountId());
-        total += entry.amount;
-    }
-    BOOST_CHECK_EQUAL(total, *cap);
-    if (entries.size() == 2) BOOST_CHECK(entries[0].payout_account < entries[1].payout_account);
-    // Without payout bindings nobody is owed anything.
-    network.payout.clear();
-    BOOST_CHECK(storage.SettlementEntries(period, 0).empty());
-    network.payout[endpoints[0].storage_id] = first;
-    network.payout[endpoints[1].storage_id] = second;
-    // Checks older than the period start do not count.
-    BOOST_CHECK(storage.SettlementEntries(period, std::numeric_limits<std::int64_t>::max()).empty());
-    // Outside the lease nothing is owed.
-    BOOST_CHECK(storage.SettlementEntries(lease->end_period, 0).empty());
-
-    // Persisted placement/evidence never carries live verification into a new session.
-    cybou::StorageService reopened{*fixture.runtime, network, application_db, cybou::BETA_REMOTE_REPLICA_TARGET};
-    BOOST_REQUIRE(reopened.DescribePlacement(content.operation_id));
-    BOOST_CHECK(!reopened.ProviderEvidence().empty());
-    BOOST_CHECK(reopened.SettlementEntries(period, 0).empty());
-    BOOST_REQUIRE(reopened.Audit(content.operation_id).state == cybou::DurabilityState::PROTECTED);
-    BOOST_CHECK(!reopened.SettlementEntries(period, 0).empty());
+    auto identity = fixture.CreateIdentity("cumulative-boundary.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "boundary-app"};
+    cybou::RuntimeStorageTransport transport{*fixture.runtime};
+    cybou::StorageService storage{*fixture.runtime, transport, db, 1};
+    const auto before = fixture.runtime->GetStateRoot();
+    BOOST_CHECK_THROW(storage.SettlementEntries(0, 0), std::runtime_error);
+    BOOST_CHECK_THROW(storage.SettlementEntries(0, 0, cybou::MAX_STORAGE_SETTLEMENT_ENTRIES + 1), std::invalid_argument);
+    BOOST_CHECK(fixture.runtime->GetStateRoot() == before);
+    BOOST_CHECK(!storage.PreparedSettlement(0));
 }
 
-BOOST_AUTO_TEST_CASE(settlement_preparation_and_finalization_do_not_spend_future_renewal)
+BOOST_AUTO_TEST_CASE(unconnected_collector_preparation_cannot_freeze_a_period)
 {
     CybouServiceTestFixture fixture;
-    auto owner = fixture.CreateIdentity("term-owner.vault");
-    auto first_provider = fixture.CreateIdentity("term-provider-1.vault");
-    auto second_provider = fixture.CreateIdentity("term-provider-2.vault");
-    ProviderNetwork network{fixture, 2};
-    cybou::PrivateApplicationStore db{owner->GetKeyStore(), fixture.directory / "term-application"};
-    const auto content = Publish(fixture, *owner, db, true);
-    network.Sync();
-    const auto endpoints = network.Endpoints();
-    const auto owner_id = *owner->GetKeyStore().GetAccountId();
-    const auto first_id = *first_provider->GetKeyStore().GetAccountId();
-    const auto second_id = *second_provider->GetKeyStore().GetAccountId();
-    std::copy_n(first_id.Value().begin(), 32, network.payout[endpoints[0].storage_id].begin());
-    std::copy_n(second_id.Value().begin(), 32, network.payout[endpoints[1].storage_id].begin());
-    cybou::StorageService storage{*fixture.runtime, network, db, cybou::BETA_REMOTE_REPLICA_TARGET};
-    BOOST_REQUIRE(storage.Secure(content.operation_id, content.leaves).state == cybou::DurabilityState::PROTECTED);
-    BOOST_REQUIRE(storage.AuditNextPlacement(content.leaves.size()));
-    const auto initial = fixture.runtime->GetStorageLease(content.operation_id);
-    BOOST_REQUIRE(initial && initial->funded_terms.size() == 1U);
-    BOOST_REQUIRE_EQUAL(initial->escrow_onboarding + initial->escrow_locked, 2U);
-    const auto params = fixture.definition.GetProtocolParameters();
-    const auto initial_snapshot = fixture.runtime->GetStore().GetStateSnapshot();
-    BOOST_REQUIRE(initial_snapshot && initial_snapshot.state);
-    const auto total = cybou::TotalCybou(*initial_snapshot.state);
-    const auto pay = [&](uint64_t period) {
-        const auto entries = storage.SettlementEntries(period, 0);
-        BOOST_REQUIRE_EQUAL(entries.size(), 1U);
-        BOOST_REQUIRE_EQUAL(entries.front().amount, 1U);
-        BOOST_REQUIRE(storage.SubmitSettlement(period,
-            1700000000 + period * params.storage_settlement_period_seconds, entries));
-        BOOST_REQUIRE(fixture.runtime->ProduceBlock());
-    };
-    pay(0);
-    const auto paid_initial = fixture.runtime->GetStorageLease(content.operation_id)->funded_terms.front();
-    BOOST_CHECK_EQUAL(paid_initial.paid_onboarding + paid_initial.paid_locked, 1U);
-    const auto snapshot = fixture.runtime->GetStore().GetStateSnapshot();
-    BOOST_REQUIRE(snapshot && snapshot.state);
-    const cybou::StorageLeasePayload renewal{content.operation_id, 30};
-    const auto commitment = cybou::ComputeStorageLeasePayloadCommitment(renewal);
-    BOOST_REQUIRE(commitment);
-    cybou::IdentityOperationAuthorization authorization;
-    authorization.account_id = owner_id;
-    authorization.nonce = snapshot.state->identities.Find(owner_id)->nonce;
-    authorization.kind = cybou::IdentityOperationKind::STORAGE_LEASE;
-    authorization.payload_commitment = *commitment;
-    const auto digest = cybou::ComputeIdentityOperationDigest(fixture.runtime->GetNetworkBinding(), authorization);
-    BOOST_REQUIRE(digest);
-    const auto signature = owner->GetKeyStore().SignAuthorization(*digest);
-    BOOST_REQUIRE(signature);
-    authorization.signature = *signature;
-    BOOST_REQUIRE(fixture.runtime->SubmitOperation(cybou::AuthorizedStorageLease{authorization, renewal}));
-    BOOST_REQUIRE(fixture.runtime->ProduceBlock());
-    const auto renewed = fixture.runtime->GetStorageLease(content.operation_id);
-    BOOST_REQUIRE(renewed && renewed->funded_terms.size() == 2U);
-    BOOST_CHECK(renewed->funded_terms.front() == paid_initial);
-    BOOST_CHECK_EQUAL(renewed->funded_terms.back().paid_onboarding + renewed->funded_terms.back().paid_locked, 0U);
-    pay(1);
-    const auto exhausted = fixture.runtime->GetStorageLease(content.operation_id);
-    BOOST_REQUIRE(exhausted);
-    BOOST_CHECK_EQUAL(exhausted->funded_terms.front().paid_onboarding + exhausted->funded_terms.front().paid_locked, 2U);
-    BOOST_CHECK_EQUAL(exhausted->escrow_onboarding + exhausted->escrow_locked, 2U);
-    BOOST_CHECK(storage.SettlementEntries(2, 0).empty());
-    const auto before_rejection = fixture.runtime->GetStore().GetStateSnapshot();
-    BOOST_REQUIRE(before_rejection && before_rejection.state);
-    BOOST_CHECK(!storage.SubmitSettlement(2, 1700000000 + 2 * params.storage_settlement_period_seconds,
-        {{content.operation_id, first_id, 1}}));
-    const auto after = fixture.runtime->GetStore().GetStateSnapshot();
-    BOOST_REQUIRE(after && after.state);
-    BOOST_CHECK(cybou::SerializeCybouState(*after.state) == cybou::SerializeCybouState(*before_rejection.state));
-    BOOST_CHECK(cybou::TotalCybou(*after.state) == total);
+    auto identity = fixture.CreateIdentity("cumulative-boundary.vault");
+    cybou::PrivateApplicationStore db{identity->GetKeyStore(), fixture.directory / "boundary-app"};
+    cybou::RuntimeStorageTransport transport{*fixture.runtime};
+    cybou::StorageService storage{*fixture.runtime, transport, db, 1};
+    const auto before = fixture.runtime->GetStateRoot();
+    BOOST_CHECK_THROW(storage.SettlementEntries(0, 0), std::runtime_error);
+    BOOST_CHECK_THROW(storage.SettlementEntries(0, 0, cybou::MAX_STORAGE_SETTLEMENT_ENTRIES + 1), std::invalid_argument);
+    BOOST_CHECK(fixture.runtime->GetStateRoot() == before);
+    BOOST_CHECK(!storage.PreparedSettlement(0));
 }
 
 BOOST_AUTO_TEST_CASE(replicas_go_to_distinct_payout_accounts_and_nodes_of_one_account_count_once)

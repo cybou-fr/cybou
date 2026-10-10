@@ -21,7 +21,7 @@ namespace {
 constexpr size_t ACCOUNT_SIZE{32 + 8 * 5};
 constexpr size_t PUBLICATION_SIZE{32 + 32 + 32 + 4 + 8};
 constexpr size_t LEASE_SIZE{32 + 32 + 4 + 1 + 8 + 8 + 8 + 8 + 4};
-constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 11 + 4 + 4};
+constexpr size_t FUNDED_TERM_SIZE{32 + 8 * 13 + 4 + 4 + 4};
 constexpr size_t GENESIS_ALLOCATION_BASE_SIZE{32 + 8 + 4 + 1};
 
 void Write32(std::vector<unsigned char>& out, uint32_t value)
@@ -130,6 +130,7 @@ size_t SerializedStateSize(const CybouState& state,
         for (const auto& term : lease.funded_terms) {
             for (const auto& d : term.declarations) total_size += 52 + 80 * d.eligible.size();
             for (const auto& a : term.assignments) total_size += 116 + 69 * a.allocations.size();
+            total_size += 89 * term.service_payments.size();
         }
     }
     return total_size;
@@ -489,7 +490,13 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
         unsigned __int128 remaining_onboarding{0}, remaining_locked{0};
         for (const auto& term : lease.funded_terms) {
             if (term.funding_operation_id.IsNull() || !funding_ids.insert(term.funding_operation_id).second ||
-                term.first_period != end || term.end_period <= term.first_period)
+                term.first_period < end || term.end_period <= term.first_period)
+                return StateValidationError::INVALID_STORAGE_LEASE;
+            if (term.paid_onboarding > term.initial_onboarding || term.paid_locked > term.initial_locked ||
+                term.refunded_onboarding > term.initial_onboarding - term.paid_onboarding ||
+                term.refunded_locked > term.initial_locked - term.paid_locked ||
+                ((term.refunded_onboarding || term.refunded_locked) &&
+                    std::min(term.end_period, lease.end_period) > state.settlement.next_period))
                 return StateValidationError::INVALID_STORAGE_LEASE;
             const auto budget = ComputeAssignedStorageBudget(lease.units, lease.replicas,
                 term.end_period - term.first_period, term.period_seconds, term.rate);
@@ -499,8 +506,12 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
                 term.paid_onboarding > term.initial_onboarding || term.paid_locked > term.initial_locked ||
                 (term.paid_locked != 0 && term.paid_onboarding != term.initial_onboarding))
                 return StateValidationError::INVALID_STORAGE_LEASE;
+            if (std::min(term.end_period, lease.end_period) <= state.settlement.next_period &&
+                (term.initial_onboarding - term.paid_onboarding != term.refunded_onboarding ||
+                 term.initial_locked - term.paid_locked != term.refunded_locked)) return StateValidationError::INVALID_STORAGE_LEASE;
             if (!term.next_assignment_epoch || term.declarations.size() > std::numeric_limits<uint32_t>::max() ||
-                term.assignments.size() > std::numeric_limits<uint32_t>::max()) return StateValidationError::INVALID_STORAGE_LEASE;
+                term.assignments.size() > std::numeric_limits<uint32_t>::max() ||
+                term.service_payments.size() > std::numeric_limits<uint32_t>::max()) return StateValidationError::INVALID_STORAGE_LEASE;
             uint64_t prior_epoch{0}, prior_height{0};
             std::set<Hash256> declaration_ids, activation_ids;
             for (const auto& d : term.declarations) {
@@ -540,8 +551,30 @@ StateValidationError ValidateCybouState(const CybouState& state, uint64_t* out_t
                 }
                 if (std::any_of(sums.begin(), sums.end(), [&](const auto sum) { return sum != lease.units; })) return StateValidationError::INVALID_STORAGE_LEASE;
             }
-            remaining_onboarding += term.initial_onboarding - term.paid_onboarding;
-            remaining_locked += term.initial_locked - term.paid_locked;
+            unsigned __int128 paid_sum{0};
+            std::vector<unsigned __int128> service(lease.replicas);
+            const StorageServicePayment* prior_payment{nullptr};
+            for (const auto& e : term.service_payments) {
+                if (e.slot >= lease.replicas || !e.verified_unit_seconds ||
+                    (prior_payment && !(std::tie(prior_payment->slot, prior_payment->storage_id, prior_payment->payout_account) <
+                        std::tie(e.slot, e.storage_id, e.payout_account)))) return StateValidationError::INVALID_STORAGE_LEASE;
+                const auto capacity = ComputeAcceptedStorageCapacity(term, e.slot, e.storage_id, e.payout_account,
+                    state.settlement.next_period, lease.end_period);
+                const auto remainder = ComputeAssignedStoragePayout(*budget, e.verified_unit_seconds, e.paid);
+                if (term.assignments.empty()) return StateValidationError::INVALID_STORAGE_LEASE;
+                const auto closed_capacity = ComputeAcceptedStorageCapacity(term, e.slot, e.storage_id, e.payout_account,
+                    std::min(term.end_period, lease.end_period) <= state.settlement.next_period ? state.settlement.next_period : term.assignments.back().effective_period,
+                    lease.end_period);
+                if (!capacity || !closed_capacity || e.closed_epoch_capacity != *closed_capacity ||
+                    e.verified_unit_seconds > *capacity || !remainder || *remainder != 0)
+                    return StateValidationError::INVALID_STORAGE_LEASE;
+                service[e.slot] += e.verified_unit_seconds; paid_sum += e.paid; prior_payment = &e;
+            }
+            if (paid_sum != static_cast<unsigned __int128>(term.paid_onboarding) + term.paid_locked ||
+                std::any_of(service.begin(), service.end(), [&](const auto sum) { return sum > term.contracted_unit_seconds; }))
+                return StateValidationError::INVALID_STORAGE_LEASE;
+            remaining_onboarding += term.initial_onboarding - term.paid_onboarding - term.refunded_onboarding;
+            remaining_locked += term.initial_locked - term.paid_locked - term.refunded_locked;
             end = term.end_period;
         }
         if (end < lease.end_period || lease.escrow_onboarding != remaining_onboarding ||
@@ -656,6 +689,14 @@ std::optional<std::vector<unsigned char>> SerializeCybouState(const CybouState& 
                     out.insert(out.end(), u.payout_account.Value().begin(), u.payout_account.Value().end());
                     Write32(out, u.units);
                 }
+            }
+            Write64(out, term.refunded_onboarding); Write64(out, term.refunded_locked);
+            Write32(out, static_cast<uint32_t>(term.service_payments.size()));
+            for (const auto& e : term.service_payments) {
+                out.push_back(e.slot);
+                out.insert(out.end(), e.storage_id.begin(), e.storage_id.end());
+                out.insert(out.end(), e.payout_account.Value().begin(), e.payout_account.Value().end());
+                Write64(out, e.verified_unit_seconds); Write64(out, e.paid); Write64(out, e.closed_epoch_capacity);
             }
         }
     }
@@ -828,6 +869,18 @@ std::optional<CybouState> DeserializeCybouState(std::span<const unsigned char> b
                     std::copy(storage->begin(), storage->end(), u.storage_id.begin()); a.allocations.push_back(u);
                 }
                 term.assignments.push_back(std::move(a));
+            }
+            const auto refunded_onboarding = reader.U64(); const auto refunded_locked = reader.U64();
+            const auto payments = reader.U32();
+            if (!refunded_onboarding || !refunded_locked || !payments || *payments > reader.Remaining() / 89) return std::nullopt;
+            term.refunded_onboarding = *refunded_onboarding; term.refunded_locked = *refunded_locked;
+            for (uint32_t k{0}; k < *payments; ++k) {
+                const auto slot = reader.U8(); const auto storage = reader.Bytes(32); const auto payout = reader.Bytes(32);
+                const auto service = reader.U64(); const auto paid = reader.U64(); const auto closed = reader.U64();
+                const auto account = payout ? AccountId::FromBytes(*payout) : std::nullopt;
+                if (!slot || !storage || !account || !service || !paid || !closed) return std::nullopt;
+                StorageServicePayment e{.slot = *slot, .payout_account = *account, .verified_unit_seconds = *service, .paid = *paid, .closed_epoch_capacity = *closed};
+                std::copy(storage->begin(), storage->end(), e.storage_id.begin()); term.service_payments.push_back(e);
             }
             lease.funded_terms.push_back(std::move(term));
         }

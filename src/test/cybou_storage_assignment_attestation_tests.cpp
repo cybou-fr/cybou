@@ -14,6 +14,12 @@
 #include <future>
 
 namespace {
+cybou::Hash256 CounterHash(uint64_t value)
+{
+    cybou::Hash256 id;
+    for (unsigned i = 0; i < 8; ++i) id.begin()[i] = static_cast<unsigned char>(value >> (i * 8));
+    return id;
+}
 struct Signer final : cybou::PoaSigner {
     std::array<unsigned char, 32> seed;
     mutable unsigned calls{0};
@@ -153,7 +159,7 @@ BOOST_AUTO_TEST_CASE(canonical_prepare_activate_retains_verified_bindings_and_al
     BOOST_CHECK(one.state_root == two.state_root); state = *one.state;
     BOOST_CHECK_EQUAL(state.settlement.next_period, 0U);
     BOOST_CHECK_EQUAL(state.settlement.next_period_start_utc, 100000U);
-    auto& term = state.leases.at(publication).funded_terms.front();
+    const auto term = state.leases.at(publication).funded_terms.front();
     BOOST_REQUIRE_EQUAL(term.declarations.size(), 1U);
     BOOST_CHECK_EQUAL(term.declarations[0].eligible[0].accepted_height, 10U);
     BOOST_CHECK_EQUAL(term.next_assignment_epoch, 2U);
@@ -175,10 +181,11 @@ BOOST_AUTO_TEST_CASE(canonical_prepare_activate_retains_verified_bindings_and_al
     BOOST_CHECK(CybouStateHash(state) == prepared_root);
     // Accepted bindings are historical facts; ACTIVATE does not need fresh signatures.
     BOOST_REQUIRE(ApplyStorageSettlement(activate, network, params, poa, state, 12, Hash256{3}) == StorageSettlementError::NONE);
-    BOOST_REQUIRE_EQUAL(term.assignments.size(), 1U);
-    BOOST_CHECK(term.assignments[0].seed == Hash256{3});
+    const auto& active_term = state.leases.at(publication).funded_terms.front();
+    BOOST_REQUIRE_EQUAL(active_term.assignments.size(), 1U);
+    BOOST_CHECK(active_term.assignments[0].seed == Hash256{3});
     std::array<uint32_t,2> units{};
-    for (const auto& allocation : term.assignments[0].allocations) units[allocation.slot] += allocation.units;
+    for (const auto& allocation : active_term.assignments[0].allocations) units[allocation.slot] += allocation.units;
     BOOST_CHECK_EQUAL(units[0], 2U); BOOST_CHECK_EQUAL(units[1], 2U);
     BOOST_CHECK_EQUAL(TotalCybou(state), TotalCybou(*one.state));
     const auto encoded = SerializeCybouState(state); BOOST_REQUIRE(encoded);
@@ -189,10 +196,9 @@ BOOST_AUTO_TEST_CASE(canonical_prepare_activate_retains_verified_bindings_and_al
     BOOST_CHECK(ValidateCybouState(corrupt) == StateValidationError::INVALID_STORAGE_LEASE);
     corrupt = state; corrupt.leases.at(publication).funded_terms[0].declarations[0].eligible.push_back(term.declarations[0].eligible[0]);
     BOOST_CHECK(ValidateCybouState(corrupt) == StateValidationError::INVALID_STORAGE_LEASE);
-    StorageSettlement pay{.period_start_utc = 100000}; pay = sign(pay);
-    const auto activated_root = CybouStateHash(state);
-    BOOST_CHECK(ApplyStorageSettlement(pay, network, params, poa, state) == StorageSettlementError::INVALID_ASSIGNMENT);
-    BOOST_CHECK(CybouStateHash(state) == activated_root);
+    StorageSettlement pay{.period_start_utc = 100000}; pay.period_end_utc = 186400; pay.evidence_root = Hash256{5}; pay = sign(pay);
+    BOOST_CHECK(ApplyStorageSettlement(pay, network, params, poa, state) == StorageSettlementError::NONE);
+    BOOST_CHECK_EQUAL(state.settlement.next_period, 1U);
 }
 
 BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation)
@@ -269,6 +275,62 @@ BOOST_AUTO_TEST_CASE(full_nodes_finalize_prepare_then_later_seed_then_activation
     const auto exact = SerializeCybouState(*accepted.state); BOOST_REQUIRE(exact);
     const auto reopened = DeserializeCybouState(*exact); BOOST_REQUIRE(reopened);
     BOOST_CHECK(CybouStateHash(*reopened) == f.service.runtime->GetStateRoot());
+
+    // Real PAY finality on both nodes; tiny terms accumulate service before
+    // whole CYBOU entitlement. This tests PoA-attested totals, not raw audits.
+    const auto activation_id = *ComputeOperationId(ProtocolOperation{*signed_activate});
+    const auto total = TotalCybou(*accepted.state);
+    std::map<AccountId, uint64_t> provider_before;
+    for (const auto& allocation : term.assignments[0].allocations)
+        provider_before[allocation.payout_account] = accepted.state->accounts.at(allocation.payout_account).onboarding_system_balance;
+    std::optional<ProtocolOperation> first_pay;
+    for (uint64_t period = 0; period < 30; ++period) {
+        StorageSettlement pay{.period = period, .period_start_utc = 100000 + period * 86400};
+        pay.period_end_utc = pay.period_start_utc + 86400; pay.evidence_root = CounterHash(period + 100);
+        pay.activation_witnesses = {activation_id};
+        for (const auto& allocation : term.assignments[0].allocations)
+            pay.entries.push_back({*publication_id, allocation.payout_account, period == 29 ? 1U : 0U,
+                allocation.slot, allocation.storage_id, (period + 1) * 86400});
+        std::sort(pay.entries.begin(), pay.entries.end(), [](const auto& a, const auto& b) {
+            return std::tie(a.funding_operation_id,a.slot,a.storage_id,a.payout_account) <
+                std::tie(b.funding_operation_id,b.slot,b.storage_id,b.payout_account); });
+        const auto before = f.service.runtime->GetStateRoot();
+        auto bad = pay; bad.entries[0].amount += 1;
+        BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
+        bad = pay; bad.entries[0].verified_unit_seconds += 1;
+        BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
+        bad = pay; bad.activation_witnesses.clear();
+        BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
+        bad = pay; bad.activation_witnesses.push_back(CounterHash(999));
+        std::sort(bad.activation_witnesses.begin(),bad.activation_witnesses.end());
+        BOOST_CHECK(!f.service.runtime->SignStorageSettlement(bad));
+        const auto signed_pay = f.service.runtime->SignStorageSettlement(pay); BOOST_REQUIRE(signed_pay);
+        BOOST_CHECK(f.service.runtime->GetStateRoot() == before);
+        const ProtocolOperation operation{*signed_pay}; if (!first_pay) first_pay = operation;
+        BOOST_REQUIRE(f.service.runtime->SubmitOperation(operation));
+        BOOST_CHECK(f.service.runtime->GetStateRoot() == before);
+        const auto block = f.service.runtime->ProduceBlock(); BOOST_REQUIRE(block);
+        BOOST_REQUIRE(verifier.runtime->CommitBlock(*block));
+        BOOST_CHECK(f.service.runtime->GetStateRoot() == verifier.runtime->GetStateRoot());
+        const auto paid = verifier.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(paid);
+        BOOST_CHECK_EQUAL(TotalCybou(*paid.state), total);
+        const auto& retained = paid.state->leases.at(*publication_id).funded_terms.front();
+        BOOST_REQUIRE_EQUAL(retained.service_payments.size(), 2U);
+        BOOST_CHECK_EQUAL(retained.paid_onboarding, period == 29 ? 2U : 0U);
+        BOOST_CHECK_EQUAL(retained.service_payments[0].verified_unit_seconds, (period + 1) * 86400);
+        const auto serialized = SerializeCybouState(*paid.state); BOOST_REQUIRE(serialized);
+        const auto restored = DeserializeCybouState(*serialized); BOOST_REQUIRE(restored);
+        BOOST_CHECK(CybouStateHash(*restored) == verifier.runtime->GetStateRoot());
+        BOOST_CHECK(!f.service.runtime->SignStorageSettlement(*signed_pay));
+    }
+    const auto final = verifier.runtime->GetStore().GetStateSnapshot(); BOOST_REQUIRE(final);
+    const auto& closed = final.state->leases.at(*publication_id);
+    BOOST_CHECK_EQUAL(closed.escrow_onboarding + closed.escrow_locked, 0U);
+    for (const auto& [account, balance] : provider_before)
+        BOOST_CHECK_EQUAL(final.state->accounts.at(account).onboarding_system_balance, balance + 1);
+    const auto final_root = f.service.runtime->GetStateRoot();
+    BOOST_CHECK(f.service.runtime->SubmitOperation(*first_pay).status == OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK(f.service.runtime->GetStateRoot() == final_root);
 }
 
 BOOST_AUTO_TEST_CASE(atomic_assignment_wire_limits_and_exact_consumption)
@@ -305,6 +367,20 @@ BOOST_AUTO_TEST_CASE(atomic_assignment_wire_limits_and_exact_consumption)
     BOOST_CHECK(!SerializeStorageSettlement(activate));
     activate.manifest.pop_back(); activate.manifest.back() = activate.manifest.front();
     BOOST_CHECK(!SerializeStorageSettlement(activate));
+    StorageSettlement pay{.period_start_utc = 1}; pay.period_end_utc = 86401; pay.evidence_root = Hash256{3};
+    pay.poa_signature.ml_dsa.resize(3309);
+    for (uint64_t i = 1; i <= 1024; ++i)
+        pay.entries.push_back({CounterHash(i), f.proofs[0].binding.payout_account, 0, 0, f.proofs[0].storage_id, 1});
+    std::sort(pay.entries.begin(), pay.entries.end(), [](const auto& a,const auto& b) { return a.funding_operation_id < b.funding_operation_id; });
+    for (uint64_t i = 1; i <= 372; ++i) pay.activation_witnesses.push_back(CounterHash(i));
+    std::sort(pay.activation_witnesses.begin(),pay.activation_witnesses.end());
+    encoded = SerializeProtocolOperation(ProtocolOperation{pay}); BOOST_REQUIRE(encoded);
+    BOOST_CHECK_EQUAL(encoded->size(), 131055U); BOOST_CHECK(DeserializeProtocolOperation(*encoded));
+    pay.activation_witnesses.push_back(CounterHash(373)); std::sort(pay.activation_witnesses.begin(),pay.activation_witnesses.end());
+    BOOST_CHECK(!SerializeStorageSettlement(pay));
+    pay.activation_witnesses.pop_back();
+    body = *encoded; body.push_back(0); BOOST_CHECK(!DeserializeProtocolOperation(body));
+    body = *encoded; std::fill_n(body.begin() + 58,4,255); BOOST_CHECK(!DeserializeProtocolOperation(body));
 }
 
 BOOST_AUTO_TEST_CASE(bindings_require_both_keys_and_the_matching_snapshot)

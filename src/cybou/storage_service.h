@@ -294,16 +294,9 @@ public:
     /// \brief Shadow-оценка суточного rent всех известных placements этой Identity (DEC-279).
     /// \return CYBOU в сутки при `chunk_count × target` billing units; std::nullopt при переполнении.
     std::optional<std::uint64_t> EstimatedDailyRent();
-    /// \brief Выплаты settlement-периода \p period по placements этой Identity (DEC-280, DEC-282).
-    /// \details Для каждой finalized аренды, активной в \p period, period cap делится по слотам
-    ///          `units × replicas`: payout-аккаунт получает долю слотов (чанков), реплику которых он
-    ///          держит и которая успешно проверена не раньше \p verified_since_ms; целочисленный
-    ///          остаток раздаётся по одному CYBOU, начиная со смещения \p period.
-    ///          Payout-аккаунт берётся из живой проверенной binding; плательщик не получает ничего,
-    ///          не больше `replicas` аккаунтов на аренду. Записи упорядочены для StorageSettlement.
-    /// Throws std::length_error rather than truncating obligations when the
-    /// preparation limit is exceeded. A smaller limit can bound a caller batch;
-    /// it does not authorize advancing the canonical settlement period.
+    /// Cumulative canonical collector preparation is not connected yet. Throws
+    /// rather than treating placement/liveness snapshots as paid service or
+    /// advancing a period with an empty fallback. No daily ranking path exists.
     std::vector<StorageSettlementEntry> SettlementEntries(std::uint64_t period, std::int64_t verified_since_ms,
         std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
     /// Retained exact input/signature in existing app.db; corruption throws.

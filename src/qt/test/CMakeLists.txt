@@ -21,9 +21,15 @@ target_link_libraries(test_cybou-native-qt
 
 import_plugins(test_cybou-native-qt)
 
-add_test(NAME test_cybou-native-qt
-  COMMAND test_cybou-native-qt
-)
+if(WIN32)
+  add_test(NAME test_cybou-native-qt
+    COMMAND test_cybou-native-qt
+      -o "${CMAKE_CURRENT_BINARY_DIR}/qt-results.txt,txt"
+      -o "${CMAKE_CURRENT_BINARY_DIR}/qt-results.xml,junitxml"
+  )
+else()
+  add_test(NAME test_cybou-native-qt COMMAND test_cybou-native-qt)
+endif()
 set_tests_properties(test_cybou-native-qt PROPERTIES
   ENVIRONMENT "CYBOU_DEV_PEER_ADMISSION=france"
 )

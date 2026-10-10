@@ -154,4 +154,21 @@ jobs:
       - name: Run desktop smoke tests
         run: |
           $env:PATH = "${{ env.Qt6_DIR }}/../../../bin;$env:PATH"
-          ctest --test-dir build-desktop -R '^test_cybou-native-qt$' --output-on-failure
+          ctest --test-dir build-desktop -R '^test_cybou-native-qt$' --verbose --output-on-failure --output-log build-desktop/qt-ctest.log
+          $qtTestExit = $LASTEXITCODE
+          Get-ChildItem build-desktop -Recurse -Filter qt-results.txt | ForEach-Object { Get-Content -LiteralPath $_.FullName }
+          Write-Output "Qt CTest exit code: $qtTestExit"
+          exit $qtTestExit
+
+      - name: Retain Windows Qt diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-qt-diagnostics
+          if-no-files-found: warn
+          path: |
+            build-desktop/qt-ctest.log
+            build-desktop/Testing/Temporary/LastTest.log
+            build-desktop/Testing/Temporary/LastTestsFailed.log
+            build-desktop/**/qt-results.txt
+            build-desktop/**/qt-results.xml

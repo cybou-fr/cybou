@@ -87,6 +87,14 @@ struct StorageAcceptedAssignment {
     friend bool operator==(const StorageAcceptedAssignment&, const StorageAcceptedAssignment&) = default;
 };
 
+struct StorageServicePayment {
+    uint8_t slot{0};
+    std::array<unsigned char, 32> storage_id{};
+    AccountId payout_account;
+    uint64_t verified_unit_seconds{0}, paid{0}, closed_epoch_capacity{0};
+    friend bool operator==(const StorageServicePayment&, const StorageServicePayment&) = default;
+};
+
 struct StorageFundedTerm {
     cybou::Hash256 funding_operation_id;
     uint64_t first_period{0};
@@ -104,6 +112,8 @@ struct StorageFundedTerm {
     uint64_t next_assignment_epoch{1};
     std::vector<StorageAssignmentDeclaration> declarations;
     std::vector<StorageAcceptedAssignment> assignments;
+    std::vector<StorageServicePayment> service_payments;
+    uint64_t refunded_onboarding{0}, refunded_locked{0};
     friend bool operator==(const StorageFundedTerm&, const StorageFundedTerm&) = default;
 };
 
