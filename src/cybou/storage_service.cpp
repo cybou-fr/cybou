@@ -16,7 +16,7 @@ namespace cybou {
 
 StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& transport,
     PrivateApplicationStore& application_db, const std::uint8_t remote_replica_target)
-    : m_runtime{runtime}, m_transport{transport},
+    : m_runtime{runtime}, m_transport{transport}, m_db{application_db},
       m_target{std::clamp<std::uint8_t>(remote_replica_target, 1, MAX_REPLICAS_PER_CHUNK)},
       m_placements{std::make_unique<PlacementRepository>(application_db)},
       m_evidence{std::make_unique<EvidenceLedger>(application_db)},
@@ -25,6 +25,98 @@ StorageService::StorageService(CybouNodeRuntime& runtime, StorageTransport& tran
 }
 
 StorageService::~StorageService() = default;
+
+namespace {
+std::string SettlementJournalKey(const CybouNodeRuntime& runtime, std::uint64_t period)
+{ return "storage/settlement/" + runtime.GetNetworkBinding().GetHex() + '/' + std::to_string(period); }
+std::optional<std::vector<unsigned char>> PreparedBytes(StorageSettlement settlement)
+{
+    settlement.poa_signature = {};
+    settlement.poa_signature.ml_dsa.resize(3309);
+    return SerializeProtocolOperation(ProtocolOperation{std::move(settlement)});
+}
+std::optional<StorageSettlement> DecodeSettlement(const std::vector<unsigned char>& bytes)
+{
+    const auto op = DeserializeProtocolOperation(bytes);
+    if (!op || SerializeProtocolOperation(*op) != bytes) return std::nullopt;
+    const auto* settlement = std::get_if<StorageSettlement>(&*op);
+    return settlement ? std::optional{*settlement} : std::nullopt;
+}
+}
+
+std::optional<StorageSettlement> StorageService::PreparedSettlement(const std::uint64_t period)
+{
+    PrivateApplicationStore::Batch snapshot{m_db};
+    if (!snapshot.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement journal unavailable"};
+    const auto key = SettlementJournalKey(m_runtime, period);
+    const auto prepared = m_db.Get(key + "/prepared");
+    const auto signed_bytes = m_db.Get(key + "/signed");
+    if (!prepared) {
+        if (m_db.Has(key + "/prepared") || m_db.Has(key + "/signed"))
+            throw std::runtime_error{"missing settlement preparation"};
+        return std::nullopt;
+    }
+    auto result = DecodeSettlement(*prepared);
+    if (!result || result->period != period || PreparedBytes(*result) != prepared)
+        throw std::runtime_error{"corrupt settlement preparation"};
+    if (signed_bytes) {
+        result = DecodeSettlement(*signed_bytes);
+        const auto digest = result ? ComputeStorageSettlementDigest(m_runtime.GetNetworkBinding(), *result) : std::nullopt;
+        if (!result || PreparedBytes(*result) != prepared || !digest ||
+            !VerifyIdentityMessage(m_runtime.GetNetworkGenesis().GetPoaPublicKey(), result->poa_signature, *digest))
+            throw std::runtime_error{"corrupt signed settlement"};
+    } else if (m_db.Has(key + "/signed")) throw std::runtime_error{"unreadable signed settlement"};
+    return result;
+}
+
+OperationSubmitResult StorageService::SubmitSettlement(const std::uint64_t period, const std::uint64_t start,
+    std::vector<StorageSettlementEntry> entries)
+{
+    StorageSettlement requested{.period = period, .period_start_utc = start, .entries = std::move(entries)};
+    const auto prepared_bytes = PreparedBytes(requested);
+    if (!prepared_bytes) return {};
+    const auto key = SettlementJournalKey(m_runtime, period);
+    const auto retained = PreparedSettlement(period);
+    if (retained && PreparedBytes(*retained) != prepared_bytes)
+        throw std::runtime_error{"different settlement already prepared for this period"};
+    {
+        PrivateApplicationStore::Batch prepare{m_db};
+        if (!prepare.IsOutermost() || !m_db.IsUnlocked()) throw std::runtime_error{"settlement journal unavailable"};
+        const auto prior = m_db.Get(key + "/prepared");
+        if (prior && prior != prepared_bytes) throw std::runtime_error{"conflicting settlement preparation"};
+        if ((!prior && (m_db.Has(key + "/prepared") || m_db.Has(key + "/signed"))) ||
+            (!prior && !m_db.Put(key + "/prepared", *prepared_bytes)) || !prepare.Commit())
+            throw std::runtime_error{"cannot persist settlement preparation"};
+    }
+    auto settlement = PreparedSettlement(period);
+    if (!settlement) throw std::runtime_error{"lost settlement preparation"};
+    auto digest = ComputeStorageSettlementDigest(m_runtime.GetNetworkBinding(), *settlement);
+    if (!digest) return {};
+    if (!VerifyIdentityMessage(m_runtime.GetNetworkGenesis().GetPoaPublicKey(), settlement->poa_signature, *digest)) {
+        const auto signed_settlement = m_runtime.SignStorageSettlement(*settlement);
+        if (!signed_settlement) return {};
+        const auto bytes = SerializeProtocolOperation(ProtocolOperation{*signed_settlement});
+        if (!bytes) return {};
+        {
+            PrivateApplicationStore::Batch save{m_db};
+            if (!save.IsOutermost() || m_db.Get(key + "/prepared") != prepared_bytes)
+                throw std::runtime_error{"settlement journal changed during signing"};
+            // A concurrent exact signer may have saved first; never overwrite it.
+            if (!m_db.Has(key + "/signed") && !m_db.Put(key + "/signed", *bytes))
+                throw std::runtime_error{"cannot persist signed settlement"};
+            if (!save.Commit()) throw std::runtime_error{"cannot commit signed settlement"};
+        }
+        settlement = PreparedSettlement(period);
+        if (!settlement) throw std::runtime_error{"lost signed settlement"};
+    }
+    const ProtocolOperation op{*settlement};
+    const auto id = ComputeOperationId(op);
+    if (!id) return {};
+    if (m_runtime.GetOperationStatus(*id).kind == OperationStatusKind::FINALIZED)
+        return {.status = OperationSubmitStatus::ALREADY_FINALIZED, .op_id = *id};
+    // No app.db transaction spans admission/relay. All retained bytes survive rejection.
+    return m_runtime.SubmitOperation(op);
+}
 
 std::map<std::array<unsigned char, 32>, StorageProviderEvidence> StorageService::ProviderEvidence()
 {

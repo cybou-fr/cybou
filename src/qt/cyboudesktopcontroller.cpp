@@ -206,35 +206,27 @@ void CybouDesktopController::settleStoragePeriod()
     m_settlement_pending = true;
     const auto generation = ++m_settlement_generation;
     m_application->prepareStorageSettlement(period, static_cast<std::int64_t>(start) * 1000,
-        [this, start, period, period_seconds, account, generation](std::vector<cybou::StorageSettlementEntry> entries, QString error) {
-          QMetaObject::invokeMethod(this, [this, start, period, period_seconds, account, generation, entries = std::move(entries), error = std::move(error)]() mutable {
+        [this, period, period_seconds, account, generation](cybou::StorageSettlement prepared, QString error) {
+          QMetaObject::invokeMethod(this, [this, period, period_seconds, account, generation, prepared = std::move(prepared), error = std::move(error)]() mutable {
             if (generation != m_settlement_generation) return;
             if (!error.isEmpty()) {
                 m_settlement_pending = false;
                 m_model->notify(error);
                 return;
             }
+            const auto start = prepared.period_start_utc;
+            auto entries = std::move(prepared.entries);
             if (m_model->status().account_id != account || !ReviewStorageSettlement(m_model, period, start,
                     start + period_seconds, entries, QApplication::activeWindow())) { if (generation == m_settlement_generation) m_settlement_pending = false; return; }
             std::uint64_t total{0};
             for (const auto& entry : entries) total += entry.amount;
             const auto count = entries.size();
-            if (m_settlement_worker.joinable()) m_settlement_worker.join();
-            m_settlement_worker = std::jthread([this, start, period, generation, count, total, entries = std::move(entries)]() mutable {
-              bool ok = false;
-              try {
-                std::lock_guard identity_access{m_identity_access_mutex};
-                const auto current = m_node_service->Runtime().GetStorageSettlementCursor();
-                if (m_identity_service->IsUnlocked() && m_identity_service->IsNetworkAuthority() && current &&
-                    current->next_period == period && (current->next_period_start_utc == 0 || current->next_period_start_utc == start)) {
-                    const auto result = m_node_service->Runtime().SubmitStorageSettlement(start, std::move(entries));
-                    ok = result.status == cybou::OperationSubmitStatus::ACCEPTED || result.status == cybou::OperationSubmitStatus::ALREADY_PENDING;
-                }
-              } catch (const std::exception&) { /* Core signing safety remains fail-closed. */ }
-              QMetaObject::invokeMethod(this, [this, generation, ok, period, count, total] {
+            m_application->submitStorageSettlement(period, start, std::move(entries),
+              [this, generation, count, total, period](bool ok, QString error) {
+              QMetaObject::invokeMethod(this, [this, generation, ok, period, count, total, error = std::move(error)] {
                 if (generation != m_settlement_generation) return;
                 m_settlement_pending = false;
-                m_model->notify(ok
+                m_model->notify(!error.isEmpty() ? error : ok
                     ? CybouDesktopModel::tr("Storage period %1 submitted: %2 payouts, %3. Waiting for PoA finalization.")
                           .arg(period).arg(count).arg(cybouAmountText(total))
                     : CybouDesktopModel::tr("The storage settlement was rejected by local execution."));
@@ -673,8 +665,7 @@ void CybouDesktopController::publishAuthority()
 
 void CybouDesktopController::stop()
 {
-    qInfo("CYBOU shutdown: waiting for settlement worker");
-    if (m_settlement_worker.joinable()) m_settlement_worker.join();
+    qInfo("CYBOU shutdown: releasing signing state");
     m_identity_signer_state.reset();
     m_poa_signer_state.reset();
     qInfo("CYBOU shutdown: stopping network workers");

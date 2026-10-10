@@ -197,33 +197,17 @@ OperationSubmitResult CybouNodeRuntime::SubmitOperation(ProtocolOperation op)
     return SubmitOperationInternal(std::move(op), *nonce, std::nullopt);
 }
 
-OperationSubmitResult CybouNodeRuntime::SubmitStorageSettlement(const uint64_t period_start_utc,
-    std::vector<StorageSettlementEntry> entries)
+std::optional<StorageSettlement> CybouNodeRuntime::SignStorageSettlement(StorageSettlement settlement)
 {
     std::lock_guard lock(m_chain.mutex);
-    if (!m_chain.poa_finalizer || !m_chain.poa_finalizer->SignerEnabled() || m_chain.store.PoaSafetyHalted()) {
-        return {.status = OperationSubmitStatus::POA_SIGNER_UNAVAILABLE};
-    }
+    if (!m_chain.poa_finalizer || !m_chain.poa_finalizer->SignerEnabled() ||
+        m_chain.store.PoaSafetyHalted() || m_chain.poa_finalizer->SafetyHalted()) return std::nullopt;
     const auto loaded = m_chain.store.GetStateSnapshot();
-    if (loaded.error != StateLoadError::NONE || !loaded.state || m_chain.poa_finalizer->SafetyHalted()) return {};
-    StorageSettlement settlement{.period = loaded.state->settlement.next_period,
-        .period_start_utc = period_start_utc, .entries = std::move(entries)};
-    if (!m_chain.poa_finalizer->SignStorageSettlement(settlement)) return {};
-    const ProtocolOperation operation{std::move(settlement)};
-    OperationSubmitStatus status{OperationSubmitStatus::REJECTED};
-    // Signed by the genesis PoA key: its own protection, no relay PoW.
-    switch (m_chain.operation_pool.Admit(operation, 0)) {
-    case PoolAdmission::ACCEPTED: status = OperationSubmitStatus::ACCEPTED; break;
-    case PoolAdmission::ALREADY_PENDING: status = OperationSubmitStatus::ALREADY_PENDING; break;
-    case PoolAdmission::ALREADY_FINALIZED: status = OperationSubmitStatus::ALREADY_FINALIZED; break;
-    case PoolAdmission::REJECTED: break;
-    }
-    const OperationSubmitResult result{.status = status, .op_id = ComputeOperationId(operation).value_or(cybou::Hash256{})};
-    if (result.status == OperationSubmitStatus::ACCEPTED) {
-        NotifyBlockProductionLocked();
-        RememberOperationStatus(result.op_id, {.kind = OperationStatusKind::LOCAL_PENDING});
-    }
-    return result;
+    if (!loaded || !loaded.state || settlement.period != loaded.state->settlement.next_period ||
+        (loaded.state->settlement.next_period_start_utc &&
+            settlement.period_start_utc != loaded.state->settlement.next_period_start_utc) ||
+        !m_chain.poa_finalizer->SignStorageSettlement(settlement)) return std::nullopt;
+    return settlement;
 }
 
 OperationRelayEnqueueStatus CybouNodeRuntime::EnqueueRelayedOperation(

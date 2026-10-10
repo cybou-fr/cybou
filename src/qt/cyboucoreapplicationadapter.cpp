@@ -44,23 +44,39 @@ void CybouCoreApplicationAdapter::openIdentity()
 }
 
 void CybouCoreApplicationAdapter::prepareStorageSettlement(const std::uint64_t period,
-    const std::int64_t verified_since_ms, std::function<void(std::vector<cybou::StorageSettlementEntry>, QString)> done)
+    const std::int64_t verified_since_ms, std::function<void(cybou::StorageSettlement, QString)> done)
 {
     if (!m_session) {
         done({}, tr("Storage settlement preparation requires an open Identity."));
         return;
     }
     m_session->Post([period, verified_since_ms, done = std::move(done)](IdentitySession& s) {
-        std::vector<cybou::StorageSettlementEntry> entries;
+        cybou::StorageSettlement settlement{.period = period,
+            .period_start_utc = static_cast<std::uint64_t>(verified_since_ms / 1000)};
         QString error;
         try {
-            entries = s.storage_projection.Settlement(period, verified_since_ms);
+            if (const auto retained = s.storage->PreparedSettlement(period)) settlement = *retained;
+            else settlement.entries = s.storage_projection.Settlement(period, verified_since_ms);
         } catch (const std::length_error&) {
             error = tr("Too many storage payouts for one settlement. Nothing was submitted; obligations were not discarded.");
         } catch (const std::exception&) {
             error = tr("Storage settlement preparation failed. Nothing was submitted.");
         }
-        done(std::move(entries), std::move(error));
+        done(std::move(settlement), std::move(error));
+    });
+}
+
+void CybouCoreApplicationAdapter::submitStorageSettlement(const std::uint64_t period, const std::uint64_t start,
+    std::vector<cybou::StorageSettlementEntry> entries, std::function<void(bool, QString)> done)
+{
+    if (!m_session) { done(false, tr("Storage settlement requires an open Identity.")); return; }
+    m_session->Post([period, start, entries = std::move(entries), done = std::move(done)](IdentitySession& s) mutable {
+        try {
+            const auto result = s.storage->SubmitSettlement(period, start, std::move(entries));
+            done(static_cast<bool>(result), {});
+        } catch (const std::exception&) {
+            done(false, tr("Storage settlement could not be saved or replayed. Its journal was retained; nothing was replaced."));
+        }
     });
 }
 

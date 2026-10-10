@@ -8,6 +8,38 @@ desktop updates below; deployment statements retain their stated scope.
 
 ## Shared economics quotes (2026-10-09)
 
+### Exact settlement operation retention (2026-10-10)
+
+The isolated source tree routes desktop settlement review/submission through the
+existing Identity session worker and StorageService. Existing encrypted app.db
+retains prepared input and exact signed operation bytes under NetworkBinding and
+period before candidate submission. Review reuses original entries/UTC start;
+changed input for that period fails closed. Signed retries retain OperationID;
+verified finalized replay returns without submitting or paying again. Failed
+signed persistence and corrupt records retain preparation and reject submission.
+The separate desktop settlement worker and runtime combined sign/submit API
+were removed. No extra database, wire fields or live deployment.
+
+This addresses retention for the current wire format. Target cumulative
+service/paid execution, evidence references, batch reconciliation and retention
+policy remain open; DOC-020 and production crash recovery are not accepted.
+
+Native Windows core/Qt test targets built. StorageService regression passed
+28 cases / 656 assertions. Persistent app.db reopen plus a fresh verifier pool
+retains exact signed bytes through uncertain delivery and finalized replay;
+the original fixture signer retains its signing journal. Signed-save failure,
+conflicting preparation and corruption fail closed. Qt authority review passed
+(3 QtTest results including setup/cleanup). Evidence: ignored
+`artifacts/economics-settlement-journal-{core,qt}.txt` and build logs.
+The initial fixture FAIL is retained separately: it incorrectly tried to sign
+after importing blocks into a fresh signing journal; safety correctly halted.
+The corrected fixture independently verifies the original signer's block,
+without recreating signing history or weakening checks. This is isolated
+component/integration evidence, not forced-process termination acceptance.
+Runtime/PoA regression additionally passed 30 cases / 429 assertions
+(`artifacts/economics-settlement-journal-runtime.txt`), including candidate
+validation, durable signing conflicts and canonical-history mismatch rejection.
+
 ### Verified observations to service intervals (2026-10-10)
 
 The operator adopted isolated Beta checks every 12 hours, maximum credited gap

@@ -32,6 +32,7 @@
 namespace cybou {
 
 class CybouNodeRuntime;
+struct OperationSubmitResult;
 
 /// \brief Целевое число удалённых полных реплик для DEV и Beta.
 ///
@@ -305,6 +306,10 @@ public:
     /// it does not authorize advancing the canonical settlement period.
     std::vector<StorageSettlementEntry> SettlementEntries(std::uint64_t period, std::int64_t verified_since_ms,
         std::size_t entry_limit = MAX_STORAGE_SETTLEMENT_ENTRIES);
+    /// Retained exact input/signature in existing app.db; corruption throws.
+    std::optional<StorageSettlement> PreparedSettlement(std::uint64_t period);
+    OperationSubmitResult SubmitSettlement(std::uint64_t period, std::uint64_t start,
+        std::vector<StorageSettlementEntry> entries);
 
 private:
     friend struct StorageEvidenceLedgerTestAccess;
@@ -324,6 +329,7 @@ private:
         std::span<const StorageEndpoint> preferred);
     CybouNodeRuntime& m_runtime;
     StorageTransport& m_transport;
+    PrivateApplicationStore& m_db;
     const std::uint8_t m_target;
     std::unique_ptr<PlacementRepository> m_placements;
     std::unique_ptr<EvidenceLedger> m_evidence;

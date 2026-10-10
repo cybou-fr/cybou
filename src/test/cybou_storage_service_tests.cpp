@@ -31,12 +31,29 @@ struct StorageEvidenceLedgerTestAccess {
 #include <memory>
 #include <set>
 #include <thread>
+#include <functional>
 
 namespace {
 
 struct PublishedContent {
     cybou::Hash256 operation_id;
     std::vector<cybou::ChunkId> leaves;
+};
+
+struct SettlementSigner final : cybou::PoaSigner {
+    std::array<unsigned char, 32> seed;
+    mutable unsigned calls{0};
+    std::function<void()> after_sign;
+    explicit SettlementSigner(std::array<unsigned char, 32> value) : seed{value} {}
+    std::optional<cybou::IdentityHybridPublicKey> PublicKey() const override
+    { return cybou::DeriveIdentityPublicKey(seed, cybou::IdentityKeyPurpose::POA_FINALIZER); }
+    std::optional<cybou::IdentityHybridSignature> Sign(std::span<const unsigned char> bytes) const override
+    {
+        ++calls;
+        const auto signature = cybou::SignIdentityMessage(seed, cybou::IdentityKeyPurpose::POA_FINALIZER, bytes);
+        if (after_sign) after_sign();
+        return signature;
+    }
 };
 
 /** Stages a multi-chunk tree, publishes it with a self capsule and optionally finalizes it. */
@@ -83,6 +100,94 @@ int ReplicaCount(const ProviderNetwork& network, const cybou::ChunkId& id)
 } // namespace
 
 BOOST_AUTO_TEST_SUITE(cybou_storage_service_tests)
+
+BOOST_AUTO_TEST_CASE(settlement_exact_journal_survives_reopen_and_fresh_pool_without_double_payment)
+{
+    CybouServiceTestFixture f;
+    auto owner = f.CreateIdentity("journal-owner.vault");
+    auto provider = f.CreateIdentity("journal-provider.vault");
+    auto db = std::make_unique<cybou::PrivateApplicationStore>(owner->GetKeyStore(), f.directory / "settlement-app");
+    const auto content = Publish(f, *owner, *db, true);
+    cybou::RuntimeStorageTransport transport{*f.runtime};
+    auto service = std::make_unique<cybou::StorageService>(*f.runtime, transport, *db, 1);
+    const std::vector<cybou::StorageSettlementEntry> entries{{content.operation_id, *provider->GetAccountId(), 1}};
+    const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
+    BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
+    const auto root = f.runtime->GetStateRoot();
+    const auto first = service->SubmitSettlement(0, 1700000000, entries); BOOST_REQUIRE(first);
+    BOOST_CHECK_EQUAL(signer->calls, 1U);
+    BOOST_CHECK(f.runtime->GetStateRoot() == root); // Submission is never payment.
+    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/0";
+    const auto exact = db->Get(key + "/signed"); BOOST_REQUIRE(exact);
+    BOOST_CHECK(first.op_id == cybou::ComputeOperationId(cybou::ProtocolOperation{*service->PreparedSettlement(0)}));
+    BOOST_CHECK(service->SubmitSettlement(0, 1700000000, entries).op_id == first.op_id);
+    BOOST_CHECK_EQUAL(signer->calls, 1U);
+    BOOST_CHECK_THROW(service->SubmitSettlement(0, 1700000001, entries), std::runtime_error);
+    auto different = entries; different[0].amount = 2;
+    BOOST_CHECK_THROW(service->SubmitSettlement(0, 1700000000, different), std::runtime_error);
+    BOOST_CHECK(db->Get(key + "/signed") == exact);
+    std::vector<cybou::FinalizedBlock> blocks;
+    for (std::uint64_t h{1}; h <= *f.runtime->GetFinalizedHeight(); ++h) blocks.push_back(*f.runtime->GetBlockAtHeight(h));
+    service.reset(); db.reset();
+    f.runtime->DisablePoaSigner(); // Only one active signer, including this isolated fixture.
+    cybou::CybouNodeRuntime restarted{{.network_genesis = f.definition, .data_dir = f.directory / "fresh-pool",
+        .memory_only = true, .wipe_data = true, .operation_work_bits = 0}};
+    BOOST_REQUIRE(restarted.InitializeGenesis(f.genesis));
+    for (const auto& block : blocks) BOOST_REQUIRE(restarted.CommitBlock(block));
+    db = std::make_unique<cybou::PrivateApplicationStore>(owner->GetKeyStore(), f.directory / "settlement-app");
+    cybou::RuntimeStorageTransport restarted_transport{restarted};
+    cybou::StorageService recovered{restarted, restarted_transport, *db, 1};
+    const auto replay = recovered.SubmitSettlement(0, 1700000000, entries);
+    BOOST_CHECK(replay.delivery_uncertain); // No connected peer ACK in this isolated node.
+    BOOST_CHECK(restarted.HasCandidateOperation(first.op_id));
+    BOOST_CHECK(replay.op_id == first.op_id);
+    BOOST_CHECK(db->Get(key + "/signed") == exact);
+    // The original signer retains its signing history; the fresh node only verifies.
+    BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
+    const auto finalized = f.runtime->ProduceBlock(); BOOST_REQUIRE(finalized);
+    BOOST_REQUIRE(restarted.CommitBlock(*finalized));
+    const auto paid_root = restarted.GetStateRoot();
+    const auto balance = restarted.GetAccountState(*provider->GetAccountId()); BOOST_REQUIRE(balance);
+    BOOST_CHECK_EQUAL(balance->onboarding_system_balance, 20001U);
+    BOOST_CHECK(recovered.SubmitSettlement(0, 1700000000, entries).status == cybou::OperationSubmitStatus::ALREADY_FINALIZED);
+    BOOST_CHECK(restarted.GetStateRoot() == paid_root);
+    BOOST_CHECK_EQUAL(restarted.GetStorageSettlementCursor()->next_period, 1U);
+}
+
+BOOST_AUTO_TEST_CASE(settlement_signature_save_failure_never_submits_and_retains_exact_unsigned_input)
+{
+    CybouServiceTestFixture f;
+    auto owner = f.CreateIdentity("journal-failure.vault");
+    cybou::PrivateApplicationStore db{owner->GetKeyStore(), f.directory / "failure-app"};
+    cybou::RuntimeStorageTransport transport{*f.runtime};
+    cybou::StorageService service{*f.runtime, transport, db, 1};
+    const auto signer = std::make_shared<SettlementSigner>(f.validator_seed);
+    BOOST_REQUIRE(f.runtime->EnablePoaSigner(signer));
+    {
+        cybou::PrivateApplicationStore::Batch enclosing{db};
+        BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000000, {}), std::runtime_error);
+        BOOST_CHECK_EQUAL(signer->calls, 0U);
+    }
+    signer->after_sign = [&] { owner->GetKeyStore().Clear(); };
+    const auto root = f.runtime->GetStateRoot();
+    BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000000, {}), std::runtime_error);
+    BOOST_CHECK(f.runtime->GetStateRoot() == root);
+    BOOST_REQUIRE(owner->LoadVault("correct horse battery staple"));
+    const auto key = "storage/settlement/" + f.runtime->GetNetworkBinding().GetHex() + "/0";
+    BOOST_CHECK(!db.Has(key + "/signed"));
+    const auto prepared = db.Get(key + "/prepared"); BOOST_REQUIRE(prepared);
+    const auto restored = service.PreparedSettlement(0); BOOST_REQUIRE(restored);
+    BOOST_CHECK_EQUAL(restored->period_start_utc, 1700000000U);
+    BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000001, {}), std::runtime_error);
+    signer->after_sign = {};
+    const auto submitted = service.SubmitSettlement(0, 1700000000, {}); BOOST_REQUIRE(submitted);
+    BOOST_CHECK(db.Get(key + "/prepared") == prepared);
+    BOOST_CHECK(f.runtime->GetOperationStatus(submitted.op_id).kind == cybou::OperationStatusKind::LOCAL_PENDING);
+    BOOST_REQUIRE(db.Put(key + "/signed", std::vector<unsigned char>{1, 2, 3}));
+    BOOST_CHECK_THROW(service.PreparedSettlement(0), std::runtime_error);
+    BOOST_CHECK_THROW(service.SubmitSettlement(0, 1700000000, {}), std::runtime_error);
+    BOOST_CHECK(db.Get(key + "/signed") == std::vector<unsigned char>({1, 2, 3}));
+}
 
 BOOST_AUTO_TEST_CASE(evidence_intervals_do_not_rewind_duplicate_or_credit_long_gaps)
 {
@@ -543,7 +648,7 @@ BOOST_AUTO_TEST_CASE(settlement_preparation_and_finalization_do_not_spend_future
         const auto entries = storage.SettlementEntries(period, 0);
         BOOST_REQUIRE_EQUAL(entries.size(), 1U);
         BOOST_REQUIRE_EQUAL(entries.front().amount, 1U);
-        BOOST_REQUIRE(fixture.runtime->SubmitStorageSettlement(
+        BOOST_REQUIRE(storage.SubmitSettlement(period,
             1700000000 + period * params.storage_settlement_period_seconds, entries));
         BOOST_REQUIRE(fixture.runtime->ProduceBlock());
     };
@@ -579,7 +684,7 @@ BOOST_AUTO_TEST_CASE(settlement_preparation_and_finalization_do_not_spend_future
     BOOST_CHECK(storage.SettlementEntries(2, 0).empty());
     const auto before_rejection = fixture.runtime->GetStore().GetStateSnapshot();
     BOOST_REQUIRE(before_rejection && before_rejection.state);
-    BOOST_CHECK(!fixture.runtime->SubmitStorageSettlement(1700000000 + 2 * params.storage_settlement_period_seconds,
+    BOOST_CHECK(!storage.SubmitSettlement(2, 1700000000 + 2 * params.storage_settlement_period_seconds,
         {{content.operation_id, first_id, 1}}));
     const auto after = fixture.runtime->GetStore().GetStateSnapshot();
     BOOST_REQUIRE(after && after.state);

@@ -47,7 +47,6 @@ private:
     CybouDesktopModel* m_model;
     bool m_settlement_pending{false};
     quint64 m_settlement_generation{0};
-    std::jthread m_settlement_worker;
     std::filesystem::path m_data_directory;
     std::unique_ptr<cybou::CybouNodeService> m_node_service;
     std::unique_ptr<cybou::CybouIdentityService> m_identity_service;

@@ -67,7 +67,9 @@ public:
     void identityKeysChanged() override;
     /** Computes storage payouts of one settlement period on the session thread; done runs there. */
     void prepareStorageSettlement(std::uint64_t period, std::int64_t verified_since_ms,
-        std::function<void(std::vector<cybou::StorageSettlementEntry>, QString)> done);
+        std::function<void(cybou::StorageSettlement, QString)> done);
+    void submitStorageSettlement(std::uint64_t period, std::uint64_t start,
+        std::vector<cybou::StorageSettlementEntry> entries, std::function<void(bool, QString)> done);
     /** Test hook: remote chunk transport used by new sessions (default: CYBOU P2P peers). */
     void setStorageTransport(cybou::StorageTransport* transport) { m_transport_override = transport; }
 

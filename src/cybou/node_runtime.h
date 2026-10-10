@@ -334,11 +334,8 @@ public:
     /// \brief Решает relay-PoW операции (DEC-273, DEC-284); кэширует результат.
     /// \return Nonce или std::nullopt, если операция не сериализуется.
     std::optional<uint64_t> PrepareOperationWork(const ProtocolOperation& op);
-    /// \brief Только для PoA signer: подписывает и ставит в pool StorageSettlement следующего периода.
-    /// \param period_start_utc UTC-начало периода; после первого settlement обязано совпасть с курсором.
-    /// \param entries Выплаты providers, строго упорядоченные по (publication, payout account).
-    /// \return Итог локальной подготовки; невалидный против finalized state settlement отвергается pool.
-    OperationSubmitResult SubmitStorageSettlement(uint64_t period_start_utc, std::vector<StorageSettlementEntry> entries);
+    /// Signs without submission; caller must durably save exact bytes before admission.
+    std::optional<StorageSettlement> SignStorageSettlement(StorageSettlement settlement);
     /// \brief Возвращает локально известный статус операции.
     /// \param op_id Искомый OperationID.
     /// \return Snapshot локального знания о candidate/finalized состоянии этой операции.

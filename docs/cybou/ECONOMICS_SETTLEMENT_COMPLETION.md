@@ -70,8 +70,9 @@ validate the target inputs, and would still apply the obsolete daily cap.
 
 Current production path is
 `StorageService::SettlementEntries` -> desktop adapter/controller ->
-`CybouNodeRuntime::SubmitStorageSettlement` ->
-`PoaFinalizer::SignStorageSettlement` -> candidate/block execution ->
+`StorageService::SubmitSettlement` -> durable app.db preparation ->
+`CybouNodeRuntime::SignStorageSettlement` / `PoaFinalizer::SignStorageSettlement`
+-> durable exact signed bytes -> `CybouNodeRuntime::SubmitOperation` -> candidate/block execution ->
 `ApplyStorageSettlement`. It reads live payout bindings, ranks locally verified
 placement chunks, retains at most lease.replica_count recipients and distributes
 the old period cap. The deployed baseline has one extendable lease per publication.
@@ -236,7 +237,7 @@ from existing canonical operation bytes. Do not introduce a provider registry
 as a shortcut for proof lookup. Batch commitment hash domains remain separately
 specified before implementation, not mechanically renamed existing domains.
 
-Current `PoaFinalizer::SignStorageSettlement` checks safety halt and verifies its
+At the 2026-10-09 reviewed baseline, `PoaFinalizer::SignStorageSettlement` checks safety halt and verifies its
 signature, but does not persist the signed operation; its block-signing journal
 does not constitute an exact settlement-operation journal. Current runtime
 submission then admits the operation to the volatile candidate pool. The desktop
@@ -244,6 +245,18 @@ controller holds pending generation only in memory. No inspected path connects
 this settlement to IdentityOperationCoordinator's exact-byte journal. A lost ACK
 or process restart cannot be claimed recovered merely because the block signer
 has a safe history.
+
+The isolated 2026-10-10 source-tree follow-up connects the desktop review and
+submission to the existing Identity session worker and StorageService. Existing
+encrypted app.db retains the canonical prepared body and exact signed operation
+under NetworkBinding/period before candidate admission. Review reuses retained
+entries and the original UTC start; another body for that period is rejected.
+Retries reuse signed bytes and derive OperationID from them; finalized replay
+returns the existing result without another payout. Corruption or failed signed
+save fails closed, retaining preparation. No extra DB, worker or wire fields.
+This covers the current settlement format only. Target cumulative evidence
+references, batch identity, competing-period reconciliation and retention policy
+remain open; no cumulative settlement or production recovery acceptance follows.
 
 Required durable lifecycle in existing app.db, scoped by NetworkBinding and
 canonical period/batch identity:
